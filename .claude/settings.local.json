@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem -Path \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\" -Recurse -Directory)",
-      "Bash(Select-Object FullName)"
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem -Path \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\" -File -Include \"*.jpg\", \"*.jpeg\", \"*.png\", \"*.gif\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(grep -E \"\\\\.\\(jpg|jpeg|png|gif\\)$\")"
     ]
   }
 }

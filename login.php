@@ -112,9 +112,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <style>
 *{box-sizing:border-box}
-body{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',system-ui,sans-serif;padding:20px}
+body{background:linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.75)), url('IMG_4604.jpg');background-size:cover;background-position:center;background-attachment:fixed;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',system-ui,sans-serif;padding:20px}
 .login-wrap{width:100%;max-width:420px}
-.login-card{background:#fff;border-radius:18px;padding:42px 38px;box-shadow:0 25px 60px rgba(0,0,0,.45)}
+.login-card{background:rgba(255, 255, 255, 0.95);backdrop-filter:blur(10px);border-radius:24px;padding:42px 38px;box-shadow:0 25px 60px rgba(0,0,0,.5);border:1px solid rgba(255,255,255,0.3)}
 .brand-icon{width:58px;height:58px;background:#2563eb;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;margin:0 auto 16px}
 .login-title{font-size:23px;font-weight:800;color:#0f172a;text-align:center;margin-bottom:4px}
 .login-sub{color:#64748b;font-size:13px;text-align:center;margin-bottom:28px}

@@ -2,9 +2,15 @@
 require_once __DIR__ . '/../../includes/functions.php';
 $pageTitle = 'Workshop Job Cards';
 $db = getDB();
-$status = $_GET['status'] ?? '';
-$where = $status ? "WHERE j.status='".addslashes($status)."'" : '';
-$jobs = $db->query("SELECT j.*, c.chassis_number, c.make, c.model, m.name AS mechanic_name FROM workshop_jobs j JOIN cars c ON c.id=j.car_id LEFT JOIN mechanics m ON m.id=j.mechanic_id $where ORDER BY j.created_at DESC")->fetchAll();
+$allowed = ['pending','in_progress','waiting_parts','on_hold','completed','cancelled'];
+$status  = in_array($_GET['status'] ?? '', $allowed) ? $_GET['status'] : '';
+if ($status) {
+    $stmt = $db->prepare("SELECT j.*, c.chassis_number, c.make, c.model, m.name AS mechanic_name FROM workshop_jobs j JOIN cars c ON c.id=j.car_id LEFT JOIN mechanics m ON m.id=j.mechanic_id WHERE j.status=? ORDER BY j.created_at DESC");
+    $stmt->execute([$status]);
+    $jobs = $stmt->fetchAll();
+} else {
+    $jobs = $db->query("SELECT j.*, c.chassis_number, c.make, c.model, m.name AS mechanic_name FROM workshop_jobs j JOIN cars c ON c.id=j.car_id LEFT JOIN mechanics m ON m.id=j.mechanic_id ORDER BY j.created_at DESC")->fetchAll();
+}
 include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
