@@ -1,0 +1,18 @@
+# PHP / Composer
+vendor/
+composer.lock
+
+# Configuration
+config/database.local.php
+.env
+
+# Storage / Uploads
+uploads/*
+!uploads/.gitkeep
+tmp/*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+*.swp
+*.log

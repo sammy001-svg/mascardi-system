@@ -1,0 +1,177 @@
+<?php
+require_once __DIR__ . '/../../includes/functions.php';
+$id = (int)($_GET['id'] ?? 0);
+if (!$id) redirect(BASE_URL . '/modules/cars/index.php');
+$db = getDB();
+
+$car = $db->prepare("SELECT * FROM cars WHERE id=?");
+$car->execute([$id]);
+$car = $car->fetch();
+if (!$car) { setFlash('error','Car not found.'); redirect(BASE_URL.'/modules/cars/index.php'); }
+
+$intake   = $db->prepare("SELECT ci.*, d.name AS driver_name FROM car_intake ci LEFT JOIN car_transfers ct ON ct.car_id=ci.car_id LEFT JOIN drivers d ON d.id=ct.driver_id WHERE ci.car_id=? ORDER BY ci.id DESC LIMIT 1");
+$intake->execute([$id]); $intake = $intake->fetch();
+
+$transfers = $db->prepare("SELECT ct.*, d.name AS driver_name, d.phone AS driver_phone, d.license_number FROM car_transfers ct JOIN drivers d ON d.id=ct.driver_id WHERE ct.car_id=? ORDER BY ct.id DESC");
+$transfers->execute([$id]); $transfers = $transfers->fetchAll();
+
+$assessments = $db->prepare("SELECT ca.*, m.name AS mechanic_name FROM car_assessments ca LEFT JOIN mechanics m ON m.id=ca.mechanic_id WHERE ca.car_id=? ORDER BY ca.id DESC");
+$assessments->execute([$id]); $assessments = $assessments->fetchAll();
+
+$jobs = $db->prepare("SELECT j.*, m.name AS mechanic_name FROM workshop_jobs j LEFT JOIN mechanics m ON m.id=j.mechanic_id WHERE j.car_id=? ORDER BY j.id DESC");
+$jobs->execute([$id]); $jobs = $jobs->fetchAll();
+
+$quotations = $db->prepare("SELECT * FROM quotations WHERE car_id=? ORDER BY id DESC");
+$quotations->execute([$id]); $quotations = $quotations->fetchAll();
+
+$invoices = $db->prepare("SELECT * FROM invoices WHERE car_id=? ORDER BY id DESC");
+$invoices->execute([$id]); $invoices = $invoices->fetchAll();
+
+$pageTitle = $car['make'] . ' ' . $car['model'];
+include __DIR__ . '/../../includes/header.php';
+?>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><?= e($car['make'].' '.$car['model']) ?> <code class="ms-2"><?= e($car['chassis_number']) ?></code></h5>
+    <div class="d-flex gap-2">
+        <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
+        <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Car Details -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><i class="fa fa-car me-2"></i>Vehicle Details</div>
+            <div class="card-body">
+                <dl class="row mb-0" style="font-size:13.5px">
+                    <dt class="col-5 text-muted">Status</dt>
+                    <dd class="col-7"><?= statusBadge($car['status']) ?></dd>
+                    <dt class="col-5 text-muted">Chassis</dt>
+                    <dd class="col-7"><code><?= e($car['chassis_number']) ?></code></dd>
+                    <dt class="col-5 text-muted">Reg. No.</dt>
+                    <dd class="col-7"><?= e($car['registration_number'] ?: '—') ?></dd>
+                    <dt class="col-5 text-muted">Engine No.</dt>
+                    <dd class="col-7"><?= e($car['engine_number'] ?: '—') ?></dd>
+                    <dt class="col-5 text-muted">Make</dt>
+                    <dd class="col-7"><?= e($car['make']) ?></dd>
+                    <dt class="col-5 text-muted">Model</dt>
+                    <dd class="col-7"><?= e($car['model']) ?></dd>
+                    <dt class="col-5 text-muted">Year</dt>
+                    <dd class="col-7"><?= e($car['year']) ?></dd>
+                    <dt class="col-5 text-muted">Color</dt>
+                    <dd class="col-7"><?= e($car['color'] ?: '—') ?></dd>
+                    <dt class="col-5 text-muted">Body Type</dt>
+                    <dd class="col-7"><?= e($car['body_type'] ?: '—') ?></dd>
+                    <dt class="col-5 text-muted">Transmission</dt>
+                    <dd class="col-7"><?= ucfirst($car['transmission'] ?: '—') ?></dd>
+                    <dt class="col-5 text-muted">Fuel</dt>
+                    <dd class="col-7"><?= ucfirst($car['fuel_type'] ?: '—') ?></dd>
+                    <dt class="col-5 text-muted">Added</dt>
+                    <dd class="col-7"><?= fmtDate($car['created_at']) ?></dd>
+                </dl>
+                <?php if ($car['notes']): ?>
+                <hr><p class="small text-muted mb-0"><?= e($car['notes']) ?></p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Quick links -->
+        <div class="card mt-3">
+            <div class="card-header"><i class="fa fa-bolt me-2"></i>Actions</div>
+            <div class="card-body d-grid gap-2">
+                <a href="<?= BASE_URL ?>/modules/intake/add.php?car_id=<?= $id ?>" class="btn btn-sm btn-outline-primary"><i class="fa fa-anchor me-1"></i>Register Intake</a>
+                <a href="<?= BASE_URL ?>/modules/assessments/add.php?car_id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-clipboard-check me-1"></i>New Assessment</a>
+                <a href="<?= BASE_URL ?>/modules/jobs/add.php?car_id=<?= $id ?>" class="btn btn-sm btn-outline-dark"><i class="fa fa-toolbox me-1"></i>Create Job Card</a>
+                <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $id ?>" class="btn btn-sm btn-outline-info"><i class="fa fa-file-lines me-1"></i>New Quotation</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <!-- Timeline/History -->
+        <div class="card mb-3">
+            <div class="card-header"><i class="fa fa-route me-2"></i>Journey Timeline</div>
+            <div class="card-body">
+                <div class="timeline">
+                    <?php if ($intake): ?>
+                    <div class="timeline-item">
+                        <div class="timeline-dot dot-success"></div>
+                        <div class="fw-semibold">Arrived at Mombasa Port</div>
+                        <div class="small text-muted"><?= fmtDate($intake['intake_date']) ?> — <?= e($intake['port']) ?></div>
+                        <?php if ($intake['condition_notes']): ?><div class="small"><?= e($intake['condition_notes']) ?></div><?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php foreach ($transfers as $t): ?>
+                    <div class="timeline-item">
+                        <div class="timeline-dot dot-<?= $t['status'] === 'arrived' ? 'success' : 'warning' ?>"></div>
+                        <div class="fw-semibold">Transfer: <?= e($t['from_location']) ?> → <?= e($t['to_location']) ?></div>
+                        <div class="small text-muted">Driver: <strong><?= e($t['driver_name']) ?></strong> | <?= fmtDate($t['departure_date']) ?></div>
+                        <div><?= statusBadge($t['status']) ?></div>
+                    </div>
+                    <?php endforeach; ?>
+
+                    <?php foreach ($assessments as $a): ?>
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="fw-semibold"><?= ucwords(str_replace('_',' ',$a['assessment_type'])) ?> Assessment</div>
+                        <div class="small text-muted"><?= fmtDate($a['assessment_date']) ?><?= $a['mechanic_name'] ? ' — ' . e($a['mechanic_name']) : '' ?></div>
+                        <div><?= statusBadge($a['overall_status']) ?> <a href="<?= BASE_URL ?>/modules/assessments/view.php?id=<?= $a['id'] ?>" class="btn btn-xs btn-outline-secondary ms-2">View</a></div>
+                    </div>
+                    <?php endforeach; ?>
+
+                    <?php foreach ($jobs as $j): ?>
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="fw-semibold">Workshop Job: <?= e($j['job_number']) ?></div>
+                        <div class="small text-muted"><?= fmtDate($j['start_date']) ?><?= $j['mechanic_name'] ? ' — ' . e($j['mechanic_name']) : '' ?></div>
+                        <div><?= statusBadge($j['status']) ?> <a href="<?= BASE_URL ?>/modules/jobs/view.php?id=<?= $j['id'] ?>" class="btn btn-xs btn-outline-secondary ms-2">View Job</a></div>
+                    </div>
+                    <?php endforeach; ?>
+
+                    <?php if (empty($intake) && empty($transfers) && empty($assessments) && empty($jobs)): ?>
+                    <p class="text-muted small">No history yet for this vehicle.</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quotations & Invoices -->
+        <?php if ($quotations || $invoices): ?>
+        <div class="row g-3">
+            <?php if ($quotations): ?>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header"><i class="fa fa-file-lines me-2"></i>Quotations</div>
+                    <div class="list-group list-group-flush">
+                        <?php foreach ($quotations as $q): ?>
+                        <a href="<?= BASE_URL ?>/modules/quotations/view.php?id=<?= $q['id'] ?>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span><?= e($q['quotation_number']) ?></span>
+                            <span><?= statusBadge($q['status']) ?> <strong class="ms-2"><?= money($q['total']) ?></strong></span>
+                        </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+            <?php if ($invoices): ?>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header"><i class="fa fa-file-invoice-dollar me-2"></i>Invoices</div>
+                    <div class="list-group list-group-flush">
+                        <?php foreach ($invoices as $inv): ?>
+                        <a href="<?= BASE_URL ?>/modules/invoices/view.php?id=<?= $inv['id'] ?>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span><?= e($inv['invoice_number']) ?></span>
+                            <span><?= statusBadge($inv['status']) ?> <strong class="ms-2"><?= money($inv['total']) ?></strong></span>
+                        </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php include __DIR__ . '/../../includes/footer.php'; ?>
