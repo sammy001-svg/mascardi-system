@@ -6,7 +6,6 @@ $db = getDB();
 $errors    = [];
 $preCarId  = (int)($_GET['car_id'] ?? 0);
 
-$cars      = $db->query("SELECT id, chassis_number, make, model, year FROM cars WHERE status NOT IN ('delivered') ORDER BY make, model")->fetchAll();
 $mechanics = $db->query("SELECT id, name FROM mechanics WHERE status='active' ORDER BY name")->fetchAll();
 $partsList = getPartsList();
 
@@ -99,9 +98,13 @@ include __DIR__ . '/../../includes/header.php';
                 <label class="form-label">Vehicle <span class="text-danger">*</span></label>
                 <select name="car_id" class="form-select select2" required>
                     <option value="">— Select vehicle —</option>
-                    <?php foreach ($cars as $c): ?>
+                    <?php 
+                    $cars = $db->query("SELECT id, chassis_number, make, model, year, car_type, owner_name FROM cars WHERE status NOT IN ('delivered') ORDER BY make, model")->fetchAll();
+                    foreach ($cars as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $postCarId === (int)$c['id'] ? 'selected' : '' ?>>
-                        <?= e($c['make'] . ' ' . $c['model'] . ' ' . $c['year'] . ' — ' . $c['chassis_number']) ?>
+                        <?= e($c['make'] . ' ' . $c['model'] . ' ' . $c['year']) ?>
+                        <?= $c['car_type']==='client' ? ' — [CLIENT: '.e($c['owner_name']).']' : '' ?>
+                        — <?= e($c['chassis_number']) ?>
                     </option>
                     <?php endforeach; ?>
                 </select>

@@ -6,7 +6,7 @@ $errors = [];
 $preCarId = (int)($_GET['car_id'] ?? 0);
 $preJobId = (int)($_GET['job_id'] ?? 0);
 
-$cars      = $db->query("SELECT id, chassis_number, make, model, year FROM cars ORDER BY make,model")->fetchAll();
+$cars      = $db->query("SELECT id, chassis_number, make, model, year, car_type, owner_name, owner_phone FROM cars ORDER BY make,model")->fetchAll();
 $jobs      = $db->query("SELECT id, job_number, car_id FROM workshop_jobs WHERE status NOT IN ('completed','cancelled') ORDER BY job_number")->fetchAll();
 $inventory = $db->query("SELECT id, part_number, part_name, selling_price FROM inventory ORDER BY part_name")->fetchAll();
 
@@ -152,10 +152,14 @@ $(function(){
                 <div class="row g-3">
                     <div class="col-12">
                         <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-                        <select name="car_id" class="form-select select2" required>
+                        <select name="car_id" id="car_select" class="form-select select2" required>
                             <option value="">Select car...</option>
                             <?php foreach ($cars as $c): ?>
-                            <option value="<?= $c['id'] ?>" <?= (($_POST['car_id']??$preCarId)==$c['id'])?'selected':'' ?>><?= e($c['make'].' '.$c['model'].' — '.$c['chassis_number']) ?></option>
+                            <option value="<?= $c['id'] ?>" 
+                                data-type="<?= $c['car_type'] ?>"
+                                data-owner="<?= e($c['owner_name']) ?>"
+                                data-phone="<?= e($c['owner_phone']) ?>"
+                                <?= (($_POST['car_id']??$preCarId)==$c['id'])?'selected':'' ?>><?= e($c['make'].' '.$c['model'].' — '.$c['chassis_number']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -170,12 +174,34 @@ $(function(){
                     </div>
                     <div class="col-6"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="<?= e($_POST['date']??date('Y-m-d')) ?>"></div>
                     <div class="col-6"><label class="form-label">Valid Until</label><input type="date" name="valid_until" class="form-control" value="<?= e($_POST['valid_until']??date('Y-m-d', strtotime('+30 days'))) ?>"></div>
-                    <div class="col-12"><label class="form-label">Customer Name</label><input type="text" name="customer_name" class="form-control" value="<?= e($_POST['customer_name']??'') ?>"></div>
-                    <div class="col-6"><label class="form-label">Phone</label><input type="text" name="customer_phone" class="form-control" value="<?= e($_POST['customer_phone']??'') ?>"></div>
+                    <div class="col-12"><label class="form-label">Customer Name</label><input type="text" id="customer_name" name="customer_name" class="form-control" value="<?= e($_POST['customer_name']??'') ?>"></div>
+                    <div class="col-6"><label class="form-label">Phone</label><input type="text" id="customer_phone" name="customer_phone" class="form-control" value="<?= e($_POST['customer_phone']??'') ?>"></div>
                     <div class="col-6"><label class="form-label">Email</label><input type="email" name="customer_email" class="form-control" value="<?= e($_POST['customer_email']??'') ?>"></div>
                 </div>
             </div>
         </div>
+        <script>
+        function populateCustomer() {
+            var opt = $('#car_select').find('option:selected');
+            if(opt.val() && opt.data('type') === 'client'){
+                $('#customer_name').val(opt.data('owner'));
+                $('#customer_phone').val(opt.data('phone'));
+            }
+        }
+        $(document).on('change', '#car_select', function(){
+            var opt = $(this).find('option:selected');
+            if(opt.data('type') === 'client'){
+                $('#customer_name').val(opt.data('owner'));
+                $('#customer_phone').val(opt.data('phone'));
+            } else {
+                $('#customer_name').val('');
+                $('#customer_phone').val('');
+            }
+        });
+        $(function(){
+            populateCustomer();
+        });
+        </script>
 
         <!-- Totals -->
         <div class="card">

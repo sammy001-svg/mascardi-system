@@ -6,7 +6,6 @@ $errors = [];
 $preCarId       = (int)($_GET['car_id'] ?? 0);
 $preAssessId    = (int)($_GET['assessment_id'] ?? 0);
 
-$cars      = $db->query("SELECT id, chassis_number, make, model, year FROM cars ORDER BY make,model")->fetchAll();
 $mechanics = $db->query("SELECT id, name FROM mechanics WHERE status='active' ORDER BY name")->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -46,8 +45,14 @@ include __DIR__ . '/../../includes/header.php';
                 <label class="form-label">Vehicle <span class="text-danger">*</span></label>
                 <select name="car_id" class="form-select select2" required>
                     <option value="">Select car...</option>
-                    <?php foreach ($cars as $c): ?>
-                    <option value="<?= $c['id'] ?>" <?= (($_POST['car_id']??$preCarId)==$c['id'])?'selected':'' ?>><?= e($c['make'].' '.$c['model'].' '.$c['year'].' — '.$c['chassis_number']) ?></option>
+                    <?php 
+                    $cars = $db->query("SELECT id, chassis_number, make, model, year, car_type, owner_name FROM cars ORDER BY make,model")->fetchAll();
+                    foreach ($cars as $c): ?>
+                    <option value="<?= $c['id'] ?>" <?= (($_POST['car_id']??$preCarId)==$c['id'])?'selected':'' ?>>
+                        <?= e($c['make'].' '.$c['model'].' '.$c['year']) ?> 
+                        <?= $c['car_type']==='client' ? ' — [CLIENT: '.e($c['owner_name']).']' : '' ?>
+                        — <?= e($c['chassis_number']) ?>
+                    </option>
                     <?php endforeach; ?>
                 </select>
             </div>

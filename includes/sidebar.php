@@ -101,8 +101,14 @@ function isActive(string $path): string {
 
         <?php if (hasRole('admin')): ?>
         <div class="nav-section">Administration</div>
+        <a href="<?= BASE_URL ?>/modules/locations/index.php" class="nav-item <?= isActive('/modules/locations/') ?>">
+            <i class="fa fa-map-location-dot"></i><span>Locations</span>
+        </a>
         <a href="<?= BASE_URL ?>/modules/users/index.php" class="nav-item <?= isActive('/modules/users/') ?>">
             <i class="fa fa-users-gear"></i><span>Users</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/audit/index.php" class="nav-item <?= isActive('/modules/audit/') ?>">
+            <i class="fa fa-history"></i><span>Audit Logs</span>
         </a>
         <a href="<?= BASE_URL ?>/modules/settings/index.php" class="nav-item <?= isActive('/modules/settings/') ?>">
             <i class="fa fa-gear"></i><span>Settings</span>

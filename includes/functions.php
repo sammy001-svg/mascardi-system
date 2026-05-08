@@ -115,3 +115,59 @@ function getDashboardStats(): array {
     $stats['revenue_month']      = $db->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid' AND MONTH(created_at)=MONTH(NOW()) AND YEAR(created_at)=YEAR(NOW())")->fetchColumn();
     return $stats;
 }
+
+/**
+ * Log system activity to audit_logs table
+ */
+function logActivity(string $action, string $module, ?int $recordId = null, ?string $details = null, $oldValues = null, $newValues = null): void {
+    try {
+        $db = getDB();
+        $user = authUser();
+        $userId = $user ? $user['id'] : null;
+        $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+
+        $stmt = $db->prepare("INSERT INTO audit_logs (user_id, action, module, record_id, details, old_values, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([
+            $userId,
+            $action,
+            $module,
+            $recordId,
+            $details,
+            $oldValues ? json_encode($oldValues) : null,
+            $newValues ? json_encode($newValues) : null,
+            $ip
+        ]);
+    } catch (Exception $e) {
+        error_log("Audit Log Error: " . $e->getMessage());
+    }
+}
+/**
+ * Handle file upload with basic security checks
+ */
+function handleUpload(array $file, string $targetDir, array $allowedTypes = ['jpg', 'jpeg', 'png', 'webp'], int $maxSize = 5242880): string {
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        throw new Exception("Upload error: " . $file['error']);
+    }
+
+    if ($file['size'] > $maxSize) {
+        throw new Exception("File too large. Maximum " . ($maxSize / 1048576) . "MB allowed.");
+    }
+
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowedTypes)) {
+        throw new Exception("Invalid file type. Allowed: " . implode(', ', $allowedTypes));
+    }
+
+    if (!is_dir($targetDir)) {
+        mkdir($targetDir, 0777, true);
+    }
+
+    $filename = bin2hex(random_bytes(8)) . '.' . $ext;
+    $targetPath = $targetDir . '/' . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+        throw new Exception("Failed to move uploaded file.");
+    }
+
+    return $filename;
+}

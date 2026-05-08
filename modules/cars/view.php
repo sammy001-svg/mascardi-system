@@ -4,7 +4,7 @@ $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/cars/index.php');
 $db = getDB();
 
-$car = $db->prepare("SELECT * FROM cars WHERE id=?");
+$car = $db->prepare("SELECT c.*, l.name AS location_name FROM cars c LEFT JOIN locations l ON l.id = c.location_id WHERE c.id=?");
 $car->execute([$id]);
 $car = $car->fetch();
 if (!$car) { setFlash('error','Car not found.'); redirect(BASE_URL.'/modules/cars/index.php'); }
@@ -27,16 +27,56 @@ $quotations->execute([$id]); $quotations = $quotations->fetchAll();
 $invoices = $db->prepare("SELECT * FROM invoices WHERE car_id=? ORDER BY id DESC");
 $invoices->execute([$id]); $invoices = $invoices->fetchAll();
 
+$images = $db->prepare("SELECT * FROM car_images WHERE car_id=? ORDER BY is_primary DESC, created_at DESC");
+$images->execute([$id]); $images = $images->fetchAll();
+$primaryImage = null;
+foreach($images as $img) if($img['is_primary']) $primaryImage = $img;
+
 $pageTitle = $car['make'] . ' ' . $car['model'];
 include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><?= e($car['make'].' '.$car['model']) ?> <code class="ms-2"><?= e($car['chassis_number']) ?></code></h5>
     <div class="d-flex gap-2">
+        <a href="media.php?id=<?= $id ?>" class="btn btn-sm btn-outline-primary"><i class="fa fa-camera me-1"></i>Photos (<?= count($images) ?>)</a>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
 </div>
+
+<?php if ($primaryImage): ?>
+<div class="card mb-4 overflow-hidden">
+    <div class="row g-0">
+        <div class="col-md-7">
+            <img src="<?= BASE_URL ?>/uploads/cars/<?= e($primaryImage['file_path']) ?>" class="img-fluid w-100 h-100" style="object-fit:cover; max-height:400px;">
+        </div>
+        <div class="col-md-5 d-flex flex-column">
+            <div class="card-body bg-light flex-grow-1">
+                <h6 class="fw-bold mb-3">Vehicle Gallery</h6>
+                <div class="row g-2">
+                    <?php 
+                    $thumbCount = 0;
+                    foreach($images as $img): 
+                        if($img['is_primary']) continue;
+                        if($thumbCount >= 6) break;
+                    ?>
+                    <div class="col-4">
+                        <img src="<?= BASE_URL ?>/uploads/cars/<?= e($img['file_path']) ?>" class="img-fluid rounded border shadow-sm" style="height:80px; width:100%; object-fit:cover;">
+                    </div>
+                    <?php $thumbCount++; endforeach; ?>
+                    <?php if (count($images) > 7): ?>
+                    <div class="col-4">
+                        <a href="media.php?id=<?= $id ?>" class="d-flex align-items-center justify-content-center bg-white border rounded text-decoration-none text-primary fw-bold" style="height:80px">
+                            +<?= count($images) - 7 ?>
+                        </a>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <div class="row g-4">
     <!-- Car Details -->
@@ -45,6 +85,23 @@ include __DIR__ . '/../../includes/header.php';
             <div class="card-header"><i class="fa fa-car me-2"></i>Vehicle Details</div>
             <div class="card-body">
                 <dl class="row mb-0" style="font-size:13.5px">
+                    <dt class="col-5 text-muted">Vehicle Type</dt>
+                    <dd class="col-7">
+                        <?php if ($car['car_type'] === 'client'): ?>
+                            <span class="badge bg-info text-dark">CLIENT VEHICLE</span>
+                        <?php else: ?>
+                            <span class="badge bg-primary">INVENTORY (STOCK)</span>
+                        <?php endif; ?>
+                    </dd>
+                    <?php if ($car['car_type'] === 'client'): ?>
+                    <dt class="col-5 text-muted">Owner</dt>
+                    <dd class="col-7">
+                        <div class="fw-bold"><?= e($car['owner_name']) ?></div>
+                        <div class="small text-muted"><?= e($car['owner_phone'] ?: 'No Phone') ?></div>
+                    </dd>
+                    <?php endif; ?>
+                    <dt class="col-5 text-muted">Current Yard</dt>
+                    <dd class="col-7 fw-bold text-primary"><i class="fa fa-location-dot me-1"></i><?= e($car['location_name'] ?: '—') ?></dd>
                     <dt class="col-5 text-muted">Status</dt>
                     <dd class="col-7"><?= statusBadge($car['status']) ?></dd>
                     <dt class="col-5 text-muted">Chassis</dt>

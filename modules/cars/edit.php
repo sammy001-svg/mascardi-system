@@ -19,6 +19,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'engine_number'       => trim($_POST['engine_number'] ?? ''),
         'transmission'        => $_POST['transmission'] ?? 'manual',
         'fuel_type'           => $_POST['fuel_type'] ?? 'petrol',
+        'car_type'            => $_POST['car_type'] ?? 'inventory',
+        'owner_name'          => trim($_POST['owner_name'] ?? ''),
+        'owner_phone'         => trim($_POST['owner_phone'] ?? ''),
+        'location_id'         => (int)($_POST['location_id'] ?? 1),
         'body_type'           => trim($_POST['body_type'] ?? ''),
         'status'              => $_POST['status'] ?? 'in_transit',
         'notes'               => trim($_POST['notes'] ?? ''),
@@ -28,8 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$data['model'])          $errors[] = 'Model is required.';
 
     if (empty($errors)) {
-        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,body_type=?,status=?,notes=? WHERE id=?")
+        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,body_type=?,status=?,notes=? WHERE id=?")
            ->execute([...array_values($data), $id]);
+        logActivity('update', 'cars', $id, "Updated car: {$data['make']} {$data['model']} ({$data['chassis_number']})");
         setFlash('success','Car updated successfully.');
         redirect(BASE_URL.'/modules/cars/view.php?id='.$id);
     }
@@ -96,6 +101,31 @@ include __DIR__ . '/../../includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label">Vehicle Type <span class="text-danger">*</span></label>
+                    <select name="car_type" id="car_type" class="form-select" required>
+                        <option value="inventory" <?= ($car['car_type'] ?? 'inventory') === 'inventory' ? 'selected' : '' ?>>Inventory (Imported)</option>
+                        <option value="client" <?= ($car['car_type'] ?? '') === 'client' ? 'selected' : '' ?>>Client (Repair/Service)</option>
+                    </select>
+                </div>
+                <div class="col-md-4 owner-fields" style="<?= ($car['car_type'] ?? '') === 'client' ? '' : 'display:none' ?>">
+                    <label class="form-label">Owner Name <span class="text-danger">*</span></label>
+                    <input type="text" name="owner_name" class="form-control" value="<?= e($car['owner_name'] ?? '') ?>" placeholder="Customer Name">
+                </div>
+                <div class="col-md-4 owner-fields" style="<?= ($car['car_type'] ?? '') === 'client' ? '' : 'display:none' ?>">
+                    <label class="form-label">Owner Phone</label>
+                    <input type="text" name="owner_phone" class="form-control" value="<?= e($car['owner_phone'] ?? '') ?>" placeholder="Customer Phone">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Current Location <span class="text-danger">*</span></label>
+                    <select name="location_id" class="form-select" required>
+                        <?php 
+                        $locs = $db->query("SELECT id, name FROM locations WHERE status='active' OR id = " . (int)($car['location_id'] ?? 0) . " ORDER BY name ASC")->fetchAll();
+                        foreach ($locs as $l): ?>
+                        <option value="<?= $l['id'] ?>" <?= (int)($car['location_id'] ?? 0) === (int)$l['id'] ? 'selected' : '' ?>><?= e($l['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2"><?= e($car['notes'] ?? '') ?></textarea></div>
             </div>
             <div class="mt-4 d-flex gap-2">
@@ -105,4 +135,15 @@ include __DIR__ . '/../../includes/header.php';
         </form>
     </div>
 </div>
+
+<script>
+document.getElementById('car_type').addEventListener('change', function() {
+    const isClient = this.value === 'client';
+    document.querySelectorAll('.owner-fields').forEach(el => {
+        el.style.display = isClient ? 'block' : 'none';
+        const input = el.querySelector('input');
+        if (input) input.required = isClient && input.name === 'owner_name';
+    });
+});
+</script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

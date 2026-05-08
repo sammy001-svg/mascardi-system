@@ -14,6 +14,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $engine    = trim($_POST['engine_number'] ?? '');
     $trans     = $_POST['transmission'] ?? 'manual';
     $fuel      = $_POST['fuel_type'] ?? 'petrol';
+    $carType   = $_POST['car_type'] ?? 'inventory';
+    $ownerName = trim($_POST['owner_name'] ?? '');
+    $ownerPhone = trim($_POST['owner_phone'] ?? '');
     $body      = trim($_POST['body_type'] ?? '');
     $notes     = trim($_POST['notes'] ?? '');
 
@@ -21,13 +24,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$make)    $errors[] = 'Make is required.';
     if (!$model)   $errors[] = 'Model is required.';
     if (!$year)    $errors[] = 'Year is required.';
+    if ($carType === 'client' && !$ownerName) $errors[] = 'Owner name is required for client vehicles.';
 
     if (empty($errors)) {
         try {
-            $stmt = $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,body_type,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
-            $stmt->execute([$chassis,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$body,$notes]);
+            $locId = (int)($_POST['location_id'] ?? 1);
+            $stmt = $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,location_id,body_type,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([$chassis,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$locId,$body,$notes]);
+            $carId = $db->lastInsertId();
+            
+            logActivity('create', 'cars', $carId, "Added car: $make $model ($chassis)");
             setFlash('success', "Car {$make} {$model} ({$chassis}) added successfully.");
-            redirect(BASE_URL . '/modules/cars/view.php?id=' . $db->lastInsertId());
+            redirect(BASE_URL . '/modules/cars/view.php?id=' . $carId);
         } catch (PDOException $e) {
             if ($e->getCode() === '23000') {
                 $errors[] = 'Chassis number already exists.';
@@ -106,6 +114,31 @@ include __DIR__ . '/../../includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label">Vehicle Type <span class="text-danger">*</span></label>
+                    <select name="car_type" id="car_type" class="form-select" required>
+                        <option value="inventory" <?= ($_POST['car_type'] ?? 'inventory') === 'inventory' ? 'selected' : '' ?>>Inventory (Imported)</option>
+                        <option value="client" <?= ($_POST['car_type'] ?? '') === 'client' ? 'selected' : '' ?>>Client (Repair/Service)</option>
+                    </select>
+                </div>
+                <div class="col-md-4 owner-fields" style="<?= ($_POST['car_type'] ?? '') === 'client' ? '' : 'display:none' ?>">
+                    <label class="form-label">Owner Name <span class="text-danger">*</span></label>
+                    <input type="text" name="owner_name" class="form-control" value="<?= e($_POST['owner_name'] ?? '') ?>" placeholder="Customer Name">
+                </div>
+                <div class="col-md-4 owner-fields" style="<?= ($_POST['car_type'] ?? '') === 'client' ? '' : 'display:none' ?>">
+                    <label class="form-label">Owner Phone</label>
+                    <input type="text" name="owner_phone" class="form-control" value="<?= e($_POST['owner_phone'] ?? '') ?>" placeholder="Customer Phone">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Current Location <span class="text-danger">*</span></label>
+                    <select name="location_id" class="form-select" required>
+                        <?php 
+                        $locs = $db->query("SELECT id, name FROM locations WHERE status='active' ORDER BY name ASC")->fetchAll();
+                        foreach ($locs as $l): ?>
+                        <option value="<?= $l['id'] ?>" <?= (int)($_POST['location_id'] ?? 1) === (int)$l['id'] ? 'selected' : '' ?>><?= e($l['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <div class="col-12">
                     <label class="form-label">Notes</label>
                     <textarea name="notes" class="form-control" rows="2"><?= e($_POST['notes'] ?? '') ?></textarea>
@@ -118,4 +151,15 @@ include __DIR__ . '/../../includes/header.php';
         </form>
     </div>
 </div>
+
+<script>
+document.getElementById('car_type').addEventListener('change', function() {
+    const isClient = this.value === 'client';
+    document.querySelectorAll('.owner-fields').forEach(el => {
+        el.style.display = isClient ? 'block' : 'none';
+        const input = el.querySelector('input');
+        if (input) input.required = isClient && input.name === 'owner_name';
+    });
+});
+</script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
