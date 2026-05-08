@@ -31,7 +31,6 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if(empty($lpos)): ?><tr><td colspan="10" class="text-center text-muted py-4">No LPOs yet.</td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>

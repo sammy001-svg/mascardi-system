@@ -29,7 +29,6 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if(empty($mechanics)): ?><tr><td colspan="8" class="text-center text-muted py-4">No mechanics found.</td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>

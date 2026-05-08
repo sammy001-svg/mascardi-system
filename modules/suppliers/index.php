@@ -127,12 +127,6 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endif; ?>
                 </tr>
                 <?php endforeach; ?>
-                <?php if (empty($suppliers)): ?>
-                <tr><td colspan="10" class="text-center py-5 text-muted">
-                    <i class="fa fa-truck fa-2x mb-2 d-block"></i>No suppliers found.
-                    <?php if (hasRole(['admin','manager'])): ?><br><a href="add.php" class="btn btn-sm btn-primary mt-2"><i class="fa fa-plus me-1"></i>Add First Supplier</a><?php endif; ?>
-                </td></tr>
-                <?php endif; ?>
             </tbody>
         </table>
     </div>

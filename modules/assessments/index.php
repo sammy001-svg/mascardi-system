@@ -30,7 +30,6 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if(empty($assessments)): ?><tr><td colspan="9" class="text-center text-muted py-4">No assessments yet.</td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>

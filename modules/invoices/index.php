@@ -37,7 +37,6 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if(empty($invoices)): ?><tr><td colspan="9" class="text-center text-muted py-4">No invoices found.</td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>

@@ -49,7 +49,6 @@ include __DIR__ . '/../../includes/header.php';
                     <td><a href="view.php?id=<?= $r['id'] ?>" class="btn btn-xs btn-outline-primary"><i class="fa fa-eye"></i></a></td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if(empty($records)): ?><tr><td colspan="10" class="text-center text-muted py-4">No intake records yet.</td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>

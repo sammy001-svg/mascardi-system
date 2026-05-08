@@ -110,7 +110,10 @@ function isActive(string $path): string {
         <?php endif; ?>
     </nav>
 
-    <div class="sidebar-footer">
-        <small class="text-muted">v<?= APP_VERSION ?></small>
+    <div class="sidebar-footer border-top border-white-10 pt-3">
+        <a href="<?= BASE_URL ?>/logout.php" class="nav-item text-danger-light mb-2">
+            <i class="fa fa-right-from-bracket"></i><span>Sign Out</span>
+        </a>
+        <small class="text-muted d-block mt-2">v<?= APP_VERSION ?></small>
     </div>
 </div>

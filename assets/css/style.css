@@ -129,6 +129,9 @@ body {
     padding: 12px 16px;
     border-top: 1px solid #21262d;
 }
+.text-danger-light { color: #f87171 !important; }
+.text-danger-light:hover { color: #ef4444 !important; background: rgba(220,38,38,.1) !important; }
+.border-white-10 { border-color: rgba(255,255,255,.1) !important; }
 
 /* ── Top Navbar ──────────────────────────────────────── */
 .top-navbar {

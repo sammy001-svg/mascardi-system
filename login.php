@@ -119,14 +119,14 @@ body{background:linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.75)),
 .login-title{font-size:23px;font-weight:800;color:#0f172a;text-align:center;margin-bottom:4px}
 .login-sub{color:#64748b;font-size:13px;text-align:center;margin-bottom:28px}
 .form-label{font-size:13px;font-weight:600;color:#374151;margin-bottom:5px}
-.form-control{font-size:14px;border-color:#e2e8f0;padding:10px 14px 10px 40px;border-radius:8px}
+.form-control{font-size:14px;border-color:#e2e8f0;padding:10px 40px;border-radius:8px}
 .form-control:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
 .field-wrap{position:relative}
-.field-wrap i{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px;pointer-events:none}
+.field-wrap > i:first-child{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px;pointer-events:none}
+.password-toggle{position:absolute;right:13px;top:50%;transform:translateY(-50%);color:#94a3b8;cursor:pointer;z-index:10;transition:color .15s;background:none;border:none;padding:0;font-size:14px;display:flex;align-items:center}
+.password-toggle:hover{color:#2563eb}
 .btn-login{background:#2563eb;border:none;padding:12px;font-size:15px;font-weight:700;border-radius:10px;letter-spacing:.3px}
 .btn-login:hover{background:#1d4ed8}
-.alert{border-radius:10px;font-size:13px}
-.first-run-badge{background:#fef3c7;color:#92400e;border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:20px;border:1px solid #fcd34d}
 </style>
 </head>
 <body>
@@ -169,13 +169,19 @@ body{background:linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.75)),
             </div>
             <div class="mb-3">
                 <label class="form-label">Password <span class="text-danger">*</span></label>
-                <div class="field-wrap"><i class="fa fa-lock"></i>
-                <input type="password" name="password" class="form-control" placeholder="At least 6 characters" required></div>
+                <div class="field-wrap">
+                    <i class="fa fa-lock"></i>
+                    <input type="password" name="password" class="form-control password-input" placeholder="At least 6 characters" required>
+                    <button type="button" class="password-toggle"><i class="fa fa-eye"></i></button>
+                </div>
             </div>
             <div class="mb-4">
                 <label class="form-label">Confirm Password <span class="text-danger">*</span></label>
-                <div class="field-wrap"><i class="fa fa-lock"></i>
-                <input type="password" name="password_confirm" class="form-control" placeholder="Repeat password" required></div>
+                <div class="field-wrap">
+                    <i class="fa fa-lock"></i>
+                    <input type="password" name="password_confirm" class="form-control password-input" placeholder="Repeat password" required>
+                    <button type="button" class="password-toggle"><i class="fa fa-eye"></i></button>
+                </div>
             </div>
             <button type="submit" class="btn btn-login btn-primary w-100 text-white">
                 <i class="fa fa-check-circle me-2"></i>Create Admin Account
@@ -192,8 +198,11 @@ body{background:linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.75)),
             </div>
             <div class="mb-4">
                 <label class="form-label">Password</label>
-                <div class="field-wrap"><i class="fa fa-lock"></i>
-                <input type="password" name="password" class="form-control" placeholder="Enter your password" required autocomplete="current-password"></div>
+                <div class="field-wrap">
+                    <i class="fa fa-lock"></i>
+                    <input type="password" name="password" class="form-control password-input" placeholder="Enter your password" required autocomplete="current-password">
+                    <button type="button" class="password-toggle"><i class="fa fa-eye"></i></button>
+                </div>
             </div>
             <button type="submit" class="btn btn-login btn-primary w-100 text-white">
                 <i class="fa fa-right-to-bracket me-2"></i>Sign In
@@ -206,5 +215,21 @@ body{background:linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.75)),
         <?= htmlspecialchars(APP_NAME) ?> &mdash; Car Yard Management System
     </p>
 </div>
+
+<script>
+document.querySelectorAll('.password-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const input = btn.closest('.field-wrap').querySelector('.password-input');
+        const icon = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.replace('fa-eye', 'fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+    });
+});
+</script>
 </body>
 </html>
