@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)"
+    ]
+  }
+}

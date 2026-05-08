@@ -17,25 +17,45 @@
 <link href="<?= BASE_URL ?>/assets/css/style.css" rel="stylesheet">
 </head>
 <body>
+<?php requireLogin(); $__user = authUser(); ?>
 <div class="wrapper d-flex">
 <?php include __DIR__ . '/sidebar.php'; ?>
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 <div class="main-content flex-grow-1">
+
 <!-- Top Navbar -->
-<nav class="top-navbar navbar px-4 py-2 d-flex align-items-center justify-content-between">
-    <button class="btn btn-sm sidebar-toggle me-3" id="sidebarToggle">
-        <i class="fa fa-bars"></i>
-    </button>
-    <span class="fw-semibold text-white"><?= isset($pageTitle) ? e($pageTitle) : '' ?></span>
+<nav class="top-navbar navbar px-3 py-2 d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-sm sidebar-toggle" id="sidebarToggle">
+            <i class="fa fa-bars"></i>
+        </button>
+        <span class="fw-semibold text-white ms-1"><?= isset($pageTitle) ? e($pageTitle) : '' ?></span>
+    </div>
     <div class="d-flex align-items-center gap-3">
         <?php $ls = getDashboardStats(); ?>
         <?php if ($ls['low_stock'] > 0): ?>
-        <a href="<?= BASE_URL ?>/modules/inventory/index.php?filter=low_stock" class="text-warning text-decoration-none small">
-            <i class="fa fa-triangle-exclamation"></i> <?= $ls['low_stock'] ?> low stock
+        <a href="<?= BASE_URL ?>/modules/inventory/index.php?filter=low_stock" class="text-warning text-decoration-none small d-none d-md-flex align-items-center gap-1">
+            <i class="fa fa-triangle-exclamation"></i>
+            <span><?= $ls['low_stock'] ?> low stock</span>
         </a>
         <?php endif; ?>
-        <span class="text-light small"><?= date('d M Y') ?></span>
+        <span class="text-light small d-none d-md-inline"><?= date('d M Y') ?></span>
+        <!-- User info -->
+        <div class="d-flex align-items-center gap-2">
+            <div class="user-avatar" title="<?= e($__user['role']) ?>">
+                <?= strtoupper(substr($__user['name'], 0, 1)) ?>
+            </div>
+            <div class="d-none d-lg-block">
+                <div class="text-white fw-medium" style="font-size:13px;line-height:1.2"><?= e($__user['name']) ?></div>
+                <div class="text-white-50" style="font-size:11px"><?= ucfirst(e($__user['role'])) ?></div>
+            </div>
+            <a href="<?= BASE_URL ?>/logout.php" class="btn btn-sm btn-outline-light py-1 px-2 ms-1" title="Sign Out">
+                <i class="fa fa-right-from-bracket"></i>
+            </a>
+        </div>
     </div>
 </nav>
+
 <!-- Flash message -->
 <?php $flash = getFlash(); if ($flash): ?>
 <div class="alert alert-<?= $flash['type'] === 'error' ? 'danger' : $flash['type'] ?> alert-dismissible fade show mx-4 mt-3" role="alert">

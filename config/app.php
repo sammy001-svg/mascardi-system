@@ -1,7 +1,7 @@
 <?php
 define('APP_NAME', 'Mascardi System');
 define('APP_VERSION', '1.0.0');
-define('BASE_URL', '/mascardi-system');  // adjust to your server path
+define('BASE_URL', 'http://localhost:8001');  // adjust to your server path
 define('BASE_PATH', dirname(__DIR__));
 
 // Start session

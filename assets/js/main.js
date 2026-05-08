@@ -2,7 +2,17 @@ $(function () {
 
     // ── Sidebar toggle ──────────────────────────────
     $('#sidebarToggle').on('click', function () {
-        $('#sidebar').toggleClass('collapsed');
+        if ($(window).width() <= 768) {
+            $('#sidebar').toggleClass('open');
+            $('#sidebarBackdrop').toggleClass('show');
+        } else {
+            $('#sidebar').toggleClass('collapsed');
+        }
+    });
+
+    $('#sidebarBackdrop').on('click', function () {
+        $('#sidebar').removeClass('open');
+        $(this).removeClass('show');
     });
 
     // ── DataTables init ─────────────────────────────

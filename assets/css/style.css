@@ -168,6 +168,105 @@ body { background: var(--body-bg); font-family: 'Segoe UI', system-ui, sans-seri
 .part-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
 .part-row:last-child { border-bottom: none; }
 
+/* ── Assessment: Type & Overall Status Buttons ──────── */
+.type-radio, .os-radio { position: absolute; opacity: 0; pointer-events: none; }
+.type-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 8px; cursor: pointer;
+    border: 2px solid var(--border); background: #fff;
+    font-size: 13px; font-weight: 600; color: #64748b;
+    transition: all .15s; white-space: nowrap;
+}
+.type-btn:hover { border-color: #94a3b8; color: #374151; }
+.type-radio:checked + .type-btn { background: #dbeafe; border-color: #2563eb; color: #2563eb; }
+
+.os-btn {
+    display: inline-block; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+    border: 2px solid var(--border); background: #fff;
+    font-size: 12px; font-weight: 700; color: #64748b; transition: all .15s;
+}
+.os-btn:hover { border-color: var(--os-color,#64748b); color: var(--os-color,#64748b); }
+.os-radio:checked + .os-btn { background: var(--os-color,#64748b); border-color: var(--os-color,#64748b); color: #fff; }
+
+/* ── Assessment: Fuel Gauge ─────────────────────────── */
+.fuel-gauge { display: flex; border: 2px solid var(--border); border-radius: 10px; overflow: hidden; }
+.fuel-radio { position: absolute; opacity: 0; pointer-events: none; }
+.fuel-btn {
+    flex: 1; text-align: center; padding: 8px 4px; cursor: pointer;
+    font-size: 13px; font-weight: 700; color: #94a3b8;
+    background: #f8fafc; border-right: 1px solid var(--border);
+    transition: background .12s, color .12s;
+}
+.fuel-btn:last-of-type { border-right: none; }
+.fuel-btn:hover { background: #e2e8f0; color: #374151; }
+.fuel-radio:checked + .fuel-btn { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+/* ── Assessment: Category Accordion ─────────────────── */
+.assess-category { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.assess-cat-header {
+    background: #f8fafc; padding: 12px 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; -webkit-user-select: none; user-select: none; transition: background .12s;
+}
+.assess-cat-header:hover { background: #f1f5f9; }
+.assess-cat-body { padding: 0 18px; }
+
+/* ── Assessment: Part Row ────────────────────────────── */
+.assess-part-row {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 9px 0; border-bottom: 1px solid #f1f5f9;
+    transition: background .1s;
+}
+.assess-part-row:last-child { border-bottom: none; }
+.assess-part-row:has(input[type=radio]:not([value=good]):checked) {
+    background: #fffbf0; margin: 0 -18px; padding: 9px 18px;
+}
+.assess-part-name { min-width: 170px; flex: 1; font-size: 13.5px; font-weight: 500; color: #1e293b; }
+.assess-part-notes { flex: 1; min-width: 200px; }
+.view-issue-row { background: #fffbf0; margin: 0 -18px; padding: 9px 18px; }
+
+/* ── Assessment: Condition Button Group ──────────────── */
+.cond-group { display: flex; gap: 4px; flex-shrink: 0; }
+.cond-radio { position: absolute; opacity: 0; pointer-events: none; }
+.cond-btn {
+    padding: 5px 9px; border-radius: 7px; cursor: pointer;
+    border: 2px solid #e2e8f0; font-size: 11px; font-weight: 700;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: #f8fafc; color: #94a3b8; transition: all .12s;
+    min-width: 52px; text-align: center; line-height: 1.1;
+}
+.cond-btn i { font-size: 12px; }
+.cond-btn:hover { border-color: #94a3b8; color: #475569; }
+
+/* Selected states */
+.cond-radio:checked + .cond-good    { background: #dcfce7; color: #16a34a; border-color: #16a34a; }
+.cond-radio:checked + .cond-minor   { background: #fef3c7; color: #b45309; border-color: #b45309; }
+.cond-radio:checked + .cond-major   { background: #fee2e2; color: #dc2626; border-color: #dc2626; }
+.cond-radio:checked + .cond-missing { background: #0f172a; color: #f1f5f9; border-color: #0f172a; }
+.cond-radio:checked + .cond-service { background: #dbeafe; color: #2563eb; border-color: #2563eb; }
+/* Hover states (unselected) */
+.cond-good:hover    { background: #dcfce7; color: #16a34a; border-color: #bbf7d0; }
+.cond-minor:hover   { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+.cond-major:hover   { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+.cond-missing:hover { background: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+.cond-service:hover { background: #dbeafe; color: #2563eb; border-color: #93c5fd; }
+
+/* ── Assessment: Sticky Footer ───────────────────────── */
+.assess-footer {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #fff; border-top: 1px solid var(--border);
+    padding: 14px 28px; z-index: 98;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 -4px 16px rgba(0,0,0,.08);
+}
+
+@media (max-width: 640px) {
+    .cond-btn span { display: none; }
+    .cond-btn { min-width: 36px; }
+    .assess-part-name { min-width: 120px; }
+    .type-btn { padding: 6px 10px; font-size: 12px; }
+}
+
 /* ── Print Styles ───────────────────────────────────── */
 .print-doc { max-width: 820px; margin: 0 auto; background: #fff; }
 .doc-header { border-bottom: 3px solid var(--primary); padding-bottom: 20px; margin-bottom: 24px; }
@@ -213,3 +312,103 @@ body { background: var(--body-bg); font-family: 'Segoe UI', system-ui, sans-seri
     .card { box-shadow: none !important; border: none !important; }
     body { background: #fff; }
 }
+
+/* ── Welcome Banner ─────────────────────────────────── */
+.welcome-banner {
+    background: linear-gradient(135deg, #1e293b 0%, #1d4ed8 100%);
+    color: #fff;
+    border-radius: 14px;
+    padding: 22px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(37,99,235,.25);
+}
+.welcome-text h5 { color: #fff; font-size: 17px; font-weight: 700; }
+.welcome-text p  { color: rgba(255,255,255,.7); font-size: 13px; }
+.welcome-stat-val { font-size: 22px; font-weight: 800; color: #fff; line-height: 1; }
+.welcome-stat-lbl { font-size: 11px; color: rgba(255,255,255,.65); margin-top: 2px; }
+.welcome-divider   { opacity: .25; }
+
+/* ── Stat Card as Link ──────────────────────────────── */
+.stat-card-link {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+}
+.stat-card-link:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 18px rgba(0,0,0,.12);
+    color: inherit;
+}
+.stat-value-sm { font-size: 15px !important; }
+
+/* ── Quick Actions Grid ─────────────────────────────── */
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+    gap: 12px;
+}
+.quick-action-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+    padding: 18px 10px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    text-decoration: none;
+    color: #0f172a;
+    background: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    transition: transform .15s, box-shadow .15s, border-color .15s;
+}
+.quick-action-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0,0,0,.1);
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+.qa-icon {
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+}
+
+/* ── Empty State ────────────────────────────────────── */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+}
+
+/* ── Job List Item ──────────────────────────────────── */
+.job-list-item { border-left: 3px solid transparent !important; transition: border-color .15s; }
+.job-list-item:hover { border-left-color: var(--primary) !important; }
+
+/* ── User Avatar (navbar) ───────────────────────────── */
+.user-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.18);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+
+/* ── Mobile Sidebar Backdrop ────────────────────────── */
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 99;
+}
+.sidebar-backdrop.show { display: block; }
