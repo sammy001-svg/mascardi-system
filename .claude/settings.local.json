@@ -5,7 +5,9 @@
       "Bash(Select-Object FullName)",
       "Bash(Get-ChildItem -Path \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\" -File -Include \"*.jpg\", \"*.jpeg\", \"*.png\", \"*.gif\")",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(grep -E \"\\\\.\\(jpg|jpeg|png|gif\\)$\")"
+      "Bash(grep -E \"\\\\.\\(jpg|jpeg|png|gif\\)$\")",
+      "Bash(mysql -u root mascardi_db -e ' *)",
+      "PowerShell(& \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root mascardi_db 2>&1)"
     ]
   }
 }

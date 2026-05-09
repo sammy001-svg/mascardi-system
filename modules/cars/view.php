@@ -37,9 +37,12 @@ include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><?= e($car['make'].' '.$car['model']) ?> <code class="ms-2"><?= e($car['chassis_number']) ?></code></h5>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
         <a href="media.php?id=<?= $id ?>" class="btn btn-sm btn-outline-primary"><i class="fa fa-camera me-1"></i>Photos (<?= count($images) ?>)</a>
+        <?php if (canEditDelete()): ?>
+        <a href="assign_driver.php?id=<?= $id ?>" class="btn btn-sm btn-outline-warning"><i class="fa fa-id-card me-1"></i>Assign Driver</a>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
+        <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
 </div>

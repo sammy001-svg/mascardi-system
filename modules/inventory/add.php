@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
-requireRole('admin', 'manager');
+requireRole(['admin', 'manager']);
 $pageTitle = 'Add Part';
 $db = getDB();
 $error = '';

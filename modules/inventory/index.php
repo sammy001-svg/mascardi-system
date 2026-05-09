@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
 $pageTitle = 'Parts & Inventory';
 $db = getDB();
+$showPrices = !hasRole('mechanic');
 
 $filter = $_GET['filter'] ?? '';
 $search = trim($_GET['q'] ?? '');
@@ -56,7 +57,7 @@ include __DIR__ . '/../../includes/header.php';
         <h5 class="mb-1">Parts &amp; Inventory</h5>
         <div class="text-muted small">Stock management for parts and materials</div>
     </div>
-    <?php if (hasRole(['admin','manager'])): ?>
+    <?php if (canEditDelete()): ?>
     <a href="add.php" class="btn btn-primary btn-sm"><i class="fa fa-plus me-1"></i>Add Part</a>
     <?php endif; ?>
 </div>
@@ -94,6 +95,7 @@ include __DIR__ . '/../../includes/header.php';
         </div>
         </a>
     </div>
+    <?php if ($showPrices): ?>
     <div class="col-6 col-md-3">
         <div class="stat-card">
             <div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="fa fa-coins"></i></div>
@@ -103,6 +105,7 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </div>
     </div>
+    <?php endif; ?>
 </div>
 
 <!-- Filters -->
@@ -146,12 +149,14 @@ include __DIR__ . '/../../includes/header.php';
                     <th>Category</th>
                     <th>Qty</th>
                     <th>Unit</th>
+                    <?php if ($showPrices): ?>
                     <th>Buy Price</th>
                     <th>Sell Price</th>
+                    <?php endif; ?>
                     <th>Reorder At</th>
                     <th>Status</th>
                     <th>Supplier</th>
-                    <?php if (hasRole(['admin','manager'])): ?><th>Actions</th><?php endif; ?>
+                    <?php if (canEditDelete()): ?><th>Actions</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -172,12 +177,14 @@ include __DIR__ . '/../../includes/header.php';
                     <td><span class="badge bg-light text-dark border"><?= e($item['category'] ?? '—') ?></span></td>
                     <td class="fw-semibold <?= $qty==0?'text-danger':($qty<=$rl?'text-warning':'') ?>"><?= number_format($qty, 2) ?></td>
                     <td class="text-muted small"><?= e($item['unit']) ?></td>
+                    <?php if ($showPrices): ?>
                     <td><?= money((float)$item['unit_price']) ?></td>
                     <td><?= money((float)$item['selling_price']) ?></td>
+                    <?php endif; ?>
                     <td class="text-muted"><?= number_format($rl, 2) ?></td>
                     <td><?= $stockBadge ?></td>
                     <td class="text-muted small"><?= e($item['supplier_name'] ?? '—') ?></td>
-                    <?php if (hasRole(['admin','manager'])): ?>
+                    <?php if (canEditDelete()): ?>
                     <td>
                         <a href="edit.php?id=<?= $item['id'] ?>" class="btn btn-xs btn-outline-secondary"><i class="fa fa-pen"></i></a>
                         <a href="adjust.php?id=<?= $item['id'] ?>" class="btn btn-xs btn-outline-primary" title="Adjust Stock"><i class="fa fa-sliders"></i></a>

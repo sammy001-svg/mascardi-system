@@ -1,6 +1,6 @@
-</div><!-- /page-content -->
-</div><!-- /main-content -->
-</div><!-- /wrapper -->
+</div><!-- /page-body -->
+</div><!-- /main-wrap -->
+</div><!-- /appShell -->
 
 <!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -12,7 +12,7 @@
 <!-- Select2 -->
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <!-- Custom -->
-<script src="<?= BASE_URL ?>/assets/js/main.js"></script>
+<script src="<?= BASE_URL ?>/assets/js/main.js?v=<?= @filemtime(BASE_PATH . '/assets/js/main.js') ?: time() ?>"></script>
 <?php if (isset($extraJs)) echo $extraJs; ?>
 </body>
 </html>

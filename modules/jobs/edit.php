@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin(); requireRole('admin');
 $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/jobs/index.php');
 $db=getDB(); $stmt=$db->prepare("SELECT * FROM workshop_jobs WHERE id=?"); $stmt->execute([$id]); $job=$stmt->fetch();
 if(!$job){setFlash('error','Not found.');redirect(BASE_URL.'/modules/jobs/index.php');}

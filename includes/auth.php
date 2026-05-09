@@ -64,9 +64,14 @@ function canAccess(string $module): bool {
     if (!$user) return false;
     if ($user['role'] === 'admin') return true;
     $map = [
-        'manager'  => ['cars','drivers','mechanics','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports'],
-        'mechanic' => ['cars','jobs','assessments','inventory'],
-        'driver'   => ['cars','intake'],
+        'manager'  => ['cars','drivers','mechanics','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests'],
+        'mechanic' => ['cars','jobs','assessments','inventory','parts_requests'],
+        'driver'   => ['assessments'],
     ];
     return in_array($module, $map[$user['role']] ?? []);
+}
+
+// Only admins may edit or delete existing records
+function canEditDelete(): bool {
+    return hasRole('admin');
 }

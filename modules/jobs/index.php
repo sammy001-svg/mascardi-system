@@ -43,7 +43,9 @@ include __DIR__ . '/../../includes/header.php';
                     <td><?= statusBadge($j['status']) ?></td>
                     <td>
                         <a href="view.php?id=<?= $j['id'] ?>" class="btn btn-xs btn-outline-primary"><i class="fa fa-eye"></i></a>
+                        <?php if (canEditDelete()): ?>
                         <a href="edit.php?id=<?= $j['id'] ?>" class="btn btn-xs btn-outline-secondary"><i class="fa fa-pen"></i></a>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>

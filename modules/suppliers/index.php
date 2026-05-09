@@ -37,7 +37,7 @@ include __DIR__ . '/../../includes/header.php';
         <h5 class="mb-1">Suppliers</h5>
         <div class="text-muted small">Manage parts and materials suppliers</div>
     </div>
-    <?php if (hasRole(['admin','manager'])): ?>
+    <?php if (canEditDelete()): ?>
     <a href="add.php" class="btn btn-primary btn-sm"><i class="fa fa-plus me-1"></i>Add Supplier</a>
     <?php endif; ?>
 </div>
@@ -101,7 +101,7 @@ include __DIR__ . '/../../includes/header.php';
                     <th>Parts</th>
                     <th>LPOs</th>
                     <th>Status</th>
-                    <?php if (hasRole(['admin','manager'])): ?><th>Actions</th><?php endif; ?>
+                    <?php if (canEditDelete()): ?><th>Actions</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -116,7 +116,7 @@ include __DIR__ . '/../../includes/header.php';
                     <td><span class="badge bg-light text-dark border"><?= $s['parts_count'] ?></span></td>
                     <td><span class="badge bg-light text-dark border"><?= $s['lpo_count'] ?></span></td>
                     <td><?= statusBadge($s['status']) ?></td>
-                    <?php if (hasRole(['admin','manager'])): ?>
+                    <?php if (canEditDelete()): ?>
                     <td>
                         <a href="edit.php?id=<?= $s['id'] ?>" class="btn btn-xs btn-outline-secondary"><i class="fa fa-pen"></i></a>
                         <?php if ($s['lpo_count'] == 0 && $s['parts_count'] == 0): ?>

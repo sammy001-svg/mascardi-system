@@ -7,10 +7,11 @@ $db = getDB();
 
 $stmt = $db->prepare("
     SELECT ca.*, c.chassis_number, c.make, c.model, c.year, c.color,
-           m.name AS mechanic_name
+           m.name AS mechanic_name, d.name AS driver_name
     FROM car_assessments ca
     JOIN cars c ON c.id = ca.car_id
     LEFT JOIN mechanics m ON m.id = ca.mechanic_id
+    LEFT JOIN drivers d ON d.id = ca.driver_id
     WHERE ca.id = ?
 ");
 $stmt->execute([$id]);
@@ -69,14 +70,23 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
     <div class="d-flex gap-2 flex-wrap no-print">
+        <?php if (canAccess('jobs') && canEditDelete()): ?>
         <a href="<?= BASE_URL ?>/modules/jobs/add.php?car_id=<?= $assessment['car_id'] ?>&assessment_id=<?= $id ?>"
            class="btn btn-sm btn-primary">
             <i class="fa fa-toolbox me-1"></i>Create Job Card
         </a>
+        <?php endif; ?>
+        <?php if (canAccess('cars')): ?>
         <a href="<?= BASE_URL ?>/modules/cars/view.php?id=<?= $assessment['car_id'] ?>"
            class="btn btn-sm btn-outline-secondary">
             <i class="fa fa-car me-1"></i>View Car
         </a>
+        <?php endif; ?>
+        <?php if (canEditDelete()): ?>
+        <a href="delete.php?id=<?= $id ?>" class="btn btn-sm btn-outline-danger confirm-delete">
+            <i class="fa fa-trash me-1"></i>Delete
+        </a>
+        <?php endif; ?>
         <button onclick="window.print()" class="btn btn-sm btn-outline-dark">
             <i class="fa fa-print me-1"></i>Print
         </button>
@@ -144,7 +154,7 @@ include __DIR__ . '/../../includes/header.php';
             </div>
             <div class="col-6 col-md-3 border-end">
                 <div class="text-muted small mb-1">Assessed By</div>
-                <div class="fw-semibold small"><?= e($assessment['mechanic_name'] ?? '—') ?></div>
+                <div class="fw-semibold small"><?= e($assessment['mechanic_name'] ?? $assessment['driver_name'] ?? '—') ?></div>
             </div>
             <div class="col-6 col-md-3 border-end">
                 <div class="text-muted small mb-1">Assessment Type</div>

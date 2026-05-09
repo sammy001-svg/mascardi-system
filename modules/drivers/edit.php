@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
-requireLogin();
+requireLogin(); requireRole('admin');
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/drivers/index.php');
 $db = getDB();

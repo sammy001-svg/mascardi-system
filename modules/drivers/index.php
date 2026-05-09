@@ -43,8 +43,12 @@ include __DIR__ . '/../../includes/header.php';
                     <td><span class="badge bg-info"><?= $d['trips'] ?></span></td>
                     <td><?= statusBadge($d['status']) ?></td>
                     <td>
+                        <?php if (canEditDelete()): ?>
                         <a href="edit.php?id=<?= $d['id'] ?>" class="btn btn-xs btn-outline-secondary"><i class="fa fa-pen"></i></a>
                         <a href="delete.php?id=<?= $d['id'] ?>" class="btn btn-xs btn-outline-danger confirm-delete"><i class="fa fa-trash"></i></a>
+                        <?php else: ?>
+                        <span class="text-muted small">—</span>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>

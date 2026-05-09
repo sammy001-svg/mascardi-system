@@ -17,11 +17,16 @@ $(function () {
 
     // ── DataTables init ─────────────────────────────
     if ($.fn.DataTable) {
-        $('.datatable').DataTable({
-            responsive: true,
-            pageLength: 25,
-            language: { search: '', searchPlaceholder: 'Search...' },
-            dom: '<"d-flex justify-content-between align-items-center mb-3"lf>t<"d-flex justify-content-between align-items-center mt-3"ip>',
+        $('.datatable').each(function () {
+            var colCount = $(this).find('thead tr:first th').length;
+            // Ensure empty-state colspan matches actual column count
+            $(this).find('tbody tr td[colspan]').attr('colspan', colCount);
+
+            $(this).DataTable({
+                pageLength: 25,
+                language: { search: '', searchPlaceholder: 'Search...' },
+                dom: '<"d-flex justify-content-between align-items-center mb-3"lf>t<"d-flex justify-content-between align-items-center mt-3"ip>',
+            });
         });
     }
 
