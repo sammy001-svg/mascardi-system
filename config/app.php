@@ -1,11 +1,17 @@
 <?php
 define('APP_NAME', 'Mascardi System');
 define('APP_VERSION', '1.0.0');
-// Auto-detect BASE_URL
-$protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http");
-$host = $_SERVER['HTTP_HOST'];
-$base_url = $protocol . "://" . $host;
-define('BASE_URL', $base_url);  // Dynamically detected for cPanel/Localhost compatibility
+// Robust BASE_URL detection
+if (!defined('BASE_URL')) {
+    $protocol = (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] === 1) || isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    // Clean host (remove any accidental protocol or path)
+    $host = preg_replace('/^https?:\/\//i', '', $host);
+    $host = explode('/', $host)[0];
+    
+    // Define BASE_URL (assuming project is in root of domain/subdomain)
+    define('BASE_URL', $protocol . '://' . $host);
+}
 define('BASE_PATH', dirname(__DIR__));
 
 // Start session
