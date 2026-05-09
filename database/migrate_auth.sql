@@ -3,7 +3,7 @@
 -- (If you are doing a fresh install, use schema.sql instead)
 -- ============================================================
 
-USE mascardi_db;
+-- USE mascardi_db;
 
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,

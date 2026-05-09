@@ -340,7 +340,7 @@ CREATE TABLE settings (
 ) ENGINE=InnoDB;
 
 INSERT INTO settings (setting_key, setting_value) VALUES
-('company_name', 'Mascardi Car Yard'),
+('company_name', 'Mascardi Luxury Cars'),
 ('company_address', 'Nairobi, Kenya'),
 ('company_phone', '+254 700 000 000'),
 ('company_email', 'info@mascardi.co.ke'),
