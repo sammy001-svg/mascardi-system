@@ -1,5 +1,5 @@
 <?php
-define('APP_NAME', 'Mascardi System');
+define('APP_NAME', 'Mascardi Luxury Cars');
 define('APP_VERSION', '1.0.0');
 // Robust BASE_URL detection
 if (!defined('BASE_URL')) {
