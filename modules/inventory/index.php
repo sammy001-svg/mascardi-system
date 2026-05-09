@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
+canAccess('inventory') || die('Access denied.');
 $pageTitle = 'Parts & Inventory';
 $db = getDB();
 $showPrices = !hasRole('mechanic');

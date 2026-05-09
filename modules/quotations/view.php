@@ -14,19 +14,23 @@ if(isset($_GET['status'])){
 }
 // Convert to invoice
 if(isset($_GET['convert'])){
-    $db->beginTransaction();
     try{
+        $db->beginTransaction();
         $invNum=nextNumber('invoices','invoice_number',getSetting('invoice_prefix','INV'));
         $db->prepare("INSERT INTO invoices (invoice_number,quotation_id,car_id,job_id,date,due_date,customer_name,customer_phone,customer_email,subtotal,discount,tax_rate,tax_amount,total,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
            ->execute([$invNum,$id,$q['car_id'],$q['job_id'],date('Y-m-d'),date('Y-m-d',strtotime('+30 days')),$q['customer_name'],$q['customer_phone'],$q['customer_email'],$q['subtotal'],$q['discount'],$q['tax_rate'],$q['tax_amount'],$q['total'],$q['notes']]);
-        $invId=$db->lastInsertId();
+        $invId=(int)$db->lastInsertId();
         $iStmt=$db->prepare("INSERT INTO invoice_items (invoice_id,item_type,description,quantity,unit_price,total) VALUES (?,?,?,?,?,?)");
         foreach($items as $item) $iStmt->execute([$invId,$item['item_type'],$item['description'],$item['quantity'],$item['unit_price'],$item['total']]);
         $db->prepare("UPDATE quotations SET status='converted' WHERE id=?")->execute([$id]);
         $db->commit();
         setFlash('success',"Invoice {$invNum} created.");
         redirect(BASE_URL.'/modules/invoices/view.php?id='.$invId);
-    }catch(Exception $e){$db->rollBack();setFlash('error',$e->getMessage());redirect('view.php?id='.$id);}
+    }catch(\Throwable $e){
+        if($db->inTransaction()) $db->rollBack();
+        setFlash('error','Conversion failed: '.$e->getMessage());
+        redirect(BASE_URL.'/modules/quotations/view.php?id='.$id);
+    }
 }
 
 $pageTitle=$q['quotation_number'];

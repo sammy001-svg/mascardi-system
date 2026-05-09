@@ -7,7 +7,14 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(grep -E \"\\\\.\\(jpg|jpeg|png|gif\\)$\")",
       "Bash(mysql -u root mascardi_db -e ' *)",
-      "PowerShell(& \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root mascardi_db 2>&1)"
+      "PowerShell(& \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root mascardi_db 2>&1)",
+      "PowerShell(& \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root mascardi_db -e \"DELETE FROM invoice_items WHERE invoice_id=1; DELETE FROM invoices WHERE id=1;\")",
+      "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" -l \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\\\\modules\\\\quotations\\\\view.php\")",
+      "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\\\\_test_convert.php\" 2>&1)",
+      "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" --version)",
+      "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" -l \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\\\\modules\\\\invoices\\\\view.php\")",
+      "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" -l \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\\\\modules\\\\invoices\\\\index.php\")",
+      "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" -r \"echo ini_get\\('display_errors'\\) . PHP_EOL; echo ini_get\\('error_reporting'\\) . PHP_EOL; echo ini_get\\('log_errors'\\) . PHP_EOL; echo ini_get\\('error_log'\\) . PHP_EOL;\")"
     ]
   }
 }
