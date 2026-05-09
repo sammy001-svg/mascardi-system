@@ -1,7 +1,11 @@
 <?php
 define('APP_NAME', 'Mascardi System');
 define('APP_VERSION', '1.0.0');
-define('BASE_URL', 'http://localhost:8001');  // adjust to your server path
+// Auto-detect BASE_URL
+$protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http");
+$host = $_SERVER['HTTP_HOST'];
+$base_url = $protocol . "://" . $host;
+define('BASE_URL', $base_url);  // Dynamically detected for cPanel/Localhost compatibility
 define('BASE_PATH', dirname(__DIR__));
 
 // Start session
