@@ -116,9 +116,6 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if (empty($requests)): ?>
-                <tr><td colspan="8" class="text-center py-4 text-muted">No part requests yet.</td></tr>
-                <?php endif; ?>
             </tbody>
         </table>
     </div>
