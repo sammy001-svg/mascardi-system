@@ -6,6 +6,7 @@ $errors = [];
 $preCarId = (int)($_GET['car_id'] ?? 0);
 
 $cars    = $db->query("SELECT id, chassis_number, make, model, year FROM cars ORDER BY make, model")->fetchAll();
+$drivers = $db->query("SELECT id, name FROM drivers WHERE status='active' ORDER BY name ASC")->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $carId       = (int)($_POST['car_id'] ?? 0);
@@ -19,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $condNotes   = trim($_POST['condition_notes'] ?? '');
 
     // Transfer fields
+    $driverId      = $_POST['driver_id'] ? (int)$_POST['driver_id'] : null;
     $transportedBy = trim($_POST['transported_by'] ?? '');
     $depDate       = $_POST['departure_date'] ?: null;
     $estArr        = $_POST['estimated_arrival'] ?: null;
@@ -37,8 +39,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Save transfer if departure date set
             if ($depDate) {
-                $db->prepare("INSERT INTO car_transfers (car_id,transported_by,departure_date,estimated_arrival,from_location,to_location,departure_condition,departure_mileage,status) VALUES (?,?,?,?,'Mombasa','Nairobi',?,?,'in_transit')")
-                   ->execute([$carId,$transportedBy,$depDate,$estArr,$depCond,$depMileage]);
+                $db->prepare("INSERT INTO car_transfers (car_id,driver_id,transported_by,departure_date,estimated_arrival,from_location,to_location,departure_condition,departure_mileage,status) VALUES (?,?,?,?,?,'Mombasa','Nairobi',?,?,'in_transit')")
+                   ->execute([$carId,$driverId,$transportedBy,$depDate,$estArr,$depCond,$depMileage]);
                 $db->prepare("UPDATE cars SET status='in_transit' WHERE id=?")->execute([$carId]);
             } else {
                 $db->prepare("UPDATE cars SET status='arrived' WHERE id=?")->execute([$carId]);
@@ -129,8 +131,17 @@ include __DIR__ . '/../../includes/header.php';
             <div class="card-body">
                 <p class="text-muted small mb-3">Fill in transport details to record departure immediately. Leave blank if not dispatching yet.</p>
                 <div class="row g-3">
-                    <div class="col-12">
-                        <label class="form-label">Transported By</label>
+                    <div class="col-md-6">
+                        <label class="form-label">Internal Driver</label>
+                        <select name="driver_id" class="form-select select2">
+                            <option value="">-- Select Driver (Optional) --</option>
+                            <?php foreach ($drivers as $d): ?>
+                            <option value="<?= $d['id'] ?>" <?= ($_POST['driver_id']??'')==$d['id']?'selected':'' ?>><?= e($d['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">External Transporter</label>
                         <input type="text" name="transported_by" class="form-control" placeholder="Transporter name" value="<?= e($_POST['transported_by']??'') ?>">
                     </div>
                     <div class="col-md-6">

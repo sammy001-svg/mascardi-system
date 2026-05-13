@@ -6,7 +6,7 @@ $stmt = $db->prepare("SELECT ci.*, c.chassis_number, c.make, c.model, c.year, c.
 $stmt->execute([$id]); $intake = $stmt->fetch();
 if(!$intake){setFlash('error','Not found.');redirect(BASE_URL.'/modules/intake/index.php');}
 
-$transfers = $db->prepare("SELECT ct.*, d.name AS driver_name, d.phone AS driver_phone, d.id_number AS driver_id_num, d.license_number, d.license_class FROM car_transfers ct JOIN drivers d ON d.id=ct.driver_id WHERE ct.car_id=? ORDER BY ct.id DESC");
+$transfers = $db->prepare("SELECT ct.*, d.name AS driver_name, d.phone AS driver_phone, d.id_number AS driver_id_num, d.license_number, d.license_class FROM car_transfers ct LEFT JOIN drivers d ON d.id=ct.driver_id WHERE ct.car_id=? ORDER BY ct.id DESC");
 $transfers->execute([$intake['car_id']]); $transfers = $transfers->fetchAll();
 
 $pageTitle = 'Intake Record';
@@ -62,7 +62,8 @@ include __DIR__ . '/../../includes/header.php';
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <h6 class="text-muted small fw-bold text-uppercase mb-2">Driver Details</h6>
+                        <h6 class="text-muted small fw-bold text-uppercase mb-2">Transporter Details</h6>
+                        <?php if ($t['driver_name']): ?>
                         <dl class="row mb-0" style="font-size:13.5px">
                             <dt class="col-5 text-muted">Name</dt><dd class="col-7 fw-semibold"><?= e($t['driver_name']) ?></dd>
                             <dt class="col-5 text-muted">ID Number</dt><dd class="col-7"><?= e($t['driver_id_num']??'—') ?></dd>
@@ -70,6 +71,12 @@ include __DIR__ . '/../../includes/header.php';
                             <dt class="col-5 text-muted">License Class</dt><dd class="col-7"><?= e($t['license_class']??'—') ?></dd>
                             <dt class="col-5 text-muted">Phone</dt><dd class="col-7"><?= e($t['driver_phone']??'—') ?></dd>
                         </dl>
+                        <?php else: ?>
+                        <dl class="row mb-0" style="font-size:13.5px">
+                            <dt class="col-5 text-muted">Transporter</dt><dd class="col-7 fw-semibold"><?= e($t['transported_by']??'—') ?></dd>
+                            <dt class="col-7 text-muted small mt-2">External Party</dt>
+                        </dl>
+                        <?php endif; ?>
                     </div>
                     <div class="col-md-6">
                         <h6 class="text-muted small fw-bold text-uppercase mb-2">Trip Details</h6>
