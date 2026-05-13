@@ -16,6 +16,9 @@ $stats = $db->query("
     WHERE `condition` != 'good'
 ")->fetch();
 
+// Ensure stats are numeric
+foreach(['total','open_count','resolved_count','critical_count'] as $k) $stats[$k] = (int)($stats[$k] ?? 0);
+
 // ── By category ──────────────────────────────────────────────────────────────
 $focusCategories = ['Exterior','Wheels & Tyres','Interior','Electronics','Engine & Mechanical'];
 
@@ -40,14 +43,14 @@ $byVehicle = $db->query("
         COUNT(ai.id)                                                           AS total,
         SUM(CASE WHEN ai.is_resolved=0 THEN 1 ELSE 0 END)                     AS open_count,
         SUM(CASE WHEN ai.is_resolved=1 THEN 1 ELSE 0 END)                     AS resolved_count,
-        SUM(CASE WHEN ai.is_resolved=0 AND ai.condition='major_damage'  THEN 1 ELSE 0 END) AS critical,
-        SUM(CASE WHEN ai.is_resolved=0 AND ai.condition='minor_damage'  THEN 1 ELSE 0 END) AS minor,
-        SUM(CASE WHEN ai.is_resolved=0 AND ai.condition='needs_service' THEN 1 ELSE 0 END) AS service,
-        SUM(CASE WHEN ai.is_resolved=0 AND ai.condition='missing'       THEN 1 ELSE 0 END) AS missing
+        SUM(CASE WHEN ai.is_resolved=0 AND ai.`condition`='major_damage'  THEN 1 ELSE 0 END) AS critical,
+        SUM(CASE WHEN ai.is_resolved=0 AND ai.`condition`='minor_damage'  THEN 1 ELSE 0 END) AS minor,
+        SUM(CASE WHEN ai.is_resolved=0 AND ai.`condition`='needs_service' THEN 1 ELSE 0 END) AS service,
+        SUM(CASE WHEN ai.is_resolved=0 AND ai.`condition`='missing'       THEN 1 ELSE 0 END) AS missing
     FROM assessment_items ai
     JOIN car_assessments ca ON ca.id = ai.assessment_id
     JOIN cars c ON c.id = ca.car_id
-    WHERE ai.condition != 'good'
+    WHERE ai.`condition` != 'good'
     GROUP BY c.id, c.make, c.model, c.year, c.chassis_number, c.registration_number
     ORDER BY open_count DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
@@ -144,7 +147,10 @@ include __DIR__ . '/../../includes/header.php';
                     array_filter($focusCategories, fn($c) => isset($catMap[$c])),
                     array_filter(array_keys($catMap), fn($c) => !in_array($c, $focusCategories))
                 );
-                $maxOpen = max(1, max(array_column($byCategory, 'open_count')));
+                
+                $openCounts = array_column($byCategory, 'open_count');
+                $maxOpen    = !empty($openCounts) ? max($openCounts) : 0;
+                $maxOpen    = max(1, $maxOpen);
                 ?>
                 <?php foreach ($orderedCats as $cat):
                     $row   = $catMap[$cat];

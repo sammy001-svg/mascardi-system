@@ -38,12 +38,12 @@ if (!$car) { setFlash('error', 'Vehicle not found.'); redirect(BASE_URL . '/modu
 // All issues for this vehicle (condition != good), grouped for display
 $items = $db->prepare("
     SELECT
-        ai.id, ai.part_name, ai.part_category, ai.condition, ai.notes,
+        ai.id, ai.part_name, ai.part_category, ai.`condition`, ai.notes,
         ai.is_resolved, ai.resolved_at, ai.resolved_by,
         ca.assessment_date, ca.assessment_type, ca.id AS assessment_id
     FROM assessment_items ai
     JOIN car_assessments ca ON ca.id = ai.assessment_id
-    WHERE ca.car_id = ? AND ai.condition != 'good'
+    WHERE ca.car_id = ? AND ai.`condition` != 'good'
     ORDER BY ai.is_resolved ASC, ai.part_category ASC, ca.assessment_date DESC
 ");
 $items->execute([$carId]);
