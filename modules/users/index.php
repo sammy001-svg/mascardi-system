@@ -4,9 +4,8 @@ requireRole('admin');
 $pageTitle = 'Users';
 $db = getDB();
 $users = $db->query("SELECT u.*,
-    CASE u.linked_type WHEN 'driver' THEN d.name WHEN 'mechanic' THEN m.name END AS linked_name
+    CASE u.linked_type WHEN 'mechanic' THEN m.name ELSE NULL END AS linked_name
     FROM users u
-    LEFT JOIN drivers d ON d.id = u.linked_id AND u.linked_type = 'driver'
     LEFT JOIN mechanics m ON m.id = u.linked_id AND u.linked_type = 'mechanic'
     ORDER BY u.role, u.name")->fetchAll();
 
@@ -38,7 +37,7 @@ include __DIR__ . '/../../includes/header.php';
                     <td><code><?= e($u['username']) ?></code></td>
                     <td>
                         <?php
-                        $roleColors = ['admin'=>'danger','manager'=>'primary','mechanic'=>'info','driver'=>'warning'];
+                        $roleColors = ['admin'=>'danger','manager'=>'primary','mechanic'=>'info'];
                         $rc = $roleColors[$u['role']] ?? 'secondary';
                         ?>
                         <span class="badge bg-<?= $rc ?>"><?= ucfirst(e($u['role'])) ?></span>

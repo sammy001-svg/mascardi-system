@@ -9,10 +9,12 @@ $preJobId = (int)($_GET['job_id'] ?? 0);
 $cars      = $db->query("SELECT id, chassis_number, make, model, year, car_type, owner_name, owner_phone FROM cars ORDER BY make,model")->fetchAll();
 $jobs      = $db->query("SELECT id, job_number, car_id FROM workshop_jobs WHERE status NOT IN ('completed','cancelled') ORDER BY job_number")->fetchAll();
 $inventory = $db->query("SELECT id, part_number, part_name, selling_price FROM inventory ORDER BY part_name")->fetchAll();
+$clients   = $db->query("SELECT id, name, email, phone FROM clients WHERE status='active' ORDER BY name")->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $carId    = (int)($_POST['car_id'] ?? 0);
     $jobId    = $_POST['job_id'] ? (int)$_POST['job_id'] : null;
+    $clientId = $_POST['client_id'] ? (int)$_POST['client_id'] : null;
     $date     = $_POST['date'] ?? date('Y-m-d');
     $validUntil = $_POST['valid_until'] ?: null;
     $custName = trim($_POST['customer_name'] ?? '');
@@ -49,8 +51,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $total    = $taxable + $taxAmt;
 
             $qNum = nextNumber('quotations','quotation_number', getSetting('quotation_prefix','QT'));
-            $db->prepare("INSERT INTO quotations (quotation_number,car_id,job_id,date,valid_until,customer_name,customer_phone,customer_email,subtotal,discount,tax_rate,tax_amount,total,notes,terms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-               ->execute([$qNum,$carId,$jobId,$date,$validUntil,$custName,$custPhone,$custEmail,$subtotal,$discAmt,$taxRate,$taxAmt,$total,$notes,$terms]);
+            $db->prepare("INSERT INTO quotations (quotation_number,car_id,job_id,client_id,date,valid_until,customer_name,customer_phone,customer_email,subtotal,discount,tax_rate,tax_amount,total,notes,terms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+               ->execute([$qNum,$carId,$jobId,$clientId,$date,$validUntil,$custName,$custPhone,$custEmail,$subtotal,$discAmt,$taxRate,$taxAmt,$total,$notes,$terms]);
             $qId = $db->lastInsertId();
 
             $iStmt = $db->prepare("INSERT INTO quotation_items (quotation_id,item_type,inventory_id,description,quantity,unit_price,discount,total) VALUES (?,?,?,?,?,?,?,?)");
@@ -67,8 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->commit();
             setFlash('success',"Quotation {$qNum} created.");
             redirect(BASE_URL.'/modules/quotations/view.php?id='.$qId);
-        } catch (Exception $e) {
-            $db->rollBack(); $errors[] = $e->getMessage();
+        } catch (\Throwable $e) {
+            if($db->inTransaction()) $db->rollBack(); $errors[] = $e->getMessage();
         }
     }
 }
@@ -174,6 +176,17 @@ $(function(){
                     </div>
                     <div class="col-6"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="<?= e($_POST['date']??date('Y-m-d')) ?>"></div>
                     <div class="col-6"><label class="form-label">Valid Until</label><input type="date" name="valid_until" class="form-control" value="<?= e($_POST['valid_until']??date('Y-m-d', strtotime('+30 days'))) ?>"></div>
+                    <div class="col-12">
+                        <label class="form-label">Link to Client <small class="text-muted">(optional)</small></label>
+                        <select name="client_id" id="client_select" class="form-select select2">
+                            <option value="">— No client —</option>
+                            <?php foreach ($clients as $cl): ?>
+                            <option value="<?= $cl['id'] ?>" data-name="<?= e($cl['name']) ?>" data-email="<?= e($cl['email']) ?>" data-phone="<?= e($cl['phone']) ?>" <?= (($_POST['client_id']??'')==$cl['id'])?'selected':'' ?>>
+                                <?= e($cl['name']) ?><?= $cl['phone']?' — '.$cl['phone']:'' ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <div class="col-12"><label class="form-label">Customer Name</label><input type="text" id="customer_name" name="customer_name" class="form-control" value="<?= e($_POST['customer_name']??'') ?>"></div>
                     <div class="col-6"><label class="form-label">Phone</label><input type="text" id="customer_phone" name="customer_phone" class="form-control" value="<?= e($_POST['customer_phone']??'') ?>"></div>
                     <div class="col-6"><label class="form-label">Email</label><input type="email" name="customer_email" class="form-control" value="<?= e($_POST['customer_email']??'') ?>"></div>
@@ -193,9 +206,17 @@ $(function(){
             if(opt.data('type') === 'client'){
                 $('#customer_name').val(opt.data('owner'));
                 $('#customer_phone').val(opt.data('phone'));
-            } else {
+            } else if(!$('#client_select').val()) {
                 $('#customer_name').val('');
                 $('#customer_phone').val('');
+            }
+        });
+        $(document).on('change', '#client_select', function(){
+            var opt = $(this).find('option:selected');
+            if(opt.val()){
+                $('#customer_name').val(opt.data('name'));
+                $('#customer_phone').val(opt.data('phone'));
+                $('input[name="customer_email"]').val(opt.data('email'));
             }
         });
         $(function(){

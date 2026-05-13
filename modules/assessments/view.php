@@ -7,11 +7,10 @@ $db = getDB();
 
 $stmt = $db->prepare("
     SELECT ca.*, c.chassis_number, c.make, c.model, c.year, c.color,
-           m.name AS mechanic_name, d.name AS driver_name
+           m.name AS mechanic_name
     FROM car_assessments ca
     JOIN cars c ON c.id = ca.car_id
     LEFT JOIN mechanics m ON m.id = ca.mechanic_id
-    LEFT JOIN drivers d ON d.id = ca.driver_id
     WHERE ca.id = ?
 ");
 $stmt->execute([$id]);

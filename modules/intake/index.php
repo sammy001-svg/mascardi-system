@@ -4,11 +4,10 @@ $pageTitle = 'Mombasa Intake';
 $db = getDB();
 $records = $db->query("
     SELECT ci.*, c.chassis_number, c.make, c.model, c.year, c.status AS car_status,
-           ct.status AS transfer_status, d.name AS driver_name, ct.departure_date, ct.arrival_date
+           ct.status AS transfer_status, ct.transported_by, ct.departure_date, ct.arrival_date
     FROM car_intake ci
     JOIN cars c ON c.id = ci.car_id
     LEFT JOIN car_transfers ct ON ct.car_id = ci.car_id
-    LEFT JOIN drivers d ON d.id = ct.driver_id
     ORDER BY ci.intake_date DESC
 ")->fetchAll();
 include __DIR__ . '/../../includes/header.php';
@@ -28,7 +27,7 @@ include __DIR__ . '/../../includes/header.php';
                     <th>Intake Date</th>
                     <th>Port</th>
                     <th>Condition</th>
-                    <th>Driver</th>
+                    <th>Transported By</th>
                     <th>Departure</th>
                     <th>Transfer Status</th>
                     <th>Actions</th>
@@ -43,7 +42,7 @@ include __DIR__ . '/../../includes/header.php';
                     <td><?= fmtDate($r['intake_date']) ?></td>
                     <td><?= e($r['port']) ?></td>
                     <td><?= $r['condition_on_arrival'] ? statusBadge($r['condition_on_arrival']) : '—' ?></td>
-                    <td><?= e($r['driver_name']??'Not assigned') ?></td>
+                    <td><?= e($r['transported_by']??'—') ?></td>
                     <td><?= fmtDate($r['departure_date']) ?></td>
                     <td><?= $r['transfer_status'] ? statusBadge($r['transfer_status']) : '<span class="badge bg-light text-dark">No transfer</span>' ?></td>
                     <td><a href="view.php?id=<?= $r['id'] ?>" class="btn btn-xs btn-outline-primary"><i class="fa fa-eye"></i></a></td>

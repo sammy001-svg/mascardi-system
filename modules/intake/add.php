@@ -6,7 +6,6 @@ $errors = [];
 $preCarId = (int)($_GET['car_id'] ?? 0);
 
 $cars    = $db->query("SELECT id, chassis_number, make, model, year FROM cars ORDER BY make, model")->fetchAll();
-$drivers = $db->query("SELECT id, name, license_number, phone FROM drivers WHERE status='active' ORDER BY name")->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $carId       = (int)($_POST['car_id'] ?? 0);
@@ -20,11 +19,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $condNotes   = trim($_POST['condition_notes'] ?? '');
 
     // Transfer fields
-    $driverId    = (int)($_POST['driver_id'] ?? 0);
-    $depDate     = $_POST['departure_date'] ?: null;
-    $estArr      = $_POST['estimated_arrival'] ?: null;
-    $depCond     = trim($_POST['departure_condition'] ?? '');
-    $depMileage  = $_POST['departure_mileage'] ? (int)$_POST['departure_mileage'] : null;
+    $transportedBy = trim($_POST['transported_by'] ?? '');
+    $depDate       = $_POST['departure_date'] ?: null;
+    $estArr        = $_POST['estimated_arrival'] ?: null;
+    $depCond       = trim($_POST['departure_condition'] ?? '');
+    $depMileage    = $_POST['departure_mileage'] ? (int)$_POST['departure_mileage'] : null;
 
     if (!$carId)     $errors[] = 'Please select a car.';
     if (!$intakeDate) $errors[] = 'Intake date is required.';
@@ -36,10 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("INSERT INTO car_intake (car_id,intake_date,port,shipping_line,bill_of_lading,container_number,clearing_agent,condition_on_arrival,condition_notes) VALUES (?,?,?,?,?,?,?,?,?)")
                ->execute([$carId,$intakeDate,$port,$shipping,$bl,$container,$agent,$condition,$condNotes]);
 
-            // Save transfer if driver selected
-            if ($driverId && $depDate) {
-                $db->prepare("INSERT INTO car_transfers (car_id,driver_id,departure_date,estimated_arrival,from_location,to_location,departure_condition,departure_mileage,status) VALUES (?,?,?,?,'Mombasa','Nairobi',?,?,'in_transit')")
-                   ->execute([$carId,$driverId,$depDate,$estArr,$depCond,$depMileage]);
+            // Save transfer if departure date set
+            if ($depDate) {
+                $db->prepare("INSERT INTO car_transfers (car_id,transported_by,departure_date,estimated_arrival,from_location,to_location,departure_condition,departure_mileage,status) VALUES (?,?,?,?,'Mombasa','Nairobi',?,?,'in_transit')")
+                   ->execute([$carId,$transportedBy,$depDate,$estArr,$depCond,$depMileage]);
                 $db->prepare("UPDATE cars SET status='in_transit' WHERE id=?")->execute([$carId]);
             } else {
                 $db->prepare("UPDATE cars SET status='arrived' WHERE id=?")->execute([$carId]);
@@ -128,18 +127,11 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card">
             <div class="card-header"><i class="fa fa-truck-moving me-2"></i>Transfer to Nairobi (Optional)</div>
             <div class="card-body">
-                <p class="text-muted small mb-3">Fill in driver details to record departure immediately. Leave blank if not dispatching yet.</p>
+                <p class="text-muted small mb-3">Fill in transport details to record departure immediately. Leave blank if not dispatching yet.</p>
                 <div class="row g-3">
                     <div class="col-12">
-                        <label class="form-label">Assigned Driver</label>
-                        <select name="driver_id" class="form-select select2">
-                            <option value="">Select driver...</option>
-                            <?php foreach ($drivers as $d): ?>
-                            <option value="<?= $d['id'] ?>" <?= ($_POST['driver_id']??'')==$d['id']?'selected':'' ?>>
-                                <?= e($d['name'].' — License: '.$d['license_number'].' | '.$d['phone']) ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label class="form-label">Transported By</label>
+                        <input type="text" name="transported_by" class="form-control" placeholder="Transporter name" value="<?= e($_POST['transported_by']??'') ?>">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Departure Date/Time</label>
@@ -155,7 +147,7 @@ include __DIR__ . '/../../includes/header.php';
                     </div>
                     <div class="col-12">
                         <label class="form-label">Condition at Departure</label>
-                        <textarea name="departure_condition" class="form-control" rows="3" placeholder="Record car condition before handing to driver..."><?= e($_POST['departure_condition']??'') ?></textarea>
+                        <textarea name="departure_condition" class="form-control" rows="3" placeholder="Record car condition before dispatch..."><?= e($_POST['departure_condition']??'') ?></textarea>
                     </div>
                 </div>
             </div>

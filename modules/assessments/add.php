@@ -9,32 +9,11 @@ $role = $user['role'];
 $linkedId = (int)($user['linked_id'] ?? 0);
 
 // ── Allowed types and car scope per role ────────────────────────────────────
-if ($role === 'driver') {
-    $allowedTypes = ['pre_departure'];
-    $defaultType  = 'pre_departure';
-    // Only cars assigned to this driver via a pending/in_transit transfer
-    $stmt = $db->prepare("
-        SELECT c.id, c.chassis_number, c.make, c.model, c.year, c.car_type, c.owner_name
-        FROM cars c
-        JOIN car_transfers ct ON ct.car_id = c.id
-        WHERE ct.driver_id = ? AND ct.status IN ('pending','in_transit')
-        ORDER BY c.make, c.model
-    ");
-    $stmt->execute([$linkedId]);
-    $cars = $stmt->fetchAll();
-} elseif ($role === 'mechanic') {
-    $allowedTypes = ['arrival', 'pre_sales', 'pre_delivery'];
-    $defaultType  = 'arrival';
-    $cars = $db->query("SELECT id, chassis_number, make, model, year, car_type, owner_name FROM cars WHERE status NOT IN ('delivered') ORDER BY make, model")->fetchAll();
-} else {
-    // admin / manager
-    $allowedTypes = ['pre_departure', 'arrival', 'pre_sales', 'pre_delivery'];
-    $defaultType  = 'arrival';
-    $cars = $db->query("SELECT id, chassis_number, make, model, year, car_type, owner_name FROM cars WHERE status NOT IN ('delivered') ORDER BY make, model")->fetchAll();
-}
+$allowedTypes = ['arrival', 'pre_delivery', 'client_service', 'yard'];
+$defaultType  = 'arrival';
+$cars = $db->query("SELECT id, chassis_number, make, model, year, car_type, owner_name FROM cars WHERE status NOT IN ('delivered') ORDER BY make, model")->fetchAll();
 
 $mechanics = $db->query("SELECT id, name FROM mechanics WHERE status='active' ORDER BY name")->fetchAll();
-$drivers   = $db->query("SELECT id, name FROM drivers WHERE status='active' ORDER BY name")->fetchAll();
 $partsList = getPartsList();
 
 $allParts = [];
@@ -60,34 +39,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Enforce allowed types
     if (!in_array($type, $allowedTypes)) $type = $defaultType;
 
-    // Resolve who performed the assessment
-    if ($role === 'driver') {
-        $driverId  = $linkedId ?: null;
-        $mechId    = null;
-    } elseif ($role === 'mechanic') {
-        $mechId   = $linkedId ?: ((int)($_POST['mechanic_id'] ?? 0) ?: null);
-        $driverId = null;
-    } else {
-        $mechId   = $_POST['mechanic_id'] ? (int)$_POST['mechanic_id'] : null;
-        $driverId = $type === 'pre_departure' && $_POST['driver_id']
-                    ? (int)$_POST['driver_id'] : null;
-    }
+    $mechId = $role === 'mechanic'
+        ? ($linkedId ?: ((int)($_POST['mechanic_id'] ?? 0) ?: null))
+        : ($_POST['mechanic_id'] ? (int)$_POST['mechanic_id'] : null);
 
     if (!$carId) $errors[] = 'Please select a vehicle.';
     if (!$date)  $errors[] = 'Assessment date is required.';
 
-    // Validate car is in driver's assigned list
-    if ($role === 'driver' && $carId) {
-        $check = $db->prepare("SELECT id FROM car_transfers WHERE car_id=? AND driver_id=? AND status IN ('pending','in_transit')");
-        $check->execute([$carId, $linkedId]);
-        if (!$check->fetch()) $errors[] = 'That vehicle is not assigned to you for delivery.';
-    }
-
     if (empty($errors)) {
         $db->beginTransaction();
         try {
-            $db->prepare("INSERT INTO car_assessments (car_id, mechanic_id, driver_id, assessment_date, assessment_type, overall_status, mileage, fuel_level, notes) VALUES (?,?,?,?,?,?,?,?,?)")
-               ->execute([$carId, $mechId, $driverId, $date, $type, $status, $mileage, $fuel, $notes]);
+            $db->prepare("INSERT INTO car_assessments (car_id, mechanic_id, assessment_date, assessment_type, overall_status, mileage, fuel_level, notes) VALUES (?,?,?,?,?,?,?,?)")
+               ->execute([$carId, $mechId, $date, $type, $status, $mileage, $fuel, $notes]);
             $assessmentId = (int)$db->lastInsertId();
 
             // Save part-level checklist
@@ -104,23 +67,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Update car status based on assessment type
             $newCarStatus = match ($type) {
-                'pre_departure' => 'in_transit',
-                'arrival'       => 'arrived',
-                default         => 'in_assessment',
+                'arrival' => 'arrived',
+                default   => 'in_assessment',
             };
             $db->prepare("UPDATE cars SET status=? WHERE id=?")->execute([$newCarStatus, $carId]);
-
-            // If driver did pre_departure, mark the transfer as in_transit
-            if ($type === 'pre_departure' && $driverId) {
-                $db->prepare("UPDATE car_transfers SET status='in_transit', departure_date=COALESCE(departure_date,?) WHERE car_id=? AND driver_id=? AND status='pending'")
-                   ->execute([$date, $carId, $driverId]);
-            }
 
             $db->commit();
             setFlash('success', 'Assessment saved successfully.');
             redirect(BASE_URL . '/modules/assessments/view.php?id=' . $assessmentId);
-        } catch (Exception $e) {
-            $db->rollBack();
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
             $errors[] = 'Save failed: ' . $e->getMessage();
         }
     }
@@ -131,7 +87,6 @@ $postConditions = $_POST['part_condition'] ?? [];
 $postNotes      = $_POST['part_notes']     ?? [];
 $postCarId      = (int)($_POST['car_id']          ?? $preCarId);
 $postMechId     = (int)($_POST['mechanic_id']     ?? ($role === 'mechanic' ? $linkedId : 0));
-$postDriverId   = (int)($_POST['driver_id']       ?? ($role === 'driver'   ? $linkedId : 0));
 $postDate       = $_POST['assessment_date']  ?? date('Y-m-d');
 $postType       = in_array($_POST['assessment_type'] ?? '', $allowedTypes) ? $_POST['assessment_type'] : $defaultType;
 $postStatus     = $_POST['overall_status']   ?? 'fair';
@@ -141,10 +96,10 @@ $postGeneralNotes = $_POST['notes']          ?? '';
 
 // Type metadata
 $typesMeta = [
-    'pre_departure' => ['Pre-Departure (Driver)',    'fa-truck-fast',        '#d97706'],
-    'arrival'       => ['Arrival Check (Mechanic)',  'fa-anchor',            '#0284c7'],
-    'pre_sales'     => ['Pre-Sales (Mechanic)',      'fa-tag',               '#7c3aed'],
-    'pre_delivery'  => ['Pre-Delivery (Mechanic)',   'fa-flag-checkered',    '#16a34a'],
+    'arrival'        => ['Vehicle Intake Protocol',   'fa-anchor',          '#0284c7'],
+    'pre_delivery'   => ['Pre-Delivery',              'fa-flag-checkered',  '#16a34a'],
+    'client_service' => ['Client Service Assessment', 'fa-user-check',      '#7c3aed'],
+    'yard'           => ['Yard Assessment',            'fa-warehouse',       '#d97706'],
 ];
 
 include __DIR__ . '/../../includes/header.php';
@@ -162,12 +117,7 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 <?php endif; ?>
 
-<?php if ($role === 'driver' && empty($cars)): ?>
-<div class="alert alert-warning">
-    <i class="fa fa-triangle-exclamation me-2"></i>
-    No cars are currently assigned to you for delivery. Ask your administrator to assign a car.
-</div>
-<?php else: ?>
+<?php if(true): ?>
 
 <form method="POST" id="assessmentForm">
 
@@ -191,7 +141,6 @@ include __DIR__ . '/../../includes/header.php';
                 </select>
             </div>
 
-            <?php if ($role !== 'driver'): ?>
             <div class="col-md-4">
                 <label class="form-label">Assessed By (Mechanic)</label>
                 <select name="mechanic_id" class="form-select select2">
@@ -203,21 +152,6 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endforeach; ?>
                 </select>
             </div>
-            <?php endif; ?>
-
-            <?php if (in_array('pre_departure', $allowedTypes) && $role !== 'driver'): ?>
-            <div class="col-md-4" id="driverFieldWrapper">
-                <label class="form-label">Assigned Driver (for Pre-Departure)</label>
-                <select name="driver_id" class="form-select select2">
-                    <option value="">— Select driver —</option>
-                    <?php foreach ($drivers as $d): ?>
-                    <option value="<?= $d['id'] ?>" <?= $postDriverId === (int)$d['id'] ? 'selected' : '' ?>>
-                        <?= e($d['name']) ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <?php endif; ?>
 
             <div class="col-md-3">
                 <label class="form-label">Date <span class="text-danger">*</span></label>

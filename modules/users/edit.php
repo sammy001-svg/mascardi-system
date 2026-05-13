@@ -10,7 +10,6 @@ if (!$user) { setFlash('error', 'User not found.'); redirect(BASE_URL . '/module
 $pageTitle = 'Edit User';
 $errors = [];
 
-$freeDrivers   = $db->query("SELECT d.id, d.name FROM drivers d WHERE d.status='active' AND (NOT EXISTS (SELECT 1 FROM users u WHERE u.linked_type='driver' AND u.linked_id=d.id) OR d.id=" . (int)($user['linked_id'] ?? 0) . ") ORDER BY d.name")->fetchAll();
 $freeMechanics = $db->query("SELECT m.id, m.name FROM mechanics m WHERE m.status='active' AND (NOT EXISTS (SELECT 1 FROM users u WHERE u.linked_type='mechanic' AND u.linked_id=m.id) OR m.id=" . (int)($user['linked_id'] ?? 0) . ") ORDER BY m.name")->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -97,7 +96,6 @@ include __DIR__ . '/../../includes/header.php';
                         <option value="admin"    <?= $user['role'] === 'admin'    ? 'selected' : '' ?>>Admin — Full access</option>
                         <option value="manager"  <?= $user['role'] === 'manager'  ? 'selected' : '' ?>>Manager — Operations access</option>
                         <option value="mechanic" <?= $user['role'] === 'mechanic' ? 'selected' : '' ?>>Mechanic — Workshop access</option>
-                        <option value="driver"   <?= $user['role'] === 'driver'   ? 'selected' : '' ?>>Driver — Transport access</option>
                     </select>
                     <?php if ($id === authUser()['id']): ?>
                     <input type="hidden" name="role" value="admin">
@@ -120,35 +118,19 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
             </div>
 
-            <!-- Link to driver/mechanic -->
+            <!-- Link to mechanic profile -->
             <div class="form-section">
-                <div class="form-section-title">Profile Link</div>
+                <div class="form-section-title">Mechanic Profile Link</div>
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Link Type</label>
-                        <select name="linked_type" class="form-select" id="linkedType">
-                            <option value="">— None —</option>
-                            <option value="driver"   <?= ($user['linked_type'] ?? '') === 'driver'   ? 'selected' : '' ?>>Driver</option>
-                            <option value="mechanic" <?= ($user['linked_type'] ?? '') === 'mechanic' ? 'selected' : '' ?>>Mechanic</option>
-                        </select>
-                    </div>
-                    <div class="col-md-5" id="linkedDriverWrap" style="display:none">
-                        <label class="form-label">Select Driver</label>
-                        <select name="linked_id" class="form-select">
-                            <option value="">— Select driver —</option>
-                            <?php foreach ($freeDrivers as $d): ?>
-                            <option value="<?= $d['id'] ?>" <?= $user['linked_id'] == $d['id'] ? 'selected' : '' ?>><?= e($d['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-5" id="linkedMechanicWrap" style="display:none">
+                    <div class="col-md-5">
                         <label class="form-label">Select Mechanic</label>
                         <select name="linked_id" class="form-select">
-                            <option value="">— Select mechanic —</option>
+                            <option value="">— None —</option>
                             <?php foreach ($freeMechanics as $m): ?>
                             <option value="<?= $m['id'] ?>" <?= $user['linked_id'] == $m['id'] ? 'selected' : '' ?>><?= e($m['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <input type="hidden" name="linked_type" value="mechanic">
                     </div>
                 </div>
             </div>
@@ -162,21 +144,5 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <?php
-$initLinkedType = json_encode($user['linked_type'] ?? '');
-$extraJs = <<<JS
-<script>
-(function () {
-    var lt = document.getElementById('linkedType');
-    function update() {
-        var val = lt ? lt.value : '';
-        var dw = document.getElementById('linkedDriverWrap');
-        var mw = document.getElementById('linkedMechanicWrap');
-        if (dw) dw.style.display = val === 'driver'   ? '' : 'none';
-        if (mw) mw.style.display = val === 'mechanic' ? '' : 'none';
-    }
-    if (lt) { lt.addEventListener('change', update); update(); }
-}());
-</script>
-JS;
 include __DIR__ . '/../../includes/footer.php';
 ?>

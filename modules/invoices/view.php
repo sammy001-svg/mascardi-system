@@ -1,11 +1,41 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/mailer.php';
 $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/invoices/index.php');
 $db=getDB();
 $stmt=$db->prepare("SELECT i.*,c.chassis_number,c.make,c.model,c.year,c.color,c.registration_number FROM invoices i JOIN cars c ON c.id=i.car_id WHERE i.id=?");
 $stmt->execute([$id]); $inv=$stmt->fetch();
 if(!$inv){setFlash('error','Not found.');redirect(BASE_URL.'/modules/invoices/index.php');}
 $items=$db->prepare("SELECT * FROM invoice_items WHERE invoice_id=?"); $items->execute([$id]); $items=$items->fetchAll();
+
+// Link to client
+if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['link_client_id'])){
+    $lcid=(int)$_POST['link_client_id']?:null;
+    $db->prepare("UPDATE invoices SET client_id=? WHERE id=?")->execute([$lcid,$id]);
+    setFlash('success','Client linked.');redirect(BASE_URL.'/modules/invoices/view.php?id='.$id);
+}
+
+// Send invoice email
+if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['send_email'])){
+    $toEmail=trim($_POST['to_email']??'');
+    $toName =trim($_POST['to_name']??'Invoice');
+    if($toEmail && filter_var($toEmail,FILTER_VALIDATE_EMAIL)){
+        $subj='Invoice '.$inv['invoice_number'].' from '.getSetting('company_name','Mascardi System');
+        $rows='';
+        foreach($items as $it) $rows.='<tr><td>'.e($it['item_type']).'</td><td>'.e($it['description']).'</td><td style="text-align:center">'.$it['quantity'].'</td><td style="text-align:right">'.money((float)$it['unit_price']).'</td><td style="text-align:right">'.money((float)$it['total']).'</td></tr>';
+        $body='<p>Dear '.e($toName).',</p><p>Please find below your invoice from '.e(getSetting('company_name','us')).'.</p>
+               <table class="data"><thead><tr><th>Type</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>'.$rows.'</tbody></table>
+               <table class="data" style="margin-top:8px"><tr><td>Subtotal</td><td style="text-align:right">'.money((float)$inv['subtotal']).'</td></tr>
+               <tr><td>Discount</td><td style="text-align:right">-'.money((float)$inv['discount']).'</td></tr>
+               <tr><td>VAT ('.$inv['tax_rate'].'%)</td><td style="text-align:right">'.money((float)$inv['tax_amount']).'</td></tr>
+               <tr class="total-row"><td>Total</td><td style="text-align:right">'.money((float)$inv['total']).'</td></tr>
+               <tr><td>Amount Paid</td><td style="text-align:right">'.money((float)$inv['amount_paid']).'</td></tr>
+               <tr><td><strong>Balance Due</strong></td><td style="text-align:right"><strong>'.money((float)$inv['total']-(float)$inv['amount_paid']).'</strong></td></tr></table>';
+        $r=sendMail($toEmail,$toName,$subj,mailTemplate($subj,$body),'invoice',$id);
+        setFlash($r['ok']?'success':'error',$r['ok']?'Invoice emailed to '.$toEmail.'.'  :'Email failed: '.$r['error']);
+    } else { setFlash('error','Invalid email address.'); }
+    redirect(BASE_URL.'/modules/invoices/view.php?id='.$id);
+}
 
 // Record payment
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['payment_amount'])){
@@ -27,6 +57,7 @@ include __DIR__ . '/../../includes/header.php';
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">Invoice: <strong><?= e($inv['invoice_number']) ?></strong> <?= statusBadge($inv['status']) ?></h5>
     <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#emailModal"><i class="fa fa-envelope me-1"></i>Send to Client</button>
         <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fa fa-print me-1"></i>Print / PDF</a>
         <?php if($inv['status']!=='paid'): ?><a href="?id=<?= $id ?>&status=cancelled" class="btn btn-sm btn-outline-danger" onclick="return confirm('Cancel invoice?')">Cancel</a><?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
@@ -91,5 +122,31 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </div>
     </div>
+</div>
+
+<!-- Email Modal -->
+<div class="modal fade" id="emailModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST">
+        <div class="modal-header"><h5 class="modal-title"><i class="fa fa-envelope me-2"></i>Send Invoice by Email</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Recipient Name</label>
+            <input type="text" name="to_name" class="form-control" value="<?= e($inv['customer_name']??'') ?>" placeholder="Customer name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email Address</label>
+            <input type="email" name="to_email" class="form-control" value="<?= e($inv['customer_email']??'') ?>" placeholder="customer@example.com" required>
+          </div>
+          <div class="alert alert-info small mb-0"><i class="fa fa-info-circle me-1"></i>The full invoice with line items and payment summary will be included in the email.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" name="send_email" value="1" class="btn btn-primary"><i class="fa fa-paper-plane me-1"></i>Send</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

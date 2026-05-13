@@ -9,16 +9,7 @@ $role = $user['role'] ?? 'mechanic';
 $chartLabels = '[]';
 $chartCounts = '[]';
 
-if ($role === 'driver') {
-    $driverId = (int)($user['linked_id'] ?? 0);
-    $stmt = $db->prepare("SELECT ct.*, c.make, c.model, c.chassis_number, c.status AS car_status FROM car_transfers ct JOIN cars c ON c.id=ct.car_id WHERE ct.driver_id=? AND ct.status IN ('pending','in_transit') ORDER BY ct.departure_date DESC");
-    $stmt->execute([$driverId]); $assignedCars = $stmt->fetchAll();
-    $stmt2 = $db->prepare("SELECT ca.*, c.make, c.model FROM car_assessments ca JOIN cars c ON c.id=ca.car_id WHERE ca.driver_id=? ORDER BY ca.assessment_date DESC LIMIT 5");
-    $stmt2->execute([$driverId]); $myAssessments = $stmt2->fetchAll();
-    $stats['assigned_cars'] = count($assignedCars);
-    $stmt3 = $db->prepare("SELECT COUNT(*) FROM car_assessments WHERE driver_id=?");
-    $stmt3->execute([$driverId]); $stats['total_assessments'] = (int)$stmt3->fetchColumn();
-} elseif ($role === 'mechanic') {
+if ($role === 'mechanic') {
     $mechId = (int)($user['linked_id'] ?? 0);
     $stmt = $db->prepare("SELECT COUNT(*) FROM workshop_jobs WHERE mechanic_id=? AND status NOT IN ('completed','cancelled')");
     $stmt->execute([$mechId]); $stats['assigned_jobs'] = (int)$stmt->fetchColumn();
@@ -91,22 +82,11 @@ include __DIR__ . '/includes/header.php';
     <div class="welcome-text">
         <h5 class="mb-1">Welcome back, <?= e($user['name']) ?></h5>
         <p class="mb-0"><?= date('l, d F Y') ?> &mdash;
-            <?php if ($role === 'driver'): ?>Your assigned deliveries and assessments.
-            <?php elseif ($role === 'mechanic'): ?>Here are your active assignments.
+            <?php if ($role === 'mechanic'): ?>Here are your active assignments.
             <?php else: ?>Here&rsquo;s what&rsquo;s happening today.<?php endif; ?></p>
     </div>
     <div class="welcome-stats d-none d-md-flex align-items-center gap-4">
-        <?php if ($role === 'driver'): ?>
-            <div class="text-center">
-                <div class="welcome-stat-val text-warning"><?= $stats['assigned_cars'] ?></div>
-                <div class="welcome-stat-lbl">Assigned Cars</div>
-            </div>
-            <div class="vr welcome-divider"></div>
-            <div class="text-center">
-                <div class="welcome-stat-val text-success"><?= $stats['total_assessments'] ?></div>
-                <div class="welcome-stat-lbl">My Assessments</div>
-            </div>
-        <?php elseif ($role === 'mechanic'): ?>
+        <?php if ($role === 'mechanic'): ?>
             <div class="text-center">
                 <div class="welcome-stat-val text-warning"><?= $stats['assigned_jobs'] ?></div>
                 <div class="welcome-stat-lbl">Active Jobs</div>
@@ -137,35 +117,7 @@ include __DIR__ . '/includes/header.php';
 
 <!-- Stat Cards -->
 <div class="row g-3 mb-4">
-    <?php if ($role === 'driver'): ?>
-        <div class="col-sm-6 col-xl-4">
-            <a href="<?= BASE_URL ?>/modules/assessments/index.php" class="stat-card stat-card-link" style="border-left:4px solid #d97706">
-                <div class="stat-icon" style="background:#fef3c7;color:#d97706"><i class="fa fa-clipboard-check"></i></div>
-                <div class="stat-info">
-                    <div class="stat-label">Assigned Cars</div>
-                    <div class="stat-value"><?= $stats['assigned_cars'] ?></div>
-                </div>
-            </a>
-        </div>
-        <div class="col-sm-6 col-xl-4">
-            <a href="<?= BASE_URL ?>/modules/assessments/index.php" class="stat-card stat-card-link" style="border-left:4px solid #2563eb">
-                <div class="stat-icon" style="background:#dbeafe;color:#2563eb"><i class="fa fa-list-check"></i></div>
-                <div class="stat-info">
-                    <div class="stat-label">My Assessments</div>
-                    <div class="stat-value"><?= $stats['total_assessments'] ?></div>
-                </div>
-            </a>
-        </div>
-        <div class="col-sm-6 col-xl-4">
-            <a href="<?= BASE_URL ?>/modules/assessments/add.php" class="stat-card stat-card-link" style="border-left:4px solid #16a34a">
-                <div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="fa fa-plus-circle"></i></div>
-                <div class="stat-info">
-                    <div class="stat-label">New Assessment</div>
-                    <div class="stat-value" style="font-size:16px">Start →</div>
-                </div>
-            </a>
-        </div>
-    <?php elseif ($role === 'mechanic'): ?>
+    <?php if ($role === 'mechanic'): ?>
         <div class="col-sm-6 col-xl-4">
             <a href="<?= BASE_URL ?>/modules/jobs/index.php" class="stat-card stat-card-link" style="border-left:4px solid #f59e0b">
                 <div class="stat-icon" style="background:#fef3c7;color:#f59e0b"><i class="fa fa-toolbox"></i></div>
@@ -226,16 +178,7 @@ include __DIR__ . '/includes/header.php';
     <div class="card-header"><i class="fa fa-bolt me-2"></i>Quick Actions</div>
     <div class="card-body">
         <div class="quick-actions-grid">
-            <?php if ($role === 'driver'): ?>
-                <a href="<?= BASE_URL ?>/modules/assessments/add.php" class="quick-action-card">
-                    <div class="qa-icon" style="background:#fef3c7;color:#d97706"><i class="fa fa-truck-fast fa-lg"></i></div>
-                    <span>Pre-Departure<br>Assessment</span>
-                </a>
-                <a href="<?= BASE_URL ?>/modules/assessments/index.php" class="quick-action-card">
-                    <div class="qa-icon" style="background:#dbeafe;color:#2563eb"><i class="fa fa-list-check fa-lg"></i></div>
-                    <span>My Assessments</span>
-                </a>
-            <?php elseif ($role === 'mechanic'): ?>
+            <?php if ($role === 'mechanic'): ?>
                 <a href="<?= BASE_URL ?>/modules/jobs/index.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#fef3c7;color:#d97706"><i class="fa fa-toolbox fa-lg"></i></div>
                     <span>My Jobs</span>
@@ -283,68 +226,7 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <div class="row g-4">
-    <?php if ($role === 'driver'): ?>
-        <!-- Driver: Assigned Cars -->
-        <div class="col-lg-8">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="fa fa-truck-fast me-2"></i>My Assigned Cars for Delivery</span>
-                    <a href="<?= BASE_URL ?>/modules/assessments/add.php" class="btn btn-xs btn-primary">Start Assessment</a>
-                </div>
-                <div class="card-body p-0">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th class="ps-3">Vehicle</th>
-                                <th>Chassis</th>
-                                <th>Route</th>
-                                <th>Departure</th>
-                                <th>Car Status</th>
-                                <th class="text-end pe-3">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($assignedCars as $ct): ?>
-                            <tr>
-                                <td class="ps-3 fw-medium small"><?= e($ct['make'] . ' ' . $ct['model']) ?></td>
-                                <td><code style="font-size:10px"><?= e($ct['chassis_number']) ?></code></td>
-                                <td class="small text-muted"><?= e($ct['from_location']) ?> → <?= e($ct['to_location']) ?></td>
-                                <td class="small"><?= $ct['departure_date'] ? fmtDate($ct['departure_date'], 'd M Y') : '—' ?></td>
-                                <td><?= statusBadge($ct['car_status']) ?></td>
-                                <td class="text-end pe-3">
-                                    <a href="<?= BASE_URL ?>/modules/assessments/add.php?car_id=<?= $ct['car_id'] ?>" class="btn btn-xs btn-warning">Assess</a>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                            <?php if (empty($assignedCars)): ?>
-                            <tr><td colspan="6" class="text-center py-4 text-muted small">No cars currently assigned to you.</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        <!-- Driver: Recent Assessments -->
-        <div class="col-lg-4">
-            <div class="card h-100">
-                <div class="card-header">Recent My Assessments</div>
-                <div class="list-group list-group-flush">
-                    <?php foreach ($myAssessments as $a): ?>
-                    <a href="<?= BASE_URL ?>/modules/assessments/view.php?id=<?= $a['id'] ?>" class="list-group-item list-group-item-action">
-                        <div class="fw-semibold small"><?= e($a['make'] . ' ' . $a['model']) ?></div>
-                        <div class="d-flex justify-content-between align-items-center mt-1">
-                            <span class="text-muted small"><?= fmtDate($a['assessment_date']) ?></span>
-                            <?= statusBadge($a['overall_status']) ?>
-                        </div>
-                    </a>
-                    <?php endforeach; ?>
-                    <?php if (empty($myAssessments)): ?>
-                    <div class="list-group-item text-center text-muted small py-3">No assessments yet.</div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    <?php elseif ($role === 'mechanic'): ?>
+    <?php if ($role === 'mechanic'): ?>
         <!-- Mechanic's My Jobs -->
         <div class="col-lg-8">
             <div class="card h-100">

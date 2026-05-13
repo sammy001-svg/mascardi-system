@@ -9,10 +9,10 @@ $car->execute([$id]);
 $car = $car->fetch();
 if (!$car) { setFlash('error','Car not found.'); redirect(BASE_URL.'/modules/cars/index.php'); }
 
-$intake   = $db->prepare("SELECT ci.*, d.name AS driver_name FROM car_intake ci LEFT JOIN car_transfers ct ON ct.car_id=ci.car_id LEFT JOIN drivers d ON d.id=ct.driver_id WHERE ci.car_id=? ORDER BY ci.id DESC LIMIT 1");
+$intake   = $db->prepare("SELECT ci.*, ct.transported_by FROM car_intake ci LEFT JOIN car_transfers ct ON ct.car_id=ci.car_id WHERE ci.car_id=? ORDER BY ci.id DESC LIMIT 1");
 $intake->execute([$id]); $intake = $intake->fetch();
 
-$transfers = $db->prepare("SELECT ct.*, d.name AS driver_name, d.phone AS driver_phone, d.license_number FROM car_transfers ct JOIN drivers d ON d.id=ct.driver_id WHERE ct.car_id=? ORDER BY ct.id DESC");
+$transfers = $db->prepare("SELECT ct.* FROM car_transfers ct WHERE ct.car_id=? ORDER BY ct.id DESC");
 $transfers->execute([$id]); $transfers = $transfers->fetchAll();
 
 $assessments = $db->prepare("SELECT ca.*, m.name AS mechanic_name FROM car_assessments ca LEFT JOIN mechanics m ON m.id=ca.mechanic_id WHERE ca.car_id=? ORDER BY ca.id DESC");
@@ -40,7 +40,6 @@ include __DIR__ . '/../../includes/header.php';
     <div class="d-flex gap-2 flex-wrap">
         <a href="media.php?id=<?= $id ?>" class="btn btn-sm btn-outline-primary"><i class="fa fa-camera me-1"></i>Photos (<?= count($images) ?>)</a>
         <?php if (canEditDelete()): ?>
-        <a href="assign_driver.php?id=<?= $id ?>" class="btn btn-sm btn-outline-warning"><i class="fa fa-id-card me-1"></i>Assign Driver</a>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
@@ -167,7 +166,7 @@ include __DIR__ . '/../../includes/header.php';
                     <div class="timeline-item">
                         <div class="timeline-dot dot-<?= $t['status'] === 'arrived' ? 'success' : 'warning' ?>"></div>
                         <div class="fw-semibold">Transfer: <?= e($t['from_location']) ?> → <?= e($t['to_location']) ?></div>
-                        <div class="small text-muted">Driver: <strong><?= e($t['driver_name']) ?></strong> | <?= fmtDate($t['departure_date']) ?></div>
+                        <div class="small text-muted"><?= $t['transported_by'] ? 'Transported by: <strong>'.e($t['transported_by']).'</strong> | ' : '' ?><?= fmtDate($t['departure_date']) ?></div>
                         <div><?= statusBadge($t['status']) ?></div>
                     </div>
                     <?php endforeach; ?>

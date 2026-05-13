@@ -14,7 +14,16 @@
       "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" --version)",
       "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" -l \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\\\\modules\\\\invoices\\\\view.php\")",
       "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" -l \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\\\\modules\\\\invoices\\\\index.php\")",
-      "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" -r \"echo ini_get\\('display_errors'\\) . PHP_EOL; echo ini_get\\('error_reporting'\\) . PHP_EOL; echo ini_get\\('log_errors'\\) . PHP_EOL; echo ini_get\\('error_log'\\) . PHP_EOL;\")"
+      "PowerShell(& \"C:\\\\xampp\\\\php\\\\php.exe\" -r \"echo ini_get\\('display_errors'\\) . PHP_EOL; echo ini_get\\('error_reporting'\\) . PHP_EOL; echo ini_get\\('log_errors'\\) . PHP_EOL; echo ini_get\\('error_log'\\) . PHP_EOL;\")",
+      "PowerShell(& \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root mascardi_db -e \"DESCRIBE cars; DESCRIBE settings LIMIT 5;\" 2>&1)",
+      "PowerShell(& \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root mascardi_db -e \"DESCRIBE settings; SELECT setting_key FROM settings;\")",
+      "Bash(Remove-Item -Path \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\\\\modules\\\\drivers\" -Recurse -Force)",
+      "Bash(Remove-Item -Path \"e:\\\\projects\\\\Mascardi System\\\\mascardi-system\\\\modules\\\\cars\\\\assign_driver.php\" -Force)",
+      "Bash(C:/xampp/mysql/bin/mysql.exe -u root mascardi_db -e \"SHOW TABLES LIKE 'drivers'; DESCRIBE car_transfers;\")",
+      "Bash(C:/xampp/mysql/bin/mysql.exe -u root mascardi_db -e \"SHOW COLUMNS FROM car_assessments LIKE 'assessment_type';\")",
+      "Bash(C:/xampp/mysql/bin/mysql.exe -u root mascardi_db -e \"ALTER TABLE car_assessments MODIFY assessment_type ENUM\\('arrival','workshop','pre_delivery','client_service','yard'\\) NOT NULL DEFAULT 'arrival';\")",
+      "Bash(C:/xampp/mysql/bin/mysql.exe -u root mascardi_db -e \"DESCRIBE assessment_items;\")",
+      "Bash(C:/xampp/mysql/bin/mysql.exe -u root mascardi_db -e ' *)"
     ]
   }
 }

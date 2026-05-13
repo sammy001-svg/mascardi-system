@@ -5,8 +5,6 @@ $pageTitle = 'Add User';
 $db = getDB();
 $errors = [];
 
-// Fetch unlinked drivers and mechanics for the "link" dropdown
-$freeDrivers   = $db->query("SELECT d.id, d.name FROM drivers d WHERE d.status='active' AND NOT EXISTS (SELECT 1 FROM users u WHERE u.linked_type='driver' AND u.linked_id=d.id) ORDER BY d.name")->fetchAll();
 $freeMechanics = $db->query("SELECT m.id, m.name FROM mechanics m WHERE m.status='active' AND NOT EXISTS (SELECT 1 FROM users u WHERE u.linked_type='mechanic' AND u.linked_id=m.id) ORDER BY m.name")->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -25,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$pass)     $errors[] = 'Password is required.';
     elseif (strlen($pass) < 6) $errors[] = 'Password must be at least 6 characters.';
     elseif ($pass !== $pass2)  $errors[] = 'Passwords do not match.';
-    if (!in_array($role, ['admin','manager','mechanic','driver'])) $errors[] = 'Invalid role.';
+    if (!in_array($role, ['admin','manager','mechanic'])) $errors[] = 'Invalid role.';
 
     if (empty($errors)) {
         try {
@@ -80,7 +78,6 @@ include __DIR__ . '/../../includes/header.php';
                         <option value="admin"    <?= ($_POST['role'] ?? '') === 'admin'    ? 'selected' : '' ?>>Admin — Full access</option>
                         <option value="manager"  <?= ($_POST['role'] ?? '') === 'manager'  ? 'selected' : '' ?>>Manager — Operations access</option>
                         <option value="mechanic" <?= ($_POST['role'] ?? 'mechanic') === 'mechanic' ? 'selected' : '' ?>>Mechanic — Workshop access</option>
-                        <option value="driver"   <?= ($_POST['role'] ?? '') === 'driver'   ? 'selected' : '' ?>>Driver — Transport access</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -93,36 +90,19 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
             </div>
 
-            <!-- Link to driver/mechanic (shown for mechanic/driver roles) -->
+            <!-- Link to mechanic profile -->
             <div class="form-section" id="linkSection">
-                <div class="form-section-title">Link to Existing Profile (optional)</div>
-                <p class="text-muted small mb-3">Link this account to an existing driver or mechanic record so their profile is connected to their login.</p>
+                <div class="form-section-title">Link to Mechanic Profile (optional)</div>
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Link Type</label>
-                        <select name="linked_type" class="form-select" id="linkedType">
-                            <option value="">— None —</option>
-                            <option value="driver"   <?= ($_POST['linked_type'] ?? '') === 'driver'   ? 'selected' : '' ?>>Driver</option>
-                            <option value="mechanic" <?= ($_POST['linked_type'] ?? '') === 'mechanic' ? 'selected' : '' ?>>Mechanic</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6" id="linkedDriverWrap" style="display:none">
-                        <label class="form-label">Select Driver</label>
-                        <select name="linked_id" class="form-select linked-id-select" data-for="driver">
-                            <option value="">— Select driver —</option>
-                            <?php foreach ($freeDrivers as $d): ?>
-                            <option value="<?= $d['id'] ?>" <?= ($_POST['linked_id'] ?? '') == $d['id'] ? 'selected' : '' ?>><?= e($d['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-6" id="linkedMechanicWrap" style="display:none">
+                    <div class="col-md-6">
                         <label class="form-label">Select Mechanic</label>
-                        <select name="linked_id" class="form-select linked-id-select" data-for="mechanic">
-                            <option value="">— Select mechanic —</option>
+                        <select name="linked_id" class="form-select">
+                            <option value="">— None —</option>
                             <?php foreach ($freeMechanics as $m): ?>
                             <option value="<?= $m['id'] ?>" <?= ($_POST['linked_id'] ?? '') == $m['id'] ? 'selected' : '' ?>><?= e($m['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <input type="hidden" name="linked_type" value="mechanic">
                     </div>
                 </div>
             </div>
@@ -135,21 +115,5 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<?php
-$extraJs = <<<'JS'
-<script>
-(function () {
-    var linkedType = document.getElementById('linkedType');
-    function updateLinkedWrap() {
-        var val = linkedType ? linkedType.value : '';
-        var dw = document.getElementById('linkedDriverWrap');
-        var mw = document.getElementById('linkedMechanicWrap');
-        if (dw) dw.style.display = val === 'driver'   ? '' : 'none';
-        if (mw) mw.style.display = val === 'mechanic' ? '' : 'none';
-    }
-    if (linkedType) { linkedType.addEventListener('change', updateLinkedWrap); updateLinkedWrap(); }
-}());
-</script>
-JS;
-include __DIR__ . '/../../includes/footer.php';
+<?php include __DIR__ . '/../../includes/footer.php';
 ?>

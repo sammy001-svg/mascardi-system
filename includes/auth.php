@@ -64,9 +64,8 @@ function canAccess(string $module): bool {
     if (!$user) return false;
     if ($user['role'] === 'admin') return true;
     $map = [
-        'manager'  => ['cars','drivers','mechanics','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests'],
+        'manager'  => ['cars','mechanics','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings'],
         'mechanic' => ['cars','jobs','assessments','parts_requests'],
-        'driver'   => ['assessments'],
     ];
     return in_array($module, $map[$user['role']] ?? []);
 }

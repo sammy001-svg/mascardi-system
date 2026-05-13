@@ -26,18 +26,12 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-gauge-high"></i><span>Dashboard</span>
         </a>
 
-        <?php if (canAccess('cars') || canAccess('drivers') || canAccess('mechanics')): ?>
+        <?php if (canAccess('cars') || canAccess('mechanics')): ?>
         <div class="nav-section">Fleet</div>
 
         <?php if (canAccess('cars')): ?>
         <a href="<?= BASE_URL ?>/modules/cars/index.php" class="nav-item <?= isActive('/modules/cars/') ?>">
             <i class="fa fa-car"></i><span>All Cars</span>
-        </a>
-        <?php endif; ?>
-
-        <?php if (canAccess('drivers')): ?>
-        <a href="<?= BASE_URL ?>/modules/drivers/index.php" class="nav-item <?= isActive('/modules/drivers/') ?>">
-            <i class="fa fa-id-card"></i><span>Drivers</span>
         </a>
         <?php endif; ?>
 
@@ -110,6 +104,22 @@ $__isDash = !str_contains($__uri, '/modules/');
         <?php if (canAccess('suppliers')): ?>
         <a href="<?= BASE_URL ?>/modules/suppliers/index.php" class="nav-item <?= isActive('/modules/suppliers/') ?>">
             <i class="fa fa-truck"></i><span>Suppliers</span>
+        </a>
+        <?php endif; ?>
+        <?php endif; ?>
+
+        <?php if (canAccess('clients') || canAccess('service_bookings')): ?>
+        <div class="nav-section">Clients</div>
+
+        <?php if (canAccess('clients')): ?>
+        <a href="<?= BASE_URL ?>/modules/clients/index.php" class="nav-item <?= isActive('/modules/clients/') ?>">
+            <i class="fa fa-users"></i><span>Clients</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (canAccess('service_bookings')): ?>
+        <a href="<?= BASE_URL ?>/modules/service_bookings/index.php" class="nav-item <?= isActive('/modules/service_bookings/') ?>">
+            <i class="fa fa-calendar-check"></i><span>Service Bookings</span>
         </a>
         <?php endif; ?>
         <?php endif; ?>
