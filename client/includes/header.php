@@ -41,6 +41,7 @@ body { background: #f1f5f9; min-height: 100vh; }
         ?>
         <a href="<?= BASE_URL ?>/client/index.php"       class="<?= cpActive('client/index') ?>"><i class="fa fa-gauge me-1"></i>Dashboard</a>
         <a href="<?= BASE_URL ?>/client/bookings.php"    class="<?= cpActive('bookings') ?>"><i class="fa fa-calendar me-1"></i>Bookings</a>
+        <a href="<?= BASE_URL ?>/client/assessments.php" class="<?= cpActive('assessments') ?>"><i class="fa fa-list-check me-1"></i>Assessments</a>
         <a href="<?= BASE_URL ?>/client/invoices.php"    class="<?= cpActive('invoices') ?>"><i class="fa fa-file-invoice me-1"></i>Invoices</a>
         <a href="<?= BASE_URL ?>/client/quotations.php"  class="<?= cpActive('quotations') ?>"><i class="fa fa-file-lines me-1"></i>Quotes</a>
         <a href="<?= BASE_URL ?>/client/notices.php"     class="<?= cpActive('notices') ?>">

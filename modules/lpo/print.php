@@ -64,21 +64,46 @@ $company=['name'=>getSetting('company_name','Mascardi Car Yard'),'address'=>getS
         </tbody>
     </table>
     <div class="row mt-3">
-        <div class="col-6"><?php if($lpo['notes']): ?><div class="small text-muted"><strong>Notes:</strong><br><?= e($lpo['notes']) ?></div><?php endif; ?></div>
-        <div class="col-6">
+        <div class="col-7">
+            <?php if($lpo['notes']): ?><div class="small text-muted mb-3"><strong>Notes:</strong><br><?= e($lpo['notes']) ?></div><?php endif; ?>
+            <div class="mt-3">
+                <h6 class="fw-bold mb-1" style="font-size:11px;text-decoration:underline">TERMS & CONDITIONS:</h6>
+                <ol class="text-muted ps-3 mb-0" style="font-size:10.5px;line-height:1.4">
+                    <li>Goods/services must meet requirements specifications and quantities.</li>
+                    <li>Price are final unless changed in writing.</li>
+                </ol>
+            </div>
+        </div>
+        <div class="col-5">
             <table class="table table-sm mb-0" style="font-size:12px">
-                <tr><td class="text-muted">Subtotal</td><td class="text-end">KES <?= number_format($lpo['subtotal'],2) ?></td></tr>
-                <tr><td class="text-muted">VAT (<?= $lpo['tax_rate'] ?>%)</td><td class="text-end">KES <?= number_format($lpo['tax_amount'],2) ?></td></tr>
-                <tr style="background:#d97706;color:#fff"><td><strong>TOTAL</strong></td><td class="text-end"><strong>KES <?= number_format($lpo['total'],2) ?></strong></td></tr>
+                <tr><td class="text-muted border-0">Subtotal</td><td class="text-end border-0">KES <?= number_format($lpo['subtotal'],2) ?></td></tr>
+                <tr><td class="text-muted border-0">VAT (<?= $lpo['tax_rate'] ?>%)</td><td class="text-end border-0">KES <?= number_format($lpo['tax_amount'],2) ?></td></tr>
+                <tr style="background:#d97706;color:#fff"><td class="border-0"><strong>TOTAL</strong></td><td class="text-end border-0"><strong>KES <?= number_format($lpo['total'],2) ?></strong></td></tr>
             </table>
         </div>
     </div>
-    <div class="row mt-4 pt-3 border-top" style="font-size:11px;color:#64748b">
-        <div class="col-4 text-center"><div style="border-top:1px solid #cbd5e1;margin-top:30px;padding-top:8px">Requested By</div></div>
-        <div class="col-4 text-center"><div style="border-top:1px solid #cbd5e1;margin-top:30px;padding-top:8px">Authorized By</div></div>
-        <div class="col-4 text-center"><div style="border-top:1px solid #cbd5e1;margin-top:30px;padding-top:8px">Supplier Acknowledgement</div></div>
+
+    <div class="mt-5 pt-4">
+        <div class="row g-4" style="font-size:11px;color:#334155">
+            <div class="col-6">
+                <div class="p-3 border rounded-3 bg-light bg-opacity-10">
+                    <div class="mb-4"><strong>Prepared by:</strong></div>
+                    <div style="border-top:1px dashed #cbd5e1;margin-top:20px;padding-top:5px" class="text-muted">Signature & Date</div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="p-3 border rounded-3 bg-light bg-opacity-10">
+                    <div class="mb-4"><strong>Approved by:</strong></div>
+                    <div style="border-top:1px dashed #cbd5e1;margin-top:20px;padding-top:5px" class="text-muted">Signature & Date</div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="text-center mt-4 text-muted" style="font-size:11px"><?= e($company['name']) ?> — <?= e($company['phone']) ?></div>
+
+    <div class="text-center mt-5 text-muted border-top pt-3" style="font-size:10px">
+        <?= e($company['name']) ?> &bull; <?= e($company['phone']) ?> &bull; <?= e($company['email']) ?>
+    </div>
+</div>
 </div>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 </body></html>

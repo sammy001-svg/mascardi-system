@@ -53,9 +53,22 @@ include __DIR__ . '/includes/header.php';
         </div>
     </div>
     <div class="col-6 col-md-3">
+        <a href="<?= BASE_URL ?>/client/assessments.php" style="text-decoration:none">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#f0fdf4;color:#16a34a"><i class="fa fa-list-check"></i></div>
+            <?php
+            $qaCount = (int)$db->prepare("SELECT COUNT(*) FROM quick_assessments qa JOIN cars c ON c.id=qa.car_id WHERE c.client_id=?")->execute([$cid]) ? 0 : 0;
+            $qaStmt = $db->prepare("SELECT COUNT(*) FROM quick_assessments qa JOIN cars c ON c.id=qa.car_id WHERE c.client_id=?");
+            $qaStmt->execute([$cid]); $qaCount = (int)$qaStmt->fetchColumn();
+            ?>
+            <div><div class="stat-label">Assessments</div><div class="stat-value"><?= $qaCount ?></div></div>
+        </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
         <a href="<?= BASE_URL ?>/client/notices.php" style="text-decoration:none">
         <div class="stat-card">
-            <div class="stat-icon" style="background:#f0fdf4;color:#16a34a"><i class="fa fa-bell"></i></div>
+            <div class="stat-icon" style="background:#f5f3ff;color:#7c3aed"><i class="fa fa-bell"></i></div>
             <div><div class="stat-label">Unread Notices</div><div class="stat-value"><?= $unread ?></div></div>
         </div>
         </a>

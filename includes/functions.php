@@ -171,3 +171,106 @@ function handleUpload(array $file, string $targetDir, array $allowedTypes = ['jp
 
     return $filename;
 }
+/**
+ * Internal helper to convert number to words without currency wrapper
+ */
+function _numberToWordsRaw($number): string {
+    $hyphen      = '-';
+    $conjunction = ' and ';
+    $separator   = ', ';
+    $dictionary  = array(
+        0                   => 'zero',
+        1                   => 'one',
+        2                   => 'two',
+        3                   => 'three',
+        4                   => 'four',
+        5                   => 'five',
+        6                   => 'six',
+        7                   => 'seven',
+        8                   => 'eight',
+        9                   => 'nine',
+        10                  => 'ten',
+        11                  => 'eleven',
+        12                  => 'twelve',
+        13                  => 'thirteen',
+        14                  => 'fourteen',
+        15                  => 'fifteen',
+        16                  => 'sixteen',
+        17                  => 'seventeen',
+        18                  => 'eighteen',
+        19                  => 'nineteen',
+        20                  => 'twenty',
+        30                  => 'thirty',
+        40                  => 'forty',
+        50                  => 'fifty',
+        60                  => 'sixty',
+        70                  => 'seventy',
+        80                  => 'eighty',
+        90                  => 'ninety',
+        100                 => 'hundred',
+        1000                => 'thousand',
+        1000000             => 'million',
+        1000000000          => 'billion',
+        1000000000000       => 'trillion'
+    );
+
+    if (!is_numeric($number)) return '';
+    $number = (int)$number;
+    if ($number == 0) return $dictionary[0];
+
+    $num_parts = array();
+    if ($number >= 1000000000) {
+        $billions = floor($number / 1000000000);
+        $num_parts[] = _numberToWordsRaw($billions) . ' ' . $dictionary[1000000000];
+        $number %= 1000000000;
+    }
+    if ($number >= 1000000) {
+        $millions = floor($number / 1000000);
+        $num_parts[] = _numberToWordsRaw($millions) . ' ' . $dictionary[1000000];
+        $number %= 1000000;
+    }
+    if ($number >= 1000) {
+        $thousands = floor($number / 1000);
+        $num_parts[] = _numberToWordsRaw($thousands) . ' ' . $dictionary[1000];
+        $number %= 1000;
+    }
+    if ($number >= 100) {
+        $hundreds = floor($number / 100);
+        $num_parts[] = $dictionary[$hundreds] . ' ' . $dictionary[100];
+        $number %= 100;
+    }
+    if ($number > 0) {
+        if (count($num_parts) > 0) $num_parts[] = trim($conjunction);
+        if ($number < 21) {
+            $num_parts[] = $dictionary[$number];
+        } else {
+            $tens = floor($number / 10) * 10;
+            $units = $number % 10;
+            $num_parts[] = $dictionary[$tens] . ($units ? $hyphen . $dictionary[$units] : '');
+        }
+    }
+    return implode(' ', $num_parts);
+}
+
+/**
+ * Convert number to words (KES Currency)
+ */
+function numberToWords($number): string {
+    if (!is_numeric($number)) return '—';
+    $number = (float)$number;
+    $negative = $number < 0 ? 'Negative ' : '';
+    $number = abs($number);
+
+    $whole = floor($number);
+    $fraction = round(($number - $whole) * 100);
+
+    $string = $negative . ucwords(_numberToWordsRaw($whole)) . " Shillings";
+    
+    if ($fraction > 0) {
+        $string .= " and " . ucwords(_numberToWordsRaw($fraction)) . " Cents Only";
+    } else {
+        $string .= " Only";
+    }
+
+    return $string;
+}

@@ -6,23 +6,48 @@ $db   = getDB();
 $user = authUser();
 $role = $user['role'] ?? 'mechanic';
 
-$chartLabels = '[]';
-$chartCounts = '[]';
-
+// ── Fetch role-specific stats ──────────────────────────────────────────────
+$stats = [];
 if ($role === 'mechanic') {
     $mechId = (int)($user['linked_id'] ?? 0);
-    $stmt = $db->prepare("SELECT COUNT(*) FROM workshop_jobs WHERE mechanic_id=? AND status NOT IN ('completed','cancelled')");
-    $stmt->execute([$mechId]); $stats['assigned_jobs'] = (int)$stmt->fetchColumn();
-    $stmt = $db->prepare("SELECT COUNT(*) FROM car_assessments WHERE mechanic_id=? AND assessment_date=CURDATE()");
-    $stmt->execute([$mechId]); $stats['pending_assess'] = (int)$stmt->fetchColumn();
-    $stmt = $db->prepare("SELECT COUNT(*) FROM workshop_jobs WHERE mechanic_id=? AND status='completed' AND DATE(updated_at)=CURDATE()");
-    $stmt->execute([$mechId]); $stats['completed_today'] = (int)$stmt->fetchColumn();
+    $stats['assigned_jobs']     = $db->prepare("SELECT COUNT(*) FROM workshop_jobs WHERE mechanic_id=? AND status NOT IN ('completed','cancelled')");
+    $stats['assigned_jobs']->execute([$mechId]); $stats['assigned_jobs'] = (int)$stats['assigned_jobs']->fetchColumn();
+    
+    $stats['completed_today']   = $db->prepare("SELECT COUNT(*) FROM workshop_jobs WHERE mechanic_id=? AND status='completed' AND DATE(updated_at)=CURDATE()");
+    $stats['completed_today']->execute([$mechId]); $stats['completed_today'] = (int)$stats['completed_today']->fetchColumn();
+    
+    $stats['pending_assess']    = $db->prepare("SELECT COUNT(*) FROM car_assessments WHERE mechanic_id=? AND assessment_date=CURDATE()");
+    $stats['pending_assess']->execute([$mechId]); $stats['pending_assess'] = (int)$stats['pending_assess']->fetchColumn();
+    
+    $stats['parts_requested']   = $db->prepare("SELECT COUNT(*) FROM parts_requests WHERE requested_by=? AND status='pending'");
+    $stats['parts_requested']->execute([$user['id']]); $stats['parts_requested'] = (int)$stats['parts_requested']->fetchColumn();
+
     $myJobs = $db->prepare("SELECT j.*, c.make, c.model, c.chassis_number FROM workshop_jobs j JOIN cars c ON c.id=j.car_id WHERE j.mechanic_id=? ORDER BY j.priority DESC, j.created_at DESC LIMIT 10");
     $myJobs->execute([$mechId]); $myJobs = $myJobs->fetchAll();
+    
     $myAssessments = $db->prepare("SELECT ca.*, c.make, c.model FROM car_assessments ca JOIN cars c ON c.id=ca.car_id WHERE ca.mechanic_id=? ORDER BY ca.created_at DESC LIMIT 5");
     $myAssessments->execute([$mechId]); $myAssessments = $myAssessments->fetchAll();
-} else {
-    $stats       = getDashboardStats();
+
+} elseif ($role === 'workshop_manager' || $role === 'admin') {
+    $stats['total_cars']        = (int)$db->query("SELECT COUNT(*) FROM cars")->fetchColumn();
+    $stats['in_workshop']       = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status='in_workshop'")->fetchColumn();
+    $stats['open_jobs']         = (int)$db->query("SELECT COUNT(*) FROM workshop_jobs WHERE status NOT IN ('completed','cancelled')")->fetchColumn();
+    $stats['low_stock']         = (int)$db->query("SELECT COUNT(*) FROM inventory WHERE quantity <= reorder_level")->fetchColumn();
+    
+} elseif ($role === 'sales_person') {
+    $stats['total_clients']     = (int)$db->query("SELECT COUNT(*) FROM clients")->fetchColumn();
+    $stats['qa_today']          = (int)$db->query("SELECT COUNT(*) FROM quick_assessments WHERE assessment_date=CURDATE()")->fetchColumn();
+    $stats['pending_bookings']  = (int)$db->query("SELECT COUNT(*) FROM service_bookings WHERE status='pending'")->fetchColumn();
+    $stats['available_cars']    = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status IN ('arrived','completed')")->fetchColumn();
+
+} elseif ($role === 'sales_officer') {
+    $stats['revenue_month']     = (float)$db->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid' AND MONTH(created_at)=MONTH(NOW()) AND YEAR(created_at)=YEAR(NOW())")->fetchColumn();
+    $stats['unpaid_invoices']   = (int)$db->query("SELECT COUNT(*) FROM invoices WHERE status='unpaid'")->fetchColumn();
+    $stats['active_quotes']     = (int)$db->query("SELECT COUNT(*) FROM quotations WHERE status='sent'")->fetchColumn();
+    $stats['payments_today']    = (float)$db->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE status='confirmed' AND DATE(created_at)=CURDATE()")->fetchColumn();
+}
+
+if ($role !== 'mechanic') {
     $recentCars  = $db->query("SELECT c.*, ci.intake_date FROM cars c LEFT JOIN car_intake ci ON ci.car_id=c.id ORDER BY c.created_at DESC LIMIT 6")->fetchAll();
     $recentJobs  = $db->query("SELECT j.*, c.make, c.model, c.chassis_number, m.name AS mechanic_name FROM workshop_jobs j JOIN cars c ON c.id=j.car_id LEFT JOIN mechanics m ON m.id=j.mechanic_id ORDER BY j.created_at DESC LIMIT 5")->fetchAll();
     $carStatusData = $db->query("SELECT status, COUNT(*) AS cnt FROM cars GROUP BY status")->fetchAll();
@@ -81,14 +106,14 @@ include __DIR__ . '/includes/header.php';
 <div class="welcome-banner mb-4">
     <div class="welcome-text">
         <h5 class="mb-1">Welcome back, <?= e($user['name']) ?></h5>
-        <p class="mb-0"><?= date('l, d F Y') ?> &mdash;
-            <?php if ($role === 'mechanic'): ?>Here are your active assignments.
-            <?php else: ?>Here&rsquo;s what&rsquo;s happening today.<?php endif; ?></p>
+        <p class="mb-0"><?= date('l, d F Y') ?> &mdash; 
+            <span class="badge bg-white bg-opacity-20 fw-normal"><?= ucwords(str_replace('_', ' ', $role)) ?></span>
+        </p>
     </div>
     <div class="welcome-stats d-none d-md-flex align-items-center gap-4">
         <?php if ($role === 'mechanic'): ?>
             <div class="text-center">
-                <div class="welcome-stat-val text-warning"><?= $stats['assigned_jobs'] ?></div>
+                <div class="welcome-stat-val"><?= $stats['assigned_jobs'] ?></div>
                 <div class="welcome-stat-lbl">Active Jobs</div>
             </div>
             <div class="vr welcome-divider"></div>
@@ -96,20 +121,25 @@ include __DIR__ . '/includes/header.php';
                 <div class="welcome-stat-val text-success"><?= $stats['completed_today'] ?></div>
                 <div class="welcome-stat-lbl">Done Today</div>
             </div>
-        <?php else: ?>
+        <?php elseif ($role === 'workshop_manager' || $role === 'admin'): ?>
             <div class="text-center">
                 <div class="welcome-stat-val"><?= $stats['total_cars'] ?></div>
-                <div class="welcome-stat-lbl">Total Cars</div>
+                <div class="welcome-stat-lbl">Total Fleet</div>
             </div>
             <div class="vr welcome-divider"></div>
             <div class="text-center">
                 <div class="welcome-stat-val"><?= $stats['open_jobs'] ?></div>
                 <div class="welcome-stat-lbl">Open Jobs</div>
             </div>
-            <div class="vr welcome-divider"></div>
+        <?php elseif ($role === 'sales_officer'): ?>
             <div class="text-center">
-                <div class="welcome-stat-val"><?= $stats['unpaid_invoices'] ?></div>
-                <div class="welcome-stat-lbl">Unpaid Invoices</div>
+                <div class="welcome-stat-val"><?= money($stats['revenue_month'] ?? 0) ?></div>
+                <div class="welcome-stat-lbl">Revenue (Month)</div>
+            </div>
+        <?php else: ?>
+            <div class="text-center">
+                <div class="welcome-stat-val"><?= $stats['available_cars'] ?? 0 ?></div>
+                <div class="welcome-stat-lbl">Available Cars</div>
             </div>
         <?php endif; ?>
     </div>
@@ -118,57 +148,107 @@ include __DIR__ . '/includes/header.php';
 <!-- Stat Cards -->
 <div class="row g-3 mb-4">
     <?php if ($role === 'mechanic'): ?>
-        <div class="col-sm-6 col-xl-4">
+        <div class="col-sm-6 col-xl-3">
             <a href="<?= BASE_URL ?>/modules/jobs/index.php" class="stat-card stat-card-link" style="border-left:4px solid #f59e0b">
                 <div class="stat-icon" style="background:#fef3c7;color:#f59e0b"><i class="fa fa-toolbox"></i></div>
-                <div class="stat-info">
-                    <div class="stat-label">Assigned Jobs</div>
-                    <div class="stat-value"><?= $stats['assigned_jobs'] ?></div>
-                </div>
+                <div class="stat-info"><div class="stat-label">My Jobs</div><div class="stat-value"><?= $stats['assigned_jobs'] ?></div></div>
             </a>
         </div>
-        <div class="col-sm-6 col-xl-4">
-            <a href="<?= BASE_URL ?>/modules/assessments/index.php" class="stat-card stat-card-link" style="border-left:4px solid #3b82f6">
-                <div class="stat-icon" style="background:#dbeafe;color:#3b82f6"><i class="fa fa-clipboard-check"></i></div>
-                <div class="stat-info">
-                    <div class="stat-label">Assessments Today</div>
-                    <div class="stat-value"><?= $stats['pending_assess'] ?></div>
-                </div>
-            </a>
-        </div>
-        <div class="col-sm-6 col-xl-4">
+        <div class="col-sm-6 col-xl-3">
             <div class="stat-card" style="border-left:4px solid #10b981">
                 <div class="stat-icon" style="background:#d1fae5;color:#10b981"><i class="fa fa-circle-check"></i></div>
-                <div class="stat-info">
-                    <div class="stat-label">Completed Today</div>
-                    <div class="stat-value"><?= $stats['completed_today'] ?></div>
-                </div>
+                <div class="stat-info"><div class="stat-label">Done Today</div><div class="stat-value"><?= $stats['completed_today'] ?></div></div>
             </div>
         </div>
-    <?php else: ?>
+        <div class="col-sm-6 col-xl-3">
+            <a href="<?= BASE_URL ?>/modules/assessments/index.php" class="stat-card stat-card-link" style="border-left:4px solid #3b82f6">
+                <div class="stat-icon" style="background:#dbeafe;color:#3b82f6"><i class="fa fa-clipboard-check"></i></div>
+                <div class="stat-info"><div class="stat-label">My Assessments</div><div class="stat-value"><?= $stats['pending_assess'] ?></div></div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <a href="<?= BASE_URL ?>/modules/parts_requests/index.php" class="stat-card stat-card-link" style="border-left:4px solid #db2777">
+                <div class="stat-icon" style="background:#fce7f3;color:#db2777"><i class="fa fa-hand-holding-box"></i></div>
+                <div class="stat-info"><div class="stat-label">Part Requests</div><div class="stat-value"><?= $stats['parts_requested'] ?></div></div>
+            </a>
+        </div>
+
+    <?php elseif ($role === 'workshop_manager' || $role === 'admin'): ?>
         <div class="col-sm-6 col-xl-3">
             <a href="<?= BASE_URL ?>/modules/cars/index.php" class="stat-card stat-card-link" style="border-left:4px solid #2563eb">
                 <div class="stat-icon" style="background:#dbeafe;color:#2563eb"><i class="fa fa-car"></i></div>
-                <div class="stat-info"><div class="stat-label">Total Cars</div><div class="stat-value"><?= $stats['total_cars'] ?></div></div>
+                <div class="stat-info"><div class="stat-label">Total Fleet</div><div class="stat-value"><?= $stats['total_cars'] ?></div></div>
             </a>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <a href="<?= BASE_URL ?>/modules/jobs/index.php" class="stat-card stat-card-link" style="border-left:4px solid #db2777">
-                <div class="stat-icon" style="background:#fce7f3;color:#db2777"><i class="fa fa-toolbox"></i></div>
+            <a href="<?= BASE_URL ?>/modules/cars/index.php?status=in_workshop" class="stat-card stat-card-link" style="border-left:4px solid #db2777">
+                <div class="stat-icon" style="background:#fce7f3;color:#db2777"><i class="fa fa-screwdriver-wrench"></i></div>
                 <div class="stat-info"><div class="stat-label">In Workshop</div><div class="stat-value"><?= $stats['in_workshop'] ?></div></div>
             </a>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <a href="<?= BASE_URL ?>/modules/invoices/index.php" class="stat-card stat-card-link" style="border-left:4px solid #dc2626">
-                <div class="stat-icon" style="background:#fee2e2;color:#dc2626"><i class="fa fa-file-invoice-dollar"></i></div>
-                <div class="stat-info"><div class="stat-label">Unpaid Invoices</div><div class="stat-value"><?= $stats['unpaid_invoices'] ?></div></div>
+            <a href="<?= BASE_URL ?>/modules/jobs/index.php" class="stat-card stat-card-link" style="border-left:4px solid #f59e0b">
+                <div class="stat-icon" style="background:#fef3c7;color:#f59e0b"><i class="fa fa-clipboard-list"></i></div>
+                <div class="stat-info"><div class="stat-label">Open Job Cards</div><div class="stat-value"><?= $stats['open_jobs'] ?></div></div>
             </a>
         </div>
+        <div class="col-sm-6 col-xl-3">
+            <a href="<?= BASE_URL ?>/modules/inventory/index.php" class="stat-card stat-card-link" style="border-left:4px solid #dc2626">
+                <div class="stat-icon" style="background:#fee2e2;color:#dc2626"><i class="fa fa-boxes-stacked"></i></div>
+                <div class="stat-info"><div class="stat-label">Low Stock Parts</div><div class="stat-value"><?= $stats['low_stock'] ?></div></div>
+            </a>
+        </div>
+
+    <?php elseif ($role === 'sales_person'): ?>
+        <div class="col-sm-6 col-xl-3">
+            <a href="<?= BASE_URL ?>/modules/clients/index.php" class="stat-card stat-card-link" style="border-left:4px solid #2563eb">
+                <div class="stat-icon" style="background:#dbeafe;color:#2563eb"><i class="fa fa-users"></i></div>
+                <div class="stat-info"><div class="stat-label">Total Clients</div><div class="stat-value"><?= $stats['total_clients'] ?></div></div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <a href="<?= BASE_URL ?>/modules/quick_assessments/index.php" class="stat-card stat-card-link" style="border-left:4px solid #8b5cf6">
+                <div class="stat-icon" style="background:#f5f3ff;color:#8b5cf6"><i class="fa fa-magnifying-glass-chart"></i></div>
+                <div class="stat-info"><div class="stat-label">Assessments (Today)</div><div class="stat-value"><?= $stats['qa_today'] ?></div></div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <a href="<?= BASE_URL ?>/modules/service_bookings/index.php" class="stat-card stat-card-link" style="border-left:4px solid #10b981">
+                <div class="stat-icon" style="background:#d1fae5;color:#10b981"><i class="fa fa-calendar-check"></i></div>
+                <div class="stat-info"><div class="stat-label">Pending Bookings</div><div class="stat-value"><?= $stats['pending_bookings'] ?></div></div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <a href="<?= BASE_URL ?>/modules/cars/index.php" class="stat-card stat-card-link" style="border-left:4px solid #0ea5e9">
+                <div class="stat-icon" style="background:#e0f2fe;color:#0ea5e9"><i class="fa fa-car-side"></i></div>
+                <div class="stat-info"><div class="stat-label">Available Cars</div><div class="stat-value"><?= $stats['available_cars'] ?></div></div>
+            </a>
+        </div>
+
+    <?php elseif ($role === 'sales_officer'): ?>
         <div class="col-sm-6 col-xl-3">
             <div class="stat-card" style="border-left:4px solid #16a34a">
                 <div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="fa fa-money-bill-wave"></i></div>
                 <div class="stat-info"><div class="stat-label">Revenue (Month)</div><div class="stat-value stat-value-sm"><?= money($stats['revenue_month']) ?></div></div>
             </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <a href="<?= BASE_URL ?>/modules/invoices/index.php?status=unpaid" class="stat-card stat-card-link" style="border-left:4px solid #dc2626">
+                <div class="stat-icon" style="background:#fee2e2;color:#dc2626"><i class="fa fa-file-invoice-dollar"></i></div>
+                <div class="stat-info"><div class="stat-label">Unpaid Invoices</div><div class="stat-value"><?= $stats['unpaid_invoices'] ?></div></div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <a href="<?= BASE_URL ?>/modules/quotations/index.php" class="stat-card stat-card-link" style="border-left:4px solid #0284c7">
+                <div class="stat-icon" style="background:#e0f2fe;color:#0284c7"><i class="fa fa-file-lines"></i></div>
+                <div class="stat-info"><div class="stat-label">Active Quotations</div><div class="stat-value"><?= $stats['active_quotes'] ?></div></div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <a href="<?= BASE_URL ?>/modules/payments/index.php" class="stat-card stat-card-link" style="border-left:4px solid #d97706">
+                <div class="stat-icon" style="background:#fef3c7;color:#d97706"><i class="fa fa-money-bill-transfer"></i></div>
+                <div class="stat-info"><div class="stat-label">Payments (Today)</div><div class="stat-value stat-value-sm"><?= money($stats['payments_today']) ?></div></div>
+            </a>
         </div>
     <?php endif; ?>
 </div>
