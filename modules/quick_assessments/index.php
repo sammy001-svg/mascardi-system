@@ -86,11 +86,6 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if (empty($assessments)): ?>
-                <tr><td colspan="8" class="text-center py-5 text-muted">
-                    <i class="fa fa-magnifying-glass fa-2x mb-2 d-block"></i>No quick assessments yet.
-                </td></tr>
-                <?php endif; ?>
             </tbody>
         </table>
     </div>

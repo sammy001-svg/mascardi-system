@@ -71,9 +71,6 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if (empty($clients)): ?>
-                <tr><td colspan="9" class="text-center py-4 text-muted">No clients yet.</td></tr>
-                <?php endif; ?>
             </tbody>
         </table>
     </div>

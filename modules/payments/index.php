@@ -222,11 +222,6 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if (empty($payments)): ?>
-                <tr><td colspan="9" class="text-center py-5 text-muted">
-                    <i class="fa fa-inbox fa-2x mb-2 d-block"></i>No payments found.
-                </td></tr>
-                <?php endif; ?>
             </tbody>
         </table>
     </div>

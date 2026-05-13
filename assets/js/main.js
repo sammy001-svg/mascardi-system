@@ -18,9 +18,6 @@ $(function () {
     // ── DataTables init ─────────────────────────────
     if ($.fn.DataTable) {
         $('.datatable').each(function () {
-            var colCount = $(this).find('thead tr:first th').length;
-            // Ensure empty-state colspan matches actual column count
-            $(this).find('tbody tr td[colspan]').attr('colspan', colCount);
 
             $(this).DataTable({
                 pageLength: 25,

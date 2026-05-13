@@ -76,9 +76,6 @@ include __DIR__ . '/../../includes/header.php';
                     <td><a href="view.php?id=<?= $b['id'] ?>" class="btn btn-xs btn-outline-primary"><i class="fa fa-eye"></i></a></td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if (empty($bookings)): ?>
-                <tr><td colspan="8" class="text-center py-4 text-muted">No bookings yet.</td></tr>
-                <?php endif; ?>
             </tbody>
         </table>
     </div>

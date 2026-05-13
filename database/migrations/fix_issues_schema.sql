@@ -1,4 +1,4 @@
--- Fix missing columns for Issues & Assessments
+-- Comprehensive Fix for Issues & Assessments Schema
 -- Run this in phpMyAdmin on mascardi_db
 
 -- 1. Ensure car_assessments table exists
@@ -27,15 +27,33 @@ CREATE TABLE IF NOT EXISTS assessment_items (
     FOREIGN KEY (assessment_id) REFERENCES car_assessments(id)
 ) ENGINE=InnoDB;
 
--- 3. Add resolved_by if missing
-SET @dbname = DATABASE();
-SET @tablename = 'assessment_items';
-SET @columnname = 'resolved_by';
-SET @preparedStatement = (SELECT IF(
-  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @columnname) > 0,
-  'SELECT 1',
-  'ALTER TABLE assessment_items ADD COLUMN resolved_by VARCHAR(100) NULL AFTER resolved_at'
-));
-PREPARE stmt FROM @preparedStatement;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
+-- 3. Procedure to add columns safely
+DROP PROCEDURE IF EXISTS AddColumnIfMissing;
+DELIMITER //
+CREATE PROCEDURE AddColumnIfMissing(
+    IN p_tablename VARCHAR(100),
+    IN p_columnname VARCHAR(100),
+    IN p_columndef TEXT
+)
+BEGIN
+    SET @dbname = DATABASE();
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = @dbname 
+        AND TABLE_NAME = p_tablename 
+        AND COLUMN_NAME = p_columnname
+    ) THEN
+        SET @sql = CONCAT('ALTER TABLE ', p_tablename, ' ADD COLUMN ', p_columnname, ' ', p_columndef);
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END //
+DELIMITER ;
+
+-- 4. Apply column fixes
+CALL AddColumnIfMissing('assessment_items', 'resolved_at', 'DATETIME NULL');
+CALL AddColumnIfMissing('assessment_items', 'resolved_by', 'VARCHAR(100) NULL');
+
+-- 5. Cleanup
+DROP PROCEDURE IF EXISTS AddColumnIfMissing;
