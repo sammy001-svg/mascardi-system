@@ -64,13 +64,31 @@ function canAccess(string $module): bool {
     if (!$user) return false;
     if ($user['role'] === 'admin') return true;
     $map = [
-        'manager'  => ['cars','mechanics','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings'],
-        'mechanic' => ['cars','jobs','assessments','parts_requests'],
+        'workshop_manager' => ['cars','mechanics','intake','assessments','jobs','inventory','suppliers','parts_requests','issues','lpo'],
+        'sales_person'     => ['cars','clients','service_bookings','quick_assessments'],
+        'sales_officer'    => ['cars','clients','service_bookings','quotations','invoices','payments'],
+        // legacy — kept so existing sessions don't break
+        'manager'          => ['cars','mechanics','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings','issues'],
+        'mechanic'         => ['cars','jobs','assessments','parts_requests','issues'],
     ];
     return in_array($module, $map[$user['role']] ?? []);
 }
 
-// Only admins may edit or delete existing records
+// Create/edit permission per module (non-destructive writes)
+function canWrite(string $module): bool {
+    if (hasRole('admin')) return true;
+    $map = [
+        'workshop_manager' => ['cars','jobs','assessments','mechanics','inventory','parts_requests','intake','issues','lpo'],
+        'sales_person'     => ['service_bookings','quick_assessments','clients'],
+        'sales_officer'    => ['payments','quotations','invoices','clients','service_bookings'],
+        'manager'          => ['cars','jobs','assessments','mechanics','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings'],
+        'mechanic'         => ['jobs','assessments','parts_requests'],
+    ];
+    $role = authRole();
+    return in_array($module, $map[$role] ?? []);
+}
+
+// Only admins may delete records
 function canEditDelete(): bool {
     return hasRole('admin');
 }

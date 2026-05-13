@@ -191,6 +191,10 @@ include __DIR__ . '/includes/header.php';
                     <div class="qa-icon" style="background:#dbeafe;color:#2563eb"><i class="fa fa-boxes-stacked fa-lg"></i></div>
                     <span>Check Parts</span>
                 </a>
+                <a href="<?= BASE_URL ?>/modules/issues/index.php" class="quick-action-card">
+                    <div class="qa-icon" style="background:#fff7ed;color:#ea580c"><i class="fa fa-triangle-exclamation fa-lg"></i></div>
+                    <span>Issues</span>
+                </a>
             <?php else: ?>
                 <a href="<?= BASE_URL ?>/modules/cars/add.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#dbeafe;color:#2563eb"><i class="fa fa-plus-circle fa-lg"></i></div>
@@ -219,6 +223,10 @@ include __DIR__ . '/includes/header.php';
                 <a href="<?= BASE_URL ?>/modules/reports/index.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#f8fafc;color:#64748b"><i class="fa fa-chart-bar fa-lg"></i></div>
                     <span>Reports</span>
+                </a>
+                <a href="<?= BASE_URL ?>/modules/issues/index.php" class="quick-action-card">
+                    <div class="qa-icon" style="background:#fff7ed;color:#ea580c"><i class="fa fa-triangle-exclamation fa-lg"></i></div>
+                    <span>Issues</span>
                 </a>
             <?php endif; ?>
         </div>

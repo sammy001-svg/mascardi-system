@@ -37,10 +37,17 @@ include __DIR__ . '/../../includes/header.php';
                     <td><code><?= e($u['username']) ?></code></td>
                     <td>
                         <?php
-                        $roleColors = ['admin'=>'danger','manager'=>'primary','mechanic'=>'info'];
-                        $rc = $roleColors[$u['role']] ?? 'secondary';
+                        $roleColors = [
+                            'admin'            => ['danger',    'Admin'],
+                            'workshop_manager' => ['primary',   'Workshop Manager'],
+                            'sales_person'     => ['success',   'Sales Person'],
+                            'sales_officer'    => ['info',      'Sales Officer'],
+                            'manager'          => ['primary',   'Manager'],
+                            'mechanic'         => ['secondary', 'Mechanic'],
+                        ];
+                        [$rc, $rl] = $roleColors[$u['role']] ?? ['secondary', ucfirst($u['role'])];
                         ?>
-                        <span class="badge bg-<?= $rc ?>"><?= ucfirst(e($u['role'])) ?></span>
+                        <span class="badge bg-<?= $rc ?>"><?= $rl ?></span>
                     </td>
                     <td>
                         <?php if ($u['linked_name']): ?>

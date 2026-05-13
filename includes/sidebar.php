@@ -26,6 +26,7 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-gauge-high"></i><span>Dashboard</span>
         </a>
 
+        <!-- Fleet: visible to workshop_manager + admin -->
         <?php if (canAccess('cars') || canAccess('mechanics')): ?>
         <div class="nav-section">Fleet</div>
 
@@ -42,6 +43,7 @@ $__isDash = !str_contains($__uri, '/modules/');
         <?php endif; ?>
         <?php endif; ?>
 
+        <!-- Logistics: workshop_manager + admin -->
         <?php if (canAccess('intake') || canAccess('assessments')): ?>
         <div class="nav-section">Logistics</div>
 
@@ -53,29 +55,18 @@ $__isDash = !str_contains($__uri, '/modules/');
 
         <?php if (canAccess('assessments')): ?>
         <a href="<?= BASE_URL ?>/modules/assessments/index.php" class="nav-item <?= isActive('/modules/assessments/') ?>">
-            <i class="fa fa-clipboard-check"></i><span>Assessment</span>
+            <i class="fa fa-clipboard-check"></i><span>Assessments</span>
         </a>
         <?php endif; ?>
         <?php endif; ?>
 
-        <?php if (canAccess('jobs') || canAccess('quotations') || canAccess('invoices') || canAccess('lpo')): ?>
+        <!-- Workshop ops: workshop_manager + admin -->
+        <?php if (canAccess('jobs') || canAccess('parts_requests') || canAccess('issues') || canAccess('lpo')): ?>
         <div class="nav-section">Workshop</div>
 
         <?php if (canAccess('jobs')): ?>
         <a href="<?= BASE_URL ?>/modules/jobs/index.php" class="nav-item <?= isActive('/modules/jobs/') ?>">
             <i class="fa fa-toolbox"></i><span>Job Cards</span>
-        </a>
-        <?php endif; ?>
-
-        <?php if (canAccess('quotations')): ?>
-        <a href="<?= BASE_URL ?>/modules/quotations/index.php" class="nav-item <?= isActive('/modules/quotations/') ?>">
-            <i class="fa fa-file-lines"></i><span>Quotations</span>
-        </a>
-        <?php endif; ?>
-
-        <?php if (canAccess('invoices')): ?>
-        <a href="<?= BASE_URL ?>/modules/invoices/index.php" class="nav-item <?= isActive('/modules/invoices/') ?>">
-            <i class="fa fa-file-invoice-dollar"></i><span>Invoices</span>
         </a>
         <?php endif; ?>
 
@@ -90,8 +81,15 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-hand-holding-box"></i><span>Part Requests</span>
         </a>
         <?php endif; ?>
+
+        <?php if (canAccess('issues')): ?>
+        <a href="<?= BASE_URL ?>/modules/issues/index.php" class="nav-item <?= isActive('/modules/issues/') ?>">
+            <i class="fa fa-triangle-exclamation"></i><span>Issues</span>
+        </a>
+        <?php endif; ?>
         <?php endif; ?>
 
+        <!-- Inventory: workshop_manager + admin -->
         <?php if (canAccess('inventory') || canAccess('suppliers')): ?>
         <div class="nav-section">Inventory</div>
 
@@ -108,7 +106,8 @@ $__isDash = !str_contains($__uri, '/modules/');
         <?php endif; ?>
         <?php endif; ?>
 
-        <?php if (canAccess('clients') || canAccess('service_bookings')): ?>
+        <!-- Clients: sales_person + sales_officer + admin -->
+        <?php if (canAccess('clients') || canAccess('service_bookings') || canAccess('quick_assessments')): ?>
         <div class="nav-section">Clients</div>
 
         <?php if (canAccess('clients')): ?>
@@ -122,8 +121,38 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-calendar-check"></i><span>Service Bookings</span>
         </a>
         <?php endif; ?>
+
+        <?php if (canAccess('quick_assessments')): ?>
+        <a href="<?= BASE_URL ?>/modules/quick_assessments/index.php" class="nav-item <?= isActive('/modules/quick_assessments/') ?>">
+            <i class="fa fa-magnifying-glass-chart"></i><span>Quick Assessment</span>
+        </a>
+        <?php endif; ?>
         <?php endif; ?>
 
+        <!-- Financial: sales_officer + admin -->
+        <?php if (canAccess('payments') || canAccess('quotations') || canAccess('invoices')): ?>
+        <div class="nav-section">Financial</div>
+
+        <?php if (canAccess('payments')): ?>
+        <a href="<?= BASE_URL ?>/modules/payments/index.php" class="nav-item <?= isActive('/modules/payments/') ?>">
+            <i class="fa fa-money-bill-transfer"></i><span>Payments</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (canAccess('quotations')): ?>
+        <a href="<?= BASE_URL ?>/modules/quotations/index.php" class="nav-item <?= isActive('/modules/quotations/') ?>">
+            <i class="fa fa-file-lines"></i><span>Quotations</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (canAccess('invoices')): ?>
+        <a href="<?= BASE_URL ?>/modules/invoices/index.php" class="nav-item <?= isActive('/modules/invoices/') ?>">
+            <i class="fa fa-file-invoice-dollar"></i><span>Invoices</span>
+        </a>
+        <?php endif; ?>
+        <?php endif; ?>
+
+        <!-- Analytics: admin only -->
         <?php if (canAccess('reports')): ?>
         <div class="nav-section">Analytics</div>
         <a href="<?= BASE_URL ?>/modules/reports/index.php" class="nav-item <?= isActive('/modules/reports/') ?>">
@@ -131,6 +160,7 @@ $__isDash = !str_contains($__uri, '/modules/');
         </a>
         <?php endif; ?>
 
+        <!-- Admin -->
         <?php if (hasRole('admin')): ?>
         <div class="nav-section">Admin</div>
         <a href="<?= BASE_URL ?>/modules/users/index.php" class="nav-item <?= isActive('/modules/users/') ?>">

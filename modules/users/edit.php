@@ -93,9 +93,10 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="col-md-6">
                     <label class="form-label">Role <span class="text-danger">*</span></label>
                     <select name="role" class="form-select" <?= $id === authUser()['id'] ? 'disabled' : '' ?>>
-                        <option value="admin"    <?= $user['role'] === 'admin'    ? 'selected' : '' ?>>Admin — Full access</option>
-                        <option value="manager"  <?= $user['role'] === 'manager'  ? 'selected' : '' ?>>Manager — Operations access</option>
-                        <option value="mechanic" <?= $user['role'] === 'mechanic' ? 'selected' : '' ?>>Mechanic — Workshop access</option>
+                        <option value="admin"            <?= $user['role'] === 'admin'            ? 'selected' : '' ?>>Admin — Full system access</option>
+                        <option value="workshop_manager" <?= $user['role'] === 'workshop_manager' ? 'selected' : '' ?>>Workshop Manager — Workshop operations</option>
+                        <option value="sales_person"     <?= $user['role'] === 'sales_person'     ? 'selected' : '' ?>>Sales Person — Bookings &amp; quick assessments</option>
+                        <option value="sales_officer"    <?= $user['role'] === 'sales_officer'    ? 'selected' : '' ?>>Sales Officer — Payments, quotations &amp; invoices</option>
                     </select>
                     <?php if ($id === authUser()['id']): ?>
                     <input type="hidden" name="role" value="admin">

@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$pass)     $errors[] = 'Password is required.';
     elseif (strlen($pass) < 6) $errors[] = 'Password must be at least 6 characters.';
     elseif ($pass !== $pass2)  $errors[] = 'Passwords do not match.';
-    if (!in_array($role, ['admin','manager','mechanic'])) $errors[] = 'Invalid role.';
+    if (!in_array($role, ['admin','workshop_manager','sales_person','sales_officer'])) $errors[] = 'Invalid role.';
 
     if (empty($errors)) {
         try {
@@ -74,10 +74,11 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Role <span class="text-danger">*</span></label>
-                    <select name="role" class="form-select" id="roleSelect">
-                        <option value="admin"    <?= ($_POST['role'] ?? '') === 'admin'    ? 'selected' : '' ?>>Admin — Full access</option>
-                        <option value="manager"  <?= ($_POST['role'] ?? '') === 'manager'  ? 'selected' : '' ?>>Manager — Operations access</option>
-                        <option value="mechanic" <?= ($_POST['role'] ?? 'mechanic') === 'mechanic' ? 'selected' : '' ?>>Mechanic — Workshop access</option>
+                    <select name="role" class="form-select">
+                        <option value="admin"            <?= ($_POST['role'] ?? '') === 'admin'            ? 'selected' : '' ?>>Admin — Full system access</option>
+                        <option value="workshop_manager" <?= ($_POST['role'] ?? 'workshop_manager') === 'workshop_manager' ? 'selected' : '' ?>>Workshop Manager — Workshop operations</option>
+                        <option value="sales_person"     <?= ($_POST['role'] ?? '') === 'sales_person'     ? 'selected' : '' ?>>Sales Person — Bookings &amp; quick assessments</option>
+                        <option value="sales_officer"    <?= ($_POST['role'] ?? '') === 'sales_officer'    ? 'selected' : '' ?>>Sales Officer — Payments, quotations &amp; invoices</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -90,12 +91,11 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
             </div>
 
-            <!-- Link to mechanic profile -->
-            <div class="form-section" id="linkSection">
-                <div class="form-section-title">Link to Mechanic Profile (optional)</div>
+            <!-- Workshop Manager: optionally link to mechanic profile -->
+            <div class="form-section">
+                <div class="form-section-title">Link to Mechanic Profile <span class="text-muted fw-normal">(optional — Workshop Manager only)</span></div>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label">Select Mechanic</label>
                         <select name="linked_id" class="form-select">
                             <option value="">— None —</option>
                             <?php foreach ($freeMechanics as $m): ?>
