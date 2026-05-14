@@ -28,7 +28,13 @@ $timeSlots = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00'];
 
 // Fetch data for auto-fill
 $clients = $db->query("SELECT id, name, email, phone FROM clients WHERE status='active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-$cars    = $db->query("SELECT id, make, model, year, registration_number FROM cars ORDER BY make, model LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+$cars    = $db->query("
+    SELECT c.id, c.make, c.model, c.year, c.registration_number, 
+           cl.id as client_id, cl.name as client_name, cl.email as client_email, cl.phone as client_phone
+    FROM cars c
+    LEFT JOIN clients cl ON cl.id = c.client_id
+    ORDER BY c.make, c.model LIMIT 200
+")->fetchAll(PDO::FETCH_ASSOC);
 
 $errors = [];
 $d = [
@@ -187,6 +193,10 @@ include __DIR__ . '/../../includes/header.php';
                                 data-make="<?= e($c['make']) ?>"
                                 data-model="<?= e($c['model']) ?>"
                                 data-reg="<?= e($c['registration_number'] ?? '') ?>"
+                                data-client-id="<?= e($c['client_id'] ?? '') ?>"
+                                data-client-name="<?= e($c['client_name'] ?? '') ?>"
+                                data-client-email="<?= e($c['client_email'] ?? '') ?>"
+                                data-client-phone="<?= e($c['client_phone'] ?? '') ?>"
                                 <?= ($d['car_id'] == $c['id']) ? 'selected' : '' ?>>
                             <?= e($c['make'].' '.$c['model']) ?>
                             <?= $c['registration_number'] ? ' — '.e($c['registration_number']) : '' ?>
@@ -300,5 +310,15 @@ document.getElementById('carSelect')?.addEventListener('change', function () {
     document.getElementById('carMake').value  = opt.dataset.make  || '';
     document.getElementById('carModel').value = opt.dataset.model || '';
     document.getElementById('carReg').value   = opt.dataset.reg   || '';
+    if (opt.dataset.clientId) {
+        document.getElementById('clientSelect').value = opt.dataset.clientId;
+        // Trigger change to fill name/email/phone
+        const event = new Event('change');
+        document.getElementById('clientSelect').dispatchEvent(event);
+    } else if (opt.dataset.clientName) {
+        document.getElementById('clientName').value = opt.dataset.clientName;
+        document.getElementById('clientEmail').value = opt.dataset.clientEmail || '';
+        document.getElementById('clientPhone').value = opt.dataset.clientPhone || '';
+    }
 });
 </script>
