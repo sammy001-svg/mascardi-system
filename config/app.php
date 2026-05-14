@@ -5,12 +5,20 @@ define('APP_VERSION', '1.0.0');
 if (!defined('BASE_URL')) {
     $protocol = (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] === 1) || isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    // Clean host (remove any accidental protocol or path)
-    $host = preg_replace('/^https?:\/\//i', '', $host);
-    $host = explode('/', $host)[0];
     
-    // Define BASE_URL (assuming project is in root of domain/subdomain)
-    define('BASE_URL', $protocol . '://' . $host);
+    // Detect script path to handle subdirectory deployments
+    $script = $_SERVER['SCRIPT_NAME'] ?? '';
+    $dir = str_replace('\\', '/', dirname($script));
+    $baseDir = ($dir === '/') ? '' : $dir;
+    
+    // If we are deep in a module, we need to go up to the root
+    // But since this is in config/app.php, we can't easily use dirname($script) 
+    // instead let's try a simpler approach: detect if 'modules' is in the path
+    $basePath = preg_replace('/\/modules\/.*$/', '', $baseDir);
+    $basePath = preg_replace('/\/client\/.*$/', '', $basePath);
+    $basePath = rtrim($basePath, '/');
+
+    define('BASE_URL', $protocol . '://' . $host . $basePath);
 }
 define('BASE_PATH', dirname(__DIR__));
 

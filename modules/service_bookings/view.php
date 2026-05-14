@@ -6,7 +6,7 @@ canAccess('service_bookings') || die('Access denied.');
 $db   = getDB();
 $user = authUser();
 $id   = (int)($_GET['id'] ?? 0);
-if (!$id) redirect(BASE_URL . '/modules/service_bookings/index.php');
+if (!$id) redirect('index.php');
 
 $booking = $db->prepare("
     SELECT sb.*, cl.name AS client_link_name, cl.email AS client_link_email,
@@ -17,7 +17,7 @@ $booking = $db->prepare("
     WHERE sb.id = ?
 ");
 $booking->execute([$id]); $booking = $booking->fetch();
-if (!$booking) { setFlash('error','Not found.'); redirect(BASE_URL.'/modules/service_bookings/index.php'); }
+if (!$booking) { setFlash('error','Not found.'); redirect('index.php'); }
 
 // Handle status update + notes
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && hasRole(['admin','manager'])) {
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && hasRole(['admin','manager'])) {
     }
 
     setFlash('success', 'Booking updated.');
-    redirect(BASE_URL . '/modules/service_bookings/view.php?id=' . $id);
+    redirect('view.php?id=' . $id);
 }
 
 $statusColors = ['pending'=>['warning','fa-clock'],'confirmed'=>['info','fa-check'],'in_progress'=>['primary','fa-spinner'],'completed'=>['success','fa-flag-checkered'],'cancelled'=>['danger','fa-ban']];
@@ -79,6 +79,8 @@ include __DIR__ . '/../../includes/header.php';
                         <i class="fa-brands fa-whatsapp text-success me-1"></i><?= e($booking['client_phone']) ?>
                         <?php else: ?>—<?php endif; ?>
                     </dd>
+                    <dt class="col-5 text-muted">Email</dt>
+                    <dd class="col-7 small"><?= e($booking['client_email'] ?: '—') ?></dd>
                 </dl>
             </div>
         </div>
@@ -107,7 +109,14 @@ include __DIR__ . '/../../includes/header.php';
             <div class="card-header"><i class="fa fa-wrench me-2"></i>Service Details</div>
             <div class="card-body">
                 <dl class="row mb-0" style="font-size:13.5px">
-                    <dt class="col-5 text-muted">Type</dt><dd class="col-7 fw-semibold"><?= e($booking['service_type'] ?? '—') ?></dd>
+                    <dt class="col-5 text-muted">Type</dt>
+                    <dd class="col-7 fw-semibold">
+                        <?php 
+                        $types = explode(', ', $booking['service_type'] ?? '');
+                        foreach($types as $t): ?>
+                            <span class="badge bg-light text-dark border me-1 mb-1"><?= e($t) ?></span>
+                        <?php endforeach; ?>
+                    </dd>
                     <dt class="col-5 text-muted">Preferred Date</dt><dd class="col-7"><?= $booking['preferred_date'] ? fmtDate($booking['preferred_date']) : '—' ?></dd>
                     <dt class="col-5 text-muted">Start Time</dt><dd class="col-7"><?= e($booking['preferred_time'] ?? '—') ?></dd>
                     <dt class="col-5 text-muted">Sales Person</dt><dd class="col-7"><?= e($booking['sales_person'] ?? '—') ?></dd>

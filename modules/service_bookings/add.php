@@ -26,14 +26,21 @@ $serviceIcons = [
 
 $timeSlots = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00'];
 
+// Fetch data for auto-fill
+$clients = $db->query("SELECT id, name, email, phone FROM clients WHERE status='active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+$cars    = $db->query("SELECT id, make, model, year, registration_number FROM cars ORDER BY make, model LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+
 $errors = [];
 $d = [
+    'client_id'        => '',
     'client_name'      => '',
+    'client_email'     => '',
     'client_phone'     => '',
+    'car_id'           => '',
     'car_make'         => '',
     'car_model'        => '',
     'car_registration' => '',
-    'service_type'     => '',
+    'service_type'     => [], // Now an array for multiple selection
     'description'      => '',
     'preferred_date'   => '',
     'preferred_time'   => '',
@@ -43,29 +50,38 @@ $d = [
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    foreach ($d as $k => $_) $d[$k] = trim($_POST[$k] ?? '');
+    foreach ($d as $k => $_) {
+        if ($k === 'service_type') {
+            $d[$k] = $_POST[$k] ?? [];
+        } else {
+            $d[$k] = trim($_POST[$k] ?? '');
+        }
+    }
     $d['booking_date'] = date('Y-m-d');
 
     if (!$d['client_name'])  $errors[] = 'Client name is required.';
     if (!$d['client_phone']) $errors[] = 'Phone number is required.';
-    if (!$d['service_type']) $errors[] = 'Please select a service type.';
+    if (empty($d['service_type'])) $errors[] = 'Please select at least one service type.';
 
     if (empty($errors)) {
         try {
             $bNum = nextNumber('service_bookings', 'booking_number', 'BK');
+            $serviceStr = implode(', ', $d['service_type']);
+            
             $db->prepare("
                 INSERT INTO service_bookings
-                    (booking_number, client_name, client_phone,
-                     car_make, car_model, car_registration, car_description,
+                    (booking_number, client_id, client_name, client_email, client_phone,
+                     car_id, car_make, car_model, car_registration, car_description,
                      service_type, description,
                      booking_date, preferred_date, preferred_time,
                      admin_notes, sales_person, created_by)
-                VALUES (?,?,?, ?,?,?,?, ?,?, ?,?,?, ?,?,?)
+                VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?,?)
             ")->execute([
-                $bNum, $d['client_name'], $d['client_phone'],
-                $d['car_make'], $d['car_model'], $d['car_registration'],
+                $bNum, 
+                $d['client_id'] ?: null, $d['client_name'], $d['client_email'], $d['client_phone'],
+                $d['car_id'] ?: null, $d['car_make'], $d['car_model'], $d['car_registration'],
                 trim($d['car_make'].' '.$d['car_model'].' '.$d['car_registration']),
-                $d['service_type'], $d['description'],
+                $serviceStr, $d['description'],
                 $d['booking_date'],
                 $d['preferred_date'] ?: null,
                 $d['preferred_time'] ?: null,
@@ -74,7 +90,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $newId = $db->lastInsertId();
             setFlash('success', "Booking {$bNum} created.");
-            redirect(BASE_URL . '/modules/service_bookings/view.php?id=' . $newId);
+            // Use relative path for more robust redirect on cPanel
+            redirect('view.php?id=' . $newId);
         } catch (\Throwable $e) {
             $errors[] = 'Save failed: ' . $e->getMessage();
         }
@@ -84,18 +101,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 include __DIR__ . '/../../includes/header.php';
 ?>
 <style>
-.service-card input[type=radio] { display:none; }
+.service-card input[type=checkbox] { display:none; }
 .service-card label {
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     gap:8px; border:2px solid #e2e8f0; border-radius:12px; padding:18px 12px;
     cursor:pointer; transition:.15s; background:#fff; text-align:center;
-    font-size:13px; font-weight:600; color:#475569; height:100%;
+    font-size:13px; font-weight:600; color:#475569; height:100%; position:relative;
 }
-.service-card label i { font-size:22px; color:#94a3b8; transition:.15s; }
-.service-card input[type=radio]:checked + label {
+.service-card label i.fa { font-size:22px; color:#94a3b8; transition:.15s; }
+.service-card input[type=checkbox]:checked + label {
     border-color:#2563eb; background:#eff6ff; color:#1d4ed8;
 }
-.service-card input[type=radio]:checked + label i { color:#2563eb; }
+.service-card input[type=checkbox]:checked + label i.fa { color:#2563eb; }
+.service-card input[type=checkbox]:checked + label::after {
+    content:'\f058'; font-family:'Font Awesome 6 Free'; font-weight:900;
+    position:absolute; top:8px; right:8px; color:#2563eb; font-size:16px;
+}
 .service-card label:hover { border-color:#93c5fd; background:#f8fafc; }
 </style>
 
@@ -118,16 +139,35 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card mb-4">
             <div class="card-header fw-semibold"><i class="fa fa-user me-2 text-primary"></i>Client Information</div>
             <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Search Existing Client <span class="text-muted fw-normal">(optional)</span></label>
+                    <select name="client_id" class="form-select select2" id="clientSelect">
+                        <option value="">— Walk-in / Manual Entry —</option>
+                        <?php foreach ($clients as $c): ?>
+                        <option value="<?= $c['id'] ?>"
+                                data-name="<?= e($c['name']) ?>"
+                                data-email="<?= e($c['email']) ?>"
+                                data-phone="<?= e($c['phone'] ?? '') ?>"
+                                <?= ($d['client_id'] == $c['id']) ? 'selected' : '' ?>>
+                            <?= e($c['name']) ?><?= $c['phone'] ? ' — '.e($c['phone']) : '' ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label">Client Name <span class="text-danger">*</span></label>
-                        <input type="text" name="client_name" class="form-control" placeholder="Full name" value="<?= e($d['client_name']) ?>" required>
+                        <input type="text" name="client_name" id="clientName" class="form-control" placeholder="Full name" value="<?= e($d['client_name']) ?>" required>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Phone <span class="text-danger">*</span> <small class="text-muted fw-normal">(WhatsApp preferred)</small></label>
+                    <div class="col-md-4">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="client_email" id="clientEmail" class="form-control" placeholder="client@example.com" value="<?= e($d['client_email']) ?>">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Phone <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fa-brands fa-whatsapp text-success"></i></span>
-                            <input type="text" name="client_phone" class="form-control" placeholder="e.g. 0712 345 678" value="<?= e($d['client_phone']) ?>" required>
+                            <input type="text" name="client_phone" id="clientPhone" class="form-control" placeholder="e.g. 0712 345 678" value="<?= e($d['client_phone']) ?>" required>
                         </div>
                     </div>
                 </div>
@@ -138,18 +178,34 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card mb-4">
             <div class="card-header fw-semibold"><i class="fa fa-car me-2 text-primary"></i>Vehicle Details</div>
             <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Search Existing Car <span class="text-muted fw-normal">(optional)</span></label>
+                    <select name="car_id" class="form-select select2" id="carSelect">
+                        <option value="">— Walk-in / Manual Entry —</option>
+                        <?php foreach ($cars as $c): ?>
+                        <option value="<?= $c['id'] ?>"
+                                data-make="<?= e($c['make']) ?>"
+                                data-model="<?= e($c['model']) ?>"
+                                data-reg="<?= e($c['registration_number'] ?? '') ?>"
+                                <?= ($d['car_id'] == $c['id']) ? 'selected' : '' ?>>
+                            <?= e($c['make'].' '.$c['model']) ?>
+                            <?= $c['registration_number'] ? ' — '.e($c['registration_number']) : '' ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">Car Make</label>
-                        <input type="text" name="car_make" class="form-control" placeholder="e.g. BMW, Audi, Toyota" value="<?= e($d['car_make']) ?>">
+                        <input type="text" name="car_make" id="carMake" class="form-control" placeholder="e.g. BMW, Audi, Toyota" value="<?= e($d['car_make']) ?>">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Car Model</label>
-                        <input type="text" name="car_model" class="form-control" placeholder="e.g. 320i, SQ5, GLE" value="<?= e($d['car_model']) ?>">
+                        <input type="text" name="car_model" id="carModel" class="form-control" placeholder="e.g. 320i, SQ5, GLE" value="<?= e($d['car_model']) ?>">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Registration Number</label>
-                        <input type="text" name="car_registration" class="form-control" placeholder="e.g. KDA 000Q" value="<?= e($d['car_registration']) ?>" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+                        <input type="text" name="car_registration" id="carReg" class="form-control" placeholder="e.g. KDA 000Q" value="<?= e($d['car_registration']) ?>" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
                     </div>
                 </div>
             </div>
@@ -162,7 +218,7 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="row g-3">
                     <?php foreach ($serviceTypes as $st): ?>
                     <div class="col-6 col-md-4 service-card">
-                        <input type="radio" name="service_type" id="st_<?= md5($st) ?>" value="<?= e($st) ?>" <?= $d['service_type']===$st?'checked':'' ?>>
+                        <input type="checkbox" name="service_type[]" id="st_<?= md5($st) ?>" value="<?= e($st) ?>" <?= in_array($st, $d['service_type']) ? 'checked' : '' ?>>
                         <label for="st_<?= md5($st) ?>">
                             <i class="fa <?= $serviceIcons[$st] ?? 'fa-gear' ?>"></i>
                             <?= e($st) ?>
@@ -230,3 +286,19 @@ include __DIR__ . '/../../includes/header.php';
 </form>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
+
+<script>
+document.getElementById('clientSelect')?.addEventListener('change', function () {
+    const opt = this.options[this.selectedIndex];
+    document.getElementById('clientName').value  = opt.dataset.name  || '';
+    document.getElementById('clientEmail').value = opt.dataset.email || '';
+    document.getElementById('clientPhone').value = opt.dataset.phone || '';
+});
+
+document.getElementById('carSelect')?.addEventListener('change', function () {
+    const opt = this.options[this.selectedIndex];
+    document.getElementById('carMake').value  = opt.dataset.make  || '';
+    document.getElementById('carModel').value = opt.dataset.model || '';
+    document.getElementById('carReg').value   = opt.dataset.reg   || '';
+});
+</script>
