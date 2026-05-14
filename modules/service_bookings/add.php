@@ -298,27 +298,30 @@ include __DIR__ . '/../../includes/header.php';
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
 
 <script>
-document.getElementById('clientSelect')?.addEventListener('change', function () {
-    const opt = this.options[this.selectedIndex];
-    document.getElementById('clientName').value  = opt.dataset.name  || '';
-    document.getElementById('clientEmail').value = opt.dataset.email || '';
-    document.getElementById('clientPhone').value = opt.dataset.phone || '';
-});
+$(document).ready(function() {
+    // Client select auto-fill
+    $('#clientSelect').on('change', function() {
+        const opt = this.options[this.selectedIndex];
+        if (!opt) return;
+        document.getElementById('clientName').value  = opt.dataset.name  || '';
+        document.getElementById('clientEmail').value = opt.dataset.email || '';
+        document.getElementById('clientPhone').value = opt.dataset.phone || '';
+    });
 
-document.getElementById('carSelect')?.addEventListener('change', function () {
-    const opt = this.options[this.selectedIndex];
-    document.getElementById('carMake').value  = opt.dataset.make  || '';
-    document.getElementById('carModel').value = opt.dataset.model || '';
-    document.getElementById('carReg').value   = opt.dataset.reg   || '';
-    if (opt.dataset.clientId) {
-        document.getElementById('clientSelect').value = opt.dataset.clientId;
-        // Trigger change to fill name/email/phone
-        const event = new Event('change');
-        document.getElementById('clientSelect').dispatchEvent(event);
-    } else if (opt.dataset.clientName) {
-        document.getElementById('clientName').value = opt.dataset.clientName;
-        document.getElementById('clientEmail').value = opt.dataset.clientEmail || '';
-        document.getElementById('clientPhone').value = opt.dataset.clientPhone || '';
-    }
+    // Car select auto-fill
+    $('#carSelect').on('change', function() {
+        const opt = this.options[this.selectedIndex];
+        if (!opt) return;
+        document.getElementById('carMake').value  = opt.dataset.make  || '';
+        document.getElementById('carModel').value = opt.dataset.model || '';
+        document.getElementById('carReg').value   = opt.dataset.reg   || '';
+        if (opt.dataset.clientId) {
+            $('#clientSelect').val(opt.dataset.clientId).trigger('change');
+        } else if (opt.dataset.clientName) {
+            document.getElementById('clientName').value = opt.dataset.clientName;
+            document.getElementById('clientEmail').value = opt.dataset.clientEmail || '';
+            document.getElementById('clientPhone').value = opt.dataset.clientPhone || '';
+        }
+    });
 });
 </script>

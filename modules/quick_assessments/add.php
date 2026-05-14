@@ -318,38 +318,40 @@ include __DIR__ . '/../../includes/header.php';
 </form>
 
 <script>
-// Client select auto-fill
-document.getElementById('clientSelect')?.addEventListener('change', function () {
-    const opt = this.options[this.selectedIndex];
-    document.getElementById('clientName').value  = opt.dataset.name  || '';
-    document.getElementById('clientPhone').value = opt.dataset.phone || '';
-});
+$(document).ready(function() {
+    // Client select auto-fill
+    $('#clientSelect').on('change', function() {
+        const opt = this.options[this.selectedIndex];
+        if (!opt) return;
+        document.getElementById('clientName').value  = opt.dataset.name  || '';
+        document.getElementById('clientPhone').value = opt.dataset.phone || '';
+    });
 
-// Car select auto-fill
-document.getElementById('carSelect')?.addEventListener('change', function () {
-    const opt = this.options[this.selectedIndex];
-    document.getElementById('carMake').value  = opt.dataset.make  || '';
-    document.getElementById('carModel').value = opt.dataset.model || '';
-    document.getElementById('carYear').value  = opt.dataset.year  || '';
-    document.getElementById('carReg').value   = opt.dataset.reg   || '';
-    if (opt.dataset.clientId) {
-        document.getElementById('clientSelect').value = opt.dataset.clientId;
-        // Trigger change to fill name/phone
-        const event = new Event('change');
-        document.getElementById('clientSelect').dispatchEvent(event);
-    } else if (opt.dataset.clientName) {
-        document.getElementById('clientName').value = opt.dataset.clientName;
-        document.getElementById('clientPhone').value = opt.dataset.clientPhone || '';
-    }
-});
+    // Car select auto-fill
+    $('#carSelect').on('change', function() {
+        const opt = this.options[this.selectedIndex];
+        if (!opt) return;
+        document.getElementById('carMake').value  = opt.dataset.make  || '';
+        document.getElementById('carModel').value = opt.dataset.model || '';
+        document.getElementById('carYear').value  = opt.dataset.year  || '';
+        document.getElementById('carReg').value   = opt.dataset.reg   || '';
+        if (opt.dataset.clientId) {
+            $('#clientSelect').val(opt.dataset.clientId).trigger('change');
+        } else if (opt.dataset.clientName) {
+            document.getElementById('clientName').value = opt.dataset.clientName;
+            document.getElementById('clientPhone').value = opt.dataset.clientPhone || '';
+        }
+    });
 
-// Booking select auto-fill
-document.getElementById('bookingSelect')?.addEventListener('change', function () {
-    const opt = this.options[this.selectedIndex];
-    if (opt.dataset.make)   document.getElementById('carMake').value   = opt.dataset.make;
-    if (opt.dataset.model)  document.getElementById('carModel').value  = opt.dataset.model;
-    if (opt.dataset.reg)    document.getElementById('carReg').value    = opt.dataset.reg;
-    if (opt.dataset.client) document.getElementById('clientName').value = opt.dataset.client;
+    // Booking select auto-fill
+    $('#bookingSelect').on('change', function() {
+        const opt = this.options[this.selectedIndex];
+        if (!opt) return;
+        if (opt.dataset.make)   document.getElementById('carMake').value   = opt.dataset.make;
+        if (opt.dataset.model)  document.getElementById('carModel').value  = opt.dataset.model;
+        if (opt.dataset.reg)    document.getElementById('carReg').value    = opt.dataset.reg;
+        if (opt.dataset.client) document.getElementById('clientName').value = opt.dataset.client;
+    });
 });
 
 // Check button toggle style
