@@ -78,7 +78,7 @@ function canAccess(string $module): bool {
 function canWrite(string $module): bool {
     if (hasRole('admin')) return true;
     $map = [
-        'workshop_manager' => ['cars','jobs','assessments','mechanics','inventory','parts_requests','intake','issues','lpo','quick_assessments'],
+        'workshop_manager' => ['cars','jobs','assessments','mechanics','inventory','suppliers','parts_requests','intake','issues','lpo','quick_assessments'],
         'sales_person'     => ['service_bookings','quick_assessments','clients'],
         'sales_officer'    => ['payments','quotations','invoices','clients','service_bookings','quick_assessments'],
         'manager'          => ['cars','jobs','assessments','mechanics','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings'],

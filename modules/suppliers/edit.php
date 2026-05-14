@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
-requireRole('admin');
+canWrite('suppliers') || die('Permission denied.');
 $pageTitle = 'Edit Supplier';
 $db = getDB();
 
