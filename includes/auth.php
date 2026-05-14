@@ -69,7 +69,7 @@ function canAccess(string $module): bool {
         'sales_officer'    => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments'],
         // legacy — kept so existing sessions don't break
         'manager'          => ['cars','mechanics','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings','issues'],
-        'mechanic'         => ['cars','jobs','assessments','parts_requests','issues'],
+        'mechanic'         => ['jobs'],
     ];
     return in_array($module, $map[$user['role']] ?? []);
 }
@@ -82,7 +82,7 @@ function canWrite(string $module): bool {
         'sales_person'     => ['service_bookings','quick_assessments','clients'],
         'sales_officer'    => ['payments','quotations','invoices','clients','service_bookings','quick_assessments'],
         'manager'          => ['cars','jobs','assessments','mechanics','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings'],
-        'mechanic'         => ['jobs','assessments','parts_requests'],
+        'mechanic'         => [],
     ];
     $role = authRole();
     return in_array($module, $map[$role] ?? []);

@@ -1,5 +1,7 @@
-<?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('jobs') || die('Access denied.');
+canWrite('jobs') || die('Permission denied.');
 $pageTitle = 'Create Job Card';
 $db = getDB();
 $errors = [];

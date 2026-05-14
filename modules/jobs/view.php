@@ -6,6 +6,12 @@ $stmt = $db->prepare("SELECT j.*, c.chassis_number, c.make, c.model, c.year, c.c
 $stmt->execute([$id]); $job = $stmt->fetch();
 if(!$job){setFlash('error','Job not found.');redirect(BASE_URL.'/modules/jobs/index.php');}
 
+$user = authUser();
+if ($user['role'] === 'mechanic' && $job['mechanic_id'] != $user['linked_id']) {
+    setFlash('error', 'Access denied. This job is not assigned to you.');
+    redirect(BASE_URL . '/modules/jobs/index.php');
+}
+
 $quotations = $db->prepare("SELECT * FROM quotations WHERE job_id=? ORDER BY id DESC"); $quotations->execute([$id]); $quotations=$quotations->fetchAll();
 $invoices   = $db->prepare("SELECT * FROM invoices WHERE job_id=? ORDER BY id DESC");   $invoices->execute([$id]);   $invoices=$invoices->fetchAll();
 $lpos       = $db->prepare("SELECT l.*, s.name AS supplier_name FROM lpo l JOIN suppliers s ON s.id=l.supplier_id WHERE l.job_id=? ORDER BY l.id DESC"); $lpos->execute([$id]); $lpos=$lpos->fetchAll();
@@ -16,9 +22,11 @@ include __DIR__ . '/../../includes/header.php';
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">Job Card: <strong><?= e($job['job_number']) ?></strong></h5>
     <div class="d-flex gap-2">
+        <?php if (canWrite('jobs')): ?>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $job['car_id'] ?>&job_id=<?= $id ?>" class="btn btn-sm btn-outline-info"><i class="fa fa-file-lines me-1"></i>New Quotation</a>
         <a href="<?= BASE_URL ?>/modules/lpo/add.php?job_id=<?= $id ?>" class="btn btn-sm btn-outline-warning"><i class="fa fa-file-import me-1"></i>New LPO</a>
+        <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
 </div>
@@ -60,7 +68,9 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="fa fa-file-lines me-2"></i>Quotations</span>
+                <?php if (canWrite('quotations')): ?>
                 <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $job['car_id'] ?>&job_id=<?= $id ?>" class="btn btn-xs btn-outline-primary">+ New</a>
+                <?php endif; ?>
             </div>
             <?php if($quotations): ?>
             <table class="table mb-0">
@@ -109,7 +119,9 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="fa fa-file-import me-2"></i>Local Purchase Orders</span>
+                <?php if (canWrite('lpo')): ?>
                 <a href="<?= BASE_URL ?>/modules/lpo/add.php?job_id=<?= $id ?>" class="btn btn-xs btn-outline-warning">+ New LPO</a>
+                <?php endif; ?>
             </div>
             <?php if($lpos): ?>
             <table class="table mb-0">

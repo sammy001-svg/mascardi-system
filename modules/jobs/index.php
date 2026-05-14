@@ -4,18 +4,47 @@ $pageTitle = 'Workshop Job Cards';
 $db = getDB();
 $allowed = ['pending','in_progress','waiting_parts','on_hold','completed','cancelled'];
 $status  = in_array($_GET['status'] ?? '', $allowed) ? $_GET['status'] : '';
+$user = authUser();
+$isMechanic = $user['role'] === 'mechanic';
+$linkedId = (int)($user['linked_id'] ?? 0);
+
 if ($status) {
-    $stmt = $db->prepare("SELECT j.*, c.chassis_number, c.make, c.model, m.name AS mechanic_name FROM workshop_jobs j JOIN cars c ON c.id=j.car_id LEFT JOIN mechanics m ON m.id=j.mechanic_id WHERE j.status=? ORDER BY j.created_at DESC");
-    $stmt->execute([$status]);
+    $sql = "SELECT j.*, c.chassis_number, c.make, c.model, m.name AS mechanic_name 
+            FROM workshop_jobs j 
+            JOIN cars c ON c.id=j.car_id 
+            LEFT JOIN mechanics m ON m.id=j.mechanic_id 
+            WHERE j.status=?";
+    $params = [$status];
+    if ($isMechanic) {
+        $sql .= " AND j.mechanic_id = ?";
+        $params[] = $linkedId;
+    }
+    $sql .= " ORDER BY j.created_at DESC";
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
     $jobs = $stmt->fetchAll();
 } else {
-    $jobs = $db->query("SELECT j.*, c.chassis_number, c.make, c.model, m.name AS mechanic_name FROM workshop_jobs j JOIN cars c ON c.id=j.car_id LEFT JOIN mechanics m ON m.id=j.mechanic_id ORDER BY j.created_at DESC")->fetchAll();
+    $sql = "SELECT j.*, c.chassis_number, c.make, c.model, m.name AS mechanic_name 
+            FROM workshop_jobs j 
+            JOIN cars c ON c.id=j.car_id 
+            LEFT JOIN mechanics m ON m.id=j.mechanic_id";
+    $params = [];
+    if ($isMechanic) {
+        $sql .= " WHERE j.mechanic_id = ?";
+        $params[] = $linkedId;
+    }
+    $sql .= " ORDER BY j.created_at DESC";
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    $jobs = $stmt->fetchAll();
 }
 include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">Job Cards <span class="badge bg-secondary ms-2"><?= count($jobs) ?></span></h5>
+    <?php if (canWrite('jobs')): ?>
     <a href="add.php" class="btn btn-primary btn-sm"><i class="fa fa-plus me-1"></i>Create Job Card</a>
+    <?php endif; ?>
 </div>
 
 <!-- Status filter pills -->
