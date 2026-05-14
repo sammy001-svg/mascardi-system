@@ -7,6 +7,10 @@ $stmt->execute([$id]); $q=$stmt->fetch();
 if(!$q) die('Not found');
 $items=$db->prepare("SELECT * FROM quotation_items WHERE quotation_id=? ORDER BY id"); $items->execute([$id]); $items=$items->fetchAll();
 $company = ['name'=>getSetting('company_name','Mascardi Car Yard'),'address'=>getSetting('company_address','Nairobi, Kenya'),'phone'=>getSetting('company_phone',''),'email'=>getSetting('company_email',''),'pin'=>getSetting('company_pin','')];
+$isClient = (bool)($_SESSION['_client'] ?? false);
+if ($isClient && $q['client_id'] !== $_SESSION['_client']['id']) {
+    die('Unauthorized access.');
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -25,7 +29,11 @@ $company = ['name'=>getSetting('company_name','Mascardi Car Yard'),'address'=>ge
 <body>
 <div class="no-print text-center py-3">
     <button onclick="window.print()" class="btn btn-primary"><i class="fa fa-print me-1"></i>Print / Save as PDF</button>
-    <a href="view.php?id=<?= $id ?>" class="btn btn-outline-secondary ms-2">Back</a>
+    <?php if ($isClient): ?>
+        <a href="<?= BASE_URL ?>/client/quotations.php" class="btn btn-outline-secondary ms-2">Back to Portal</a>
+    <?php else: ?>
+        <a href="view.php?id=<?= $id ?>" class="btn btn-outline-secondary ms-2">Back</a>
+    <?php endif; ?>
 </div>
 <div class="print-wrapper position-relative">
     <?php if(in_array($q['status'],['rejected','cancelled'])): ?><div class="watermark"><?= $q['status'] ?></div><?php endif; ?>

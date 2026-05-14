@@ -9,13 +9,10 @@ if (!defined('BASE_URL')) {
     // Detect script path to handle subdirectory deployments
     $script = $_SERVER['SCRIPT_NAME'] ?? '';
     $dir = str_replace('\\', '/', dirname($script));
-    $baseDir = ($dir === '/') ? '' : $dir;
     
-    // If we are deep in a module, we need to go up to the root
-    // But since this is in config/app.php, we can't easily use dirname($script) 
-    // instead let's try a simpler approach: detect if 'modules' is in the path
-    $basePath = preg_replace('/\/modules\/.*$/', '', $baseDir);
-    $basePath = preg_replace('/\/client\/.*$/', '', $basePath);
+    // Strip trailing /modules/... or /client/... from the directory
+    // This allows BASE_URL to point to the project root even when called from subfolders
+    $basePath = preg_replace('/(\/(modules|client|config|includes|assets))($|\/.*)/', '', $dir);
     $basePath = rtrim($basePath, '/');
 
     define('BASE_URL', $protocol . '://' . $host . $basePath);

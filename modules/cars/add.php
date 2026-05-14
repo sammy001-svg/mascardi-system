@@ -29,8 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         try {
             $locId = (int)($_POST['location_id'] ?? 1);
-            $stmt = $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,location_id,body_type,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-            $stmt->execute([$chassis,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$locId,$body,$notes]);
+            $clientId = $_POST['client_id'] ? (int)$_POST['client_id'] : null;
+            $stmt = $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,client_id,location_id,body_type,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([$chassis,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$clientId,$locId,$body,$notes]);
             $carId = $db->lastInsertId();
             
             logActivity('create', 'cars', $carId, "Added car: $make $model ($chassis)");
@@ -130,6 +131,19 @@ include __DIR__ . '/../../includes/header.php';
                     <input type="text" name="owner_phone" class="form-control" value="<?= e($_POST['owner_phone'] ?? '') ?>" placeholder="Customer Phone">
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label">Client Account <small class="text-muted">(for portal access)</small></label>
+                    <select name="client_id" id="client_id" class="form-select select2">
+                        <option value="">— No account —</option>
+                        <?php 
+                        $clients = $db->query("SELECT id, name, phone, email FROM clients WHERE status='active' ORDER BY name ASC")->fetchAll();
+                        foreach ($clients as $cl): ?>
+                        <option value="<?= $cl['id'] ?>" data-name="<?= e($cl['name']) ?>" data-phone="<?= e($cl['phone']) ?>" <?= (int)($_POST['client_id'] ?? 0) === (int)$cl['id'] ? 'selected' : '' ?>>
+                            <?= e($cl['name']) ?><?= $cl['phone'] ? ' (' . e($cl['phone']) . ')' : '' ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">Current Location <span class="text-danger">*</span></label>
                     <select name="location_id" class="form-select" required>
                         <?php 
@@ -160,6 +174,13 @@ document.getElementById('car_type').addEventListener('change', function() {
         const input = el.querySelector('input');
         if (input) input.required = isClient && input.name === 'owner_name';
     });
+});
+document.getElementById('client_id').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    if (opt.value && document.getElementById('car_type').value === 'client') {
+        document.getElementsByName('owner_name')[0].value = opt.getAttribute('data-name');
+        document.getElementsByName('owner_phone')[0].value = opt.getAttribute('data-phone');
+    }
 });
 </script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

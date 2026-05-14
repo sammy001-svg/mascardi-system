@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
-requireRole(['admin', 'manager']);
+requireRole(['admin', 'manager', 'sales_person', 'sales_officer', 'workshop_manager']);
 $pageTitle = 'New Service Booking';
 $db   = getDB();
 $user = authUser();
@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $newId = $db->lastInsertId();
             setFlash('success', "Booking {$bNum} created.");
             // Use relative path for more robust redirect on cPanel
-            redirect('view.php?id=' . $newId);
+            redirect(BASE_URL . '/modules/service_bookings/view.php?id=' . $newId);
         } catch (\Throwable $e) {
             $errors[] = 'Save failed: ' . $e->getMessage();
         }

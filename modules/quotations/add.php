@@ -6,10 +6,10 @@ $errors = [];
 $preCarId = (int)($_GET['car_id'] ?? 0);
 $preJobId = (int)($_GET['job_id'] ?? 0);
 
-$cars      = $db->query("SELECT id, chassis_number, make, model, year, car_type, owner_name, owner_phone FROM cars ORDER BY make,model")->fetchAll();
+$cars      = $db->query("SELECT id, chassis_number, registration_number, make, model, owner_name, owner_phone, owner_email FROM cars ORDER BY make ASC")->fetchAll();
 $jobs      = $db->query("SELECT id, job_number, car_id FROM workshop_jobs WHERE status NOT IN ('completed','cancelled') ORDER BY job_number")->fetchAll();
+$clients   = $db->query("SELECT id, name, phone, email FROM clients WHERE status='active' ORDER BY name ASC")->fetchAll();
 $inventory = $db->query("SELECT id, part_number, part_name, selling_price FROM inventory ORDER BY part_name")->fetchAll();
-$clients   = $db->query("SELECT id, name, email, phone FROM clients WHERE status='active' ORDER BY name")->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $carId    = (int)($_POST['car_id'] ?? 0);

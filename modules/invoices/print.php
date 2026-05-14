@@ -7,7 +7,12 @@ $stmt->execute([$id]); $inv=$stmt->fetch();
 if(!$inv) die('Not found');
 $items=$db->prepare("SELECT * FROM invoice_items WHERE invoice_id=? ORDER BY id"); $items->execute([$id]); $items=$items->fetchAll();
 $company=['name'=>getSetting('company_name','Mascardi Car Yard'),'address'=>getSetting('company_address','Nairobi, Kenya'),'phone'=>getSetting('company_phone',''),'email'=>getSetting('company_email',''),'pin'=>getSetting('company_pin','')];
-?><!DOCTYPE html>
+$isClient = (bool)($_SESSION['_client'] ?? false);
+if ($isClient && $inv['client_id'] !== $_SESSION['_client']['id']) {
+    die('Unauthorized access.');
+}
+?>
+<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><title>Invoice <?= e($inv['invoice_number']) ?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="<?= BASE_URL ?>/assets/css/style.css" rel="stylesheet">
@@ -15,7 +20,11 @@ $company=['name'=>getSetting('company_name','Mascardi Car Yard'),'address'=>getS
 </head><body>
 <div class="no-print text-center py-3">
     <button onclick="window.print()" class="btn btn-primary"><i class="fa fa-print me-1"></i>Print / Save as PDF</button>
-    <a href="view.php?id=<?= $id ?>" class="btn btn-outline-secondary ms-2">Back</a>
+    <?php if ($isClient): ?>
+        <a href="<?= BASE_URL ?>/client/invoices.php" class="btn btn-outline-secondary ms-2">Back to Portal</a>
+    <?php else: ?>
+        <a href="view.php?id=<?= $id ?>" class="btn btn-outline-secondary ms-2">Back</a>
+    <?php endif; ?>
 </div>
 <div class="print-wrapper">
     <div class="row mb-4">

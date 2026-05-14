@@ -33,6 +33,7 @@ include __DIR__ . '/includes/header.php';
                     <th style="padding:12px;border-bottom:1px solid #f1f5f9">Valid Until</th>
                     <th style="padding:12px;border-bottom:1px solid #f1f5f9">Total</th>
                     <th style="padding:12px;border-bottom:1px solid #f1f5f9">Status</th>
+                    <th style="padding:12px;border-bottom:1px solid #f1f5f9;text-align:right">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -44,6 +45,11 @@ include __DIR__ . '/includes/header.php';
                     <td style="padding:14px 12px;color:#64748b"><?= $q['valid_until'] ? fmtDate($q['valid_until']) : '—' ?></td>
                     <td style="padding:14px 12px;font-weight:600"><?= money((float)$q['total']) ?></td>
                     <td style="padding:14px 12px"><?= statusBadge($q['status']) ?></td>
+                    <td style="padding:14px 20px;text-align:right">
+                        <a href="<?= BASE_URL ?>/modules/quotations/print.php?id=<?= $q['id'] ?>" class="btn btn-xs btn-outline-primary" target="_blank">
+                            <i class="fa fa-eye me-1"></i>View
+                        </a>
+                    </td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>

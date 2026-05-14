@@ -24,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'owner_name'          => trim($_POST['owner_name'] ?? ''),
         'owner_phone'         => trim($_POST['owner_phone'] ?? ''),
         'location_id'         => (int)($_POST['location_id'] ?? 1),
+        'client_id'           => $_POST['client_id'] ? (int)$_POST['client_id'] : null,
         'body_type'           => trim($_POST['body_type'] ?? ''),
         'status'              => $_POST['status'] ?? 'in_transit',
         'notes'               => trim($_POST['notes'] ?? ''),
@@ -33,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$data['model'])          $errors[] = 'Model is required.';
 
     if (empty($errors)) {
-        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,body_type=?,status=?,notes=? WHERE id=?")
+        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=? WHERE id=?")
            ->execute([...array_values($data), $id]);
         logActivity('update', 'cars', $id, "Updated car: {$data['make']} {$data['model']} ({$data['chassis_number']})");
         setFlash('success','Car updated successfully.');
@@ -118,6 +119,19 @@ include __DIR__ . '/../../includes/header.php';
                     <input type="text" name="owner_phone" class="form-control" value="<?= e($car['owner_phone'] ?? '') ?>" placeholder="Customer Phone">
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label">Client Account <small class="text-muted">(for portal access)</small></label>
+                    <select name="client_id" id="client_id" class="form-select select2">
+                        <option value="">— No account —</option>
+                        <?php 
+                        $clients = $db->query("SELECT id, name, phone, email FROM clients WHERE status='active' ORDER BY name ASC")->fetchAll();
+                        foreach ($clients as $cl): ?>
+                        <option value="<?= $cl['id'] ?>" data-name="<?= e($cl['name']) ?>" data-phone="<?= e($cl['phone']) ?>" <?= (int)($car['client_id'] ?? 0) === (int)$cl['id'] ? 'selected' : '' ?>>
+                            <?= e($cl['name']) ?><?= $cl['phone'] ? ' (' . e($cl['phone']) . ')' : '' ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">Current Location <span class="text-danger">*</span></label>
                     <select name="location_id" class="form-select" required>
                         <?php 
@@ -145,6 +159,13 @@ document.getElementById('car_type').addEventListener('change', function() {
         const input = el.querySelector('input');
         if (input) input.required = isClient && input.name === 'owner_name';
     });
+});
+document.getElementById('client_id').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    if (opt.value && document.getElementById('car_type').value === 'client') {
+        document.getElementsByName('owner_name')[0].value = opt.getAttribute('data-name');
+        document.getElementsByName('owner_phone')[0].value = opt.getAttribute('data-phone');
+    }
 });
 </script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
