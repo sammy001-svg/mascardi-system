@@ -6,10 +6,44 @@
 -- USE mascardi_db;
 
 -- --------------------------------------------------------
+-- Locations
+-- --------------------------------------------------------
+CREATE TABLE locations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    type ENUM('branch','storage','workshop','other') DEFAULT 'branch',
+    address TEXT,
+    phone VARCHAR(50),
+    status ENUM('active','inactive') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
+-- Clients
+-- --------------------------------------------------------
+CREATE TABLE clients (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    email VARCHAR(150),
+    phone VARCHAR(50),
+    id_number VARCHAR(50),
+    portal_password VARCHAR(255),
+    portal_enabled TINYINT(1) DEFAULT 0,
+    status ENUM('active','inactive') DEFAULT 'active',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
 -- Cars
 -- --------------------------------------------------------
 CREATE TABLE cars (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    client_id INT NULL,
+    car_type ENUM('inventory','client') DEFAULT 'inventory',
+    owner_name VARCHAR(150) NULL,
     chassis_number VARCHAR(50) UNIQUE NOT NULL,
     registration_number VARCHAR(20),
     make VARCHAR(50) NOT NULL,
@@ -23,7 +57,22 @@ CREATE TABLE cars (
     status ENUM('in_transit','arrived','in_assessment','in_workshop','completed','delivered') DEFAULT 'in_transit',
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
+-- Car Images
+-- --------------------------------------------------------
+CREATE TABLE car_images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    car_id INT NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    caption VARCHAR(255),
+    is_primary TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- --------------------------------------------------------
@@ -126,6 +175,7 @@ CREATE TABLE assessment_items (
     part_category VARCHAR(50),
     part_name VARCHAR(100) NOT NULL,
     `condition` ENUM('good','minor_damage','major_damage','missing','needs_service') DEFAULT 'good',
+    is_resolved TINYINT(1) NOT NULL DEFAULT 0,
     notes TEXT,
     FOREIGN KEY (assessment_id) REFERENCES car_assessments(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
@@ -245,6 +295,73 @@ CREATE TABLE quotation_items (
     total DECIMAL(12,2) DEFAULT 0,
     FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE,
     FOREIGN KEY (inventory_id) REFERENCES inventory(id)
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
+-- Service Bookings
+-- --------------------------------------------------------
+CREATE TABLE service_bookings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    booking_number VARCHAR(20) UNIQUE NOT NULL,
+    client_id INT NULL,
+    client_name VARCHAR(150) NOT NULL,
+    client_email VARCHAR(150),
+    client_phone VARCHAR(50) NOT NULL,
+    car_id INT NULL,
+    car_make VARCHAR(100),
+    car_model VARCHAR(100),
+    car_registration VARCHAR(50),
+    car_description TEXT,
+    service_type VARCHAR(255) NOT NULL,
+    description TEXT,
+    booking_date DATE NOT NULL,
+    preferred_date DATE NULL,
+    preferred_time VARCHAR(20) NULL,
+    status ENUM('pending','confirmed','in_progress','completed','cancelled') DEFAULT 'pending',
+    admin_notes TEXT,
+    sales_person VARCHAR(100),
+    created_by VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+    FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
+-- Quick Assessments
+-- --------------------------------------------------------
+CREATE TABLE quick_assessments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    assessment_number VARCHAR(20) UNIQUE NOT NULL,
+    assessment_date DATE NOT NULL,
+    car_id INT NULL,
+    car_make VARCHAR(100),
+    car_model VARCHAR(100),
+    car_registration VARCHAR(50),
+    car_year INT,
+    client_id INT NULL,
+    client_name VARCHAR(150),
+    client_phone VARCHAR(50),
+    service_booking_id INT NULL,
+    check_tyres ENUM('ok','issue','na') DEFAULT 'na',
+    check_lights ENUM('ok','issue','na') DEFAULT 'na',
+    check_exterior ENUM('ok','issue','na') DEFAULT 'na',
+    check_engine ENUM('ok','issue','na') DEFAULT 'na',
+    check_interior ENUM('ok','issue','na') DEFAULT 'na',
+    check_brakes ENUM('ok','issue','na') DEFAULT 'na',
+    check_fluids ENUM('ok','issue','na') DEFAULT 'na',
+    check_electrical ENUM('ok','issue','na') DEFAULT 'na',
+    overall_condition ENUM('good','fair','needs_attention','critical') DEFAULT 'fair',
+    observations TEXT,
+    recommended_services TEXT,
+    assessed_by VARCHAR(100),
+    created_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL,
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+    FOREIGN KEY (service_booking_id) REFERENCES service_bookings(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- --------------------------------------------------------
@@ -368,4 +485,86 @@ CREATE TABLE users (
     last_login TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+-- Payments
+-- --------------------------------------------------------
+CREATE TABLE payments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    payment_number VARCHAR(20) UNIQUE NOT NULL,
+    payment_date DATE NOT NULL,
+    client_id INT NULL,
+    client_name VARCHAR(150) NOT NULL,
+    client_phone VARCHAR(50),
+    invoice_id INT NULL,
+    service_booking_id INT NULL,
+    description TEXT,
+    amount DECIMAL(12,2) NOT NULL,
+    payment_method ENUM('mpesa','bank','cheque','cash') NOT NULL,
+    reference_number VARCHAR(100),
+    mpesa_phone VARCHAR(50),
+    mpesa_name VARCHAR(150),
+    bank_name VARCHAR(100),
+    account_number VARCHAR(100),
+    cheque_number VARCHAR(100),
+    cheque_date DATE NULL,
+    notes TEXT,
+    balance_adjustment DECIMAL(12,2) DEFAULT 0,
+    status ENUM('pending','confirmed','reversed') DEFAULT 'pending',
+    recorded_by VARCHAR(100),
+    confirmed_by VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
+    FOREIGN KEY (service_booking_id) REFERENCES service_bookings(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
+-- Audit Logs
+-- --------------------------------------------------------
+CREATE TABLE audit_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    action VARCHAR(50) NOT NULL,
+    module VARCHAR(100),
+    record_id INT NULL,
+    details TEXT,
+    old_values LONGTEXT,
+    new_values LONGTEXT,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
+-- Client Notices
+-- --------------------------------------------------------
+CREATE TABLE client_notices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    client_id INT NOT NULL,
+    subject VARCHAR(200),
+    message TEXT NOT NULL,
+    is_read TINYINT(1) DEFAULT 0,
+    sent_by VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
+-- Email Logs
+-- --------------------------------------------------------
+CREATE TABLE email_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    to_email VARCHAR(150) NOT NULL,
+    to_name VARCHAR(150),
+    subject VARCHAR(250),
+    status ENUM('sent','failed') DEFAULT 'sent',
+    error_message TEXT,
+    reference_type VARCHAR(50),
+    reference_id INT NULL,
+    sent_by VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 -- Note: Run login.php first — the first-run setup creates the admin account via the web interface.

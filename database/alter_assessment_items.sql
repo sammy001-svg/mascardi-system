@@ -1,0 +1,1 @@
+ALTER TABLE assessment_items ADD COLUMN is_resolved TINYINT(1) NOT NULL DEFAULT 0;

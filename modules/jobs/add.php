@@ -1,3 +1,4 @@
+<?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
 canAccess('jobs') || die('Access denied.');
@@ -24,13 +25,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$carId) $errors[] = 'Please select a car.';
 
     if (empty($errors)) {
-        $jobNumber = nextNumber('workshop_jobs', 'job_number', getSetting('job_prefix','JOB'));
-        $db->prepare("INSERT INTO workshop_jobs (job_number,car_id,mechanic_id,assessment_id,start_date,end_date,status,priority,description,notes) VALUES (?,?,?,?,?,?,?,?,?,?)")
-           ->execute([$jobNumber,$carId,$mechId,$assessId,$start,$end,$status,$priority,$desc,$notes]);
-        $jobId = $db->lastInsertId();
-        $db->prepare("UPDATE cars SET status='in_workshop' WHERE id=?")->execute([$carId]);
-        setFlash('success',"Job card {$jobNumber} created.");
-        redirect(BASE_URL.'/modules/jobs/view.php?id='.$jobId);
+        try {
+            $jobNumber = nextNumber('workshop_jobs', 'job_number', getSetting('job_prefix','JOB'));
+            $db->prepare("INSERT INTO workshop_jobs (job_number,car_id,mechanic_id,assessment_id,start_date,end_date,status,priority,description,notes) VALUES (?,?,?,?,?,?,?,?,?,?)")
+               ->execute([$jobNumber,$carId,$mechId,$assessId,$start,$end,$status,$priority,$desc,$notes]);
+            $jobId = $db->lastInsertId();
+            $db->prepare("UPDATE cars SET status='in_workshop' WHERE id=?")->execute([$carId]);
+            setFlash('success',"Job card {$jobNumber} created.");
+            redirect(BASE_URL.'/modules/jobs/view.php?id='.$jobId);
+        } catch (\PDOException $e) {
+            $errors[] = "Database error: " . $e->getMessage();
+        }
     }
 }
 include __DIR__ . '/../../includes/header.php';
@@ -39,7 +44,7 @@ include __DIR__ . '/../../includes/header.php';
     <h5 class="mb-0">Create Job Card</h5>
     <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
 </div>
-<?php if ($errors): ?><div class="alert alert-danger"><ul class="mb-0"><?php foreach($errors as $err) echo "<li>".e($err)."</li>"; ?></ul></div><?php endif; ?>
+<?php if (!empty($errors)): ?><div class="alert alert-danger"><ul class="mb-0"><?php foreach($errors as $err) echo "<li>".e($err)."</li>"; ?></ul></div><?php endif; ?>
 <div class="card"><div class="card-body">
     <form method="POST">
         <div class="row g-3">
