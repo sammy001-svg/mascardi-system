@@ -12,9 +12,20 @@ if ($user['role'] === 'mechanic' && $job['mechanic_id'] != $user['linked_id']) {
     redirect(BASE_URL . '/modules/jobs/index.php');
 }
 
-$quotations = $db->prepare("SELECT * FROM quotations WHERE job_id=? ORDER BY id DESC"); $quotations->execute([$id]); $quotations=$quotations->fetchAll();
-$invoices   = $db->prepare("SELECT * FROM invoices WHERE job_id=? ORDER BY id DESC");   $invoices->execute([$id]);   $invoices=$invoices->fetchAll();
-$lpos       = $db->prepare("SELECT l.*, s.name AS supplier_name FROM lpo l JOIN suppliers s ON s.id=l.supplier_id WHERE l.job_id=? ORDER BY l.id DESC"); $lpos->execute([$id]); $lpos=$lpos->fetchAll();
+// Mark Complete quick-action
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_complete') {
+    canWrite('jobs') || die('Permission denied.');
+    $db->prepare("UPDATE workshop_jobs SET status='completed', end_date=COALESCE(end_date,CURDATE()) WHERE id=?")->execute([$id]);
+    $db->prepare("UPDATE cars SET status='completed' WHERE id=?")->execute([$job['car_id']]);
+    logActivity('update', 'jobs', $id, "Marked job {$job['job_number']} as completed");
+    setFlash('success', "Job {$job['job_number']} marked as completed.");
+    redirect(BASE_URL . '/modules/jobs/view.php?id=' . $id);
+}
+
+$quotations   = $db->prepare("SELECT * FROM quotations WHERE job_id=? ORDER BY id DESC"); $quotations->execute([$id]); $quotations=$quotations->fetchAll();
+$invoices     = $db->prepare("SELECT * FROM invoices WHERE job_id=? ORDER BY id DESC");   $invoices->execute([$id]);   $invoices=$invoices->fetchAll();
+$lpos         = $db->prepare("SELECT l.*, s.name AS supplier_name FROM lpo l JOIN suppliers s ON s.id=l.supplier_id WHERE l.job_id=? ORDER BY l.id DESC"); $lpos->execute([$id]); $lpos=$lpos->fetchAll();
+$partsReqs    = $db->prepare("SELECT pr.*, m.name AS mechanic_name FROM parts_requests pr LEFT JOIN mechanics m ON m.id=pr.mechanic_id WHERE pr.job_id=? ORDER BY pr.id DESC"); $partsReqs->execute([$id]); $partsReqs=$partsReqs->fetchAll();
 
 $pageTitle = $job['job_number'];
 include __DIR__ . '/../../includes/header.php';
@@ -23,6 +34,12 @@ include __DIR__ . '/../../includes/header.php';
     <h5 class="mb-0">Job Card: <strong><?= e($job['job_number']) ?></strong></h5>
     <div class="d-flex gap-2">
         <?php if (canWrite('jobs')): ?>
+        <?php if (!in_array($job['status'], ['completed','cancelled'])): ?>
+        <form method="POST" class="d-inline" onsubmit="return confirm('Mark this job as completed?')">
+            <input type="hidden" name="action" value="mark_complete">
+            <button type="submit" class="btn btn-sm btn-success"><i class="fa fa-circle-check me-1"></i>Mark Complete</button>
+        </form>
+        <?php endif; ?>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $job['car_id'] ?>&job_id=<?= $id ?>" class="btn btn-sm btn-outline-info"><i class="fa fa-file-lines me-1"></i>New Quotation</a>
         <a href="<?= BASE_URL ?>/modules/lpo/add.php?job_id=<?= $id ?>" class="btn btn-sm btn-outline-warning"><i class="fa fa-file-import me-1"></i>New LPO</a>
@@ -95,6 +112,9 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="fa fa-file-invoice-dollar me-2"></i>Invoices</span>
+                <?php if (canWrite('quotations')): ?>
+                <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $job['car_id'] ?>&job_id=<?= $id ?>" class="btn btn-xs btn-outline-success" title="Create a quotation and convert to invoice">+ New Invoice</a>
+                <?php endif; ?>
             </div>
             <?php if($invoices): ?>
             <table class="table mb-0">
@@ -112,7 +132,33 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endforeach; ?>
                 </tbody>
             </table>
-            <?php else: ?><div class="card-body text-muted small">No invoices yet.</div><?php endif; ?>
+            <?php else: ?><div class="card-body text-muted small">No invoices yet. <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $job['car_id'] ?>&job_id=<?= $id ?>">Create a quotation</a> and convert it to an invoice.</div><?php endif; ?>
+        </div>
+
+        <!-- Parts Requests -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fa fa-hand-holding-box me-2"></i>Parts Requests</span>
+                <?php if (canWrite('parts_requests')): ?>
+                <a href="<?= BASE_URL ?>/modules/parts_requests/add.php?job_id=<?= $id ?>" class="btn btn-xs btn-outline-primary">+ New</a>
+                <?php endif; ?>
+            </div>
+            <?php if($partsReqs): ?>
+            <table class="table mb-0">
+                <thead><tr><th class="ps-3">No.</th><th>Date</th><th>Mechanic</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                    <?php foreach($partsReqs as $pr): ?>
+                    <tr>
+                        <td class="ps-3"><?= e($pr['request_number']) ?></td>
+                        <td><?= fmtDate($pr['created_at'] ?? '') ?></td>
+                        <td><?= e($pr['mechanic_name'] ?? '—') ?></td>
+                        <td><?= statusBadge($pr['status']) ?></td>
+                        <td><a href="<?= BASE_URL ?>/modules/parts_requests/view.php?id=<?= $pr['id'] ?>" class="btn btn-xs btn-outline-primary">View</a></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php else: ?><div class="card-body text-muted small">No parts requests for this job.</div><?php endif; ?>
         </div>
 
         <!-- LPOs -->

@@ -35,7 +35,7 @@ $items = $db->prepare("
 $items->execute([$id]); $items = $items->fetchAll();
 
 // ── Approve / Reject / Issue action ─────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && hasRole(['admin','manager'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && hasRole(['admin','workshop_manager'])) {
     $action     = $_POST['action'] ?? '';
     $adminNotes = trim($_POST['admin_notes'] ?? '');
 
@@ -103,7 +103,7 @@ include __DIR__ . '/../../includes/header.php';
 <div class="card mb-4">
     <div class="card-header"><i class="fa fa-list me-2"></i>Requested Parts</div>
 
-    <?php if ($req['status'] === 'approved' && hasRole(['admin','manager'])): ?>
+    <?php if ($req['status'] === 'approved' && hasRole(['admin','workshop_manager'])): ?>
     <!-- Issue form: admin fills how much of each item to issue -->
     <form method="POST">
         <input type="hidden" name="action" value="issued">
@@ -227,7 +227,7 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <!-- Approve / Reject form (admin/manager, pending only) -->
-<?php if (hasRole(['admin','manager']) && $req['status'] === 'pending'): ?>
+<?php if (hasRole(['admin','workshop_manager']) && $req['status'] === 'pending'): ?>
 <div class="card mt-4" style="border-top:3px solid #2563eb">
     <div class="card-header"><i class="fa fa-gavel me-2"></i>Take Action</div>
     <div class="card-body">

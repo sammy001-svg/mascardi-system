@@ -15,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($carId) {
             $db->prepare("UPDATE cars SET status='arrived' WHERE id=?")->execute([$carId]);
         }
+        logActivity('update', 'intake', $carId, "Arrival confirmed for car #{$carId} — transfer #{$transferId}");
         setFlash('success', 'Arrival confirmed. Car is now in Nairobi.');
     }
     // Get the intake id to redirect back

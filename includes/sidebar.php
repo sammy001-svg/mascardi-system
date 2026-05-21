@@ -204,6 +204,16 @@ $__isDash = !str_contains($__uri, '/modules/');
            data-label="Users">
             <i class="fa fa-users-gear"></i><span>Users</span>
         </a>
+        <a href="<?= BASE_URL ?>/modules/locations/index.php"
+           class="nav-item <?= isActive('/modules/locations/') ?>"
+           data-label="Locations">
+            <i class="fa fa-location-dot"></i><span>Locations</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/audit/index.php"
+           class="nav-item <?= isActive('/modules/audit/') ?>"
+           data-label="Audit Log">
+            <i class="fa fa-history"></i><span>Audit Log</span>
+        </a>
         <a href="<?= BASE_URL ?>/modules/settings/index.php"
            class="nav-item <?= isActive('/modules/settings/') ?>"
            data-label="Settings">

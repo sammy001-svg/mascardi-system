@@ -73,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("UPDATE cars SET status=? WHERE id=?")->execute([$newCarStatus, $carId]);
 
             $db->commit();
+            logActivity('create', 'assessments', $assessmentId, "New {$type} assessment for car #{$carId} — status: {$status}");
             setFlash('success', 'Assessment saved successfully.');
             redirect(BASE_URL . '/modules/assessments/view.php?id=' . $assessmentId);
         } catch (\Throwable $e) {

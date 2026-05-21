@@ -49,6 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $db->commit();
+            logActivity('create', 'intake', $carId, "Intake record created for car #{$carId} at {$port}");
             setFlash('success','Intake record saved successfully.');
             redirect(BASE_URL.'/modules/intake/index.php');
         } catch (Exception $e) {

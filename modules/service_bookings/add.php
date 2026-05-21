@@ -104,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user['name'],
             ]);
             $newId = $db->lastInsertId();
+            logActivity('create', 'service_bookings', $newId, "Created booking {$bNum} for {$d['client_name']}");
             setFlash('success', "Booking {$bNum} created.");
             // Use relative path for more robust redirect on cPanel
             redirect(BASE_URL . '/modules/service_bookings/view.php?id=' . $newId);

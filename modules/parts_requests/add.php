@@ -74,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $db->commit();
+            logActivity('create', 'parts_requests', $reqId, "Created part request {$reqNum} with " . count($items) . " item(s)");
             setFlash('success', 'Part request ' . $reqNum . ' submitted. Waiting for approval.');
             redirect(BASE_URL . '/modules/parts_requests/view.php?id=' . $reqId);
         } catch (Exception $e) {

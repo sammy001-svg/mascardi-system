@@ -38,6 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    ->execute([$name, $username, $email, password_hash($pass, PASSWORD_DEFAULT), $mechanicId]);
             }
 
+            logActivity('create', 'mechanics', $mechanicId, "Added mechanic: {$name}");
             setFlash('success', "Mechanic {$name} added." . ($createLogin ? ' Login account created.' : ''));
             redirect(BASE_URL . '/modules/mechanics/index.php');
         } catch (PDOException $e) {

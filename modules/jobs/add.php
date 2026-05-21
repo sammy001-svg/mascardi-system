@@ -31,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                ->execute([$jobNumber,$carId,$mechId,$assessId,$start,$end,$status,$priority,$desc,$notes]);
             $jobId = $db->lastInsertId();
             $db->prepare("UPDATE cars SET status='in_workshop' WHERE id=?")->execute([$carId]);
+            logActivity('create', 'jobs', $jobId, "Created job card {$jobNumber}");
             setFlash('success',"Job card {$jobNumber} created.");
             redirect(BASE_URL.'/modules/jobs/view.php?id='.$jobId);
         } catch (\PDOException $e) {

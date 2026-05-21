@@ -63,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->prepare("DELETE FROM users WHERE id=?")->execute([$linkedUser['id']]);
             }
 
+            logActivity('update', 'mechanics', $id, "Updated mechanic: {$data['name']}");
             setFlash('success', 'Mechanic updated.');
             redirect(BASE_URL . '/modules/mechanics/index.php');
         } catch (PDOException $e) {

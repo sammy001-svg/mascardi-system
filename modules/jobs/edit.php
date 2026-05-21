@@ -12,6 +12,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $data=['mechanic_id'=>$_POST['mechanic_id']?:(null),'start_date'=>$_POST['start_date']?:null,'end_date'=>$_POST['end_date']?:null,'status'=>$_POST['status']??'pending','priority'=>$_POST['priority']??'normal','description'=>trim($_POST['description']??''),'notes'=>trim($_POST['notes']??'')];
     $db->prepare("UPDATE workshop_jobs SET mechanic_id=?,start_date=?,end_date=?,status=?,priority=?,description=?,notes=? WHERE id=?")->execute([...array_values($data),$id]);
     if($data['status']==='completed') $db->prepare("UPDATE cars SET status='completed' WHERE id=?")->execute([$job['car_id']]);
+    logActivity('update', 'jobs', $id, "Updated job {$job['job_number']} — status: {$data['status']}");
     setFlash('success','Job updated.'); redirect(BASE_URL.'/modules/jobs/view.php?id='.$id);
 }
 $pageTitle='Edit Job';

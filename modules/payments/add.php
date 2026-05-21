@@ -71,8 +71,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ref, $mpesaPhone, $mpesaName, $bankName, $accountNumber,
                 $chequeNumber, $chequeDate, $notes, $balAdj, $recordedBy,
             ]);
+            $newPayId = (int)$db->lastInsertId();
+            logActivity('create', 'payments', $newPayId, "Recorded payment {$payNum} — KES {$amount} via {$method} for {$clientName}");
             setFlash('success', "Payment {$payNum} recorded successfully.");
-            redirect(BASE_URL . '/modules/payments/view.php?id=' . $db->lastInsertId());
+            redirect(BASE_URL . '/modules/payments/view.php?id=' . $newPayId);
         } catch (\Throwable $e) {
             $errors[] = $e->getMessage();
         }

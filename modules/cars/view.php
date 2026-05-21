@@ -80,6 +80,49 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 <?php endif; ?>
 
+<?php
+$stageSteps = [
+    ['label' => 'Port Intake',  'icon' => 'fa-anchor',           'statuses' => ['arrived']],
+    ['label' => 'Transport',    'icon' => 'fa-truck-moving',      'statuses' => ['in_transit']],
+    ['label' => 'Assessment',   'icon' => 'fa-clipboard-check',   'statuses' => []],
+    ['label' => 'Workshop',     'icon' => 'fa-toolbox',           'statuses' => ['in_workshop']],
+    ['label' => 'Completed',    'icon' => 'fa-circle-check',      'statuses' => ['completed']],
+    ['label' => 'Delivered',    'icon' => 'fa-flag-checkered',    'statuses' => ['delivered','sold']],
+];
+$activeStep = 0;
+if ($intake)            $activeStep = 1;
+if (!empty($transfers)) $activeStep = 2;
+if (!empty($assessments)) $activeStep = 3;
+if (!empty($jobs))      $activeStep = 4;
+if (in_array($car['status'], ['completed']))            $activeStep = 5;
+if (in_array($car['status'], ['delivered','sold']))     $activeStep = 6;
+?>
+<div class="card mb-4">
+    <div class="card-body py-3">
+        <div class="d-flex align-items-center justify-content-between" style="overflow-x:auto">
+        <?php foreach ($stageSteps as $i => $step):
+            $stepNum  = $i + 1;
+            $isDone   = $stepNum < $activeStep;
+            $isActive = $stepNum === $activeStep;
+        ?>
+            <div class="text-center flex-fill" style="min-width:80px">
+                <div class="mx-auto rounded-circle d-flex align-items-center justify-content-center mb-1
+                    <?= $isDone ? 'bg-success text-white' : ($isActive ? 'bg-primary text-white' : 'bg-light text-muted border') ?>"
+                    style="width:40px;height:40px">
+                    <i class="fa <?= $step['icon'] ?> fa-sm"></i>
+                </div>
+                <div class="small fw-<?= $isActive ? 'bold' : 'normal' ?> <?= $isDone ? 'text-success' : ($isActive ? 'text-primary' : 'text-muted') ?>">
+                    <?= $step['label'] ?>
+                </div>
+            </div>
+            <?php if ($i < count($stageSteps) - 1): ?>
+            <div class="flex-fill" style="height:2px;background:<?= $isDone ? '#198754' : '#dee2e6' ?>;max-width:60px;min-width:20px;margin-bottom:18px"></div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+
 <div class="row g-4">
     <!-- Car Details -->
     <div class="col-lg-4">

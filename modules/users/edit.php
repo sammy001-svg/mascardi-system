@@ -129,6 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            logActivity('update', 'users', $id, "Updated user: {$name} ({$role})");
             setFlash('success', 'User updated successfully.');
             redirect(BASE_URL . '/modules/users/index.php');
         } catch (PDOException $e) {

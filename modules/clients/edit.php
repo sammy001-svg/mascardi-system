@@ -34,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $db->prepare("UPDATE clients SET name=?,email=?,phone=?,id_number=?,portal_password=?,portal_enabled=?,status=?,notes=? WHERE id=?")
                ->execute([$d['name'],$d['email'],$d['phone'],$d['id_number'],$hashedPass,$d['portal_enabled'],$d['status'],$d['notes'],$id]);
+            logActivity('update', 'clients', $id, "Updated client: {$d['name']}");
             setFlash('success', 'Client updated.');
             redirect(BASE_URL . '/modules/clients/view.php?id=' . $id);
         } catch (\Throwable $e) {

@@ -92,6 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            logActivity('create', 'users', $newId, "Created user: {$name} ({$role})");
             setFlash('success', "User {$name} created successfully.");
             redirect(BASE_URL . '/modules/users/index.php');
         } catch (PDOException $e) {

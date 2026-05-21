@@ -65,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             $db->commit();
+            logActivity('create', 'clients', $newId, "Added client: {$d['name']}");
             setFlash('success', 'Client ' . $d['name'] . ' added' . ($hasVehicle ? ' with vehicle details.' : '.'));
             redirect(BASE_URL . '/modules/clients/view.php?id=' . $newId);
         } catch (\Throwable $e) {
