@@ -21,6 +21,13 @@ define('BASE_PATH', dirname(__DIR__));
 
 // Start session
 if (session_status() === PHP_SESSION_NONE) {
+    $sessionPath = BASE_PATH . '/sessions';
+    if (!is_dir($sessionPath)) {
+        @mkdir($sessionPath, 0777, true);
+    }
+    if (is_writable($sessionPath)) {
+        session_save_path($sessionPath);
+    }
     session_start();
 }
 

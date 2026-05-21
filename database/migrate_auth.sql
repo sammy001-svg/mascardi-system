@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(150),
     password VARCHAR(255) NOT NULL,
-    role ENUM('admin','manager','mechanic','driver') NOT NULL DEFAULT 'mechanic',
+    role ENUM('admin','workshop_manager','sales_person','sales_officer','manager','mechanic','driver') NOT NULL DEFAULT 'mechanic',
     linked_id INT NULL COMMENT 'ID in drivers or mechanics table',
     linked_type ENUM('driver','mechanic') NULL,
     status ENUM('active','inactive') NOT NULL DEFAULT 'active',
