@@ -164,11 +164,16 @@ $lifecycleData->execute();
 $lifecycleData = $lifecycleData->fetchAll();
 
 $avgLifecycle = $db->query("
-    SELECT AVG(DATEDIFF(COALESCE(MAX(CASE WHEN c.status='delivered' THEN c.updated_at END), NOW()), ci.intake_date)) AS avg_days
-    FROM cars c
-    LEFT JOIN car_intake ci ON ci.car_id = c.id
-    WHERE ci.intake_date IS NOT NULL
-    GROUP BY c.id
+    SELECT AVG(days) AS avg_days
+    FROM (
+        SELECT DATEDIFF(
+            COALESCE(MAX(CASE WHEN c.status = 'delivered' THEN c.updated_at END), NOW()),
+            MIN(ci.intake_date)
+        ) AS days
+        FROM cars c
+        JOIN car_intake ci ON ci.car_id = c.id
+        GROUP BY c.id
+    ) t
 ")->fetchColumn();
 
 // ── Inventory turnover ────────────────────────────────────────────────────────
