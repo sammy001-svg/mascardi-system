@@ -107,7 +107,7 @@ include __DIR__ . '/includes/header.php';
     <div class="welcome-text">
         <h5 class="mb-1">Welcome back, <?= e($user['name']) ?></h5>
         <p class="mb-0"><?= date('l, d F Y') ?> &mdash; 
-            <span class="badge bg-white bg-opacity-20 fw-normal"><?= ucwords(str_replace('_', ' ', $role)) ?></span>
+            <span class="badge bg-white text-primary fw-semibold px-2 py-1" style="color: var(--brand) !important;"><?= ucwords(str_replace('_', ' ', $role)) ?></span>
         </p>
     </div>
     <div class="welcome-stats d-none d-md-flex align-items-center gap-4">
@@ -298,6 +298,18 @@ include __DIR__ . '/includes/header.php';
                 <a href="<?= BASE_URL ?>/modules/jobs/add.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#fdf4ff;color:#9333ea"><i class="fa fa-toolbox fa-lg"></i></div>
                     <span>Job Card</span>
+                </a>
+                <?php endif; ?>
+                <?php if (canWrite('parts_requests')): ?>
+                <a href="<?= BASE_URL ?>/modules/parts_requests/add.php" class="quick-action-card">
+                    <div class="qa-icon" style="background:#fce7f3;color:#db2777"><i class="fa fa-hand-holding-box fa-lg"></i></div>
+                    <span>Request Parts</span>
+                </a>
+                <?php endif; ?>
+                <?php if (canWrite('clients')): ?>
+                <a href="<?= BASE_URL ?>/modules/clients/add.php" class="quick-action-card">
+                    <div class="qa-icon" style="background:#e0f2fe;color:#0369a1"><i class="fa fa-user-plus fa-lg"></i></div>
+                    <span>New Client</span>
                 </a>
                 <?php endif; ?>
                 <?php if (canAccess('quotations')): ?>

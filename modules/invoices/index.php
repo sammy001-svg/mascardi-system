@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('invoices') || die('Access denied.');
 $pageTitle = 'Invoices';
 $db = getDB();
 $status = $_GET['status'] ?? '';

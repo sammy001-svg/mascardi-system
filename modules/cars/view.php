@@ -4,15 +4,15 @@ $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/cars/index.php');
 $db = getDB();
 
-$car = $db->prepare("SELECT c.*, l.name AS location_name FROM cars c LEFT JOIN locations l ON l.id = c.location_id WHERE c.id=?");
+$car = $db->prepare("SELECT c.*, l.name AS location_name, cl.phone AS owner_phone FROM cars c LEFT JOIN locations l ON l.id = c.location_id LEFT JOIN clients cl ON cl.id = c.client_id WHERE c.id=?");
 $car->execute([$id]);
 $car = $car->fetch();
 if (!$car) { setFlash('error','Car not found.'); redirect(BASE_URL.'/modules/cars/index.php'); }
 
-$intake   = $db->prepare("SELECT ci.*, ct.transported_by FROM car_intake ci LEFT JOIN car_transfers ct ON ct.car_id=ci.car_id WHERE ci.car_id=? ORDER BY ci.id DESC LIMIT 1");
+$intake   = $db->prepare("SELECT * FROM car_intake WHERE car_id=? ORDER BY id DESC LIMIT 1");
 $intake->execute([$id]); $intake = $intake->fetch();
 
-$transfers = $db->prepare("SELECT ct.* FROM car_transfers ct WHERE ct.car_id=? ORDER BY ct.id DESC");
+$transfers = $db->prepare("SELECT ct.*, d.name AS transported_by FROM car_transfers ct LEFT JOIN drivers d ON d.id = ct.driver_id WHERE ct.car_id=? ORDER BY ct.id DESC");
 $transfers->execute([$id]); $transfers = $transfers->fetchAll();
 
 $assessments = $db->prepare("SELECT ca.*, m.name AS mechanic_name FROM car_assessments ca LEFT JOIN mechanics m ON m.id=ca.mechanic_id WHERE ca.car_id=? ORDER BY ca.id DESC");
@@ -99,7 +99,7 @@ include __DIR__ . '/../../includes/header.php';
                     <dt class="col-5 text-muted">Owner</dt>
                     <dd class="col-7">
                         <div class="fw-bold"><?= e($car['owner_name']) ?></div>
-                        <div class="small text-muted"><?= e($car['owner_phone'] ?: 'No Phone') ?></div>
+                        <div class="small text-muted"><?= e(($car['owner_phone'] ?? '') ?: 'No Phone') ?></div>
                     </dd>
                     <?php endif; ?>
                     <dt class="col-5 text-muted">Current Yard</dt>

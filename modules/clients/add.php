@@ -1,13 +1,18 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
-requireRole(['admin', 'manager']);
+canWrite('clients') || die('Permission denied.');
 $pageTitle = 'New Client';
 $db   = getDB();
 $user = authUser();
 
 $errors = [];
-$d = ['name'=>'','email'=>'','phone'=>'','id_number'=>'','portal_enabled'=>0,'notes'=>'','status'=>'active'];
+$d = [
+    'name' => '', 'email' => '', 'phone' => '', 'id_number' => '', 
+    'portal_enabled' => 0, 'notes' => '', 'status' => 'active',
+    'car_make' => '', 'car_model' => '', 'car_year' => date('Y'), 
+    'car_registration' => '', 'car_chassis' => ''
+];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['name']           = trim($_POST['name'] ?? '');
@@ -19,20 +24,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['status']         = $_POST['status'] ?? 'active';
     $portalPass          = trim($_POST['portal_password'] ?? '');
 
+    $d['car_make']         = trim($_POST['car_make'] ?? '');
+    $d['car_model']        = trim($_POST['car_model'] ?? '');
+    $d['car_year']         = trim($_POST['car_year'] ?? '');
+    $d['car_registration']  = trim($_POST['car_registration'] ?? '');
+    $d['car_chassis']      = trim($_POST['car_chassis'] ?? '');
+
     if (!$d['name'])  $errors[] = 'Name is required.';
     if (!$d['email']) $errors[] = 'Email is required.';
     elseif (!filter_var($d['email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'Invalid email address.';
     if ($d['portal_enabled'] && !$portalPass) $errors[] = 'A portal password is required when enabling portal access.';
 
+    $hasVehicle = ($d['car_make'] !== '' || $d['car_model'] !== '' || $d['car_registration'] !== '' || $d['car_chassis'] !== '');
+    if ($hasVehicle) {
+        if (!$d['car_make']) $errors[] = 'Car Make is required if adding vehicle details.';
+        if (!$d['car_model']) $errors[] = 'Car Model is required if adding vehicle details.';
+        if (!$d['car_chassis']) $errors[] = 'Chassis Number is required if adding vehicle details.';
+        if (!$d['car_year']) $errors[] = 'Car Year is required if adding vehicle details.';
+        
+        if ($d['car_chassis']) {
+            $checkChassis = $db->prepare("SELECT COUNT(*) FROM cars WHERE chassis_number = ?");
+            $checkChassis->execute([$d['car_chassis']]);
+            if ($checkChassis->fetchColumn() > 0) {
+                $errors[] = 'Chassis number already exists in the system.';
+            }
+        }
+    }
+
     if (empty($errors)) {
         $hashedPass = $portalPass ? password_hash($portalPass, PASSWORD_DEFAULT) : null;
         try {
+            $db->beginTransaction();
             $db->prepare("INSERT INTO clients (name,email,phone,id_number,portal_password,portal_enabled,status,notes) VALUES (?,?,?,?,?,?,?,?)")
                ->execute([$d['name'],$d['email'],$d['phone'],$d['id_number'],$hashedPass,$d['portal_enabled'],$d['status'],$d['notes']]);
             $newId = $db->lastInsertId();
-            setFlash('success', 'Client ' . $d['name'] . ' added.');
+
+            if ($hasVehicle) {
+                $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,car_type,owner_name,client_id,location_id,status) VALUES (?,?,?,?,?,?,?,?,?,?)")
+                   ->execute([$d['car_chassis'],$d['car_registration'],$d['car_make'],$d['car_model'],(int)$d['car_year'],'client',$d['name'],$newId,null,'completed']);
+            }
+            
+            $db->commit();
+            setFlash('success', 'Client ' . $d['name'] . ' added' . ($hasVehicle ? ' with vehicle details.' : '.'));
             redirect(BASE_URL . '/modules/clients/view.php?id=' . $newId);
         } catch (\Throwable $e) {
+            $db->rollBack();
             $errors[] = 'Save failed: ' . $e->getMessage();
         }
     }
@@ -82,6 +118,34 @@ include __DIR__ . '/../../includes/header.php';
                     <div class="col-12">
                         <label class="form-label">Notes</label>
                         <textarea name="notes" class="form-control" rows="3"><?= e($d['notes']) ?></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4" style="border-top:3px solid #10b981">
+            <div class="card-header fw-semibold"><i class="fa fa-car me-2"></i>Vehicle Details (Optional)</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Car Make</label>
+                        <input type="text" name="car_make" class="form-control" value="<?= e($d['car_make'] ?? '') ?>" placeholder="e.g. Toyota">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Car Model</label>
+                        <input type="text" name="car_model" class="form-control" value="<?= e($d['car_model'] ?? '') ?>" placeholder="e.g. Prado">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Year</label>
+                        <input type="number" name="car_year" class="form-control" value="<?= e($d['car_year'] ?? date('Y')) ?>" min="1980" max="<?= date('Y')+1 ?>">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Registration Number</label>
+                        <input type="text" name="car_registration" class="form-control" value="<?= e($d['car_registration'] ?? '') ?>" placeholder="e.g. KDA 123A" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Chassis Number</label>
+                        <input type="text" name="car_chassis" class="form-control" value="<?= e($d['car_chassis'] ?? '') ?>" placeholder="e.g. JTEBT9FJ60K...">
                     </div>
                 </div>
             </div>

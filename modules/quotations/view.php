@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('quotations') || die('Access denied.');
 require_once __DIR__ . '/../../includes/mailer.php';
 $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/quotations/index.php');
 $db=getDB();
@@ -33,11 +35,13 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['send_email'])){
 
 // Handle status change
 if(isset($_GET['status'])){
+    canWrite('quotations') || die('Permission denied.');
     $db->prepare("UPDATE quotations SET status=? WHERE id=?")->execute([$_GET['status'],$id]);
     setFlash('success','Status updated.'); redirect('view.php?id='.$id);
 }
 // Convert to invoice
 if(isset($_GET['convert'])){
+    canWrite('invoices') || die('Permission denied.');
     try{
         $db->beginTransaction();
         $invNum=nextNumber('invoices','invoice_number',getSetting('invoice_prefix','INV'));
@@ -63,12 +67,12 @@ include __DIR__ . '/../../includes/header.php';
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">Quotation: <strong><?= e($q['quotation_number']) ?></strong> <?= statusBadge($q['status']) ?></h5>
     <div class="d-flex gap-2 flex-wrap">
-        <?php if($q['status']!=='converted' && $q['status']!=='rejected'): ?>
+        <?php if($q['status']!=='converted' && $q['status']!=='rejected' && canWrite('invoices')): ?>
         <a href="?id=<?= $id ?>&convert=1" class="btn btn-sm btn-success" onclick="return confirm('Convert to Invoice?')"><i class="fa fa-file-invoice-dollar me-1"></i>Convert to Invoice</a>
         <?php endif; ?>
         <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#emailModal"><i class="fa fa-envelope me-1"></i>Send to Client</button>
         <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fa fa-print me-1"></i>Print / PDF</a>
-        <?php if($q['status']==='draft'): ?>
+        <?php if($q['status']==='draft' && canWrite('quotations')): ?>
         <a href="?id=<?= $id ?>&status=sent" class="btn btn-sm btn-outline-info">Mark as Sent</a>
         <a href="?id=<?= $id ?>&status=approved" class="btn btn-sm btn-outline-success">Approve</a>
         <a href="?id=<?= $id ?>&status=rejected" class="btn btn-sm btn-outline-danger">Reject</a>

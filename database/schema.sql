@@ -259,6 +259,7 @@ CREATE TABLE workshop_jobs (
 -- --------------------------------------------------------
 CREATE TABLE quotations (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    client_id INT NULL,
     quotation_number VARCHAR(20) UNIQUE NOT NULL,
     car_id INT NOT NULL,
     job_id INT,
@@ -277,7 +278,8 @@ CREATE TABLE quotations (
     terms TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (car_id) REFERENCES cars(id),
-    FOREIGN KEY (job_id) REFERENCES workshop_jobs(id)
+    FOREIGN KEY (job_id) REFERENCES workshop_jobs(id),
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- --------------------------------------------------------
@@ -369,6 +371,7 @@ CREATE TABLE quick_assessments (
 -- --------------------------------------------------------
 CREATE TABLE invoices (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    client_id INT NULL,
     invoice_number VARCHAR(20) UNIQUE NOT NULL,
     quotation_id INT,
     car_id INT NOT NULL,
@@ -388,7 +391,8 @@ CREATE TABLE invoices (
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (car_id) REFERENCES cars(id),
-    FOREIGN KEY (quotation_id) REFERENCES quotations(id)
+    FOREIGN KEY (quotation_id) REFERENCES quotations(id),
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- --------------------------------------------------------

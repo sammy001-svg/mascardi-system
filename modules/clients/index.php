@@ -25,7 +25,9 @@ include __DIR__ . '/../../includes/header.php';
         <h5 class="mb-1">Clients</h5>
         <div class="text-muted small"><?= count($clients) ?> registered client<?= count($clients) !== 1 ? 's' : '' ?></div>
     </div>
+    <?php if (canWrite('clients')): ?>
     <a href="add.php" class="btn btn-primary btn-sm"><i class="fa fa-plus me-1"></i>New Client</a>
+    <?php endif; ?>
 </div>
 
 <div class="card">

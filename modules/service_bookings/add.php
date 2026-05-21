@@ -27,7 +27,16 @@ $serviceIcons = [
 $timeSlots = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00'];
 
 // Fetch data for auto-fill
-$clients = $db->query("SELECT id, name, email, phone FROM clients WHERE status='active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+$clients = $db->query("
+    SELECT c.id, c.name, c.email, c.phone,
+           ca.id AS car_id, ca.make AS car_make, ca.model AS car_model, ca.registration_number AS car_reg
+    FROM clients c
+    LEFT JOIN cars ca ON ca.client_id = c.id AND ca.id = (
+        SELECT MIN(id) FROM cars WHERE client_id = c.id LIMIT 1
+    )
+    WHERE c.status='active'
+    ORDER BY c.name
+")->fetchAll(PDO::FETCH_ASSOC);
 $cars    = $db->query("
     SELECT c.id, c.make, c.model, c.year, c.registration_number, 
            cl.id as client_id, cl.name as client_name, cl.email as client_email, cl.phone as client_phone
@@ -154,6 +163,10 @@ include __DIR__ . '/../../includes/header.php';
                                 data-name="<?= e($c['name']) ?>"
                                 data-email="<?= e($c['email']) ?>"
                                 data-phone="<?= e($c['phone'] ?? '') ?>"
+                                data-car-id="<?= e($c['car_id'] ?? '') ?>"
+                                data-car-make="<?= e($c['car_make'] ?? '') ?>"
+                                data-car-model="<?= e($c['car_model'] ?? '') ?>"
+                                data-car-reg="<?= e($c['car_reg'] ?? '') ?>"
                                 <?= ($d['client_id'] == $c['id']) ? 'selected' : '' ?>>
                             <?= e($c['name']) ?><?= $c['phone'] ? ' — '.e($c['phone']) : '' ?>
                         </option>
@@ -303,24 +316,74 @@ $(document).ready(function() {
     $('#clientSelect').on('change', function() {
         const opt = this.options[this.selectedIndex];
         if (!opt) return;
+        
         document.getElementById('clientName').value  = opt.dataset.name  || '';
         document.getElementById('clientEmail').value = opt.dataset.email || '';
         document.getElementById('clientPhone').value = opt.dataset.phone || '';
+        
+        // Auto-populate vehicle details if they exist on the client
+        if (opt.dataset.carId) {
+            if ($('#carSelect').val() !== opt.dataset.carId) {
+                // If the car exists in the list, select it
+                if ($('#carSelect option[value="' + opt.dataset.carId + '"]').length > 0) {
+                    $('#carSelect').val(opt.dataset.carId).trigger('change');
+                } else {
+                    // Otherwise, fill inputs directly
+                    document.getElementById('carMake').value  = opt.dataset.carMake  || '';
+                    document.getElementById('carModel').value = opt.dataset.carModel || '';
+                    document.getElementById('carReg').value   = opt.dataset.carReg   || '';
+                    if ($('#carSelect').val() !== '') {
+                        $('#carSelect').val('').trigger('change');
+                    }
+                }
+            }
+        } else if (opt.dataset.carMake) {
+            document.getElementById('carMake').value  = opt.dataset.carMake  || '';
+            document.getElementById('carModel').value = opt.dataset.carModel || '';
+            document.getElementById('carReg').value   = opt.dataset.carReg   || '';
+            if ($('#carSelect').val() !== '') {
+                $('#carSelect').val('').trigger('change');
+            }
+        } else {
+            // No vehicle details for this client, or walk-in client
+            document.getElementById('carMake').value  = '';
+            document.getElementById('carModel').value = '';
+            document.getElementById('carReg').value   = '';
+            if ($('#carSelect').val() !== '') {
+                $('#carSelect').val('').trigger('change');
+            }
+            if (!opt.value) {
+                document.getElementById('clientName').value = '';
+                document.getElementById('clientEmail').value = '';
+                document.getElementById('clientPhone').value = '';
+            }
+        }
     });
 
     // Car select auto-fill
     $('#carSelect').on('change', function() {
         const opt = this.options[this.selectedIndex];
         if (!opt) return;
+        
         document.getElementById('carMake').value  = opt.dataset.make  || '';
         document.getElementById('carModel').value = opt.dataset.model || '';
         document.getElementById('carReg').value   = opt.dataset.reg   || '';
+        
         if (opt.dataset.clientId) {
-            $('#clientSelect').val(opt.dataset.clientId).trigger('change');
+            if ($('#clientSelect').val() !== opt.dataset.clientId) {
+                $('#clientSelect').val(opt.dataset.clientId).trigger('change');
+            }
         } else if (opt.dataset.clientName) {
             document.getElementById('clientName').value = opt.dataset.clientName;
             document.getElementById('clientEmail').value = opt.dataset.clientEmail || '';
             document.getElementById('clientPhone').value = opt.dataset.clientPhone || '';
+        } else {
+            // If empty car chosen, only clear car fields
+            if (!opt.value) {
+                document.getElementById('carMake').value = '';
+                document.getElementById('carModel').value = '';
+                document.getElementById('carReg').value = '';
+            }
         }
     });
 });

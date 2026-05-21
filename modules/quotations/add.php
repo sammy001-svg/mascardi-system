@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('quotations') || die('Access denied.');
+canWrite('quotations') || die('Permission denied.');
 $pageTitle = 'New Quotation';
 $db = getDB();
 $errors = [];

@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('invoices') || die('Access denied.');
 require_once __DIR__ . '/../../includes/mailer.php';
 $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/invoices/index.php');
 $db=getDB();
@@ -10,6 +12,7 @@ $items=$db->prepare("SELECT * FROM invoice_items WHERE invoice_id=?"); $items->e
 
 // Link to client
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['link_client_id'])){
+    canWrite('invoices') || die('Permission denied.');
     $lcid=(int)$_POST['link_client_id']?:null;
     $db->prepare("UPDATE invoices SET client_id=? WHERE id=?")->execute([$lcid,$id]);
     setFlash('success','Client linked.');redirect(BASE_URL.'/modules/invoices/view.php?id='.$id);
@@ -39,6 +42,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['send_email'])){
 
 // Record payment
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['payment_amount'])){
+    (canWrite('payments') || canWrite('invoices')) || die('Permission denied.');
     $amount=(float)$_POST['payment_amount'];
     $newPaid=$inv['amount_paid']+$amount;
     $newStatus=$newPaid>=$inv['total']?'paid':($newPaid>0?'partial':'unpaid');
@@ -47,6 +51,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['payment_amount'])){
     redirect('view.php?id='.$id);
 }
 if(isset($_GET['status'])){
+    canWrite('invoices') || die('Permission denied.');
     $db->prepare("UPDATE invoices SET status=? WHERE id=?")->execute([$_GET['status'],$id]);
     redirect('view.php?id='.$id);
 }
@@ -59,7 +64,7 @@ include __DIR__ . '/../../includes/header.php';
     <div class="d-flex gap-2 flex-wrap">
         <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#emailModal"><i class="fa fa-envelope me-1"></i>Send to Client</button>
         <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fa fa-print me-1"></i>Print / PDF</a>
-        <?php if($inv['status']!=='paid'): ?><a href="?id=<?= $id ?>&status=cancelled" class="btn btn-sm btn-outline-danger" onclick="return confirm('Cancel invoice?')">Cancel</a><?php endif; ?>
+        <?php if($inv['status']!=='paid' && canWrite('invoices')): ?><a href="?id=<?= $id ?>&status=cancelled" class="btn btn-sm btn-outline-danger" onclick="return confirm('Cancel invoice?')">Cancel</a><?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
 </div>
@@ -91,7 +96,7 @@ include __DIR__ . '/../../includes/header.php';
         </div></div>
 
         <!-- Record payment -->
-        <?php if($inv['status']!=='paid' && $inv['status']!=='cancelled'): ?>
+        <?php if($inv['status']!=='paid' && $inv['status']!=='cancelled' && (canWrite('payments') || canWrite('invoices'))): ?>
         <div class="card"><div class="card-header"><i class="fa fa-money-bill-wave me-2"></i>Record Payment</div><div class="card-body">
             <form method="POST">
                 <div class="mb-2"><label class="form-label small">Amount</label><input type="number" name="payment_amount" class="form-control" min="0.01" step="0.01" max="<?= $inv['total']-$inv['amount_paid'] ?>" value="<?= $inv['total']-$inv['amount_paid'] ?>" required></div>

@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
-requireRole(['admin','manager','mechanic']);
+requireRole(['admin','manager','mechanic','workshop_manager']);
 $pageTitle = 'New Part Request';
 $db   = getDB();
 $user = authUser();

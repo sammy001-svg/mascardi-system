@@ -68,7 +68,7 @@ include __DIR__ . '/../../includes/header.php';
         </div>
         <?php endif; ?>
     </div>
-    <?php if ($role === 'mechanic'): ?>
+    <?php if (canWrite('parts_requests')): ?>
     <a href="add.php" class="btn btn-primary btn-sm"><i class="fa fa-plus me-1"></i>New Request</a>
     <?php endif; ?>
 </div>
