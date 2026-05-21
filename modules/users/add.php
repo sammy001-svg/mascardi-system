@@ -36,6 +36,7 @@ $moduleGroups = [
         ['key' => 'payments',           'label' => 'Payments',            'icon' => 'fa-money-bill-transfer'],
         ['key' => 'quotations',         'label' => 'Quotations',          'icon' => 'fa-file-lines'],
         ['key' => 'invoices',           'label' => 'Invoices',            'icon' => 'fa-file-invoice-dollar'],
+        ['key' => 'sales',              'label' => 'Sales',               'icon' => 'fa-tag'],
     ],
     'Analytics' => [
         ['key' => 'reports',            'label' => 'Reports',             'icon' => 'fa-chart-bar'],
@@ -326,12 +327,12 @@ function permDesc(string $key): string {
             write:  ['jobs','assessments','mechanics','parts_requests','issues','quick_assessments']
         },
         sales_person: {
-            access: ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments'],
-            write:  ['service_bookings','quick_assessments','clients','payments']
+            access: ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales'],
+            write:  ['service_bookings','quick_assessments','clients','payments','sales']
         },
         sales_officer: {
-            access: ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments'],
-            write:  ['payments','quotations','invoices','clients','service_bookings','quick_assessments']
+            access: ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales'],
+            write:  ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales']
         },
         mechanic: {
             access: ['jobs','assessments','parts_requests','issues'],

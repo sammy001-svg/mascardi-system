@@ -91,7 +91,12 @@ include __DIR__ . '/../../includes/header.php';
                         <?php endif; ?>
                     </dd>
                     <dt class="col-5 text-muted">Portal URL</dt>
-                    <dd class="col-7"><a href="<?= BASE_URL ?>/client/login.php" target="_blank" class="small">/client/login.php</a></dd>
+                    <dd class="col-7">
+                        <a href="<?= BASE_URL ?>/portal/login.php" target="_blank" class="small">/portal/login.php</a>
+                        <?php if ($client['portal_enabled'] && $client['portal_password']): ?>
+                        <a href="<?= BASE_URL ?>/portal/login.php" target="_blank" class="btn btn-xs btn-outline-success ms-1"><i class="fa fa-arrow-up-right-from-square me-1"></i>Open Portal</a>
+                        <?php endif; ?>
+                    </dd>
                     <dt class="col-5 text-muted">Notes</dt><dd class="col-7 text-muted small"><?= $client['notes'] ? e($client['notes']) : '—' ?></dd>
                     <dt class="col-5 text-muted">Since</dt><dd class="col-7"><?= fmtDate($client['created_at']) ?></dd>
                 </dl>

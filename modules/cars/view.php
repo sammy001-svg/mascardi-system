@@ -32,6 +32,9 @@ $images->execute([$id]); $images = $images->fetchAll();
 $primaryImage = null;
 foreach($images as $img) if($img['is_primary']) $primaryImage = $img;
 
+$existingSale = $db->prepare("SELECT id, sale_number FROM car_sales WHERE car_id=? AND status='active' LIMIT 1");
+$existingSale->execute([$id]); $existingSale = $existingSale->fetch();
+
 $pageTitle = $car['make'] . ' ' . $car['model'];
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -39,6 +42,17 @@ include __DIR__ . '/../../includes/header.php';
     <h5 class="mb-0"><?= e($car['make'].' '.$car['model']) ?> <code class="ms-2"><?= e($car['chassis_number']) ?></code></h5>
     <div class="d-flex gap-2 flex-wrap">
         <a href="media.php?id=<?= $id ?>" class="btn btn-sm btn-outline-primary"><i class="fa fa-camera me-1"></i>Photos (<?= count($images) ?>)</a>
+        <?php if ($car['car_type'] === 'inventory' && canWrite('sales')): ?>
+            <?php if ($existingSale): ?>
+            <a href="<?= BASE_URL ?>/modules/sales/view.php?id=<?= $existingSale['id'] ?>" class="btn btn-sm btn-success">
+                <i class="fa fa-tag me-1"></i>View Sale <span class="ms-1 opacity-75">(<?= e($existingSale['sale_number']) ?>)</span>
+            </a>
+            <?php elseif (in_array($car['status'], ['completed','arrived','in_workshop'])): ?>
+            <a href="<?= BASE_URL ?>/modules/sales/add.php?car_id=<?= $id ?>" class="btn btn-sm btn-success">
+                <i class="fa fa-tag me-1"></i>Record Sale
+            </a>
+            <?php endif; ?>
+        <?php endif; ?>
         <?php if (canEditDelete()): ?>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <?php endif; ?>

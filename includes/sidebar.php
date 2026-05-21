@@ -184,6 +184,14 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-file-invoice-dollar"></i><span>Invoices</span>
         </a>
         <?php endif; ?>
+
+        <?php if (canAccess('sales')): ?>
+        <a href="<?= BASE_URL ?>/modules/sales/index.php"
+           class="nav-item <?= isActive('/modules/sales/') ?>"
+           data-label="Sales">
+            <i class="fa fa-tag"></i><span>Sales</span>
+        </a>
+        <?php endif; ?>
         <?php endif; ?>
 
         <!-- Analytics -->

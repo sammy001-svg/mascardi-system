@@ -92,8 +92,8 @@ function canAccess(string $module): bool {
     }
     $map = [
         'workshop_manager' => ['cars','mechanics','assessments','jobs','parts_requests','issues','quick_assessments'],
-        'sales_person'     => ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments'],
-        'sales_officer'    => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments'],
+        'sales_person'     => ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales'],
+        'sales_officer'    => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales'],
         // legacy — kept so existing sessions don't break
         'manager'          => ['cars','mechanics','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings','issues'],
         'mechanic'         => ['jobs','assessments','parts_requests','issues'],
@@ -110,8 +110,8 @@ function canWrite(string $module): bool {
     }
     $map = [
         'workshop_manager' => ['jobs','assessments','mechanics','parts_requests','issues','quick_assessments'],
-        'sales_person'     => ['service_bookings','quick_assessments','clients','payments'],
-        'sales_officer'    => ['payments','quotations','invoices','clients','service_bookings','quick_assessments'],
+        'sales_person'     => ['service_bookings','quick_assessments','clients','payments','sales'],
+        'sales_officer'    => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales'],
         'manager'          => ['cars','jobs','assessments','mechanics','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings'],
         'mechanic'         => ['assessments','parts_requests'],
     ];

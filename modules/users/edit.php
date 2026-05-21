@@ -42,6 +42,7 @@ $moduleGroups = [
         ['key' => 'payments',           'label' => 'Payments',            'icon' => 'fa-money-bill-transfer'],
         ['key' => 'quotations',         'label' => 'Quotations',          'icon' => 'fa-file-lines'],
         ['key' => 'invoices',           'label' => 'Invoices',            'icon' => 'fa-file-invoice-dollar'],
+        ['key' => 'sales',              'label' => 'Sales',               'icon' => 'fa-tag'],
     ],
     'Analytics' => [
         ['key' => 'reports',            'label' => 'Reports',             'icon' => 'fa-chart-bar'],
@@ -57,15 +58,15 @@ foreach ($moduleGroups as $group) {
 // Role defaults (mirrors auth.php fallback maps)
 $roleAccessDefaults = [
     'workshop_manager' => ['cars','mechanics','assessments','jobs','parts_requests','issues','quick_assessments'],
-    'sales_person'     => ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments'],
-    'sales_officer'    => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments'],
+    'sales_person'     => ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales'],
+    'sales_officer'    => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales'],
     'mechanic'         => ['jobs','assessments','parts_requests','issues'],
     'driver'           => [],
 ];
 $roleWriteDefaults = [
     'workshop_manager' => ['jobs','assessments','mechanics','parts_requests','issues','quick_assessments'],
-    'sales_person'     => ['service_bookings','quick_assessments','clients','payments'],
-    'sales_officer'    => ['payments','quotations','invoices','clients','service_bookings','quick_assessments'],
+    'sales_person'     => ['service_bookings','quick_assessments','clients','payments','sales'],
+    'sales_officer'    => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales'],
     'mechanic'         => ['assessments','parts_requests'],
     'driver'           => [],
 ];
@@ -417,12 +418,12 @@ function permDesc(string $key): string {
             write:  ['jobs','assessments','mechanics','parts_requests','issues','quick_assessments']
         },
         sales_person: {
-            access: ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments'],
-            write:  ['service_bookings','quick_assessments','clients','payments']
+            access: ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales'],
+            write:  ['service_bookings','quick_assessments','clients','payments','sales']
         },
         sales_officer: {
-            access: ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments'],
-            write:  ['payments','quotations','invoices','clients','service_bookings','quick_assessments']
+            access: ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales'],
+            write:  ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales']
         },
         mechanic: {
             access: ['jobs','assessments','parts_requests','issues'],
