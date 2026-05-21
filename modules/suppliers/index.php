@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
+canAccess('suppliers') || die('Access denied.');
 $pageTitle = 'Suppliers';
 $db = getDB();
 

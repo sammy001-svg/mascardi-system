@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('lpo') || die('Access denied.');
 $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/lpo/index.php');
 $db=getDB();
 $stmt=$db->prepare("SELECT l.*,s.name AS supplier_name,s.contact_person,s.phone AS supplier_phone,s.email AS supplier_email,s.address AS supplier_address,s.pin_number AS supplier_pin FROM lpo l JOIN suppliers s ON s.id=l.supplier_id WHERE l.id=?");

@@ -136,15 +136,28 @@ include __DIR__ . '/../../includes/header.php';
         </div>
 
         <!-- Quick links -->
+        <?php 
+        $hasAnyAction = canAccess('intake') || canAccess('assessments') || canAccess('jobs') || canAccess('quotations');
+        if ($hasAnyAction): 
+        ?>
         <div class="card mt-3">
             <div class="card-header"><i class="fa fa-bolt me-2"></i>Actions</div>
             <div class="card-body d-grid gap-2">
+                <?php if (canAccess('intake')): ?>
                 <a href="<?= BASE_URL ?>/modules/intake/add.php?car_id=<?= $id ?>" class="btn btn-sm btn-outline-primary"><i class="fa fa-anchor me-1"></i>Register Intake</a>
+                <?php endif; ?>
+                <?php if (canAccess('assessments')): ?>
                 <a href="<?= BASE_URL ?>/modules/assessments/add.php?car_id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-clipboard-check me-1"></i>New Assessment</a>
+                <?php endif; ?>
+                <?php if (canAccess('jobs')): ?>
                 <a href="<?= BASE_URL ?>/modules/jobs/add.php?car_id=<?= $id ?>" class="btn btn-sm btn-outline-dark"><i class="fa fa-toolbox me-1"></i>Create Job Card</a>
+                <?php endif; ?>
+                <?php if (canAccess('quotations')): ?>
                 <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $id ?>" class="btn btn-sm btn-outline-info"><i class="fa fa-file-lines me-1"></i>New Quotation</a>
+                <?php endif; ?>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 
     <div class="col-lg-8">

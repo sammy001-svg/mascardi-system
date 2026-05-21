@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canWrite('lpo') || die('Permission denied.');
 $pageTitle = 'Create LPO';
 $db = getDB();
 $errors = [];

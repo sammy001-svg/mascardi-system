@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('lpo') || die('Access denied.');
 $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/lpo/index.php');
 $db=getDB();
 $stmt=$db->prepare("SELECT l.*,s.name AS supplier_name,s.contact_person,s.phone AS supplier_phone,s.email AS supplier_email,s.address AS supplier_address,s.pin_number AS supplier_pin,j.job_number FROM lpo l JOIN suppliers s ON s.id=l.supplier_id LEFT JOIN workshop_jobs j ON j.id=l.job_id WHERE l.id=?");
@@ -8,6 +10,7 @@ if(!$lpo){setFlash('error','Not found.');redirect(BASE_URL.'/modules/lpo/index.p
 $items=$db->prepare("SELECT * FROM lpo_items WHERE lpo_id=? ORDER BY id"); $items->execute([$id]); $items=$items->fetchAll();
 
 if(isset($_GET['status'])){
+    canWrite('lpo') || die('Permission denied.');
     $db->prepare("UPDATE lpo SET status=? WHERE id=?")->execute([$_GET['status'],$id]);
     // If received, update inventory
     if($_GET['status']==='received'){

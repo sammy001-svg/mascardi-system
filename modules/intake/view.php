@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('intake') || die('Access denied.');
 $id = (int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/intake/index.php');
 $db = getDB();
 $stmt = $db->prepare("SELECT ci.*, c.chassis_number, c.make, c.model, c.year, c.color, c.status AS car_status FROM car_intake ci JOIN cars c ON c.id=ci.car_id WHERE ci.id=?");

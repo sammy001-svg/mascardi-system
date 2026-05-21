@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canWrite('intake') || die('Permission denied.');
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db = getDB();
     $transferId     = (int)($_POST['transfer_id'] ?? 0);

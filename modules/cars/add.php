@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canWrite('cars') || die('Permission denied.');
 $pageTitle = 'Add Car';
 $db = getDB();
 $errors = [];

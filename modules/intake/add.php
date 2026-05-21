@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canWrite('intake') || die('Permission denied.');
 $pageTitle = 'New Mombasa Intake';
 $db = getDB();
 $errors = [];

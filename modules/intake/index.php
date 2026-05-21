@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('intake') || die('Access denied.');
 $pageTitle = 'Mombasa Intake';
 $db = getDB();
 $records = $db->query("

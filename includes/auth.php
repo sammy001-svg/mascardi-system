@@ -64,7 +64,7 @@ function canAccess(string $module): bool {
     if (!$user) return false;
     if ($user['role'] === 'admin') return true;
     $map = [
-        'workshop_manager' => ['cars','mechanics','intake','assessments','jobs','inventory','suppliers','parts_requests','issues','lpo','quick_assessments'],
+        'workshop_manager' => ['cars','mechanics','assessments','jobs','parts_requests','issues','quick_assessments'],
         'sales_person'     => ['cars','clients','service_bookings','quick_assessments'],
         'sales_officer'    => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments'],
         // legacy — kept so existing sessions don't break
@@ -78,7 +78,7 @@ function canAccess(string $module): bool {
 function canWrite(string $module): bool {
     if (hasRole('admin')) return true;
     $map = [
-        'workshop_manager' => ['cars','jobs','assessments','mechanics','inventory','suppliers','parts_requests','intake','issues','lpo','quick_assessments'],
+        'workshop_manager' => ['jobs','assessments','mechanics','parts_requests','issues','quick_assessments'],
         'sales_person'     => ['service_bookings','quick_assessments','clients'],
         'sales_officer'    => ['payments','quotations','invoices','clients','service_bookings','quick_assessments'],
         'manager'          => ['cars','jobs','assessments','mechanics','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings'],

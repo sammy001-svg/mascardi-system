@@ -276,38 +276,54 @@ include __DIR__ . '/includes/header.php';
                     <span>Issues</span>
                 </a>
             <?php else: ?>
+                <?php if (canWrite('cars')): ?>
                 <a href="<?= BASE_URL ?>/modules/cars/add.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#dbeafe;color:#2563eb"><i class="fa fa-plus-circle fa-lg"></i></div>
                     <span>Add Car</span>
                 </a>
+                <?php endif; ?>
+                <?php if (canAccess('intake')): ?>
                 <a href="<?= BASE_URL ?>/modules/intake/add.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#fef3c7;color:#d97706"><i class="fa fa-anchor fa-lg"></i></div>
                     <span>New Intake</span>
                 </a>
+                <?php endif; ?>
+                <?php if (canAccess('assessments')): ?>
                 <a href="<?= BASE_URL ?>/modules/assessments/add.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#f0fdf4;color:#16a34a"><i class="fa fa-clipboard-check fa-lg"></i></div>
                     <span>Assessment</span>
                 </a>
+                <?php endif; ?>
+                <?php if (canAccess('jobs')): ?>
                 <a href="<?= BASE_URL ?>/modules/jobs/add.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#fdf4ff;color:#9333ea"><i class="fa fa-toolbox fa-lg"></i></div>
                     <span>Job Card</span>
                 </a>
+                <?php endif; ?>
+                <?php if (canAccess('quotations')): ?>
                 <a href="<?= BASE_URL ?>/modules/quotations/add.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#f0f9ff;color:#0284c7"><i class="fa fa-file-lines fa-lg"></i></div>
                     <span>Quotation</span>
                 </a>
+                <?php endif; ?>
+                <?php if (canAccess('invoices')): ?>
                 <a href="<?= BASE_URL ?>/modules/invoices/index.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#fff1f2;color:#dc2626"><i class="fa fa-file-invoice-dollar fa-lg"></i></div>
                     <span>Invoices</span>
                 </a>
+                <?php endif; ?>
+                <?php if (canAccess('reports')): ?>
                 <a href="<?= BASE_URL ?>/modules/reports/index.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#f8fafc;color:#64748b"><i class="fa fa-chart-bar fa-lg"></i></div>
                     <span>Reports</span>
                 </a>
+                <?php endif; ?>
+                <?php if (canAccess('issues')): ?>
                 <a href="<?= BASE_URL ?>/modules/issues/index.php" class="quick-action-card">
                     <div class="qa-icon" style="background:#fff7ed;color:#ea580c"><i class="fa fa-triangle-exclamation fa-lg"></i></div>
                     <span>Issues</span>
                 </a>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     </div>

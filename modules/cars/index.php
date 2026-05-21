@@ -31,7 +31,9 @@ include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">All Cars <span class="badge bg-secondary ms-2"><?= count($cars) ?></span></h5>
+    <?php if (canWrite('cars')): ?>
     <a href="<?= BASE_URL ?>/modules/cars/add.php" class="btn btn-primary btn-sm"><i class="fa fa-plus me-1"></i>Add Car</a>
+    <?php endif; ?>
 </div>
 
 <!-- Filters -->

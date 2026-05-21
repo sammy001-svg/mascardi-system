@@ -90,7 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $next = $_GET['next'] ?? '';
                 if ($next && str_starts_with(urldecode($next), '/')) {
-                    header('Location: ' . BASE_URL . urldecode($next));
+                    // $next is already an absolute path (starts with /), which includes the subdirectory if any.
+                    // Prepending BASE_URL would double the subdirectory path. Redirect directly to $next instead.
+                    header('Location: ' . urldecode($next));
                 } else {
                     header('Location: ' . BASE_URL . '/index.php');
                 }

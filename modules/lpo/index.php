@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('lpo') || die('Access denied.');
 $pageTitle = 'Local Purchase Orders';
 $db = getDB();
 $lpos = $db->query("SELECT l.*, s.name AS supplier_name, j.job_number FROM lpo l JOIN suppliers s ON s.id=l.supplier_id LEFT JOIN workshop_jobs j ON j.id=l.job_id ORDER BY l.created_at DESC")->fetchAll();
