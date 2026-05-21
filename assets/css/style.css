@@ -755,12 +755,153 @@ a:hover { text-decoration: underline; }
     .app-topbar { padding: 0 16px; }
     .welcome-banner { padding: 20px; flex-direction: column; align-items: flex-start; gap: 16px; }
     .welcome-stats { flex-direction: row !important; }
+
+    /* Spacing: Card Padding Scale-Down */
+    .card-body:not([class*="p-"]) { padding: 16px !important; }
+    .card-header { padding: 12px 16px !important; }
+    .card-body.p-0 .dataTables_wrapper > div:first-child { padding: 12px 16px 0 !important; }
+    .card-body.p-0 .dataTables_wrapper > div:last-child { padding: 0 16px 12px !important; }
+    
+    /* Table Responsive Tweak */
+    .table > thead > tr > th, 
+    .table > tbody > tr > td {
+        padding: 10px 12px !important;
+        font-size: 12.5px !important;
+    }
+    .table > thead > tr > th:first-child,
+    .table > tbody > tr > td:first-child {
+        padding-left: 16px !important;
+    }
+    .table > thead > tr > th:last-child,
+    .table > tbody > tr > td:last-child {
+        padding-right: 16px !important;
+    }
+    
+    /* Form Zoom Prevention on iOS & Touch-friendly targets */
+    .form-control, 
+    .form-select, 
+    .select2-container--bootstrap-5 .select2-selection {
+        font-size: 16px !important;
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+    }
+    .select2-container--bootstrap-5 .select2-selection {
+        height: auto !important;
+    }
+    
+    /* DataTables Layout & Pagination Responsive Refinement */
+    .dataTables_wrapper > div:first-child,
+    .dataTables_wrapper > div:last-child {
+        flex-direction: column !important;
+        gap: 12px !important;
+        align-items: stretch !important;
+    }
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_paginate {
+        text-align: center !important;
+        margin: 0 auto !important;
+    }
+    .dataTables_wrapper .dataTables_filter label {
+        display: block !important;
+        width: 100% !important;
+    }
+    .dataTables_wrapper .dataTables_filter input {
+        width: 100% !important;
+        margin-left: 0 !important;
+        margin-top: 4px !important;
+        font-size: 14px !important;
+    }
+    
+    /* Assessment Fixed Footer Override */
+    .assess-footer {
+        padding: 12px 16px !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+        align-items: stretch !important;
+    }
+    .assess-footer .btn {
+        width: 100% !important;
+    }
+    body.has-assess-footer .page-body {
+        padding-bottom: 120px !important;
+    }
 }
 @media (max-width: 576px) {
     .quick-actions-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
     .cond-btn span { display: none; }
     .cond-btn { min-width: 36px; }
     .type-btn { padding: 7px 10px; font-size: 12px; }
+
+    /* Stack Page headers (Title + "Add Car") */
+    .page-body > .d-flex.justify-content-between.align-items-center.mb-3,
+    .page-body > .d-flex.justify-content-between.align-items-start.mb-3 {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+    }
+    .page-body > .d-flex.justify-content-between.align-items-center.mb-3 .btn,
+    .page-body > .d-flex.justify-content-between.align-items-start.mb-3 .btn {
+        width: 100% !important;
+        text-align: center !important;
+    }
+    
+    /* Compact Stat Cards Grid and Values */
+    .stat-card {
+        padding: 14px 16px !important;
+        gap: 12px !important;
+    }
+    .stat-icon {
+        width: 42px !important;
+        height: 42px !important;
+        font-size: 18px !important;
+        border-radius: 8px !important;
+    }
+    .stat-value {
+        font-size: 22px !important;
+    }
+    .stat-value-sm {
+        font-size: 15px !important;
+    }
+    
+    /* Quick Actions Text Scaling */
+    .quick-action-card {
+        padding: 14px 8px 12px !important;
+        font-size: 11px !important;
+    }
+    .qa-icon {
+        width: 38px !important;
+        height: 38px !important;
+        font-size: 16px !important;
+        border-radius: 8px !important;
+    }
+    
+    /* Topbar Layout Spacing */
+    .topbar-user {
+        padding-left: 8px !important;
+        border-left: none !important;
+    }
+    .app-topbar {
+        padding: 0 12px !important;
+        gap: 8px !important;
+    }
+    .topbar-title {
+        font-size: 14px !important;
+    }
+    
+    /* Responsive Login Card */
+    .login-card {
+        padding: 28px 20px !important;
+        border-radius: 18px !important;
+    }
+    .login-title {
+        font-size: 20px !important;
+    }
+    .login-sub {
+        font-size: 12px !important;
+        margin-bottom: 20px !important;
+    }
 }
 
 /* ─────────────────────────────────────────────────────────
