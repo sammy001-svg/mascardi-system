@@ -34,6 +34,24 @@ $quotes   = $db->prepare("SELECT q.*,c.make,c.model FROM quotations q JOIN cars 
 $bookings = $db->prepare("SELECT * FROM service_bookings WHERE client_id=? ORDER BY created_at DESC"); $bookings->execute([$id]); $bookings=$bookings->fetchAll();
 $notices  = $db->prepare("SELECT * FROM client_notices WHERE client_id=? ORDER BY created_at DESC LIMIT 20"); $notices->execute([$id]); $notices=$notices->fetchAll();
 
+// Financial summary
+$finStmt = $db->prepare("SELECT COALESCE(SUM(total),0) AS total_billed, COALESCE(SUM(amount_paid),0) AS total_paid FROM invoices WHERE client_id=? AND status NOT IN ('cancelled')");
+$finStmt->execute([$id]); $fin = $finStmt->fetch();
+$outstanding = (float)$fin['total_billed'] - (float)$fin['total_paid'];
+
+// Payments for this client (confirmed, via invoice or booking)
+$paymentsStmt = $db->prepare("
+    SELECT p.*, i.invoice_number, sb.booking_number
+    FROM payments p
+    LEFT JOIN invoices i ON i.id = p.invoice_id
+    LEFT JOIN service_bookings sb ON sb.id = p.service_booking_id
+    WHERE (i.client_id = ? OR sb.client_id = ?)
+      AND p.status = 'confirmed'
+    ORDER BY p.payment_date DESC, p.id DESC
+");
+$paymentsStmt->execute([$id, $id]);
+$clientPayments = $paymentsStmt->fetchAll();
+
 $pageTitle = $client['name'];
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -43,6 +61,9 @@ include __DIR__ . '/../../includes/header.php';
         <div class="text-muted small"><?= e($client['email']) ?><?= $client['phone'] ? ' · ' . e($client['phone']) : '' ?></div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
+        <a href="statement.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-outline-primary">
+            <i class="fa fa-file-lines me-1"></i>Statement
+        </a>
         <?php if (canEditDelete()): ?>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <?php endif; ?>
@@ -100,6 +121,47 @@ include __DIR__ . '/../../includes/header.php';
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Financial Summary -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="border-left:4px solid #2563eb">
+            <div class="stat-icon" style="background:#dbeafe;color:#2563eb"><i class="fa fa-file-invoice-dollar"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Total Billed</div>
+                <div class="stat-value stat-value-sm"><?= money((float)$fin['total_billed']) ?></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="border-left:4px solid #16a34a">
+            <div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="fa fa-money-bill-wave"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Total Paid</div>
+                <div class="stat-value stat-value-sm"><?= money((float)$fin['total_paid']) ?></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <?php $balColor = $outstanding > 0 ? '#dc2626' : '#16a34a'; $balBg = $outstanding > 0 ? '#fee2e2' : '#dcfce7'; ?>
+        <div class="stat-card" style="border-left:4px solid <?= $balColor ?>">
+            <div class="stat-icon" style="background:<?= $balBg ?>;color:<?= $balColor ?>"><i class="fa fa-scale-balanced"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Outstanding</div>
+                <div class="stat-value stat-value-sm" style="color:<?= $balColor ?>"><?= money($outstanding) ?></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="border-left:4px solid #8b5cf6">
+            <div class="stat-icon" style="background:#f5f3ff;color:#8b5cf6"><i class="fa fa-calendar-check"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Bookings</div>
+                <div class="stat-value"><?= count($bookings) ?></div>
             </div>
         </div>
     </div>
@@ -177,6 +239,54 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+
+<!-- Payments -->
+<?php if ($clientPayments): ?>
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fa fa-money-bill-transfer me-2 text-success"></i>Payment History (<?= count($clientPayments) ?>)</span>
+        <a href="statement.php?id=<?= $id ?>" target="_blank" class="btn btn-xs btn-outline-primary">
+            <i class="fa fa-print me-1"></i>Print Statement
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0" style="font-size:13.5px">
+            <thead>
+                <tr>
+                    <th class="ps-3">Date</th>
+                    <th>Payment #</th>
+                    <th>For</th>
+                    <th>Method</th>
+                    <th>Ref / Receipt</th>
+                    <th class="text-end pe-3">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php
+            $methodLabel = ['mpesa'=>'M-Pesa','bank'=>'Bank','cheque'=>'Cheque','cash'=>'Cash'];
+            foreach ($clientPayments as $pay): ?>
+            <tr>
+                <td class="ps-3 text-muted small"><?= fmtDate($pay['payment_date']) ?></td>
+                <td class="fw-medium"><?= e($pay['payment_number']) ?></td>
+                <td class="small text-muted">
+                    <?php if ($pay['invoice_number']): ?>
+                        <a href="<?= BASE_URL ?>/modules/invoices/view.php?id=<?= $pay['invoice_id'] ?>"><?= e($pay['invoice_number']) ?></a>
+                    <?php elseif ($pay['booking_number']): ?>
+                        Booking <?= e($pay['booking_number']) ?>
+                    <?php else: ?>
+                        <?= e($pay['description'] ?? '—') ?>
+                    <?php endif; ?>
+                </td>
+                <td><span class="badge bg-secondary"><?= e($methodLabel[$pay['payment_method']] ?? $pay['payment_method']) ?></span></td>
+                <td class="small"><code><?= e($pay['reference_number'] ?? '—') ?></code></td>
+                <td class="text-end pe-3 fw-semibold text-success"><?= money((float)$pay['amount']) ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Notices -->
 <?php if ($notices): ?>

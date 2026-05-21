@@ -2,6 +2,9 @@
 </div><!-- /main-wrap -->
 </div><!-- /appShell -->
 
+<!-- Toast notification stack -->
+<div id="toastStack" class="toast-stack"></div>
+
 <!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <!-- Bootstrap 5 -->

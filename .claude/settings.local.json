@@ -28,7 +28,8 @@
       "Bash(Sort-Object)",
       "Bash(cd \"/h/Projects 2026/Mascardi system\" && grep -r \"addslashes\\\\|mysqli_real_escape_string\" --include=\"*.php\")",
       "Read(//h/h/Projects 2026/**)",
-      "Bash(Test-Path \"h:\\\\Projects 2026\\\\Mascardi system\\\\.gitignore\")"
+      "Bash(Test-Path \"h:\\\\Projects 2026\\\\Mascardi system\\\\.gitignore\")",
+      "Bash(php -r ' *)"
     ]
   }
 }

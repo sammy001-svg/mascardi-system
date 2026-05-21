@@ -60,11 +60,36 @@ function requireRole(string|array $roles): void {
     }
 }
 
+// Load per-user permission rows from DB (cached per request via static)
+function getUserPermissions(): array {
+    static $cache = null;
+    if ($cache !== null) return $cache;
+    $user = authUser();
+    if (!$user || $user['role'] === 'admin') return $cache = [];
+    try {
+        $db   = getDB();
+        $stmt = $db->prepare("SELECT module, can_access, can_write FROM user_permissions WHERE user_id=?");
+        $stmt->execute([$user['id']]);
+        $cache = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $cache[$row['module']] = [(bool)$row['can_access'], (bool)$row['can_write']];
+        }
+    } catch (Exception $e) {
+        $cache = [];
+    }
+    return $cache;
+}
+
 // Module access map (non-admin roles)
 function canAccess(string $module): bool {
     $user = authUser();
     if (!$user) return false;
     if ($user['role'] === 'admin') return true;
+    // Custom per-user permissions override role defaults when any rows exist
+    $perms = getUserPermissions();
+    if (!empty($perms)) {
+        return (bool)($perms[$module][0] ?? false);
+    }
     $map = [
         'workshop_manager' => ['cars','mechanics','assessments','jobs','parts_requests','issues','quick_assessments'],
         'sales_person'     => ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments'],
@@ -79,6 +104,10 @@ function canAccess(string $module): bool {
 // Create/edit permission per module (non-destructive writes)
 function canWrite(string $module): bool {
     if (hasRole('admin')) return true;
+    $perms = getUserPermissions();
+    if (!empty($perms)) {
+        return (bool)($perms[$module][1] ?? false);
+    }
     $map = [
         'workshop_manager' => ['jobs','assessments','mechanics','parts_requests','issues','quick_assessments'],
         'sales_person'     => ['service_bookings','quick_assessments','clients','payments'],

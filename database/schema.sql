@@ -131,7 +131,8 @@ CREATE TABLE car_intake (
 CREATE TABLE car_transfers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     car_id INT NOT NULL,
-    driver_id INT NOT NULL,
+    driver_id INT NULL,
+    transported_by VARCHAR(150) NULL,
     departure_date DATETIME,
     estimated_arrival DATETIME,
     arrival_date DATETIME,

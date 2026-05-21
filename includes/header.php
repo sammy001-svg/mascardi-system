@@ -53,15 +53,46 @@
 
         <span class="topbar-date d-none d-lg-inline"><?= date('d M Y') ?></span>
 
-        <div class="topbar-user">
-            <div class="topbar-avatar"><?= strtoupper(substr($__user['name'], 0, 1)) ?></div>
-            <div class="d-none d-md-block">
-                <div class="topbar-username"><?= e($__user['name']) ?></div>
-                <div class="topbar-userrole"><?= ucfirst(e($__user['role'])) ?></div>
-            </div>
-            <a href="<?= BASE_URL ?>/logout.php" class="topbar-logout" title="Sign Out">
-                <i class="fa fa-right-from-bracket"></i>
-            </a>
+        <!-- Dark mode toggle -->
+        <button class="topbar-icon-btn" id="themeToggle" title="Toggle dark mode">
+            <i class="fa fa-moon" id="themeIcon"></i>
+        </button>
+
+        <!-- User dropdown -->
+        <div class="dropdown">
+            <button type="button" class="topbar-user dropdown-toggle"
+                    id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <div class="topbar-avatar"><?= strtoupper(substr($__user['name'], 0, 1)) ?></div>
+                <div class="d-none d-md-block">
+                    <div class="topbar-username"><?= e($__user['name']) ?></div>
+                    <div class="topbar-userrole"><?= ucwords(str_replace('_',' ',e($__user['role']))) ?></div>
+                </div>
+                <i class="fa fa-chevron-down topbar-chevron d-none d-md-inline ms-1"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end topbar-dropdown" aria-labelledby="userDropdown">
+                <li>
+                    <div class="dd-user-info">
+                        <div class="dd-user-name"><?= e($__user['name']) ?></div>
+                        <div class="dd-user-role"><?= ucwords(str_replace('_',' ',e($__user['role']))) ?></div>
+                    </div>
+                </li>
+                <?php if (hasRole('admin')): ?>
+                <li><a class="dropdown-item" href="<?= BASE_URL ?>/modules/users/index.php">
+                    <i class="fa fa-user-circle"></i>My Profile
+                </a></li>
+                <li><a class="dropdown-item" href="<?= BASE_URL ?>/modules/settings/index.php">
+                    <i class="fa fa-gear"></i>System Settings
+                </a></li>
+                <?php else: ?>
+                <li><a class="dropdown-item" href="<?= BASE_URL ?>/modules/users/index.php">
+                    <i class="fa fa-user-circle"></i>My Profile
+                </a></li>
+                <?php endif; ?>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item item-danger" href="<?= BASE_URL ?>/logout.php">
+                    <i class="fa fa-right-from-bracket"></i>Sign Out
+                </a></li>
+            </ul>
         </div>
     </div>
 </header>
