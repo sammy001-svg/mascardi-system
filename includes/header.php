@@ -19,6 +19,7 @@
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet">
 <!-- Custom — cache-busted so changes always load -->
 <link href="<?= BASE_URL ?>/assets/css/style.css?v=<?= @filemtime(BASE_PATH . '/assets/css/style.css') ?: time() ?>" rel="stylesheet">
+<meta name="csrf-token" content="<?= csrfToken() ?>">
 </head>
 <body>
 <?php requireLogin(); $__user = authUser(); ?>

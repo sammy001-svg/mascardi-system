@@ -19,6 +19,8 @@ function requireLogin(): void {
         header('Location: ' . BASE_URL . '/login.php' . ($back ? "?next={$back}" : ''));
         exit;
     }
+    // Verify CSRF on every authenticated POST request
+    verifyCsrf();
 }
 
 function hasRole(string|array $roles): bool {

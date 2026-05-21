@@ -71,7 +71,8 @@ include __DIR__ . '/../../includes/header.php';
         <a href="?id=<?= $id ?>&convert=1" class="btn btn-sm btn-success" onclick="return confirm('Convert to Invoice?')"><i class="fa fa-file-invoice-dollar me-1"></i>Convert to Invoice</a>
         <?php endif; ?>
         <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#emailModal"><i class="fa fa-envelope me-1"></i>Send to Client</button>
-        <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fa fa-print me-1"></i>Print / PDF</a>
+        <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fa fa-print me-1"></i>Print</a>
+        <a href="download_pdf.php?id=<?= $id ?>" class="btn btn-sm btn-outline-danger" target="_blank"><i class="fa fa-file-pdf me-1"></i>Download PDF</a>
         <?php if($q['status']==='draft' && canWrite('quotations')): ?>
         <a href="?id=<?= $id ?>&status=sent" class="btn btn-sm btn-outline-info">Mark as Sent</a>
         <a href="?id=<?= $id ?>&status=approved" class="btn btn-sm btn-outline-success">Approve</a>

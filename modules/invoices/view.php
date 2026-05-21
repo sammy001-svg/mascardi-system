@@ -63,7 +63,8 @@ include __DIR__ . '/../../includes/header.php';
     <h5 class="mb-0">Invoice: <strong><?= e($inv['invoice_number']) ?></strong> <?= statusBadge($inv['status']) ?></h5>
     <div class="d-flex gap-2 flex-wrap">
         <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#emailModal"><i class="fa fa-envelope me-1"></i>Send to Client</button>
-        <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fa fa-print me-1"></i>Print / PDF</a>
+        <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fa fa-print me-1"></i>Print</a>
+        <a href="download_pdf.php?id=<?= $id ?>" class="btn btn-sm btn-outline-danger" target="_blank"><i class="fa fa-file-pdf me-1"></i>Download PDF</a>
         <?php if($inv['status']!=='paid' && canWrite('invoices')): ?><a href="?id=<?= $id ?>&status=cancelled" class="btn btn-sm btn-outline-danger" onclick="return confirm('Cancel invoice?')">Cancel</a><?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
@@ -100,8 +101,20 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card"><div class="card-header"><i class="fa fa-money-bill-wave me-2"></i>Record Payment</div><div class="card-body">
             <form method="POST">
                 <div class="mb-2"><label class="form-label small">Amount</label><input type="number" name="payment_amount" class="form-control" min="0.01" step="0.01" max="<?= $inv['total']-$inv['amount_paid'] ?>" value="<?= $inv['total']-$inv['amount_paid'] ?>" required></div>
-                <button type="submit" class="btn btn-success w-100"><i class="fa fa-check me-1"></i>Record Payment</button>
+                <button type="submit" class="btn btn-success w-100"><i class="fa fa-check me-1"></i>Record Manual Payment</button>
             </form>
+            <?php if(getSetting('mpesa_consumer_key','')): ?>
+            <hr class="my-3">
+            <div class="mb-1"><small class="text-muted fw-semibold"><i class="fa fa-mobile-screen-button text-success me-1"></i>M-Pesa STK Push</small></div>
+            <div class="input-group mb-2">
+                <span class="input-group-text"><i class="fa fa-phone"></i></span>
+                <input type="tel" id="mpesa_phone" class="form-control" placeholder="2547XXXXXXXX" value="<?= e($inv['customer_phone']??'') ?>">
+            </div>
+            <button type="button" class="btn btn-outline-success w-100" id="mpesaPushBtn" onclick="sendMpesaPush(<?= $id ?>,<?= $inv['total']-$inv['amount_paid'] ?>)">
+                <i class="fa fa-paper-plane me-1"></i>Request M-Pesa Payment
+            </button>
+            <div id="mpesaStatus" class="mt-2 small"></div>
+            <?php endif; ?>
         </div></div>
         <?php endif; ?>
     </div>
@@ -154,4 +167,37 @@ include __DIR__ . '/../../includes/header.php';
     </div>
   </div>
 </div>
+<?php if(getSetting('mpesa_consumer_key','')): ?>
+<script>
+function sendMpesaPush(invoiceId, amount) {
+    var phone = document.getElementById('mpesa_phone').value.trim();
+    var status = document.getElementById('mpesaStatus');
+    var btn = document.getElementById('mpesaPushBtn');
+    if (!phone) { status.innerHTML = '<span class="text-danger">Please enter a phone number.</span>'; return; }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending...';
+    status.innerHTML = '';
+    fetch('<?= BASE_URL ?>/modules/payments/mpesa_push.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'invoice_id=' + invoiceId + '&phone=' + encodeURIComponent(phone) + '&amount=' + amount
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-paper-plane me-1"></i>Request M-Pesa Payment';
+        if (data.success) {
+            status.innerHTML = '<span class="text-success"><i class="fa fa-check-circle me-1"></i>' + data.message + '</span>';
+        } else {
+            status.innerHTML = '<span class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>' + data.error + '</span>';
+        }
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-paper-plane me-1"></i>Request M-Pesa Payment';
+        status.innerHTML = '<span class="text-danger">Network error. Please try again.</span>';
+    });
+}
+</script>
+<?php endif; ?>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

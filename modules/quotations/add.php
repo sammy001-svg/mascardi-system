@@ -8,11 +8,35 @@ $db = getDB();
 $errors = [];
 $preCarId = (int)($_GET['car_id'] ?? 0);
 $preJobId = (int)($_GET['job_id'] ?? 0);
+$preBookingId = (int)($_GET['booking_id'] ?? 0);
+$preClientId = null;
 
-$cars      = $db->query("SELECT id, chassis_number, registration_number, make, model, owner_name, owner_phone, owner_email FROM cars ORDER BY make ASC")->fetchAll();
+if ($preBookingId) {
+    $sbCheck = $db->prepare("SELECT car_id, client_id, job_id FROM service_bookings WHERE id = ?");
+    $sbCheck->execute([$preBookingId]);
+    $sbRow = $sbCheck->fetch();
+    if ($sbRow) {
+        if (!$preCarId && $sbRow['car_id']) $preCarId = (int)$sbRow['car_id'];
+        if (!$preJobId && $sbRow['job_id']) $preJobId = (int)$sbRow['job_id'];
+        $preClientId = $sbRow['client_id'] ? (int)$sbRow['client_id'] : null;
+    }
+}
+
+$cars      = $db->query("SELECT id, chassis_number, registration_number, make, model, owner_name, owner_phone, owner_email, car_type FROM cars ORDER BY make ASC")->fetchAll();
 $jobs      = $db->query("SELECT id, job_number, car_id FROM workshop_jobs WHERE status NOT IN ('completed','cancelled') ORDER BY job_number")->fetchAll();
 $clients   = $db->query("SELECT id, name, phone, email FROM clients WHERE status='active' ORDER BY name ASC")->fetchAll();
 $inventory = $db->query("SELECT id, part_number, part_name, selling_price FROM inventory ORDER BY part_name")->fetchAll();
+$serviceBookings = $db->query("
+    SELECT sb.*, cl.name AS client_name, cl.phone AS client_phone, cl.email AS client_email,
+           ca.make, ca.model, ca.chassis_number, ca.registration_number,
+           wj.id AS job_id
+    FROM service_bookings sb
+    LEFT JOIN clients cl ON cl.id = sb.client_id
+    LEFT JOIN cars ca ON ca.id = sb.car_id
+    LEFT JOIN quick_assessments qa ON qa.service_booking_id = sb.id
+    LEFT JOIN workshop_jobs wj ON wj.assessment_id = qa.id
+    ORDER BY sb.booking_number DESC
+")->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $carId    = (int)($_POST['car_id'] ?? 0);
@@ -156,6 +180,24 @@ $(function(){
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-12">
+                        <label class="form-label">Service Booking <small class="text-muted">(optional)</small></label>
+                        <select name="booking_id" id="booking_select" class="form-select select2">
+                            <option value="">— Select booking —</option>
+                            <?php foreach ($serviceBookings as $sb): ?>
+                            <option value="<?= $sb['id'] ?>"
+                                    data-car-id="<?= $sb['car_id'] ?>"
+                                    data-job-id="<?= $sb['job_id'] ?? '' ?>"
+                                    data-client-id="<?= $sb['client_id'] ?>"
+                                    data-client-name="<?= e($sb['client_name'] ?: '') ?>"
+                                    data-client-phone="<?= e($sb['client_phone'] ?: '') ?>"
+                                    data-client-email="<?= e($sb['client_email'] ?: '') ?>"
+                                    <?= (($preBookingId == $sb['id']) ? 'selected' : '') ?>>
+                                <?= e($sb['booking_number'] . ' — ' . ($sb['client_name'] ?: 'No Name') . ' (' . ($sb['car_registration'] ?: $sb['registration_number'] ?: 'No Reg') . ')') ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-12">
                         <label class="form-label">Vehicle <span class="text-danger">*</span></label>
                         <select name="car_id" id="car_select" class="form-select select2" required>
                             <option value="">Select car...</option>
@@ -184,7 +226,7 @@ $(function(){
                         <select name="client_id" id="client_select" class="form-select select2">
                             <option value="">— No client —</option>
                             <?php foreach ($clients as $cl): ?>
-                            <option value="<?= $cl['id'] ?>" data-name="<?= e($cl['name']) ?>" data-email="<?= e($cl['email']) ?>" data-phone="<?= e($cl['phone']) ?>" <?= (($_POST['client_id']??'')==$cl['id'])?'selected':'' ?>>
+                            <option value="<?= $cl['id'] ?>" data-name="<?= e($cl['name']) ?>" data-email="<?= e($cl['email']) ?>" data-phone="<?= e($cl['phone']) ?>" <?= (($_POST['client_id']??$preClientId??'')==$cl['id'])?'selected':'' ?>>
                                 <?= e($cl['name']) ?><?= $cl['phone']?' — '.$cl['phone']:'' ?>
                             </option>
                             <?php endforeach; ?>
@@ -204,12 +246,34 @@ $(function(){
                 $('#customer_phone').val(opt.data('phone'));
             }
         }
+        $(document).on('change', '#booking_select', function(){
+            var opt = $(this).find('option:selected');
+            if(opt.val()){
+                var carId = opt.data('car-id');
+                var jobId = opt.data('job-id');
+                var clientId = opt.data('client-id');
+                
+                if(carId) {
+                    $('#car_select').val(carId).trigger('change');
+                }
+                if(jobId) {
+                    $('select[name="job_id"]').val(jobId).trigger('change');
+                }
+                if(clientId) {
+                    $('#client_select').val(clientId).trigger('change');
+                } else {
+                    $('#customer_name').val(opt.data('client-name'));
+                    $('#customer_phone').val(opt.data('client-phone'));
+                    $('input[name="customer_email"]').val(opt.data('client-email'));
+                }
+            }
+        });
         $(document).on('change', '#car_select', function(){
             var opt = $(this).find('option:selected');
             if(opt.data('type') === 'client'){
                 $('#customer_name').val(opt.data('owner'));
                 $('#customer_phone').val(opt.data('phone'));
-            } else if(!$('#client_select').val()) {
+            } else if(!$('#client_select').val() && !$('#booking_select').val()) {
                 $('#customer_name').val('');
                 $('#customer_phone').val('');
             }
@@ -224,6 +288,9 @@ $(function(){
         });
         $(function(){
             populateCustomer();
+            if ($('#booking_select').val()) {
+                $('#booking_select').trigger('change');
+            }
         });
         </script>
 

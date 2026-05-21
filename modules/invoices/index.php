@@ -5,8 +5,16 @@ canAccess('invoices') || die('Access denied.');
 $pageTitle = 'Invoices';
 $db = getDB();
 $status = $_GET['status'] ?? '';
-$where = $status ? "WHERE i.status='".addslashes($status)."'" : '';
-$invoices = $db->query("SELECT i.*, c.chassis_number, c.make, c.model FROM invoices i JOIN cars c ON c.id=i.car_id $where ORDER BY i.created_at DESC")->fetchAll();
+$allowed_statuses = ['unpaid', 'partial', 'paid', 'cancelled'];
+$params = [];
+$where  = '';
+if ($status && in_array($status, $allowed_statuses)) {
+    $where    = 'WHERE i.status = ?';
+    $params[] = $status;
+}
+$stmt = $db->prepare("SELECT i.*, c.chassis_number, c.make, c.model FROM invoices i JOIN cars c ON c.id=i.car_id $where ORDER BY i.created_at DESC");
+$stmt->execute($params);
+$invoices = $stmt->fetchAll();
 include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">

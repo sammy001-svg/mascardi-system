@@ -20,7 +20,7 @@ $booking->execute([$id]); $booking = $booking->fetch();
 if (!$booking) { setFlash('error','Not found.'); redirect('index.php'); }
 
 // Handle status update + notes
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && hasRole(['admin','manager'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && hasRole(['admin','manager','sales_officer'])) {
     $newStatus   = $_POST['status']      ?? $booking['status'];
     $adminNotes  = trim($_POST['admin_notes'] ?? '');
     $db->prepare("UPDATE service_bookings SET status=?,admin_notes=?,updated_at=NOW() WHERE id=?")
@@ -131,7 +131,7 @@ include __DIR__ . '/../../includes/header.php';
 
     <div class="col-md-7">
         <!-- Update Status -->
-        <?php if (hasRole(['admin','manager'])): ?>
+        <?php if (hasRole(['admin','manager','sales_officer'])): ?>
         <div class="card mb-4" style="border-top:3px solid #2563eb">
             <div class="card-header"><i class="fa fa-gavel me-2"></i>Update Booking</div>
             <div class="card-body">
@@ -164,6 +164,17 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card mb-4">
             <div class="card-header">Admin Notes</div>
             <div class="card-body"><p class="mb-0"><?= e($booking['admin_notes']) ?></p></div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Create Quotation -->
+        <?php if (canAccess('quotations') && canWrite('quotations')): ?>
+        <div class="card mb-4">
+            <div class="card-header"><i class="fa fa-file-invoice-dollar me-2"></i>Quotation</div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">Generate a quotation for this service booking.</p>
+                <a href="<?= BASE_URL ?>/modules/quotations/add.php?booking_id=<?= $id ?>" class="btn btn-outline-primary"><i class="fa fa-plus me-1"></i>Create Quotation</a>
+            </div>
         </div>
         <?php endif; ?>
 

@@ -3,6 +3,33 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/auth.php';
 
+// ── CSRF helpers ─────────────────────────────────────────────
+function csrfToken(): string {
+    return $_SESSION['csrf_token'] ?? '';
+}
+
+function csrfField(): string {
+    return '<input type="hidden" name="csrf_token" value="' . csrfToken() . '">';
+}
+
+function verifyCsrf(): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+    $token = $_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    if (!$token || !hash_equals(csrfToken(), $token)) {
+        http_response_code(403);
+        die('<!DOCTYPE html><html><head><title>Request Rejected</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <style>body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8fafc}
+        .card{max-width:450px;width:100%;padding:2rem;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.1);text-align:center}</style>
+        </head><body><div class="card">
+        <i class="fa fa-shield-halved" style="font-size:3rem;color:#dc2626;margin-bottom:1rem"></i>
+        <h4>Security Check Failed</h4>
+        <p class="text-muted">Your session may have expired. Please go back and try again.</p>
+        <a href="javascript:history.back()" class="btn btn-primary">Go Back</a>
+        </div></body></html>');
+    }
+}
+
 // ── Sanitize output ──────────────────────────────────────
 function e(string $val): string {
     return htmlspecialchars($val, ENT_QUOTES, 'UTF-8');
@@ -158,8 +185,31 @@ function handleUpload(array $file, string $targetDir, array $allowedTypes = ['jp
         throw new Exception("Invalid file type. Allowed: " . implode(', ', $allowedTypes));
     }
 
+    // Server-side MIME type verification (defense against extension spoofing)
+    $mimeToExt = [
+        'image/jpeg'  => ['jpg', 'jpeg'],
+        'image/png'   => ['png'],
+        'image/webp'  => ['webp'],
+        'image/gif'   => ['gif'],
+        'application/pdf' => ['pdf'],
+    ];
+    if (function_exists('finfo_open')) {
+        $finfo    = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        $allowedMimes = array_filter($mimeToExt, fn($exts) => !empty(array_intersect($exts, $allowedTypes)));
+        if (!array_key_exists($mimeType, $allowedMimes)) {
+            throw new Exception("File content does not match its extension. Upload rejected.");
+        }
+    }
+
     if (!is_dir($targetDir)) {
         mkdir($targetDir, 0777, true);
+    }
+
+    // Prevent PHP execution in uploads directory
+    if (!file_exists($targetDir . '/.htaccess')) {
+        file_put_contents($targetDir . '/.htaccess', "php_flag engine off\nOptions -ExecCGI\nAddHandler cgi-script .php .pl .py .jsp .asp .sh\n");
     }
 
     $filename = bin2hex(random_bytes(8)) . '.' . $ext;

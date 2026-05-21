@@ -23,7 +23,12 @@
       "Bash(C:/xampp/mysql/bin/mysql.exe -u root mascardi_db -e \"SHOW COLUMNS FROM car_assessments LIKE 'assessment_type';\")",
       "Bash(C:/xampp/mysql/bin/mysql.exe -u root mascardi_db -e \"ALTER TABLE car_assessments MODIFY assessment_type ENUM\\('arrival','workshop','pre_delivery','client_service','yard'\\) NOT NULL DEFAULT 'arrival';\")",
       "Bash(C:/xampp/mysql/bin/mysql.exe -u root mascardi_db -e \"DESCRIBE assessment_items;\")",
-      "Bash(C:/xampp/mysql/bin/mysql.exe -u root mascardi_db -e ' *)"
+      "Bash(C:/xampp/mysql/bin/mysql.exe -u root mascardi_db -e ' *)",
+      "Bash(Get-ChildItem -Path \"h:\\\\Projects 2026\\\\Mascardi system\" -Recurse -Directory)",
+      "Bash(Sort-Object)",
+      "Bash(cd \"/h/Projects 2026/Mascardi system\" && grep -r \"addslashes\\\\|mysqli_real_escape_string\" --include=\"*.php\")",
+      "Read(//h/h/Projects 2026/**)",
+      "Bash(Test-Path \"h:\\\\Projects 2026\\\\Mascardi system\\\\.gitignore\")"
     ]
   }
 }

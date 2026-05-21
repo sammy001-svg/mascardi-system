@@ -67,38 +67,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $uname = trim($_POST['username'] ?? '');
         $pass  = $_POST['password'] ?? '';
+        $ip    = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
         if (!$uname || !$pass) {
             $error = 'Username and password are required.';
         } else {
             $db = getDB();
-            $stmt = $db->prepare("SELECT * FROM users WHERE username=? AND status='active' LIMIT 1");
-            $stmt->execute([$uname]);
-            $user = $stmt->fetch();
 
-            if ($user && password_verify($pass, $user['password'])) {
-                session_regenerate_id(true);
-                $_SESSION['auth_user'] = [
-                    'id'          => $user['id'],
-                    'name'        => $user['name'],
-                    'username'    => $user['username'],
-                    'role'        => $user['role'],
-                    'linked_id'   => $user['linked_id'],
-                    'linked_type' => $user['linked_type'],
-                ];
-                $db->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
+            // Brute-force protection: max 5 failures per username per 15 minutes
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS login_attempts (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(100) NOT NULL,
+                    ip_address VARCHAR(45) NOT NULL,
+                    attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_username_time (username, attempted_at),
+                    INDEX idx_ip_time (ip_address, attempted_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-                $next = $_GET['next'] ?? '';
-                if ($next && str_starts_with(urldecode($next), '/')) {
-                    // $next is already an absolute path (starts with /), which includes the subdirectory if any.
-                    // Prepending BASE_URL would double the subdirectory path. Redirect directly to $next instead.
-                    header('Location: ' . urldecode($next));
+                $failCount = (int)$db->prepare("SELECT COUNT(*) FROM login_attempts WHERE (username=? OR ip_address=?) AND attempted_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)")
+                    ->execute([$uname, $ip]) ? $db->query("SELECT COUNT(*) FROM login_attempts WHERE (username=? OR ip_address=?) AND attempted_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)")->fetchColumn() : 0;
+
+                $failStmt = $db->prepare("SELECT COUNT(*) FROM login_attempts WHERE (username=? OR ip_address=?) AND attempted_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
+                $failStmt->execute([$uname, $ip]);
+                $failCount = (int)$failStmt->fetchColumn();
+
+                if ($failCount >= 5) {
+                    $error = 'Too many failed attempts. Please wait 15 minutes and try again.';
                 } else {
-                    header('Location: ' . BASE_URL . '/index.php');
+                    $stmt = $db->prepare("SELECT * FROM users WHERE username=? AND status='active' LIMIT 1");
+                    $stmt->execute([$uname]);
+                    $user = $stmt->fetch();
+
+                    if ($user && password_verify($pass, $user['password'])) {
+                        // Clear failed attempts on success
+                        $db->prepare("DELETE FROM login_attempts WHERE username=? OR ip_address=?")->execute([$uname, $ip]);
+
+                        session_regenerate_id(true);
+                        $_SESSION['auth_user'] = [
+                            'id'          => $user['id'],
+                            'name'        => $user['name'],
+                            'username'    => $user['username'],
+                            'role'        => $user['role'],
+                            'linked_id'   => $user['linked_id'],
+                            'linked_type' => $user['linked_type'],
+                        ];
+                        $_SESSION['last_activity']    = time();
+                        $_SESSION['sess_regenerated'] = time();
+
+                        $db->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
+
+                        $next = $_GET['next'] ?? '';
+                        if ($next && str_starts_with(urldecode($next), '/')) {
+                            header('Location: ' . urldecode($next));
+                        } else {
+                            header('Location: ' . BASE_URL . '/index.php');
+                        }
+                        exit;
+                    } else {
+                        // Log failed attempt
+                        $db->prepare("INSERT INTO login_attempts (username, ip_address) VALUES (?, ?)")->execute([$uname, $ip]);
+                        $remaining = max(0, 5 - $failCount - 1);
+                        $error = 'Invalid username or password.' . ($remaining > 0 ? " ({$remaining} attempts remaining)" : ' Account temporarily locked.');
+                    }
                 }
-                exit;
-            } else {
-                $error = 'Invalid username or password.';
+            } catch (PDOException $e) {
+                // If login_attempts table doesn't exist yet, fall back to simple auth
+                $stmt = $db->prepare("SELECT * FROM users WHERE username=? AND status='active' LIMIT 1");
+                $stmt->execute([$uname]);
+                $user = $stmt->fetch();
+                if ($user && password_verify($pass, $user['password'])) {
+                    session_regenerate_id(true);
+                    $_SESSION['auth_user'] = ['id' => $user['id'], 'name' => $user['name'], 'username' => $user['username'], 'role' => $user['role'], 'linked_id' => $user['linked_id'], 'linked_type' => $user['linked_type']];
+                    $_SESSION['last_activity'] = time();
+                    $db->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
+                    header('Location: ' . BASE_URL . '/index.php'); exit;
+                } else {
+                    $error = 'Invalid username or password.';
+                }
             }
         }
     }
@@ -140,6 +186,10 @@ body{background:linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.75)),
 
         <?php if ($isFirstRun && !$setupDone): ?>
         <div class="first-run-badge"><i class="fa fa-star me-2"></i><strong>First-time setup:</strong> No admin account exists yet. Create one below.</div>
+        <?php endif; ?>
+
+        <?php if (isset($_GET['timeout'])): ?>
+        <div class="alert alert-warning py-2"><i class="fa fa-clock me-2"></i>Your session expired due to inactivity. Please sign in again.</div>
         <?php endif; ?>
 
         <?php if ($error): ?>

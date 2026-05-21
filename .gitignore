@@ -2,17 +2,40 @@
 vendor/
 composer.lock
 
-# Configuration
-config/database.local.php
+# Environment & credentials — NEVER commit
 .env
+*.env
 
-# Storage / Uploads
+# Configuration overrides
+config/database.local.php
+
+# Storage / Uploads (user content)
 uploads/*
 !uploads/.gitkeep
 tmp/*
 
+# Sessions
+sessions/
+
+# Development utilities (contains test scripts with hardcoded credentials)
+scratch/
+
+# Backups
+backups/
+*.sql.gz
+*.sql.bz2
+
+# Test artifacts
+coverage/
+.phpunit.result.cache
+
 # OS generated files
 .DS_Store
 Thumbs.db
+desktop.ini
 *.swp
+*.swo
 *.log
+
+# IDE
+.idea/

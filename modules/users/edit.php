@@ -144,6 +144,51 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<!-- API Token Management Card -->
+<div class="card mt-4">
+    <div class="card-header d-flex align-items-center gap-2">
+        <i class="fa fa-key text-warning"></i>
+        <span>REST API Token</span>
+        <?php if ($user['api_token'] ?? null): ?>
+        <span class="badge bg-success ms-auto">Token Active</span>
+        <?php else: ?>
+        <span class="badge bg-secondary ms-auto">No Token</span>
+        <?php endif; ?>
+    </div>
+    <div class="card-body">
+        <?php $showToken = $_SESSION['show_token_' . $id] ?? null; unset($_SESSION['show_token_' . $id]); ?>
+        <?php if ($showToken): ?>
+        <div class="alert alert-warning">
+            <i class="fa fa-exclamation-triangle me-2"></i>
+            <strong>Copy this token now — it will not be shown again:</strong>
+            <div class="mt-2 font-monospace bg-dark text-white p-2 rounded" style="word-break:break-all;font-size:13px"><?= e($showToken) ?></div>
+        </div>
+        <?php endif; ?>
+        <p class="text-muted small mb-3">
+            API tokens allow this user to authenticate to the REST API at <code><?= BASE_URL ?>/api/v1/</code>.
+            Send the token in the <code>Authorization: Bearer &lt;token&gt;</code> header.
+        </p>
+        <div class="d-flex gap-2">
+            <form method="POST" action="generate_token.php">
+                <input type="hidden" name="user_id" value="<?= $id ?>">
+                <input type="hidden" name="action" value="generate">
+                <button type="submit" class="btn btn-warning" onclick="return confirm('Generate a new API token? The old token will be invalidated immediately.')">
+                    <i class="fa fa-rotate me-1"></i><?= ($user['api_token'] ?? null) ? 'Regenerate Token' : 'Generate Token' ?>
+                </button>
+            </form>
+            <?php if ($user['api_token'] ?? null): ?>
+            <form method="POST" action="generate_token.php">
+                <input type="hidden" name="user_id" value="<?= $id ?>">
+                <input type="hidden" name="action" value="revoke">
+                <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Revoke this API token? API calls using it will stop working immediately.')">
+                    <i class="fa fa-ban me-1"></i>Revoke Token
+                </button>
+            </form>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
 <?php
 include __DIR__ . '/../../includes/footer.php';
 ?>

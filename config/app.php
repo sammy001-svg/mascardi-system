@@ -19,7 +19,7 @@ if (!defined('BASE_URL')) {
 }
 define('BASE_PATH', dirname(__DIR__));
 
-// Start session
+// Start session with hardened cookie settings
 if (session_status() === PHP_SESSION_NONE) {
     $sessionPath = BASE_PATH . '/sessions';
     if (!is_dir($sessionPath)) {
@@ -28,8 +28,70 @@ if (session_status() === PHP_SESSION_NONE) {
     if (is_writable($sessionPath)) {
         session_save_path($sessionPath);
     }
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'secure'   => isset($_SERVER['HTTPS']),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
     session_start();
 }
+
+// ── Session timeout (30 min inactivity) ─────────────────────
+if (isset($_SESSION['auth_user'])) {
+    $timeout = 1800;
+    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeout) {
+        session_unset();
+        session_destroy();
+        session_start();
+        setcookie(session_name(), '', time() - 3600, '/');
+        header('Location: ' . (defined('BASE_URL') ? BASE_URL : '') . '/login.php?timeout=1');
+        exit;
+    }
+    $_SESSION['last_activity'] = time();
+
+    // Regenerate session ID every 15 minutes to prevent fixation
+    if (!isset($_SESSION['sess_regenerated'])) {
+        $_SESSION['sess_regenerated'] = time();
+    } elseif ((time() - $_SESSION['sess_regenerated']) > 900) {
+        session_regenerate_id(true);
+        $_SESSION['sess_regenerated'] = time();
+    }
+}
+
+// ── CSRF token ───────────────────────────────────────────────
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// ── Global error & exception handling ───────────────────────────────────────
+if (!defined('APP_DEBUG')) define('APP_DEBUG', false);
+
+set_error_handler(function(int $errno, string $errstr, string $errfile, int $errline): bool {
+    if (!(error_reporting() & $errno)) return false;
+    $msg = "PHP Error [{$errno}]: {$errstr} in {$errfile}:{$errline}";
+    error_log($msg);
+    if (defined('APP_DEBUG') && APP_DEBUG) {
+        echo '<pre style="background:#fee;padding:10px;border:1px solid #f00;font-size:12px">' . htmlspecialchars($msg) . '</pre>';
+    }
+    return true;
+});
+
+set_exception_handler(function(Throwable $e): void {
+    $msg = get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
+    error_log($msg);
+    if (headers_sent()) { echo '<p style="color:red">An error occurred.</p>'; return; }
+    http_response_code(500);
+    if (defined('APP_DEBUG') && APP_DEBUG) {
+        echo '<pre style="background:#fee;padding:20px;border:1px solid #f00;font-size:12px">';
+        echo htmlspecialchars($msg . "\n\nStack Trace:\n" . $e->getTraceAsString());
+        echo '</pre>';
+    } else {
+        include dirname(__DIR__) . '/includes/error500.php';
+    }
+    exit;
+});
 
 // Flash message helpers
 function setFlash(string $type, string $message): void {

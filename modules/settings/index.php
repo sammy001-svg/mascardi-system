@@ -49,6 +49,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'job_prefix'        => strtoupper(trim($_POST['job_prefix'] ?? 'JOB')),
     ];
 
+    // M-Pesa settings
+    $updates['mpesa_env']             = in_array($_POST['mpesa_env'] ?? '', ['sandbox','production']) ? $_POST['mpesa_env'] : 'sandbox';
+    $updates['mpesa_consumer_key']    = trim($_POST['mpesa_consumer_key']    ?? '');
+    $updates['mpesa_consumer_secret'] = trim($_POST['mpesa_consumer_secret'] ?? '');
+    $updates['mpesa_shortcode']       = trim($_POST['mpesa_shortcode']       ?? '');
+    $updates['mpesa_passkey']         = trim($_POST['mpesa_passkey']         ?? '');
+    $updates['mpesa_callback_url']    = trim($_POST['mpesa_callback_url']    ?? '');
+
     if (!$updates['company_name']) {
         $error = 'Company name is required.';
     } else {
@@ -56,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($updates as $k => $v) {
             $stmt->execute([$k, $v]);
         }
-        $settings = $updates;
+        $settings = array_merge($settings, $updates);
         setFlash('success', 'Settings saved successfully.');
         redirect(BASE_URL . '/modules/settings/index.php');
     }
@@ -166,6 +174,85 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <div class="alert alert-info mt-3 mb-0 py-2 small">
                     <i class="fa fa-info-circle me-1"></i>Changing prefixes affects <strong>new</strong> documents only. Existing document numbers are not changed.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- M-Pesa Settings -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="fa fa-mobile-screen-button text-success" style="font-size:18px"></i>
+                <span>M-Pesa Integration (Daraja API)</span>
+                <span class="badge bg-<?= ($settings['mpesa_consumer_key'] ?? '') ? 'success' : 'secondary' ?> ms-auto">
+                    <?= ($settings['mpesa_consumer_key'] ?? '') ? 'Configured' : 'Not Configured' ?>
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Register your app at <strong>developer.safaricom.co.ke</strong> to get these credentials.
+                    The <strong>Callback URL</strong> must be a publicly accessible HTTPS address.
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Environment</label>
+                        <select name="mpesa_env" class="form-select">
+                            <option value="sandbox"    <?= ($settings['mpesa_env']??'sandbox')==='sandbox'    ?'selected':'' ?>>Sandbox (Testing)</option>
+                            <option value="production" <?= ($settings['mpesa_env']??'')==='production' ?'selected':'' ?>>Production (Live)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Shortcode (Paybill/Till)</label>
+                        <input type="text" name="mpesa_shortcode" class="form-control" placeholder="e.g. 174379" value="<?= e($settings['mpesa_shortcode'] ?? '') ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Consumer Key</label>
+                        <input type="text" name="mpesa_consumer_key" class="form-control font-monospace" placeholder="From Daraja portal" value="<?= e($settings['mpesa_consumer_key'] ?? '') ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Consumer Secret</label>
+                        <input type="password" name="mpesa_consumer_secret" class="form-control font-monospace" placeholder="From Daraja portal" value="<?= e($settings['mpesa_consumer_secret'] ?? '') ?>">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Lipa Na M-Pesa Passkey</label>
+                        <input type="password" name="mpesa_passkey" class="form-control font-monospace" placeholder="From Daraja portal" value="<?= e($settings['mpesa_passkey'] ?? '') ?>">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Callback URL <span class="text-danger">*</span></label>
+                        <input type="url" name="mpesa_callback_url" class="form-control" placeholder="https://yourdomain.com/modules/payments/mpesa_callback.php"
+                               value="<?= e($settings['mpesa_callback_url'] ?? '') ?>">
+                        <div class="form-text">Must be publicly accessible HTTPS. Safaricom will POST confirmation to this URL.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Backup -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fa fa-database me-2 text-primary"></i>Database Backup
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center g-3">
+                    <div class="col-md-8">
+                        <p class="text-muted small mb-0">
+                            Create a full database backup now. Backups are stored in the <code>/backups/</code> directory
+                            and are automatically cleaned up after 30 days.
+                            For automated daily backups, schedule <code>scripts/backup.bat</code> in Windows Task Scheduler.
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <a href="<?= BASE_URL ?>/scripts/backup.php" class="btn btn-outline-primary">
+                            <i class="fa fa-download me-1"></i>Create Backup Now
+                        </a>
+                        <a href="<?= BASE_URL ?>/scripts/backup.php?download=1" class="btn btn-outline-secondary ms-1">
+                            <i class="fa fa-file-arrow-down me-1"></i>Download Latest
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>

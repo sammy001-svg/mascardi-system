@@ -124,6 +124,67 @@ $topInvoices = $db->prepare("
 $topInvoices->execute([$dateFrom, $dateTo]);
 $topInvoices = $topInvoices->fetchAll();
 
+// ── Payment aging (days overdue) ─────────────────────────────────────────────
+$agingBuckets = $db->query("
+    SELECT
+        SUM(CASE WHEN DATEDIFF(NOW(), due_date) BETWEEN 1  AND 30  THEN total - amount_paid ELSE 0 END) AS bucket_30,
+        SUM(CASE WHEN DATEDIFF(NOW(), due_date) BETWEEN 31 AND 60  THEN total - amount_paid ELSE 0 END) AS bucket_60,
+        SUM(CASE WHEN DATEDIFF(NOW(), due_date) BETWEEN 61 AND 90  THEN total - amount_paid ELSE 0 END) AS bucket_90,
+        SUM(CASE WHEN DATEDIFF(NOW(), due_date)  > 90              THEN total - amount_paid ELSE 0 END) AS bucket_over90
+    FROM invoices
+    WHERE status IN ('unpaid','partial') AND due_date < NOW()
+")->fetch();
+
+$overdueInvoices = $db->query("
+    SELECT i.invoice_number, i.due_date, (i.total - i.amount_paid) AS balance,
+           DATEDIFF(NOW(), i.due_date) AS days_overdue,
+           c.make, c.model, i.customer_name
+    FROM invoices i
+    JOIN cars c ON c.id = i.car_id
+    WHERE i.status IN ('unpaid','partial') AND i.due_date < NOW()
+    ORDER BY days_overdue DESC
+    LIMIT 10
+")->fetchAll();
+
+// ── Vehicle lifecycle (days from intake to delivery) ─────────────────────────
+$lifecycleData = $db->prepare("
+    SELECT c.id, c.make, c.model, c.chassis_number,
+           ci.intake_date,
+           c.created_at AS added_date,
+           MAX(CASE WHEN c.status = 'delivered' THEN c.updated_at END) AS delivered_date,
+           DATEDIFF(COALESCE(MAX(CASE WHEN c.status = 'delivered' THEN c.updated_at END), NOW()), ci.intake_date) AS days_in_system
+    FROM cars c
+    LEFT JOIN car_intake ci ON ci.car_id = c.id
+    WHERE ci.intake_date IS NOT NULL
+    GROUP BY c.id, c.make, c.model, c.chassis_number, ci.intake_date, c.created_at
+    ORDER BY days_in_system DESC
+    LIMIT 8
+");
+$lifecycleData->execute();
+$lifecycleData = $lifecycleData->fetchAll();
+
+$avgLifecycle = $db->query("
+    SELECT AVG(DATEDIFF(COALESCE(MAX(CASE WHEN c.status='delivered' THEN c.updated_at END), NOW()), ci.intake_date)) AS avg_days
+    FROM cars c
+    LEFT JOIN car_intake ci ON ci.car_id = c.id
+    WHERE ci.intake_date IS NOT NULL
+    GROUP BY c.id
+")->fetchColumn();
+
+// ── Inventory turnover ────────────────────────────────────────────────────────
+$inventoryTurnover = $db->query("
+    SELECT i.part_name, i.category,
+           i.quantity AS current_stock,
+           COALESCE(SUM(CASE WHEN it.transaction_type = 'out' THEN it.quantity ELSE 0 END), 0) AS total_issued,
+           i.unit_price
+    FROM inventory i
+    LEFT JOIN inventory_transactions it ON it.inventory_id = i.id
+        AND it.created_at >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
+    GROUP BY i.id, i.part_name, i.category, i.quantity, i.unit_price
+    ORDER BY total_issued DESC
+    LIMIT 8
+")->fetchAll();
+
 // ── Chart JSON ────────────────────────────────────────────────────────────────
 $revenueLabels  = json_encode(array_column($monthlyRevenue, 'month_label'));
 $revenueAmounts = json_encode(array_map(fn($r) => round($r['revenue'], 2), $monthlyRevenue));
@@ -131,6 +192,8 @@ $statusLabels   = json_encode(array_map(fn($r) => ucwords(str_replace('_', ' ', 
 $statusCounts   = json_encode(array_column($carsByStatus, 'cnt'));
 $makeLabels     = json_encode(array_column($carsByMake, 'make'));
 $makeCounts     = json_encode(array_column($carsByMake, 'cnt'));
+
+$agingData    = json_encode([(float)($agingBuckets['bucket_30']??0),(float)($agingBuckets['bucket_60']??0),(float)($agingBuckets['bucket_90']??0),(float)($agingBuckets['bucket_over90']??0)]);
 
 $extraJs = <<<SCRIPT
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -195,6 +258,22 @@ $extraJs = <<<SCRIPT
                 plugins: { legend: { display: false } },
                 scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
             }
+        });
+    }
+    // Payment Aging Donut
+    var agingEl = document.getElementById('agingChart');
+    if (agingEl) {
+        new Chart(agingEl, {
+            type: 'doughnut',
+            data: {
+                labels: ['1-30 days','31-60 days','61-90 days','90+ days'],
+                datasets: [{
+                    data: {$agingData},
+                    backgroundColor: ['#f59e0b','#f97316','#ef4444','#991b1b'],
+                    borderWidth: 2, borderColor: '#fff'
+                }]
+            },
+            options: { cutout: '55%', plugins: { legend: { position: 'bottom', labels: { font:{size:10}, padding:8, boxWidth:10 } } } }
         });
     }
 }());
@@ -462,7 +541,7 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <!-- ── Inventory Summary ─────────────────────────────────────────────────────── -->
-<div class="card">
+<div class="card mb-4">
     <div class="card-header"><i class="fa fa-boxes-stacked me-2"></i>Inventory Summary</div>
     <div class="card-body">
         <div class="row g-4 text-center">
@@ -477,6 +556,132 @@ include __DIR__ . '/../../includes/header.php';
             <div class="col-sm-4">
                 <div class="fs-3 fw-bold text-success"><?= money((float)($invSummary['stock_value'] ?? 0)) ?></div>
                 <div class="text-muted small">Estimated Stock Value</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Payment Aging ──────────────────────────────────────────────────────────── -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fa fa-hourglass-half me-2 text-danger"></i>Overdue Payment Aging</span>
+                <span class="badge bg-danger"><?= count($overdueInvoices) ?> overdue</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 text-center mb-3">
+                    <div class="col-3">
+                        <div class="fw-bold text-warning"><?= money((float)($agingBuckets['bucket_30']??0)) ?></div>
+                        <div class="text-muted" style="font-size:11px">1–30 days</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold text-orange"><?= money((float)($agingBuckets['bucket_60']??0)) ?></div>
+                        <div class="text-muted" style="font-size:11px">31–60 days</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold text-danger"><?= money((float)($agingBuckets['bucket_90']??0)) ?></div>
+                        <div class="text-muted" style="font-size:11px">61–90 days</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold text-danger"><?= money((float)($agingBuckets['bucket_over90']??0)) ?></div>
+                        <div class="text-muted" style="font-size:11px">&gt;90 days</div>
+                    </div>
+                </div>
+                <canvas id="agingChart" height="160"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header"><i class="fa fa-exclamation-triangle me-2 text-warning"></i>Top Overdue Invoices</div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th class="ps-3">Invoice #</th><th>Customer</th><th>Vehicle</th><th>Days Overdue</th><th class="text-end pe-3">Balance</th></tr></thead>
+                    <tbody>
+                        <?php if (empty($overdueInvoices)): ?>
+                        <tr><td colspan="5" class="text-center text-muted py-4"><i class="fa fa-check-circle text-success me-1"></i>No overdue invoices</td></tr>
+                        <?php else: ?>
+                        <?php foreach ($overdueInvoices as $oi): ?>
+                        <tr>
+                            <td class="ps-3"><a href="<?= BASE_URL ?>/modules/invoices/view.php?id=<?= $oi['id'] ?? '' ?>" class="fw-medium text-primary text-decoration-none"><?= e($oi['invoice_number']) ?></a></td>
+                            <td class="small"><?= e($oi['customer_name'] ?? '—') ?></td>
+                            <td class="small"><?= e($oi['make'] . ' ' . $oi['model']) ?></td>
+                            <td>
+                                <span class="badge bg-<?= $oi['days_overdue'] > 90 ? 'danger' : ($oi['days_overdue'] > 30 ? 'warning text-dark' : 'secondary') ?>">
+                                    <?= $oi['days_overdue'] ?> days
+                                </span>
+                            </td>
+                            <td class="text-end pe-3 text-danger fw-semibold"><?= money((float)$oi['balance']) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Vehicle Lifecycle + Inventory Turnover ─────────────────────────────────── -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fa fa-route me-2 text-primary"></i>Vehicle Lifecycle (Intake → Delivery)</span>
+                <?php if ($avgLifecycle): ?>
+                <span class="badge bg-info">Avg: <?= round((float)$avgLifecycle) ?> days</span>
+                <?php endif; ?>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th class="ps-3">Vehicle</th><th>Chassis</th><th>Intake Date</th><th class="text-end pe-3">Days in System</th></tr></thead>
+                    <tbody>
+                        <?php if (empty($lifecycleData)): ?>
+                        <tr><td colspan="4" class="text-center text-muted py-4">No intake records found</td></tr>
+                        <?php else: ?>
+                        <?php foreach ($lifecycleData as $lv): ?>
+                        <?php $daysColor = $lv['days_in_system'] > 90 ? 'danger' : ($lv['days_in_system'] > 45 ? 'warning' : 'success'); ?>
+                        <tr>
+                            <td class="ps-3 fw-medium small"><?= e($lv['make'] . ' ' . $lv['model']) ?></td>
+                            <td><code style="font-size:10px"><?= e($lv['chassis_number']) ?></code></td>
+                            <td class="text-muted small"><?= fmtDate($lv['intake_date']) ?></td>
+                            <td class="text-end pe-3">
+                                <span class="badge bg-<?= $daysColor ?>"><?= $lv['days_in_system'] ?> days</span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><i class="fa fa-arrows-rotate me-2 text-success"></i>Inventory Turnover (Last 3 Months)</div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th class="ps-3">Part Name</th><th>Category</th><th class="text-center">Current Stock</th><th class="text-end pe-3">Issued (3 mo)</th></tr></thead>
+                    <tbody>
+                        <?php if (empty($inventoryTurnover)): ?>
+                        <tr><td colspan="4" class="text-center text-muted py-4">No inventory movement data</td></tr>
+                        <?php else: ?>
+                        <?php foreach ($inventoryTurnover as $part): ?>
+                        <tr>
+                            <td class="ps-3 small fw-medium"><?= e($part['part_name']) ?></td>
+                            <td class="small text-muted"><?= e($part['category'] ?? '—') ?></td>
+                            <td class="text-center">
+                                <span class="<?= $part['current_stock'] == 0 ? 'text-danger fw-bold' : '' ?>"><?= number_format($part['current_stock']) ?></span>
+                            </td>
+                            <td class="text-end pe-3">
+                                <span class="badge bg-<?= $part['total_issued'] > 0 ? 'success' : 'secondary' ?>"><?= number_format($part['total_issued']) ?></span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
