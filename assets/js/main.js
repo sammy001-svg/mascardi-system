@@ -1,5 +1,12 @@
 $(function () {
 
+    // ── Wrap HTML tables dynamically for mobile ─────
+    $('table.table').each(function () {
+        if (!$(this).parent().hasClass('table-responsive')) {
+            $(this).wrap('<div class="table-responsive" style="width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 1rem;"></div>');
+        }
+    });
+
     // ── Sidebar toggle ──────────────────────────────
     $('#sidebarToggle').on('click', function () {
         if ($(window).width() <= 768) {
