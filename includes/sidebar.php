@@ -11,7 +11,12 @@ $__isDash = !str_contains($__uri, '/modules/');
     <!-- Brand -->
     <div class="sidebar-brand">
         <div class="brand-logo">
+            <?php $__logo = getSetting('company_logo', ''); ?>
+            <?php if ($__logo && file_exists(BASE_PATH . '/assets/images/' . $__logo)): ?>
+            <img src="<?= BASE_URL ?>/assets/images/<?= e($__logo) ?>" alt="Logo" style="height:32px;width:32px;object-fit:contain;border-radius:4px">
+            <?php else: ?>
             <i class="fa fa-car-side" style="font-size:16px"></i>
+            <?php endif; ?>
         </div>
         <div class="brand-text">
             <span class="brand-name"><?= e(getSetting('company_name', 'Mascardi')) ?></span>
@@ -29,7 +34,7 @@ $__isDash = !str_contains($__uri, '/modules/');
         </a>
 
         <!-- Fleet -->
-        <?php if (canAccess('cars') || canAccess('mechanics')): ?>
+        <?php if (canAccess('cars') || canAccess('mechanics') || canAccess('drivers')): ?>
         <div class="nav-section">Fleet</div>
 
         <?php if (canAccess('cars')): ?>
@@ -45,6 +50,14 @@ $__isDash = !str_contains($__uri, '/modules/');
            class="nav-item <?= isActive('/modules/mechanics/') ?>"
            data-label="Mechanics">
             <i class="fa fa-screwdriver-wrench"></i><span>Mechanics</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (canAccess('drivers')): ?>
+        <a href="<?= BASE_URL ?>/modules/drivers/index.php"
+           class="nav-item <?= isActive('/modules/drivers/') ?>"
+           data-label="Drivers">
+            <i class="fa fa-id-card"></i><span>Drivers</span>
         </a>
         <?php endif; ?>
         <?php endif; ?>
@@ -221,6 +234,11 @@ $__isDash = !str_contains($__uri, '/modules/');
            class="nav-item <?= isActive('/modules/audit/') ?>"
            data-label="Audit Log">
             <i class="fa fa-history"></i><span>Audit Log</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/email_logs/index.php"
+           class="nav-item <?= isActive('/modules/email_logs/') ?>"
+           data-label="Email Logs">
+            <i class="fa fa-envelope-open-text"></i><span>Email Logs</span>
         </a>
         <a href="<?= BASE_URL ?>/modules/settings/index.php"
            class="nav-item <?= isActive('/modules/settings/') ?>"

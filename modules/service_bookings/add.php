@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/notifications.php';
+require_once __DIR__ . '/../../includes/mailer.php';
 requireLogin();
 requireRole(['admin', 'manager', 'sales_person', 'sales_officer', 'workshop_manager']);
 $pageTitle = 'New Service Booking';
@@ -111,6 +112,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "{$d['client_name']} — {$d['service_type']}",
                 BASE_URL . '/modules/service_bookings/view.php?id=' . $newId
             );
+            // Confirmation email to client
+            if ($d['client_email'] && filter_var($d['client_email'], FILTER_VALIDATE_EMAIL)) {
+                $company = getSetting('company_name', 'Mascardi System');
+                $subj    = "Booking Confirmation — {$bNum}";
+                $dateStr = $d['preferred_date'] ? date('d M Y', strtotime($d['preferred_date'])) : 'To be confirmed';
+                $timeStr = $d['preferred_time'] ?: '';
+                $vehicle = trim("{$d['car_make']} {$d['car_model']} {$d['car_registration']}");
+                $body    = "<p>Dear " . e($d['client_name']) . ",</p>
+                           <p>Thank you! Your service booking has been received. Here are the details:</p>
+                           <table class='data'>
+                             <tr><th>Booking No.</th><td><strong>{$bNum}</strong></td></tr>
+                             <tr><th>Service</th><td>" . e($serviceStr) . "</td></tr>
+                             <tr><th>Vehicle</th><td>" . e($vehicle ?: 'Not specified') . "</td></tr>
+                             <tr><th>Preferred Date</th><td>{$dateStr}" . ($timeStr ? " at {$timeStr}" : '') . "</td></tr>
+                           </table>
+                           <p>We will contact you shortly to confirm your appointment. If you have any questions, please don't hesitate to get in touch.</p>";
+                sendMail($d['client_email'], $d['client_name'], $subj, mailTemplate($subj, $body), 'service_booking', (int)$newId);
+            }
             setFlash('success', "Booking {$bNum} created.");
             // Use relative path for more robust redirect on cPanel
             redirect(BASE_URL . '/modules/service_bookings/view.php?id=' . $newId);

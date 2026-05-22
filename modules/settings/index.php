@@ -154,8 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
 // ── Role permissions matrix ───────────────────────────────────────────────
 $roleMatrix = [
     'workshop_manager' => [
-        'access' => ['cars','mechanics','assessments','jobs','parts_requests','issues','quick_assessments','inventory','lpo'],
-        'write'  => ['jobs','assessments','mechanics','parts_requests','issues','quick_assessments'],
+        'access' => ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments','inventory','lpo'],
+        'write'  => ['jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments'],
     ],
     'sales_person' => [
         'access' => ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales'],
@@ -187,6 +187,7 @@ $matrixModules = [
     'sales'             => 'Car Sales',
     'issues'            => 'Issues',
     'mechanics'         => 'Mechanics',
+    'drivers'           => 'Drivers',
     'reports'           => 'Reports',
     'suppliers'         => 'Suppliers',
 ];
@@ -743,6 +744,7 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
                         ['modules/audit/index.php',     'fa-clock-rotate-left','#f3e8ff','#7c3aed','Audit Log'],
                         ['modules/reports/index.php',   'fa-chart-bar',  '#fff7ed', '#ea580c', 'Reports'],
                         ['modules/locations/index.php', 'fa-location-dot','#fef2f2','#dc2626', 'Locations'],
+                        ['modules/email_logs/index.php','fa-envelope-open-text','#f0fdf4','#15803d','Email Logs'],
                     ];
                     foreach ($adminLinks as [$path, $icon, $bg, $clr, $lbl]):
                     ?>

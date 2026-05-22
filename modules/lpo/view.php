@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/notifications.php';
+require_once __DIR__ . '/../../includes/mailer.php';
 requireLogin();
 canAccess('lpo') || die('Access denied.');
 $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/lpo/index.php');
@@ -13,6 +14,30 @@ $items=$db->prepare("SELECT * FROM lpo_items WHERE lpo_id=? ORDER BY id"); $item
 if(isset($_GET['status'])){
     canWrite('lpo') || die('Permission denied.');
     $db->prepare("UPDATE lpo SET status=? WHERE id=?")->execute([$_GET['status'],$id]);
+    // Email supplier when LPO is marked sent
+    if ($_GET['status'] === 'sent' && $lpo['supplier_email'] && filter_var($lpo['supplier_email'], FILTER_VALIDATE_EMAIL)) {
+        $subj = "Purchase Order " . $lpo['lpo_number'] . " from " . getSetting('company_name', 'Mascardi System');
+        $rows = '';
+        foreach ($items as $it) {
+            $rows .= '<tr><td>' . e($it['description']) . '</td><td style="text-align:center">' . $it['quantity'] . ' ' . e($it['unit']) . '</td><td style="text-align:right">' . money((float)$it['unit_price']) . '</td><td style="text-align:right">' . money((float)$it['total']) . '</td></tr>';
+        }
+        $attn = $lpo['contact_person'] ? ' (' . e($lpo['contact_person']) . ')' : '';
+        $body = "<p>Dear " . e($lpo['supplier_name']) . "{$attn},</p>
+                <p>Please find below our Purchase Order <strong>" . e($lpo['lpo_number']) . "</strong>. Kindly acknowledge receipt and confirm delivery details.</p>
+                <table class='data'>
+                  <thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
+                  <tbody>{$rows}</tbody>
+                </table>
+                <table class='data' style='margin-top:8px'>
+                  <tr><td>Subtotal</td><td style='text-align:right'>" . money((float)$lpo['subtotal']) . "</td></tr>
+                  <tr><td>VAT (" . $lpo['tax_rate'] . "%)</td><td style='text-align:right'>" . money((float)$lpo['tax_amount']) . "</td></tr>
+                  <tr class='total-row'><td><strong>Total</strong></td><td style='text-align:right'><strong>" . money((float)$lpo['total']) . "</strong></td></tr>
+                </table>
+                " . ($lpo['expected_delivery'] ? "<p>Expected delivery: <strong>" . fmtDate($lpo['expected_delivery']) . "</strong></p>" : '') . "
+                " . ($lpo['notes'] ? "<p><em>" . e($lpo['notes']) . "</em></p>" : '') . "
+                <p>Please deliver to: " . e(getSetting('company_address', '')) . "</p>";
+        sendMail($lpo['supplier_email'], $lpo['supplier_name'], $subj, mailTemplate($subj, $body), 'lpo', $id);
+    }
     // If received, update inventory
     if($_GET['status']==='received'){
         foreach($items as $item){

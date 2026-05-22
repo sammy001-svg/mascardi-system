@@ -29,7 +29,9 @@
       "Bash(cd \"/h/Projects 2026/Mascardi system\" && grep -r \"addslashes\\\\|mysqli_real_escape_string\" --include=\"*.php\")",
       "Read(//h/h/Projects 2026/**)",
       "Bash(Test-Path \"h:\\\\Projects 2026\\\\Mascardi system\\\\.gitignore\")",
-      "Bash(php -r ' *)"
+      "Bash(php -r ' *)",
+      "PowerShell(New-Item -ItemType Directory -Force \"h:\\\\Projects 2026\\\\Mascardi system\\\\modules\\\\drivers\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"h:\\\\Projects 2026\\\\Mascardi system\\\\modules\\\\email_logs\")"
     ]
   }
 }

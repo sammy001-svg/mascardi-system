@@ -75,7 +75,12 @@ $checks = [
     <!-- Header -->
     <div class="row mb-5">
         <div class="col-7">
+            <?php $__logo = getSetting('company_logo',''); ?>
+            <?php if ($__logo && file_exists(BASE_PATH.'/assets/images/'.$__logo)): ?>
+            <img src="<?= BASE_URL ?>/assets/images/<?= e($__logo) ?>" alt="<?= e($company['name']) ?>" style="height:52px;max-width:180px;object-fit:contain;margin-bottom:6px;display:block">
+            <?php else: ?>
             <div class="header-logo mb-2"><?= e($company['name']) ?></div>
+            <?php endif; ?>
             <div class="text-muted small">
                 <?= e($company['address']) ?><br>
                 Tel: <?= e($company['phone']) ?> | Email: <?= e($company['email']) ?><br>

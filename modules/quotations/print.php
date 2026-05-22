@@ -41,7 +41,12 @@ if ($isClient && $q['client_id'] !== $_SESSION['_client']['id']) {
     <!-- Header -->
     <div class="row mb-4">
         <div class="col-6">
-            <div style="font-size:22px;font-weight:800;color:#0f172a"><?= e($company['name']) ?></div>
+            <?php $__logo = getSetting('company_logo',''); ?>
+            <?php if ($__logo && file_exists(BASE_PATH.'/assets/images/'.$__logo)): ?>
+            <img src="<?= BASE_URL ?>/assets/images/<?= e($__logo) ?>" alt="<?= e($company['name']) ?>" style="height:52px;max-width:180px;object-fit:contain;margin-bottom:6px;display:block">
+            <?php else: ?>
+            <div style="font-size:22px;font-weight:800;color:#0f172a;margin-bottom:4px"><?= e($company['name']) ?></div>
+            <?php endif; ?>
             <div class="text-muted small"><?= e($company['address']) ?></div>
             <?php if($company['phone']): ?><div class="small">Tel: <?= e($company['phone']) ?></div><?php endif; ?>
             <?php if($company['email']): ?><div class="small">Email: <?= e($company['email']) ?></div><?php endif; ?>

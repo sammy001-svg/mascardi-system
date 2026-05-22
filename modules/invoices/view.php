@@ -47,6 +47,21 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['payment_amount'])){
     $newPaid=$inv['amount_paid']+$amount;
     $newStatus=$newPaid>=$inv['total']?'paid':($newPaid>0?'partial':'unpaid');
     $db->prepare("UPDATE invoices SET amount_paid=?, status=? WHERE id=?")->execute([$newPaid,$newStatus,$id]);
+    // Receipt email
+    if ($inv['customer_email'] && filter_var($inv['customer_email'],FILTER_VALIDATE_EMAIL)) {
+        $subj = 'Payment Received — ' . $inv['invoice_number'];
+        $balDue = max(0, $inv['total'] - $newPaid);
+        $body = "<p>Dear " . e($inv['customer_name'] ?: 'Customer') . ",</p>
+                <p>We have received your payment of <strong>" . money($amount) . "</strong> against invoice <strong>" . e($inv['invoice_number']) . "</strong>.</p>
+                <table class='data'>
+                  <tr><th>Invoice No.</th><td>" . e($inv['invoice_number']) . "</td></tr>
+                  <tr><th>Invoice Total</th><td>" . money((float)$inv['total']) . "</td></tr>
+                  <tr><th>Amount Paid</th><td>" . money($newPaid) . "</td></tr>
+                  <tr><th>Balance Due</th><td>" . ($balDue > 0 ? money($balDue) : '<span style=\"color:#16a34a\">Fully Paid</span>') . "</td></tr>
+                </table>
+                <p>Thank you for your payment!</p>";
+        sendMail($inv['customer_email'], $inv['customer_name'] ?: 'Customer', $subj, mailTemplate($subj, $body), 'invoice', $id);
+    }
     setFlash('success','Payment of '.money($amount).' recorded.');
     redirect('view.php?id='.$id);
 }
