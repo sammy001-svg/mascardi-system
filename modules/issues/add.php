@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/notifications.php';
 requireLogin();
 canAccess('issues') || die('Access denied.');
 canWrite('issues') || die('Permission denied.');
@@ -52,6 +53,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                ]);
             $newId = (int)$db->lastInsertId();
             logActivity('create', 'issues', $newId, "Reported issue {$issNum}: {$d['title']}");
+            if (in_array($d['severity'], ['critical', 'high'])) {
+                notifyRoles(['admin', 'workshop_manager'], 'issue',
+                    strtoupper($d['severity']) . " Issue: {$d['title']}",
+                    $d['category'] . ($d['description'] ? ' — ' . mb_substr($d['description'], 0, 80) : ''),
+                    BASE_URL . '/modules/issues/view.php?id=' . $newId
+                );
+            }
             setFlash('success', "Issue {$issNum} reported.");
             redirect(BASE_URL . '/modules/issues/view.php?id=' . $newId);
         } catch (\Throwable $e) {

@@ -19,6 +19,9 @@ include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">Invoices <span class="badge bg-secondary ms-2"><?= count($invoices) ?></span></h5>
+    <?php if (canWrite('invoices')): ?>
+    <a href="add.php" class="btn btn-sm btn-primary"><i class="fa fa-plus me-1"></i>New Invoice</a>
+    <?php endif; ?>
 </div>
 <div class="mb-3 d-flex gap-2 flex-wrap">
     <a href="?" class="btn btn-sm <?= !$status?'btn-primary':'btn-outline-secondary' ?>">All</a>

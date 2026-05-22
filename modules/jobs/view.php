@@ -112,8 +112,8 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="fa fa-file-invoice-dollar me-2"></i>Invoices</span>
-                <?php if (canWrite('quotations')): ?>
-                <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $job['car_id'] ?>&job_id=<?= $id ?>" class="btn btn-xs btn-outline-success" title="Create a quotation and convert to invoice">+ New Invoice</a>
+                <?php if (canWrite('invoices')): ?>
+                <a href="<?= BASE_URL ?>/modules/invoices/add.php?job_id=<?= $id ?>" class="btn btn-xs btn-outline-success"><i class="fa fa-plus me-1"></i>New Invoice</a>
                 <?php endif; ?>
             </div>
             <?php if($invoices): ?>
@@ -132,7 +132,7 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endforeach; ?>
                 </tbody>
             </table>
-            <?php else: ?><div class="card-body text-muted small">No invoices yet. <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $job['car_id'] ?>&job_id=<?= $id ?>">Create a quotation</a> and convert it to an invoice.</div><?php endif; ?>
+            <?php else: ?><div class="card-body text-muted small">No invoices yet. <a href="<?= BASE_URL ?>/modules/invoices/add.php?job_id=<?= $id ?>">Create an invoice</a> or <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $job['car_id'] ?>&job_id=<?= $id ?>">create a quotation</a> and convert it.</div><?php endif; ?>
         </div>
 
         <!-- Parts Requests -->

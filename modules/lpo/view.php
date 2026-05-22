@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/notifications.php';
 requireLogin();
 canAccess('lpo') || die('Access denied.');
 $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/lpo/index.php');
@@ -21,6 +22,11 @@ if(isset($_GET['status'])){
                 $db->prepare("INSERT INTO inventory_transactions (inventory_id,transaction_type,quantity,balance,reference_type,reference_id,notes) VALUES (?,?,?,?,?,?,?)")->execute([$item['inventory_id'],'in',$item['quantity'],$newQty,'lpo',$id,'Received from LPO '.$lpo['lpo_number']]);
             }
         }
+        notifyRoles(['admin','workshop_manager'], 'lpo',
+            "LPO Received: {$lpo['lpo_number']}",
+            count($items) . ' item(s) added to inventory from ' . $lpo['supplier_name'],
+            BASE_URL . '/modules/lpo/view.php?id=' . $id
+        );
         setFlash('success','LPO marked as received. Inventory updated.');
     } else { setFlash('success','Status updated.'); }
     redirect('view.php?id='.$id);

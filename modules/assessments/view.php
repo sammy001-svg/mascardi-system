@@ -81,6 +81,11 @@ include __DIR__ . '/../../includes/header.php';
             <i class="fa fa-car me-1"></i>View Car
         </a>
         <?php endif; ?>
+        <?php if (canWrite('assessments')): ?>
+        <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-pen me-1"></i>Edit
+        </a>
+        <?php endif; ?>
         <?php if (canEditDelete()): ?>
         <a href="delete.php?id=<?= $id ?>" class="btn btn-sm btn-outline-danger confirm-delete">
             <i class="fa fa-trash me-1"></i>Delete

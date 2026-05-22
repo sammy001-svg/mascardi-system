@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/notifications.php';
 requireLogin();
 requireRole(['admin', 'manager', 'sales_person', 'sales_officer', 'workshop_manager']);
 $pageTitle = 'New Service Booking';
@@ -105,6 +106,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $newId = $db->lastInsertId();
             logActivity('create', 'service_bookings', $newId, "Created booking {$bNum} for {$d['client_name']}");
+            notifyRoles(['admin','workshop_manager','sales_officer'], 'booking',
+                "New Booking: {$bNum}",
+                "{$d['client_name']} — {$d['service_type']}",
+                BASE_URL . '/modules/service_bookings/view.php?id=' . $newId
+            );
             setFlash('success', "Booking {$bNum} created.");
             // Use relative path for more robust redirect on cPanel
             redirect(BASE_URL . '/modules/service_bookings/view.php?id=' . $newId);

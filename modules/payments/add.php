@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/notifications.php';
 requireLogin();
 canAccess('payments') || die('Access denied.');
 canWrite('payments') || die('Permission denied.');
@@ -73,6 +74,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $newPayId = (int)$db->lastInsertId();
             logActivity('create', 'payments', $newPayId, "Recorded payment {$payNum} — KES {$amount} via {$method} for {$clientName}");
+            notifyRoles(['admin','sales_officer'], 'payment',
+                "Payment Received: KES " . number_format($amount, 2),
+                "{$clientName} via " . strtoupper($method),
+                BASE_URL . '/modules/payments/view.php?id=' . $newPayId
+            );
             setFlash('success', "Payment {$payNum} recorded successfully.");
             redirect(BASE_URL . '/modules/payments/view.php?id=' . $newPayId);
         } catch (\Throwable $e) {

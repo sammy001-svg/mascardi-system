@@ -43,6 +43,8 @@
 
     <div class="topbar-right">
         <?php
+        require_once __DIR__ . '/notifications.php';
+        $__notifCount = getUnreadNotificationCount((int)$__user['id']);
         try { $__ls = getDashboardStats()['low_stock']; } catch (Exception $e) { $__ls = 0; }
         if ($__ls > 0): ?>
         <a href="<?= BASE_URL ?>/modules/inventory/index.php?filter=low_stock"
@@ -52,6 +54,28 @@
         <?php endif; ?>
 
         <span class="topbar-date d-none d-lg-inline"><?= date('d M Y') ?></span>
+
+        <!-- Notifications bell -->
+        <div class="dropdown">
+            <button type="button" class="topbar-icon-btn position-relative" id="notifBell"
+                    data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
+                <i class="fa fa-bell"></i>
+                <span class="notif-badge" id="notifBadge"
+                      style="<?= $__notifCount > 0 ? '' : 'display:none' ?>">
+                    <?= $__notifCount > 99 ? '99+' : $__notifCount ?>
+                </span>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end notif-panel p-0"
+                 aria-labelledby="notifBell" style="width:360px;max-height:500px;overflow-y:auto">
+                <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-white sticky-top">
+                    <span class="fw-semibold" style="font-size:13px">Notifications</span>
+                    <button class="btn btn-xs btn-outline-secondary" id="markAllRead">Mark all read</button>
+                </div>
+                <div id="notifList">
+                    <div class="notif-empty"><i class="fa fa-bell-slash fa-lg mb-2 d-block"></i>No notifications yet</div>
+                </div>
+            </div>
+        </div>
 
         <!-- Dark mode toggle -->
         <button class="topbar-icon-btn" id="themeToggle" title="Toggle dark mode">
@@ -96,6 +120,111 @@
         </div>
     </div>
 </header>
+
+<!-- ── Notification JS ──────────────────────────────── -->
+<script>
+(function () {
+    var apiUrl   = '<?= BASE_URL ?>/modules/notifications/api.php';
+    var pollInt  = null;
+
+    var typeColors = {
+        booking:   '#2563eb', payment: '#16a34a', low_stock: '#d97706',
+        issue:     '#dc2626', lpo:     '#0284c7', job:       '#9333ea',
+        sale:      '#0f172a', info:    '#64748b'
+    };
+    var typeIcons = {
+        booking: 'fa-calendar-check', payment: 'fa-money-bill-wave',
+        low_stock: 'fa-boxes-stacked', issue: 'fa-triangle-exclamation',
+        lpo: 'fa-truck', job: 'fa-toolbox', sale: 'fa-tag', info: 'fa-info-circle'
+    };
+
+    function setBadge(n) {
+        var badge = document.getElementById('notifBadge');
+        if (!badge) return;
+        if (n > 0) {
+            badge.textContent = n > 99 ? '99+' : n;
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function renderList(notifications, unread) {
+        var list = document.getElementById('notifList');
+        if (!list) return;
+        if (!notifications || !notifications.length) {
+            list.innerHTML = '<div class="notif-empty"><i class="fa fa-bell-slash fa-lg mb-2 d-block"></i>No notifications yet</div>';
+            return;
+        }
+        var html = '';
+        notifications.forEach(function (n) {
+            var icon  = typeIcons[n.type]   || 'fa-info-circle';
+            var color = typeColors[n.type]  || '#64748b';
+            var href  = n.link ? n.link : '#';
+            html += '<a class="notif-item' + (n.is_read == 0 ? ' unread' : '') + '"'
+                  + ' href="' + href + '"'
+                  + ' data-id="' + n.id + '">'
+                  + '<div class="notif-icon" style="color:' + color + ';background:' + color + '18">'
+                  + '<i class="fa ' + icon + '"></i></div>'
+                  + '<div class="notif-body">'
+                  + '<div class="notif-title">' + escHtml(n.title) + '</div>'
+                  + (n.message ? '<div class="notif-msg">' + escHtml(n.message) + '</div>' : '')
+                  + '</div>'
+                  + '<div class="notif-ago">' + (n.ago || '') + '</div>'
+                  + '</a>';
+        });
+        list.innerHTML = html;
+        setBadge(unread);
+    }
+
+    function escHtml(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function fetchNotifs() {
+        fetch(apiUrl + '?action=list')
+            .then(function(r){ return r.json(); })
+            .then(function(d){ if (d.notifications) renderList(d.notifications, d.count); })
+            .catch(function(){});
+    }
+
+    function updateCount() {
+        fetch(apiUrl + '?action=count')
+            .then(function(r){ return r.json(); })
+            .then(function(d){ if (typeof d.count !== 'undefined') setBadge(d.count); })
+            .catch(function(){});
+    }
+
+    // Load list when dropdown opens
+    document.getElementById('notifBell') && document.getElementById('notifBell').addEventListener('show.bs.dropdown', fetchNotifs);
+
+    // Mark individual read on click
+    document.addEventListener('click', function(e) {
+        var item = e.target.closest && e.target.closest('.notif-item');
+        if (!item || !item.dataset.id) return;
+        var id = item.dataset.id;
+        fetch(apiUrl + '?action=mark_read', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'id='+id })
+            .then(function(r){ return r.json(); })
+            .then(function(d){ item.classList.remove('unread'); setBadge(d.count); })
+            .catch(function(){});
+    });
+
+    // Mark all read
+    document.getElementById('markAllRead') && document.getElementById('markAllRead').addEventListener('click', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        fetch(apiUrl + '?action=mark_all_read', { method:'POST' })
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                document.querySelectorAll('.notif-item.unread').forEach(function(el){ el.classList.remove('unread'); });
+                setBadge(0);
+            })
+            .catch(function(){});
+    });
+
+    // Poll every 60 s for new notifications
+    pollInt = setInterval(updateCount, 60000);
+}());
+</script>
 
 <!-- ── Flash ─────────────────────────────────────────── -->
 <?php $__flash = getFlash(); if ($__flash): ?>

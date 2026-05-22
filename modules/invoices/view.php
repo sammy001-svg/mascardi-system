@@ -62,6 +62,9 @@ include __DIR__ . '/../../includes/header.php';
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">Invoice: <strong><?= e($inv['invoice_number']) ?></strong> <?= statusBadge($inv['status']) ?></h5>
     <div class="d-flex gap-2 flex-wrap">
+        <?php if (in_array($inv['status'], ['unpaid','partial']) && canWrite('invoices')): ?>
+        <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
+        <?php endif; ?>
         <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#emailModal"><i class="fa fa-envelope me-1"></i>Send to Client</button>
         <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fa fa-print me-1"></i>Print</a>
         <a href="download_pdf.php?id=<?= $id ?>" class="btn btn-sm btn-outline-danger" target="_blank"><i class="fa fa-file-pdf me-1"></i>Download PDF</a>
