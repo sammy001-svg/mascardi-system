@@ -22,7 +22,9 @@ define('DB_NAME',    $_ENV['DB_NAME']    ?? 'mascardi_db');
 define('DB_USER',    $_ENV['DB_USER']    ?? 'root');
 define('DB_PASS',    $_ENV['DB_PASS']    ?? '');
 define('DB_CHARSET', 'utf8mb4');
-define('APP_DEBUG',  filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOLEAN));
+if (!defined('APP_DEBUG')) {
+    define('APP_DEBUG',  filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOLEAN));
+}
 
 function getDB(): PDO {
     static $pdo = null;

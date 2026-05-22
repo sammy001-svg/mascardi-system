@@ -10,10 +10,13 @@ if (!$id) redirect('index.php');
 
 $booking = $db->prepare("
     SELECT sb.*, cl.name AS client_link_name, cl.email AS client_link_email,
-           ca.make, ca.model, ca.year, ca.chassis_number, ca.registration_number
+           ca.make, ca.model, ca.year, ca.chassis_number, ca.registration_number,
+           wj.id AS job_id
     FROM service_bookings sb
     LEFT JOIN clients cl ON cl.id = sb.client_id
     LEFT JOIN cars ca    ON ca.id = sb.car_id
+    LEFT JOIN quick_assessments qa ON qa.service_booking_id = sb.id
+    LEFT JOIN workshop_jobs wj     ON wj.assessment_id = qa.id
     WHERE sb.id = ?
 ");
 $booking->execute([$id]); $booking = $booking->fetch();
@@ -55,6 +58,9 @@ include __DIR__ . '/../../includes/header.php';
     </div>
     <div class="d-flex align-items-center gap-2">
         <span class="badge bg-<?= $sc ?> fs-6 px-3 py-2"><i class="fa <?= $si ?> me-1"></i><?= ucwords(str_replace('_',' ',$booking['status'])) ?></span>
+        <?php if (canWrite('service_bookings') && !in_array($booking['status'], ['completed', 'cancelled'])): ?>
+        <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
+        <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
 </div>
@@ -183,7 +189,7 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card">
             <div class="card-header"><i class="fa fa-toolbox me-2"></i>Linked Job Card</div>
             <div class="card-body">
-                <?php if ($booking['job_id']): ?>
+                <?php if (!empty($booking['job_id'])): ?>
                 <a href="<?= BASE_URL ?>/modules/jobs/view.php?id=<?= $booking['job_id'] ?>" class="btn btn-outline-primary"><i class="fa fa-external-link-alt me-1"></i>View Job Card</a>
                 <?php elseif ($booking['car_id']): ?>
                 <p class="text-muted small mb-2">Create a workshop job card for this booking.</p>

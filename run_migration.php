@@ -68,6 +68,43 @@ try {
     $results[] = ['warn', 'sale_prefix setting: ' . $e->getMessage()];
 }
 
+// ── Migration 015: Car Issues ─────────────────────────────────────────────────
+
+// 4. Create car_issues table
+try {
+    $db->exec("CREATE TABLE IF NOT EXISTS car_issues (
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        issue_number    VARCHAR(30)  UNIQUE NOT NULL,
+        car_id          INT          NOT NULL,
+        title           VARCHAR(200) NOT NULL,
+        description     TEXT,
+        category        VARCHAR(50),
+        severity        ENUM('low','medium','high','critical') DEFAULT 'medium',
+        status          ENUM('open','in_progress','resolved','closed') DEFAULT 'open',
+        reported_by     VARCHAR(100),
+        reported_at     DATETIME     DEFAULT CURRENT_TIMESTAMP,
+        assigned_to     INT          NULL,
+        resolved_by     VARCHAR(100),
+        resolved_at     DATETIME     NULL,
+        resolution_notes TEXT,
+        created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fk_issue_car  FOREIGN KEY (car_id)      REFERENCES cars(id)      ON DELETE CASCADE,
+        CONSTRAINT fk_issue_mech FOREIGN KEY (assigned_to) REFERENCES mechanics(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $results[] = ['ok', 'car_issues table created (or already exists)'];
+} catch (PDOException $e) {
+    $results[] = ['err', 'car_issues table: ' . $e->getMessage()];
+}
+
+// 5. Insert issue_prefix setting
+try {
+    $db->exec("INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('issue_prefix', 'ISS')");
+    $results[] = ['ok', 'issue_prefix setting inserted'];
+} catch (PDOException $e) {
+    $results[] = ['warn', 'issue_prefix setting: ' . $e->getMessage()];
+}
+
 // ── Render results ────────────────────────────────────────────────────────────
 ?>
 <!DOCTYPE html>
@@ -79,7 +116,7 @@ try {
 </head>
 <body class="bg-light">
 <div class="container py-5" style="max-width:640px">
-    <h4 class="mb-4"><i class="fa fa-database me-2"></i>Migration 014 — Car Sales</h4>
+    <h4 class="mb-4"><i class="fa fa-database me-2"></i>Migrations 014–015 — Car Sales &amp; Issues</h4>
     <div class="card">
         <div class="card-body">
             <?php foreach ($results as [$type, $msg]): ?>

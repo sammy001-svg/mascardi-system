@@ -73,6 +73,9 @@ include __DIR__ . '/../../includes/header.php';
         <h5 class="mb-1"><i class="fa fa-triangle-exclamation me-2 text-warning"></i>Issues Dashboard</h5>
         <div class="text-muted small"><?= $stats['open_count'] ?> open issue<?= $stats['open_count'] != 1 ? 's' : '' ?> across <?= count($byVehicle) ?> vehicle<?= count($byVehicle) != 1 ? 's' : '' ?></div>
     </div>
+    <?php if (canWrite('issues')): ?>
+    <a href="add.php" class="btn btn-sm btn-warning"><i class="fa fa-plus me-1"></i>Report Issue</a>
+    <?php endif; ?>
 </div>
 
 <!-- ── Stat cards ─────────────────────────────────────────────────────────── -->
@@ -246,5 +249,84 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+
+<?php
+// ── Standalone reported issues ────────────────────────────────────────────────
+$standaloneIssues = [];
+try {
+    $standaloneIssues = $db->query("
+        SELECT ci.id, ci.issue_number, ci.title, ci.category, ci.severity, ci.status,
+               ci.reported_by, ci.reported_at,
+               c.make, c.model, c.year, c.registration_number,
+               m.name AS mechanic_name
+        FROM car_issues ci
+        JOIN cars c ON c.id = ci.car_id
+        LEFT JOIN mechanics m ON m.id = ci.assigned_to
+        WHERE ci.status NOT IN ('closed')
+        ORDER BY ci.reported_at DESC
+        LIMIT 50
+    ")->fetchAll();
+} catch (\Throwable $e) { /* table may not exist yet */ }
+
+if (!empty($standaloneIssues) || canWrite('issues')):
+$severityColors = ['low'=>'secondary','medium'=>'warning','high'=>'orange','critical'=>'danger'];
+$statusColors   = ['open'=>'danger','in_progress'=>'primary','resolved'=>'success','closed'=>'dark'];
+?>
+<div class="d-flex justify-content-between align-items-center mb-3 mt-4">
+    <h6 class="mb-0 fw-bold"><i class="fa fa-flag me-2 text-warning"></i>Reported Issues</h6>
+    <?php if (canWrite('issues')): ?>
+    <a href="add.php" class="btn btn-sm btn-warning"><i class="fa fa-plus me-1"></i>Report Issue</a>
+    <?php endif; ?>
+</div>
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover datatable mb-0" style="font-size:13px">
+            <thead>
+                <tr>
+                    <th class="ps-3">Issue #</th>
+                    <th>Vehicle</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Assigned To</th>
+                    <th>Reported</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($standaloneIssues as $iss):
+                    $sevClass = $severityColors[$iss['severity']] ?? 'secondary';
+                    $stClass  = $statusColors[$iss['status']] ?? 'secondary';
+                ?>
+                <tr>
+                    <td class="ps-3 fw-semibold text-muted small"><?= e($iss['issue_number']) ?></td>
+                    <td>
+                        <div class="fw-medium small"><?= e($iss['make'].' '.$iss['model'].' '.$iss['year']) ?></div>
+                        <?php if ($iss['registration_number']): ?>
+                        <span class="badge bg-dark" style="font-size:10px"><?= e($iss['registration_number']) ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="fw-medium"><?= e($iss['title']) ?></td>
+                    <td class="small text-muted"><?= e($iss['category']) ?></td>
+                    <td><span class="badge bg-<?= $sevClass==='orange'?'warning':$sevClass ?>"><?= ucfirst($iss['severity']) ?></span></td>
+                    <td><span class="badge bg-<?= $stClass ?>"><?= ucwords(str_replace('_',' ',$iss['status'])) ?></span></td>
+                    <td class="small text-muted"><?= e($iss['mechanic_name'] ?? '—') ?></td>
+                    <td class="small text-muted"><?= fmtDate($iss['reported_at']) ?></td>
+                    <td class="pe-3 text-end">
+                        <a href="view.php?id=<?= $iss['id'] ?>" class="btn btn-xs btn-outline-primary">View</a>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                <?php if (empty($standaloneIssues)): ?>
+                <tr><td colspan="9" class="text-center text-muted py-4">
+                    No reported issues. <a href="add.php">Report the first one.</a>
+                </td></tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

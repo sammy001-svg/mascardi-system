@@ -33,6 +33,9 @@ include __DIR__ . '/../../includes/header.php';
     <h5 class="mb-0">LPO: <strong><?= e($lpo['lpo_number']) ?></strong> <?= statusBadge($lpo['status']) ?></h5>
     <div class="d-flex gap-2 flex-wrap">
         <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fa fa-print me-1"></i>Print / PDF</a>
+        <?php if($lpo['status']==='draft' && canWrite('lpo')): ?>
+        <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
+        <?php endif; ?>
         <?php if($lpo['status']==='draft'): ?>
         <a href="?id=<?= $id ?>&status=sent" class="btn btn-sm btn-outline-info">Mark Sent</a>
         <a href="?id=<?= $id ?>&status=acknowledged" class="btn btn-sm btn-outline-primary">Acknowledged</a>
