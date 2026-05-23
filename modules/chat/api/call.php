@@ -163,7 +163,7 @@ switch ($action) {
     case 'incoming': {
         $stmt = $db->prepare("
             SELECT cc.id, cc.caller_id, cc.call_type, cc.offer_sdp, cc.conversation_id,
-                   u.full_name AS caller_name
+                   u.name AS caller_name
             FROM chat_calls cc
             JOIN users u ON u.id = cc.caller_id
             WHERE cc.callee_id = ?

@@ -8,7 +8,7 @@ $me  = authUser();
 $db  = getDB();
 
 // All active users except self, for the New Chat modal
-$stmt = $db->prepare("SELECT id, full_name, role FROM users WHERE id != ? AND status = 'active' ORDER BY full_name ASC");
+$stmt = $db->prepare("SELECT id, name AS full_name, role FROM users WHERE id != ? AND status = 'active' ORDER BY name ASC");
 $stmt->execute([$me['id']]);
 $allUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

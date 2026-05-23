@@ -20,7 +20,7 @@ if ($method === 'GET') {
             cm_last.content   AS last_msg_content,
             cm_last.file_name AS last_msg_file,
             cm_last.created_at AS last_msg_at,
-            u_last.full_name  AS last_sender_name,
+            u_last.name  AS last_sender_name,
             u_last.id         AS last_sender_id,
             cp.last_read_msg_id,
             -- unread count
@@ -31,7 +31,7 @@ if ($method === 'GET') {
                AND cm2.is_deleted = 0) AS unread_count,
             -- for direct chats, the other person's details
             u_other.id        AS other_user_id,
-            u_other.full_name AS other_user_name,
+            u_other.name AS other_user_name,
             u_other.role      AS other_user_role
         FROM chat_participants cp
         JOIN chat_conversations cc ON cc.id = cp.conversation_id
@@ -88,7 +88,7 @@ if ($method === 'POST') {
     }
 
     // Check target exists
-    $target = $db->prepare("SELECT id, full_name FROM users WHERE id=?");
+    $target = $db->prepare("SELECT id, name AS full_name FROM users WHERE id=?");
     $target->execute([$targetId]);
     if (!$target->fetch()) {
         http_response_code(404); echo json_encode(['error'=>'User not found']); exit;

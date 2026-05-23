@@ -25,7 +25,7 @@ $stmt = $db->prepare("
         cm.id, cm.conversation_id, cm.sender_id, cm.type,
         cm.content, cm.file_path, cm.file_name, cm.file_size, cm.mime_type,
         cm.duration, cm.is_deleted, cm.created_at,
-        u.full_name AS sender_name, u.role AS sender_role
+        u.name AS sender_name, u.role AS sender_role
     FROM chat_messages cm
     JOIN users u ON u.id = cm.sender_id
     WHERE cm.conversation_id = ?
