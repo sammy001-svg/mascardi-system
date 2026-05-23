@@ -91,12 +91,12 @@ function canAccess(string $module): bool {
         return (bool)($perms[$module][0] ?? false);
     }
     $map = [
-        'workshop_manager' => ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments'],
-        'sales_person'     => ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales'],
-        'sales_officer'    => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales'],
+        'workshop_manager' => ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments','chat'],
+        'sales_person'     => ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales','chat'],
+        'sales_officer'    => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales','chat'],
         // legacy — kept so existing sessions don't break
-        'manager'          => ['cars','mechanics','drivers','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings','issues'],
-        'mechanic'         => ['jobs','assessments','parts_requests','issues'],
+        'manager'          => ['cars','mechanics','drivers','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings','issues','chat'],
+        'mechanic'         => ['jobs','assessments','parts_requests','issues','chat'],
     ];
     return in_array($module, $map[$user['role']] ?? []);
 }

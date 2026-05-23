@@ -207,6 +207,16 @@ $__isDash = !str_contains($__uri, '/modules/');
         <?php endif; ?>
         <?php endif; ?>
 
+        <!-- Chat -->
+        <?php if (canAccess('chat')): ?>
+        <div class="nav-section">Messaging</div>
+        <a href="<?= BASE_URL ?>/modules/chat/index.php"
+           class="nav-item <?= isActive('/modules/chat/') ?>"
+           data-label="Chat">
+            <i class="fa fa-comments"></i><span>Chat</span>
+        </a>
+        <?php endif; ?>
+
         <!-- Analytics -->
         <?php if (canAccess('reports')): ?>
         <div class="nav-section">Analytics</div>
