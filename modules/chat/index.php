@@ -25,14 +25,31 @@ include __DIR__ . '/../../includes/header.php';
 ═══════════════════════════════════════════════════════════════ */
 .page-body { padding: 0 !important; overflow: hidden !important; }
 
-/* ── Modal stacking-context isolation ───────────────────────── */
-/* Prevents the page-body CSS animation (which uses transform) from
-   creating a stacking context that traps Bootstrap modals behind
-   their own backdrop. Modal + backdrop are moved to <body> in JS,
-   but we add explicit z-index overrides here as a safety net.    */
-#newChatModal               { z-index: 1055 !important; }
-#newChatModal + .modal-backdrop,
-body > .modal-backdrop      { z-index: 1050 !important; }
+/* Chat page: strip ALL stacking-context-creating properties from page-body
+   so Bootstrap's backdrop (appended to <body>) cannot paint over the modal.
+   transform, filter, will-change:transform, opacity<1, isolation — any of
+   these on an ancestor would trap the modal inside a nested context.        */
+.page-body {
+    padding: 0 !important;
+    overflow: hidden !important;
+    animation: none !important;
+    transform: none !important;
+    filter: none !important;
+    will-change: auto !important;
+    isolation: auto !important;
+    opacity: 1 !important;
+}
+
+/* Force the modal and its backdrop to the top of the global stacking order.
+   This works even if the modal element was not yet moved out of page-body.  */
+#newChatModal {
+    z-index: 1055 !important;
+}
+body > .modal-backdrop,
+.modal-backdrop {
+    z-index: 1049 !important;
+}
+
 
 /* ── Root shell ─────────────────────────────────────────────── */
 .chat-root {
@@ -585,52 +602,8 @@ body > .modal-backdrop      { z-index: 1050 !important; }
     <img id="lbImg" src="" alt="">
 </div>
 
-<!-- NEW CHAT MODAL -->
-<div class="modal fade" id="newChatModal" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header py-2 border-bottom-0 pb-0">
-                <div>
-                    <h6 class="modal-title fw-bold mb-0">New Conversation</h6>
-                    <p class="text-muted mb-0" style="font-size:12px">Select someone to chat with</p>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-2">
-                <div class="px-2 pb-2">
-                    <div style="position:relative">
-                        <i class="fa fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8696a0;font-size:13px;pointer-events:none"></i>
-                        <input type="text" id="userSearch"
-                               class="form-control form-control-sm"
-                               style="padding-left:32px;background:#f0f2f5;border:none;border-radius:8px"
-                               placeholder="Search people…" autocomplete="off">
-                    </div>
-                </div>
-                <div class="up-list" id="upList">
-                <?php foreach ($allUsers as $u):
-                    $init  = mb_strtoupper(mb_substr($u['name'], 0, 1));
-                    $color = $palette[$u['id'] % count($palette)];
-                    $rl    = $roleLabels[$u['role']] ?? ucfirst($u['role']);
-                ?>
-                    <div class="up-item"
-                         data-uid="<?= (int)$u['id'] ?>"
-                         data-uname="<?= e($u['name']) ?>"
-                         data-ucolor="<?= e($color) ?>">
-                        <div class="up-av" style="background:<?= $color ?>"><?= e($init) ?></div>
-                        <div>
-                            <div class="up-name"><?= e($u['name']) ?></div>
-                            <div class="up-role"><?= e($rl) ?></div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-                <?php if (empty($allUsers)): ?>
-                    <p class="text-muted small text-center py-3 mb-0">No other users found.</p>
-                <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- #newChatModal is rendered AFTER footer.php (direct child of body) to avoid
+     the page-body CSS stacking context caused by its animation/transform. -->
 
 <script>
 /* ════════════════════════════════════════════════════════════
@@ -1314,7 +1287,7 @@ const Chat = {
         // creating a stacking context. Bootstrap's backdrop (appended to body after
         // .page-body) would paint over the modal inside that context. Moving the
         // modal to <body> puts it outside the stacking context so it layers correctly.
-        document.body.appendChild($('newChatModal'));
+        // #newChatModal is already a direct child of <body> (rendered after footer.php).
 
         this.buildEmojiPicker();
         this.loadConvs();
@@ -1432,3 +1405,51 @@ document.addEventListener('DOMContentLoaded', () => Chat.init());
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
+
+<!-- ══ NEW CHAT MODAL — direct child of <body>, outside page-body stacking context ══ -->
+<div class="modal fade" id="newChatModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header py-2 border-bottom-0 pb-0">
+                <div>
+                    <h6 class="modal-title fw-bold mb-0">New Conversation</h6>
+                    <p class="text-muted mb-0" style="font-size:12px">Select someone to chat with</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-2">
+                <div class="px-2 pb-2">
+                    <div style="position:relative">
+                        <i class="fa fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8696a0;font-size:13px;pointer-events:none"></i>
+                        <input type="text" id="userSearch"
+                               class="form-control form-control-sm"
+                               style="padding-left:32px;background:#f0f2f5;border:none;border-radius:8px"
+                               placeholder="Search people…" autocomplete="off">
+                    </div>
+                </div>
+                <div class="up-list" id="upList">
+                <?php foreach ($allUsers as $u):
+                    $init  = mb_strtoupper(mb_substr($u['name'], 0, 1));
+                    $color = $palette[$u['id'] % count($palette)];
+                    $rl    = $roleLabels[$u['role']] ?? ucfirst($u['role']);
+                ?>
+                    <div class="up-item"
+                         data-uid="<?= (int)$u['id'] ?>"
+                         data-uname="<?= e($u['name']) ?>"
+                         data-ucolor="<?= e($color) ?>">
+                        <div class="up-av" style="background:<?= $color ?>"><?= e($init) ?></div>
+                        <div>
+                            <div class="up-name"><?= e($u['name']) ?></div>
+                            <div class="up-role"><?= e($rl) ?></div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                <?php if (empty($allUsers)): ?>
+                    <p class="text-muted small text-center py-3 mb-0">No other users found.</p>
+                <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
