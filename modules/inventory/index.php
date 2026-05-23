@@ -58,7 +58,7 @@ include __DIR__ . '/../../includes/header.php';
         <h5 class="mb-1">Parts &amp; Inventory</h5>
         <div class="text-muted small">Stock management for parts and materials</div>
     </div>
-    <?php if (canEditDelete()): ?>
+    <?php if (canWrite('inventory')): ?>
     <a href="add.php" class="btn btn-primary btn-sm"><i class="fa fa-plus me-1"></i>Add Part</a>
     <?php endif; ?>
 </div>
@@ -157,7 +157,7 @@ include __DIR__ . '/../../includes/header.php';
                     <th>Reorder At</th>
                     <th>Status</th>
                     <th>Supplier</th>
-                    <?php if (canEditDelete()): ?><th>Actions</th><?php endif; ?>
+                    <?php if (canWrite('inventory')): ?><th>Actions</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -185,12 +185,14 @@ include __DIR__ . '/../../includes/header.php';
                     <td class="text-muted"><?= number_format($rl, 2) ?></td>
                     <td><?= $stockBadge ?></td>
                     <td class="text-muted small"><?= e($item['supplier_name'] ?? '—') ?></td>
-                    <?php if (canEditDelete()): ?>
+                    <?php if (canWrite('inventory')): ?>
                     <td>
                         <a href="edit.php?id=<?= $item['id'] ?>" class="btn btn-xs btn-outline-secondary"><i class="fa fa-pen"></i></a>
                         <a href="adjust.php?id=<?= $item['id'] ?>" class="btn btn-xs btn-outline-primary" title="Adjust Stock"><i class="fa fa-sliders"></i></a>
+                        <?php if (canEditDelete()): ?>
                         <a href="delete.php?id=<?= $item['id'] ?>" class="btn btn-xs btn-outline-danger"
                            onclick="return confirm('Delete this part? This cannot be undone.')"><i class="fa fa-trash"></i></a>
+                        <?php endif; ?>
                     </td>
                     <?php endif; ?>
                 </tr>
