@@ -2,421 +2,725 @@
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
 canAccess('chat') || die('Access denied.');
+
 $pageTitle = 'Chat';
-$me = authUser();
-$db = getDB();
+$me  = authUser();
+$db  = getDB();
 
-// All users except self for new chat
-$users = $db->prepare("SELECT id, name, role FROM users WHERE id != ? AND status='active' ORDER BY name");
-$users->execute([$me['id']]);
-$users = $users->fetchAll(PDO::FETCH_ASSOC);
+// All active users except self, for the New Chat modal
+$stmt = $db->prepare("SELECT id, full_name, role FROM users WHERE id != ? AND status = 'active' ORDER BY full_name ASC");
+$stmt->execute([$me['id']]);
+$allUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Extra styles/scripts injected into header
-$extraCss = '<style>
-/* ── Chat layout overrides ───────────────────────────────────── */
-.page-content { padding: 0 !important; }
-.chat-wrap {
+$roleLabels = [
+    'admin'            => 'Admin',
+    'workshop_manager' => 'Workshop Manager',
+    'sales_person'     => 'Sales Person',
+    'sales_officer'    => 'Sales Officer',
+    'manager'          => 'Manager',
+    'mechanic'         => 'Mechanic',
+];
+
+// Colours for avatars – deterministic by user id
+$avatarColors = ['#075e54','#128c7e','#25d366','#34b7f1','#e9c46a','#2a9d8f','#e76f51','#264653'];
+
+// Pass CSRF token to JS for AJAX posts
+$csrf = csrfToken();
+
+$extraCss = <<<CSS
+/* ─── Override page padding so chat fills the shell ─────────────────── */
+.page-content          { padding: 0 !important; overflow: hidden; }
+.app-content           { height: calc(100vh - 56px); overflow: hidden; }   /* 56px = topbar */
+
+/* ─── Root wrapper ────────────────────────────────────────────────────  */
+.chat-root {
     display: flex;
-    height: calc(100vh - 56px);   /* subtract topbar */
+    height: 100%;
     background: #f0f2f5;
-    overflow: hidden;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
 }
 
-/* ── Left sidebar ─────────────────────────────────────────────── */
-.chat-sidebar {
-    width: 340px;
-    min-width: 340px;
-    background: #fff;
-    border-right: 1px solid #e9edef;
+/* ═══════════════════════════════════════════════════════════════════════
+   LEFT PANEL – Conversation list
+═══════════════════════════════════════════════════════════════════════ */
+.chat-panel-left {
+    width: 360px;
+    min-width: 360px;
     display: flex;
     flex-direction: column;
+    background: #fff;
+    border-right: 1px solid #e9edef;
+    position: relative;
+    z-index: 2;
 }
-.chat-sidebar-header {
-    padding: 12px 16px;
-    background: #f0f2f5;
-    border-bottom: 1px solid #e9edef;
+
+/* Header */
+.cl-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-}
-.chat-sidebar-header h6 { margin: 0; font-weight: 700; font-size: 18px; }
-.chat-search { padding: 8px 12px; background: #fff; border-bottom: 1px solid #f0f2f5; }
-.chat-search input {
-    width: 100%;
-    border: none;
+    padding: 13px 16px 12px;
     background: #f0f2f5;
-    border-radius: 8px;
-    padding: 8px 14px;
-    font-size: 13px;
-    outline: none;
+    border-bottom: 1px solid #e9edef;
 }
+.cl-header-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111b21;
+    margin: 0;
+}
+.cl-header-actions { display: flex; gap: 4px; }
+.cl-icon-btn {
+    width: 36px; height: 36px;
+    background: none; border: none; border-radius: 50%;
+    color: #54656f; font-size: 17px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background .15s;
+}
+.cl-icon-btn:hover { background: #e9edef; }
+
+/* Search */
+.cl-search {
+    padding: 8px 12px;
+    background: #fff;
+    border-bottom: 1px solid #f0f2f5;
+}
+.cl-search-input {
+    width: 100%;
+    background: #f0f2f5;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px 7px 36px;
+    font-size: 13.5px;
+    outline: none;
+    color: #111b21;
+}
+.cl-search-wrap { position: relative; }
+.cl-search-icon {
+    position: absolute;
+    left: 11px; top: 50%; transform: translateY(-50%);
+    color: #8696a0; font-size: 13px; pointer-events: none;
+}
+
+/* Conversation list */
 .conv-list { flex: 1; overflow-y: auto; }
+.conv-list::-webkit-scrollbar { width: 4px; }
+.conv-list::-webkit-scrollbar-thumb { background: #c9d0d7; border-radius: 4px; }
+
 .conv-item {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 16px;
+    padding: 10px 16px;
     cursor: pointer;
     border-bottom: 1px solid #f0f2f5;
-    transition: background .1s;
+    transition: background .12s;
+    position: relative;
 }
-.conv-item:hover, .conv-item.active { background: #f0f2f5; }
+.conv-item:hover  { background: #f5f6f6; }
+.conv-item.active { background: #f0f2f5; }
+
 .conv-avatar {
-    width: 46px; height: 46px; border-radius: 50%;
-    background: #128c7e;
-    color: #fff;
+    width: 48px; height: 48px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 16px;
+    font-weight: 700; font-size: 18px; color: #fff;
+    flex-shrink: 0; letter-spacing: 0.5px;
+}
+.conv-body { flex: 1; min-width: 0; }
+.conv-top  { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
+.conv-name {
+    font-weight: 600; font-size: 14.5px; color: #111b21;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex: 1; margin-right: 6px;
+}
+.conv-time { font-size: 11px; color: #8696a0; flex-shrink: 0; }
+.conv-bottom { display: flex; align-items: center; justify-content: space-between; }
+.conv-preview {
+    font-size: 12.5px; color: #667781;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex: 1; margin-right: 6px;
+}
+.conv-unread {
+    min-width: 20px; height: 20px; padding: 0 5px;
+    background: #25d366; color: #fff;
+    border-radius: 10px; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
 }
-.conv-info { flex: 1; min-width: 0; }
-.conv-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.conv-preview { font-size: 12px; color: #667781; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.conv-time { font-size: 11px; color: #667781; }
-.conv-unread { background: #25d366; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
 
-/* ── Main chat area ───────────────────────────────────────────── */
-.chat-main {
+.conv-empty {
+    padding: 40px 20px; text-align: center;
+    color: #8696a0; font-size: 13.5px;
+}
+.conv-empty i { font-size: 40px; opacity: .25; display: block; margin-bottom: 12px; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RIGHT PANEL – Active chat
+═══════════════════════════════════════════════════════════════════════ */
+.chat-panel-right {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: #efeae2;
+    min-width: 0;
     position: relative;
 }
-.chat-main-empty {
+
+/* Empty / welcome state */
+.chat-welcome {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: #667781;
-}
-.chat-header {
+    color: #8696a0;
     background: #f0f2f5;
-    border-bottom: 1px solid #e9edef;
-    padding: 10px 16px;
+    gap: 12px;
+}
+.chat-welcome-icon {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: #e9edef;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; color: #aebac1;
+}
+.chat-welcome h6 { color: #3b4a54; font-size: 22px; font-weight: 300; margin: 0; }
+.chat-welcome p  { font-size: 13.5px; margin: 0; }
+
+/* Active pane */
+.chat-active {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+}
+.chat-active.visible { display: flex; }
+
+/* Chat header */
+.chat-header {
     display: flex;
     align-items: center;
     gap: 12px;
+    padding: 10px 16px;
+    background: #f0f2f5;
+    border-bottom: 1px solid #e9edef;
+    flex-shrink: 0;
 }
-.chat-header-info { flex: 1; }
-.chat-header-info .name { font-weight: 700; font-size: 15px; }
-.chat-header-info .status { font-size: 12px; color: #667781; }
-.chat-header-actions { display: flex; gap: 8px; }
-.chat-header-actions button {
-    background: none; border: none; color: #54656f;
-    font-size: 18px; padding: 6px; border-radius: 50%; cursor: pointer;
-    transition: background .15s;
+.chat-header-avatar {
+    width: 42px; height: 42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px; color: #fff;
+    flex-shrink: 0; cursor: pointer;
 }
-.chat-header-actions button:hover { background: #e9edef; }
+.chat-header-info { flex: 1; min-width: 0; }
+.chat-header-name { font-weight: 700; font-size: 15px; color: #111b21; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-header-sub  { font-size: 12px; color: #667781; }
+.chat-header-btns { display: flex; gap: 2px; }
+.chat-header-btns .cl-icon-btn { font-size: 18px; }
+/* back button for mobile */
+.chat-back-btn { display: none; }
 
-/* ── Message area ─────────────────────────────────────────────── */
-.chat-messages {
+/* Messages area */
+.chat-messages-area {
     flex: 1;
     overflow-y: auto;
     padding: 16px;
+    background: #efeae2;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'200\'%3E%3C/svg%3E");
+    gap: 2px;
+    /* WhatsApp-style tiled background */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' opacity='0.04'%3E%3Cpath d='M50 50 L350 50 L350 350 L50 350Z' fill='none' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E");
 }
-.msg-bubble-wrap {
-    display: flex;
-    margin: 2px 0;
+.chat-messages-area::-webkit-scrollbar { width: 5px; }
+.chat-messages-area::-webkit-scrollbar-thumb { background: #c9d0d7; border-radius: 5px; }
+
+/* Day divider */
+.msg-day {
+    display: flex; align-items: center; justify-content: center;
+    margin: 10px 0 8px;
 }
-.msg-bubble-wrap.sent { justify-content: flex-end; }
-.msg-bubble-wrap.received { justify-content: flex-start; }
+.msg-day span {
+    background: #fff; color: #54656f;
+    font-size: 12px; font-weight: 500; padding: 4px 12px;
+    border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.1);
+}
+
+/* Bubble wrapper */
+.msg-row { display: flex; margin: 1px 0; }
+.msg-row.sent     { justify-content: flex-end; }
+.msg-row.received { justify-content: flex-start; }
+
+/* Bubble */
 .msg-bubble {
-    max-width: 65%;
-    padding: 6px 10px 20px 10px;
+    max-width: 62%;
+    padding: 6px 9px 22px 9px;
     border-radius: 8px;
-    font-size: 13.5px;
-    line-height: 1.4;
+    font-size: 14px; line-height: 1.45;
     position: relative;
     word-wrap: break-word;
-    box-shadow: 0 1px 1px rgba(0,0,0,.1);
+    box-shadow: 0 1px 2px rgba(0,0,0,.12);
 }
-.msg-bubble-wrap.sent .msg-bubble {
+.msg-row.sent .msg-bubble {
     background: #d9fdd3;
-    border-top-right-radius: 0;
+    border-top-right-radius: 2px;
 }
-.msg-bubble-wrap.received .msg-bubble {
+.msg-row.received .msg-bubble {
     background: #fff;
-    border-top-left-radius: 0;
+    border-top-left-radius: 2px;
 }
-.msg-sender { font-size: 12px; font-weight: 700; color: #128c7e; margin-bottom: 2px; }
-.msg-meta {
-    position: absolute;
-    bottom: 4px; right: 8px;
-    font-size: 10px; color: #667781;
-    display: flex; align-items: center; gap: 3px;
-}
-.msg-tick { color: #53bdeb; }
 
-/* ── File bubble ──────────────────────────────────────────────── */
-.msg-file {
+/* Bubble tail via ::before pseudo */
+.msg-row.sent .msg-bubble::before {
+    content: ''; position: absolute; top: 0; right: -8px;
+    border: 8px solid transparent;
+    border-top-color: #d9fdd3; border-right: none; border-left: none;
+}
+.msg-row.received .msg-bubble::before {
+    content: ''; position: absolute; top: 0; left: -8px;
+    border: 8px solid transparent;
+    border-top-color: #fff; border-left: none; border-right: none;
+}
+
+/* Sender name (group chats) */
+.msg-sender-name { font-size: 12.5px; font-weight: 700; color: #128c7e; margin-bottom: 3px; }
+
+/* Timestamp + tick */
+.msg-footer {
+    position: absolute; bottom: 4px; right: 8px;
+    display: flex; align-items: center; gap: 3px;
+    font-size: 11px; color: #8696a0;
+}
+.msg-tick { color: #53bdeb; font-size: 11px; }
+
+/* Text content */
+.msg-text { white-space: pre-wrap; }
+
+/* Image bubble */
+.msg-img {
+    max-width: 260px; border-radius: 6px;
+    cursor: zoom-in; display: block;
+    margin-bottom: 4px;
+}
+
+/* File bubble */
+.msg-file-wrap {
     display: flex; align-items: center; gap: 10px;
     background: rgba(0,0,0,.05); border-radius: 6px;
-    padding: 8px 10px; margin-bottom: 4px;
-    min-width: 200px;
+    padding: 9px 11px; min-width: 210px; margin-bottom: 4px;
+    text-decoration: none; color: inherit;
 }
-.msg-file .file-icon { font-size: 28px; color: #128c7e; }
-.msg-file .file-info .name { font-size: 12.5px; font-weight: 600; word-break: break-all; }
-.msg-file .file-info .size { font-size: 11px; color: #667781; }
-.msg-image img { max-width: 240px; border-radius: 6px; cursor: pointer; }
+.msg-file-icon { font-size: 30px; flex-shrink: 0; }
+.msg-file-name { font-size: 13px; font-weight: 600; word-break: break-all; color: #111b21; }
+.msg-file-size { font-size: 11.5px; color: #667781; }
+.msg-file-dl   { color: #8696a0; font-size: 15px; margin-left: auto; flex-shrink: 0; }
 
-/* ── Voice note ───────────────────────────────────────────────── */
-.msg-voice {
+/* Voice note bubble */
+.msg-voice-wrap {
     display: flex; align-items: center; gap: 10px;
-    min-width: 220px; padding: 4px 0;
+    min-width: 230px; padding: 2px 0 6px;
 }
-.msg-voice .play-btn {
-    width: 38px; height: 38px; border-radius: 50%;
+.msg-voice-btn {
+    width: 40px; height: 40px; border-radius: 50%;
     background: #128c7e; color: #fff; border: none;
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 14px; flex-shrink: 0;
+    cursor: pointer; font-size: 15px; flex-shrink: 0;
+    transition: background .15s;
 }
-.msg-voice .waveform {
-    flex: 1; height: 30px; background: linear-gradient(to right, #128c7e 0%, #128c7e var(--prog, 0%), #c8d6d4 var(--prog, 0%), #c8d6d4 100%);
-    border-radius: 4px; cursor: pointer;
+.msg-voice-btn:hover { background: #0f7268; }
+.msg-voice-waveform {
+    flex: 1; height: 28px; border-radius: 4px; cursor: pointer;
+    background: linear-gradient(to right,
+        #128c7e 0%, #128c7e var(--prog,0%),
+        rgba(0,0,0,.15) var(--prog,0%), rgba(0,0,0,.15) 100%);
 }
-.msg-voice .duration { font-size: 11px; color: #667781; min-width: 30px; }
+.msg-voice-dur { font-size: 12px; color: #667781; min-width: 34px; text-align: right; }
 
-/* ── Day divider ──────────────────────────────────────────────── */
-.day-divider {
-    text-align: center; margin: 12px 0;
+/* Call/system row */
+.msg-row-call {
+    display: flex; justify-content: center; margin: 6px 0;
 }
-.day-divider span {
-    background: #e1f2fb; color: #54656f;
-    font-size: 11.5px; font-weight: 500;
-    padding: 4px 10px; border-radius: 8px;
+.msg-row-call .msg-call-chip {
+    background: rgba(0,0,0,.06); border-radius: 8px;
+    padding: 5px 14px; font-size: 12.5px; color: #54656f;
 }
 
-/* ── Input bar ────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════
+   INPUT BAR
+═══════════════════════════════════════════════════════════════════════ */
 .chat-input-bar {
-    background: #f0f2f5;
-    border-top: 1px solid #e9edef;
-    padding: 8px 12px;
     display: flex;
     align-items: flex-end;
     gap: 8px;
-}
-.chat-input-actions { display: flex; gap: 4px; }
-.chat-input-actions button, .chat-send-btn, .chat-record-btn {
-    background: none; border: none; color: #54656f; font-size: 22px;
-    padding: 6px; border-radius: 50%; cursor: pointer; transition: background .15s;
-    display: flex; align-items: center; justify-content: center;
+    padding: 8px 12px 10px;
+    background: #f0f2f5;
+    border-top: 1px solid #e9edef;
     flex-shrink: 0;
 }
-.chat-input-actions button:hover, .chat-send-btn:hover { background: #e9edef; }
-.chat-text-wrap {
-    flex: 1;
-    background: #fff;
-    border-radius: 10px;
-    padding: 8px 12px;
-    max-height: 120px;
-    overflow-y: auto;
-    font-size: 14px;
-    outline: none;
-    line-height: 1.4;
-}
-.chat-text-wrap:empty::before { content: attr(data-placeholder); color: #aaa; }
-.chat-send-btn { background: #128c7e !important; color: #fff !important; font-size: 18px !important; width: 42px; height: 42px; border-radius: 50% !important; flex-shrink: 0; }
-.chat-send-btn:hover { background: #0f7268 !important; }
-.chat-record-btn.recording { background: #fee2e2 !important; color: #dc2626 !important; animation: pulse 1s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
 
-/* ── Recording indicator ──────────────────────────────────────── */
-.recording-bar {
-    display: none;
-    align-items: center;
-    gap: 10px;
-    flex: 1;
-    background: #fff;
-    border-radius: 10px;
-    padding: 10px 14px;
-    color: #dc2626;
-    font-size: 13px;
-    font-weight: 500;
+/* Icon buttons (attach, emoji, mic) */
+.input-icon-btn {
+    background: none; border: none;
+    color: #54656f; font-size: 22px;
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0; transition: background .15s;
 }
-.recording-bar.active { display: flex; }
-.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #dc2626; animation: pulse 1s infinite; }
+.input-icon-btn:hover { background: #e9edef; }
 
-/* ── Call overlay ─────────────────────────────────────────────── */
-.call-overlay {
-    display: none;
-    position: fixed; inset: 0; z-index: 9999;
-    background: rgba(0,0,0,.85);
+/* Text area wrapper */
+.input-text-wrap {
+    flex: 1;
+    display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    position: relative;
+}
+
+/* Editable div */
+.input-text {
+    background: #fff;
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 14.5px; line-height: 1.45;
+    min-height: 42px; max-height: 130px;
+    overflow-y: auto; outline: none;
+    color: #111b21;
+    word-wrap: break-word;
+}
+.input-text:empty::before {
+    content: attr(data-ph);
+    color: #8696a0;
+    pointer-events: none;
+}
+
+/* Recording state replaces text area */
+.rec-bar {
+    display: none;
+    background: #fff; border-radius: 10px;
+    padding: 9px 14px; align-items: center; gap: 10px;
+    min-height: 42px;
+}
+.rec-bar.on { display: flex; }
+.rec-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #dc2626; flex-shrink: 0;
+    animation: blink 1s step-start infinite;
+}
+@keyframes blink { 50%{opacity:0} }
+.rec-label { font-size: 13.5px; color: #dc2626; font-weight: 500; }
+.rec-timer { font-size: 13.5px; color: #111b21; font-weight: 600; margin-left: 4px; }
+.rec-cancel { margin-left: auto; background: none; border: none; color: #8696a0; font-size: 20px; cursor: pointer; padding: 0 4px; }
+.rec-cancel:hover { color: #dc2626; }
+
+/* Send / mic FAB */
+.input-send-btn {
+    width: 44px; height: 44px; border-radius: 50%; border: none;
+    background: #128c7e; color: #fff; font-size: 17px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+    transition: background .15s, transform .1s;
+}
+.input-send-btn:hover  { background: #0f7268; }
+.input-send-btn:active { transform: scale(.92); }
+.input-send-btn.mic-mode { background: #128c7e; }
+.input-send-btn.mic-mode.recording { background: #dc2626; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CALL OVERLAY (full-screen)
+═══════════════════════════════════════════════════════════════════════ */
+.call-overlay {
+    position: fixed; inset: 0; z-index: 9990;
+    background: #1f2c34;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
     color: #fff;
 }
-.call-overlay.active { display: flex; }
-.call-avatar-lg {
-    width: 96px; height: 96px; border-radius: 50%;
-    background: #128c7e; font-size: 36px; font-weight: 700;
+.call-overlay.on { display: flex; }
+
+/* Remote video (fills when active) */
+.call-remote-video {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; display: none;
+    background: #000;
+}
+/* Local PiP */
+.call-local-video {
+    position: absolute; bottom: 130px; right: 20px;
+    width: 130px; border-radius: 10px; border: 2px solid #fff;
+    object-fit: cover; display: none; z-index: 2;
+}
+
+/* Overlay content (sits above video) */
+.call-content {
+    position: relative; z-index: 3;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 0;
+}
+.call-avatar {
+    width: 90px; height: 90px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
+    font-size: 34px; font-weight: 700; color: #fff;
     margin-bottom: 16px;
 }
-.call-status { font-size: 14px; color: rgba(255,255,255,.7); margin-bottom: 32px; }
-.call-controls { display: flex; gap: 20px; }
-.call-btn {
-    width: 60px; height: 60px; border-radius: 50%; border: none;
-    font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: transform .15s;
-}
-.call-btn:hover { transform: scale(1.1); }
-.btn-hangup { background: #dc2626; color: #fff; }
-.btn-accept { background: #16a34a; color: #fff; }
-.btn-mute   { background: rgba(255,255,255,.2); color: #fff; }
-.btn-cam    { background: rgba(255,255,255,.2); color: #fff; }
-video.local-vid {
-    position: fixed; bottom: 100px; right: 20px;
-    width: 140px; height: 105px; border-radius: 10px;
-    object-fit: cover; z-index: 10000; border: 2px solid #fff;
-    display: none;
-}
-video.remote-vid { width: 100%; max-height: 60vh; border-radius: 12px; background: #111; display:none; }
-.call-timer { font-size: 18px; font-weight: 600; letter-spacing: 1px; margin-bottom: 16px; }
+.call-name   { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+.call-status { font-size: 14px; color: rgba(255,255,255,.65); margin-bottom: 4px; }
+.call-timer  { font-size: 20px; font-weight: 600; letter-spacing: 1px; min-height: 28px; margin-bottom: 32px; }
 
-/* ── New chat modal ───────────────────────────────────────────── */
+.call-btns { display: flex; gap: 24px; align-items: center; }
+.call-btn {
+    width: 62px; height: 62px; border-radius: 50%; border: none;
+    font-size: 22px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .15s, opacity .15s;
+}
+.call-btn:hover  { opacity: .85; }
+.call-btn:active { transform: scale(.9); }
+.call-btn-mute   { background: rgba(255,255,255,.2); color: #fff; }
+.call-btn-cam    { background: rgba(255,255,255,.2); color: #fff; }
+.call-btn-end    { background: #e53935; color: #fff; }
+.call-btn-accept { background: #43a047; color: #fff; }
+.call-btn-mute.off { background: #e0e0e0; color: #333; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   IMAGE LIGHTBOX
+═══════════════════════════════════════════════════════════════════════ */
+.img-lightbox {
+    position: fixed; inset: 0; z-index: 9995;
+    background: rgba(0,0,0,.92);
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 12px;
+}
+.img-lightbox.on { display: flex; }
+.img-lightbox img { max-width: 92vw; max-height: 85vh; border-radius: 6px; object-fit: contain; }
+.img-lightbox-close {
+    position: absolute; top: 16px; right: 20px;
+    color: #fff; font-size: 28px; cursor: pointer;
+    background: none; border: none; line-height: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NEW CHAT MODAL – user picker
+═══════════════════════════════════════════════════════════════════════ */
+.user-pick-list { max-height: 360px; overflow-y: auto; }
 .user-pick-item {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 12px;
     padding: 10px 14px; cursor: pointer; border-radius: 8px;
-    transition: background .1s;
+    transition: background .12s;
 }
 .user-pick-item:hover { background: #f0f2f5; }
 .user-pick-avatar {
-    width: 38px; height: 38px; border-radius: 50%;
-    background: #128c7e; color: #fff; font-weight: 700;
+    width: 42px; height: 42px; border-radius: 50%;
+    color: #fff; font-weight: 700; font-size: 15px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 14px; flex-shrink: 0;
+    flex-shrink: 0;
 }
+.user-pick-name { font-size: 14px; font-weight: 600; color: #111b21; }
+.user-pick-role { font-size: 12px; color: #667781; }
 
-@media (max-width: 768px) {
-    .chat-sidebar { width: 100%; min-width: 100%; display: none; }
-    .chat-sidebar.mobile-show { display: flex; }
-    .chat-main { width: 100%; }
+/* ═══════════════════════════════════════════════════════════════════════
+   RESPONSIVE – mobile
+═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+    .chat-panel-left  { width: 100%; min-width: 100%; }
+    .chat-panel-right { position: absolute; inset: 0; z-index: 5; }
+    .chat-panel-right.mobile-hidden { display: none; }
+    .chat-back-btn { display: flex !important; }
 }
-</style>';
+CSS;
 
 include __DIR__ . '/../../includes/header.php';
 ?>
 
-<div class="chat-wrap">
+<div class="chat-root" id="chatRoot">
 
-    <!-- ── LEFT: Conversation list ──────────────────────────────── -->
-    <div class="chat-sidebar" id="chatSidebar">
-        <div class="chat-sidebar-header">
-            <h6>Messages</h6>
-            <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-outline-secondary rounded-circle p-1" data-bs-toggle="modal" data-bs-target="#newChatModal" title="New Chat">
-                    <i class="fa fa-pen-to-square fa-sm"></i>
+    <!-- ══════════════════════════════════════════════════════════
+         LEFT PANEL – conversation list
+    ══════════════════════════════════════════════════════════ -->
+    <div class="chat-panel-left" id="chatPanelLeft">
+
+        <div class="cl-header">
+            <h6 class="cl-header-title">Messages</h6>
+            <div class="cl-header-actions">
+                <button class="cl-icon-btn" title="New chat"
+                        data-bs-toggle="modal" data-bs-target="#newChatModal">
+                    <i class="fa fa-pen-to-square"></i>
                 </button>
             </div>
         </div>
-        <div class="chat-search">
-            <input type="text" id="convSearch" placeholder="Search or start new chat">
+
+        <div class="cl-search">
+            <div class="cl-search-wrap">
+                <i class="fa fa-magnifying-glass cl-search-icon"></i>
+                <input type="text" class="cl-search-input" id="convSearch"
+                       placeholder="Search conversations…" autocomplete="off">
+            </div>
         </div>
+
         <div class="conv-list" id="convList">
-            <div class="text-center text-muted py-5 small"><i class="fa fa-spinner fa-spin"></i> Loading…</div>
+            <div class="conv-empty">
+                <i class="fa fa-spinner fa-spin"></i>
+                Loading conversations…
+            </div>
         </div>
-    </div>
 
-    <!-- ── RIGHT: Main chat area ────────────────────────────────── -->
-    <div class="chat-main" id="chatMain">
-        <div class="chat-main-empty" id="chatEmpty">
-            <i class="fa fa-comments fa-3x mb-3 opacity-25"></i>
-            <div class="fw-semibold mb-1">Mascardi Chat</div>
-            <div class="small opacity-75">Select a conversation or start a new one</div>
+    </div><!-- /chat-panel-left -->
+
+    <!-- ══════════════════════════════════════════════════════════
+         RIGHT PANEL – active chat
+    ══════════════════════════════════════════════════════════ -->
+    <div class="chat-panel-right mobile-hidden" id="chatPanelRight">
+
+        <!-- Welcome screen (no conversation selected) -->
+        <div class="chat-welcome" id="chatWelcome">
+            <div class="chat-welcome-icon"><i class="fa fa-comments"></i></div>
+            <h6>Mascardi Chat</h6>
+            <p>Select a conversation or start a new one</p>
         </div>
-        <!-- Active chat (hidden until conversation selected) -->
-        <div id="chatActive" style="display:none;flex-direction:column;height:100%;">
+
+        <!-- Active conversation pane -->
+        <div class="chat-active" id="chatActive">
+
+            <!-- Header -->
             <div class="chat-header" id="chatHeader">
-                <div class="conv-avatar" id="hdrAvatar">–</div>
+                <button class="cl-icon-btn chat-back-btn" id="chatBackBtn" title="Back">
+                    <i class="fa fa-arrow-left"></i>
+                </button>
+                <div class="chat-header-avatar" id="hdrAvatar"
+                     style="background:#128c7e">–</div>
                 <div class="chat-header-info">
-                    <div class="name" id="hdrName">—</div>
-                    <div class="status" id="hdrStatus"></div>
+                    <div class="chat-header-name" id="hdrName">—</div>
+                    <div class="chat-header-sub"  id="hdrSub"></div>
                 </div>
-                <div class="chat-header-actions">
-                    <button onclick="ChatApp.initiateCall('audio')" title="Voice Call"><i class="fa fa-phone"></i></button>
-                    <button onclick="ChatApp.initiateCall('video')" title="Video Call"><i class="fa fa-video"></i></button>
+                <div class="chat-header-btns">
+                    <button class="cl-icon-btn" title="Voice call"
+                            onclick="Chat.call('audio')" id="btnCallAudio">
+                        <i class="fa fa-phone"></i>
+                    </button>
+                    <button class="cl-icon-btn" title="Video call"
+                            onclick="Chat.call('video')" id="btnCallVideo">
+                        <i class="fa fa-video"></i>
+                    </button>
                 </div>
             </div>
-            <div class="chat-messages" id="chatMessages"></div>
+
+            <!-- Messages scroll area -->
+            <div class="chat-messages-area" id="msgArea"></div>
+
+            <!-- Input bar -->
             <div class="chat-input-bar">
-                <div class="chat-input-actions">
-                    <button title="Attach File" onclick="document.getElementById('fileInput').click()"><i class="fa fa-paperclip"></i></button>
-                    <input type="file" id="fileInput" style="display:none" multiple>
-                </div>
-                <div class="recording-bar" id="recordingBar">
-                    <div class="rec-dot"></div>
-                    <span>Recording… <span id="recTimer">0:00</span></span>
-                    <button class="btn btn-sm btn-outline-danger ms-auto" onclick="ChatApp.cancelRecording()"><i class="fa fa-xmark"></i></button>
-                </div>
-                <div contenteditable="true" id="msgInput" class="chat-text-wrap"
-                     data-placeholder="Type a message…"
-                     onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ChatApp.sendText();}"></div>
-                <button class="chat-record-btn" id="recordBtn"
-                        onmousedown="ChatApp.startRecording()"
-                        onmouseup="ChatApp.stopRecording()"
-                        ontouchstart="ChatApp.startRecording()"
-                        ontouchend="ChatApp.stopRecording()"
-                        title="Hold to record voice note">
-                    <i class="fa fa-microphone"></i>
+
+                <!-- Attach -->
+                <button class="input-icon-btn" title="Attach file"
+                        onclick="document.getElementById('fileIn').click()">
+                    <i class="fa fa-paperclip"></i>
                 </button>
-                <button class="chat-send-btn" onclick="ChatApp.sendText()" title="Send">
-                    <i class="fa fa-paper-plane"></i>
+                <input type="file" id="fileIn" style="display:none" multiple
+                       accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.txt,.csv">
+
+                <!-- Text / recording bar -->
+                <div class="input-text-wrap">
+                    <div class="input-text" id="msgInput"
+                         contenteditable="true" data-ph="Type a message…"
+                         role="textbox" aria-multiline="true"
+                         onkeydown="Chat.onKey(event)"></div>
+                    <div class="rec-bar" id="recBar">
+                        <div class="rec-dot"></div>
+                        <span class="rec-label">Recording</span>
+                        <span class="rec-timer" id="recTimer">0:00</span>
+                        <button class="rec-cancel" onclick="Chat.cancelRec()" title="Cancel">
+                            <i class="fa fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Send / microphone -->
+                <button class="input-send-btn mic-mode" id="sendBtn"
+                        onclick="Chat.sendOrStopRec()">
+                    <i class="fa fa-microphone" id="sendIcon"></i>
                 </button>
-            </div>
+
+            </div><!-- /chat-input-bar -->
+
+        </div><!-- /chat-active -->
+
+    </div><!-- /chat-panel-right -->
+
+</div><!-- /chat-root -->
+
+<!-- ══════════════════════════════════════════════════════════════════
+     CALL OVERLAY
+══════════════════════════════════════════════════════════════════ -->
+<div class="call-overlay" id="callOverlay">
+    <video class="call-remote-video" id="remoteVid" autoplay playsinline></video>
+    <video class="call-local-video"  id="localVid"  autoplay muted playsinline></video>
+
+    <div class="call-content">
+        <div class="call-avatar" id="callAvatar" style="background:#128c7e">–</div>
+        <div class="call-name"   id="callName">—</div>
+        <div class="call-status" id="callStatusTxt">Calling…</div>
+        <div class="call-timer"  id="callTimer"></div>
+        <div class="call-btns">
+            <button class="call-btn call-btn-mute" id="btnMute"
+                    onclick="Chat.toggleMute()" title="Mute">
+                <i class="fa fa-microphone"></i>
+            </button>
+            <button class="call-btn call-btn-cam d-none" id="btnCam"
+                    onclick="Chat.toggleCam()" title="Camera">
+                <i class="fa fa-video"></i>
+            </button>
+            <button class="call-btn call-btn-end" onclick="Chat.hangup()" title="End call">
+                <i class="fa fa-phone-slash"></i>
+            </button>
+            <button class="call-btn call-btn-accept d-none" id="btnAccept"
+                    onclick="Chat.acceptCall()" title="Accept">
+                <i class="fa fa-phone"></i>
+            </button>
         </div>
     </div>
 </div>
 
-<!-- Call overlay -->
-<div class="call-overlay" id="callOverlay">
-    <video class="remote-vid" id="remoteVideo" autoplay playsinline></video>
-    <div class="call-avatar-lg" id="callAvatar">–</div>
-    <div class="fw-bold fs-4 mb-1" id="callName">—</div>
-    <div class="call-status" id="callStatus">Calling…</div>
-    <div class="call-timer d-none" id="callTimer">0:00</div>
-    <div class="call-controls">
-        <button class="call-btn btn-mute" id="muteBtn" onclick="ChatApp.toggleMute()" title="Mute"><i class="fa fa-microphone"></i></button>
-        <button class="call-btn btn-cam d-none" id="camBtn" onclick="ChatApp.toggleCamera()" title="Camera"><i class="fa fa-video"></i></button>
-        <button class="call-btn btn-hangup" onclick="ChatApp.hangup()" title="End"><i class="fa fa-phone-slash"></i></button>
-        <button class="call-btn btn-accept d-none" id="acceptBtn" onclick="ChatApp.acceptCall()" title="Accept"><i class="fa fa-phone"></i></button>
-    </div>
+<!-- Image lightbox -->
+<div class="img-lightbox" id="imgLightbox" onclick="Chat.closeLightbox()">
+    <button class="img-lightbox-close" onclick="Chat.closeLightbox()">
+        <i class="fa fa-xmark"></i>
+    </button>
+    <img id="lbImg" src="" alt="Preview">
 </div>
-<video class="local-vid" id="localVideo" autoplay muted playsinline></video>
 
-<!-- Incoming call sound (silent oscillator — just triggers browser) -->
-
-<!-- New Chat Modal -->
-<div class="modal fade" id="newChatModal" tabindex="-1">
+<!-- ══════════════════════════════════════════════════════════════════
+     NEW CHAT MODAL
+══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="newChatModal" tabindex="-1" aria-label="New Chat">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title"><i class="fa fa-pen-to-square me-2"></i>New Chat</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="modal-header py-2">
+                <h6 class="modal-title fw-semibold">
+                    <i class="fa fa-pen-to-square me-2 text-muted"></i>New Chat
+                </h6>
+                <button type="button" class="btn-close btn-close-sm"
+                        data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-2">
-                <input type="text" id="userSearch" class="form-control form-control-sm mb-2" placeholder="Search users…">
-                <div id="userList">
-                    <?php foreach ($users as $u):
-                        $init = strtoupper(substr($u['name'],0,1));
-                        $roleLabels = ['admin'=>'Admin','workshop_manager'=>'Workshop Mgr','sales_person'=>'Sales Person','sales_officer'=>'Sales Officer'];
-                        $rLabel = $roleLabels[$u['role']] ?? ucfirst($u['role']);
+                <input type="text" id="userSearch" class="form-control form-control-sm mb-2"
+                       placeholder="Search people…" autocomplete="off">
+                <div class="user-pick-list" id="userPickList">
+                    <?php foreach ($allUsers as $u):
+                        $init  = mb_strtoupper(mb_substr($u['full_name'], 0, 1));
+                        $color = $avatarColors[$u['id'] % count($avatarColors)];
+                        $rl    = $roleLabels[$u['role']] ?? ucfirst($u['role']);
                     ?>
-                    <div class="user-pick-item" data-uid="<?= $u['id'] ?>" data-name="<?= e($u['name']) ?>" onclick="ChatApp.startDirect(<?= $u['id'] ?>, '<?= e($u['name']) ?>')">
-                        <div class="user-pick-avatar"><?= $init ?></div>
+                    <div class="user-pick-item"
+                         data-name="<?= e($u['full_name']) ?>"
+                         onclick="Chat.startDirect(<?= (int)$u['id'] ?>, <?= json_encode($u['full_name']) ?>, '<?= e($color) ?>')">
+                        <div class="user-pick-avatar"
+                             style="background:<?= $color ?>"><?= e($init) ?></div>
                         <div>
-                            <div class="fw-semibold" style="font-size:13px"><?= e($u['name']) ?></div>
-                            <div class="text-muted" style="font-size:11px"><?= $rLabel ?></div>
+                            <div class="user-pick-name"><?= e($u['full_name']) ?></div>
+                            <div class="user-pick-role"><?= e($rl) ?></div>
                         </div>
                     </div>
                     <?php endforeach; ?>
+                    <?php if (empty($allUsers)): ?>
+                    <div class="text-muted small text-center py-3">No other users found.</div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -424,513 +728,856 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <script>
-const ME = { id: <?= (int)$me['id'] ?>, name: <?= json_encode($me['name']) ?> };
-const BASE = <?= json_encode(BASE_URL) ?>;
-const API  = BASE + '/modules/chat/api/';
+/* ════════════════════════════════════════════════════════════════════════
+   Chat application
+════════════════════════════════════════════════════════════════════════ */
+const ME = {
+    id:   <?= (int)$me['id'] ?>,
+    name: <?= json_encode($me['full_name'] ?? $me['name'] ?? 'Me') ?>
+};
+const BASE_URL  = <?= json_encode(rtrim(BASE_URL, '/')) ?>;
+const API_BASE  = BASE_URL + '/modules/chat/api/';
+const CSRF      = <?= json_encode($csrf) ?>;
 
-const ChatApp = {
+// Avatar colours (server-side palette, index by user id)
+const AVATAR_COLORS = <?= json_encode($avatarColors) ?>;
+function avatarColor(id) { return AVATAR_COLORS[id % AVATAR_COLORS.length]; }
+function initials(name)  { return (name || '?').charAt(0).toUpperCase(); }
+
+// ─── Utility helpers ─────────────────────────────────────────────────────
+function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str ?? '';
+    return d.innerHTML;
+}
+function fmtDur(s) {
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function fmtSize(b) {
+    if (b > 1048576) return (b / 1048576).toFixed(1) + ' MB';
+    if (b > 1024)    return (b / 1024).toFixed(0) + ' KB';
+    return b + ' B';
+}
+function fmtTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso.replace(' ', 'T'));
+    if (isNaN(d)) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function fmtDay(iso) {
+    if (!iso) return '';
+    const d   = new Date(iso.replace(' ', 'T'));
+    if (isNaN(d)) return '';
+    const now = new Date();
+    const diff = Math.floor((now - d) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function fileIcon(mime) {
+    mime = mime || '';
+    if (mime.includes('pdf'))                                return ['fa-file-pdf',   'text-danger'];
+    if (mime.includes('word') || mime.includes('document'))  return ['fa-file-word',  'text-primary'];
+    if (mime.includes('excel') || mime.includes('sheet'))    return ['fa-file-excel', 'text-success'];
+    if (mime.includes('zip')  || mime.includes('rar'))       return ['fa-file-zipper','text-warning'];
+    if (mime.includes('image'))                              return ['fa-file-image',  'text-info'];
+    if (mime.includes('audio'))                              return ['fa-file-audio',  'text-secondary'];
+    return ['fa-file', 'text-muted'];
+}
+
+// ─── AJAX helpers ─────────────────────────────────────────────────────────
+async function apiGet(endpoint, params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const r  = await fetch(API_BASE + endpoint + (qs ? '?' + qs : ''));
+    return r.json();
+}
+async function apiPost(endpoint, body = {}) {
+    const r = await fetch(API_BASE + endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': CSRF,
+        },
+        body: JSON.stringify(body),
+    });
+    return r.json();
+}
+async function apiUpload(endpoint, fd) {
+    fd.append('csrf_token', CSRF);
+    const r = await fetch(API_BASE + endpoint, { method: 'POST', body: fd });
+    return r.json();
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Main Chat object
+════════════════════════════════════════════════════════════════════════ */
+const Chat = {
     convId      : null,
+    convName    : '',
+    convColor   : '#128c7e',
+    calleeId    : null,
     lastMsgId   : 0,
+    lastDay     : '',
     pollTimer   : null,
-    callPollTimer: null,
-    mediaRecorder: null,
+    callPoll    : null,
+    isRecording : false,
+    mediaRec    : null,
     audioChunks : [],
     recTimerInt : null,
-    recSeconds  : 0,
+    recSecs     : 0,
     localStream : null,
-    remoteStream: null,
     peerConn    : null,
     activeCallId: null,
     callTimerInt: null,
     isMuted     : false,
     isCamOff    : false,
     isIncoming  : false,
-    iceCandidates: [],
+    pendingIce  : [],
 
-    // ── Conversation list ─────────────────────────────────────────
-    async loadConversations() {
-        const r = await fetch(API + 'conversations.php');
-        const data = await r.json();
-        const list = document.getElementById('convList');
-        if (!data.length) {
-            list.innerHTML = '<div class="text-center text-muted py-5 small">No conversations yet.<br>Start one with the pencil icon above.</div>';
-            return;
+    STUN: { iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+    ]},
+
+    /* ── Conversation list ─────────────────────────────────────── */
+    async loadConvs() {
+        try {
+            const data = await apiGet('conversations.php');
+            const convs = data.conversations || [];
+            const list  = document.getElementById('convList');
+            if (!convs.length) {
+                list.innerHTML = `<div class="conv-empty">
+                    <i class="fa fa-message"></i>
+                    No conversations yet.<br>
+                    <span style="font-size:12px">Tap the pencil icon to start one.</span>
+                </div>`;
+                return;
+            }
+            list.innerHTML = convs.map(c => this._convHtml(c)).join('');
+            // Re-apply active state
+            if (this.convId) {
+                const el = list.querySelector(`[data-cid="${this.convId}"]`);
+                if (el) el.classList.add('active');
+            }
+        } catch (e) {
+            console.error('loadConvs:', e);
         }
-        list.innerHTML = data.map(c => this._convHtml(c)).join('');
     },
 
     _convHtml(c) {
-        const init = c.name.charAt(0).toUpperCase();
-        const unread = c.unread > 0 ? `<div class="conv-unread">${c.unread}</div>` : '';
-        const preview = c.last_type === 'voice' ? '🎙 Voice note'
-                      : c.last_type === 'file'  ? '📎 ' + (c.last_msg || 'File')
-                      : c.last_type === 'image' ? '🖼 Photo'
-                      : (c.last_msg || '');
-        const active = this.convId == c.id ? 'active' : '';
-        return `<div class="conv-item ${active}" onclick="ChatApp.openConv(${c.id},'${e(c.name)}')">
-            <div class="conv-avatar">${init}</div>
-            <div class="conv-info">
-                <div class="conv-name">${e(c.name)}</div>
-                <div class="conv-preview">${e(preview.substring(0,60))}</div>
-            </div>
-            <div class="conv-meta">
-                <div class="conv-time">${c.last_at || ''}</div>
-                ${unread}
+        const color   = avatarColor(c.other_user_id || c.id);
+        const init    = initials(c.display_name);
+        const time    = c.last_msg_at ? fmtTime(c.last_msg_at) : '';
+        const preview = esc((c.last_preview || '').substring(0, 55));
+        const unread  = (c.unread_count > 0)
+            ? `<div class="conv-unread">${c.unread_count > 99 ? '99+' : c.unread_count}</div>` : '';
+        const active  = (this.convId == c.id) ? 'active' : '';
+        return `<div class="conv-item ${active}" data-cid="${c.id}"
+                     onclick="Chat.openConv(${c.id}, ${JSON.stringify(c.display_name)}, '${color}', ${c.other_user_id || 0})">
+            <div class="conv-avatar" style="background:${color}">${esc(init)}</div>
+            <div class="conv-body">
+                <div class="conv-top">
+                    <span class="conv-name">${esc(c.display_name)}</span>
+                    <span class="conv-time">${time}</span>
+                </div>
+                <div class="conv-bottom">
+                    <span class="conv-preview">${preview}</span>
+                    ${unread}
+                </div>
             </div>
         </div>`;
     },
 
-    async openConv(convId, name) {
-        this.convId = convId;
+    /* ── Open a conversation ───────────────────────────────────── */
+    async openConv(convId, name, color, calleeId) {
+        this.convId    = convId;
+        this.convName  = name;
+        this.convColor = color || '#128c7e';
+        this.calleeId  = calleeId || null;
         this.lastMsgId = 0;
-        clearInterval(this.pollTimer);
+        this.lastDay   = '';
 
-        document.getElementById('chatEmpty').style.display = 'none';
+        // Update header
+        document.getElementById('hdrAvatar').textContent    = initials(name);
+        document.getElementById('hdrAvatar').style.background = this.convColor;
+        document.getElementById('hdrName').textContent      = name;
+        document.getElementById('hdrSub').textContent       = '';
+
+        // Show call buttons only for direct chats
+        document.getElementById('btnCallAudio').style.display = calleeId ? '' : 'none';
+        document.getElementById('btnCallVideo').style.display = calleeId ? '' : 'none';
+
+        // Show right panel, hide left on mobile
+        const right = document.getElementById('chatPanelRight');
+        right.classList.remove('mobile-hidden');
+        document.getElementById('chatWelcome').style.display = 'none';
         const active = document.getElementById('chatActive');
-        active.style.display = 'flex';
+        active.classList.add('visible');
 
-        const init = name.charAt(0).toUpperCase();
-        document.getElementById('hdrAvatar').textContent = init;
-        document.getElementById('hdrName').textContent   = name;
-        document.getElementById('chatMessages').innerHTML = '<div class="text-center text-muted py-5 small"><i class="fa fa-spinner fa-spin"></i></div>';
-
-        // Mark sidebar item active
+        // Mark sidebar item
         document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.conv-item').forEach(el => {
-            if (el.onclick?.toString().includes(convId)) el.classList.add('active');
-        });
+        const item = document.querySelector(`[data-cid="${convId}"]`);
+        if (item) item.classList.add('active');
 
-        await this.fetchMessages(true);
-        this.pollTimer = setInterval(() => this.fetchMessages(false), 2000);
+        // Load messages
+        const area = document.getElementById('msgArea');
+        area.innerHTML = `<div class="text-center text-muted py-4" style="font-size:13px">
+            <i class="fa fa-spinner fa-spin"></i>&nbsp; Loading…</div>`;
+
+        clearInterval(this.pollTimer);
+        await this._fetchMsgs(true);
+        this.pollTimer = setInterval(() => this._fetchMsgs(false), 2000);
+
+        // Focus input
+        document.getElementById('msgInput').focus();
     },
 
-    async fetchMessages(initial) {
-        const r = await fetch(`${API}messages.php?conv_id=${this.convId}&after=${this.lastMsgId}`);
-        const msgs = await r.json();
-        if (!msgs.length) return;
-
-        const box = document.getElementById('chatMessages');
-        if (initial) box.innerHTML = '';
-
-        let lastDay = box.dataset.lastDay || '';
-        msgs.forEach(m => {
-            const day = m.day;
-            if (day !== lastDay) {
-                box.insertAdjacentHTML('beforeend', `<div class="day-divider"><span>${day}</span></div>`);
-                lastDay = day;
+    /* ── Fetch & render messages (polling) ─────────────────────── */
+    async _fetchMsgs(initial) {
+        try {
+            const data = await apiGet('messages.php', {
+                conversation_id: this.convId,
+                after: this.lastMsgId,
+            });
+            const msgs = data.messages || [];
+            if (!msgs.length) {
+                if (initial) {
+                    document.getElementById('msgArea').innerHTML =
+                        `<div class="text-center text-muted py-5" style="font-size:13px">
+                            No messages yet. Say hello! 👋</div>`;
+                }
+                return;
             }
-            box.insertAdjacentHTML('beforeend', this._msgHtml(m));
-            this.lastMsgId = Math.max(this.lastMsgId, m.id);
-        });
-        box.dataset.lastDay = lastDay;
-        box.scrollTop = box.scrollHeight;
 
-        // Update unread
-        if (!initial) this.loadConversations();
+            const area = document.getElementById('msgArea');
+            if (initial) area.innerHTML = '';
+
+            msgs.forEach(m => {
+                const day = fmtDay(m.created_at);
+                if (day && day !== this.lastDay) {
+                    area.insertAdjacentHTML('beforeend',
+                        `<div class="msg-day"><span>${esc(day)}</span></div>`);
+                    this.lastDay = day;
+                }
+                area.insertAdjacentHTML('beforeend', this._msgHtml(m));
+                this.lastMsgId = Math.max(this.lastMsgId, parseInt(m.id));
+            });
+
+            // Auto-scroll to bottom on initial load or if already near bottom
+            if (initial || this._nearBottom(area)) {
+                area.scrollTop = area.scrollHeight;
+            }
+
+            // Refresh unread badges quietly
+            if (!initial) this.loadConvs();
+        } catch (e) {
+            console.error('_fetchMsgs:', e);
+        }
     },
 
-    _msgHtml(m) {
-        const sent = m.sender_id == ME.id;
-        const cls  = sent ? 'sent' : 'received';
-        const tick  = sent ? '<span class="msg-tick"><i class="fa fa-check-double"></i></span>' : '';
-        let body = '';
+    _nearBottom(el) {
+        return el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    },
 
-        if (m.type === 'text') {
-            body = `<span>${e(m.content)}</span>`;
-        } else if (m.type === 'voice') {
-            const src = `${BASE}/uploads/chat/${e(m.file_path)}`;
-            const dur = m.duration ? this._fmtDur(m.duration) : '—';
-            body = `<div class="msg-voice">
-                <button class="play-btn" onclick="ChatApp.playVoice(this,'${src}')"><i class="fa fa-play"></i></button>
-                <div class="waveform" style="--prog:0%"></div>
-                <span class="duration">${dur}</span>
+    /* ── Render a single message bubble ──────────────────────── */
+    _msgHtml(m) {
+        const sent = (parseInt(m.sender_id) === ME.id);
+        const cls  = sent ? 'sent' : 'received';
+        const tick = sent ? `<span class="msg-tick"><i class="fa fa-check-double"></i></span>` : '';
+        const time = fmtTime(m.created_at);
+
+        // System / call rows get a centered chip
+        if (m.type === 'system' || m.type === 'call') {
+            const ico = m.type === 'call'
+                ? (m.content?.includes('video') ? 'fa-video' : 'fa-phone')
+                : 'fa-info-circle';
+            return `<div class="msg-row-call">
+                <div class="msg-call-chip">
+                    <i class="fa ${ico} me-1"></i>${esc(m.content)}
+                </div>
             </div>`;
-        } else if (m.type === 'image') {
-            const src = `${BASE}/uploads/chat/${e(m.file_path)}`;
-            body = `<div class="msg-image"><img src="${src}" onclick="window.open('${src}','_blank')" loading="lazy"></div>`;
-        } else if (m.type === 'file') {
-            const src = `${BASE}/uploads/chat/${e(m.file_path)}`;
-            const size = m.file_size ? this._fmtSize(m.file_size) : '';
-            const icon = this._fileIcon(m.mime_type || '');
-            body = `<a href="${src}" download="${e(m.file_name)}" class="text-decoration-none text-dark">
-                <div class="msg-file">
-                    <div class="file-icon"><i class="fa ${icon}"></i></div>
-                    <div class="file-info">
-                        <div class="name">${e(m.file_name)}</div>
-                        <div class="size">${size}</div>
-                    </div>
-                    <i class="fa fa-download text-muted ms-2"></i>
-                </div></a>`;
-        } else if (m.type === 'call') {
-            const ico = m.content?.includes('video') ? 'fa-video' : 'fa-phone';
-            body = `<span class="text-muted"><i class="fa ${ico} me-1"></i>${e(m.content)}</span>`;
-        } else if (m.type === 'system') {
-            return `<div class="day-divider"><span>${e(m.content)}</span></div>`;
         }
 
-        const sender = (!sent && m.conv_type === 'group') ? `<div class="msg-sender">${e(m.sender_name)}</div>` : '';
-        return `<div class="msg-bubble-wrap ${cls}">
+        let body = '';
+
+        if (m.type === 'image' && m.file_url) {
+            body = `<img class="msg-img" src="${esc(m.file_url)}"
+                         alt="${esc(m.file_name || 'Image')}" loading="lazy"
+                         onclick="Chat.lightbox('${esc(m.file_url)}')">`;
+        } else if (m.type === 'voice' && m.file_url) {
+            const dur = m.duration ? fmtDur(m.duration) : '—';
+            const uid = 'v' + m.id;
+            body = `<div class="msg-voice-wrap">
+                <button class="msg-voice-btn" id="pb${uid}"
+                        onclick="Chat.playVoice('${esc(m.file_url)}','${uid}')">
+                    <i class="fa fa-play"></i>
+                </button>
+                <div class="msg-voice-waveform" id="wf${uid}" style="--prog:0%"></div>
+                <span class="msg-voice-dur" id="dr${uid}">${dur}</span>
+            </div>`;
+        } else if (m.type === 'file' && m.file_url) {
+            const [ico, col] = fileIcon(m.mime_type);
+            const sz = m.file_size ? fmtSize(m.file_size) : '';
+            body = `<a class="msg-file-wrap" href="${esc(m.file_url)}"
+                       download="${esc(m.file_name || 'file')}" target="_blank">
+                <i class="fa ${ico} ${col} msg-file-icon"></i>
+                <div style="flex:1;min-width:0">
+                    <div class="msg-file-name">${esc(m.file_name || 'File')}</div>
+                    ${sz ? `<div class="msg-file-size">${sz}</div>` : ''}
+                </div>
+                <i class="fa fa-download msg-file-dl"></i>
+            </a>`;
+        } else {
+            // text (or fallback)
+            body = `<span class="msg-text">${esc(m.content || '')}</span>`;
+        }
+
+        return `<div class="msg-row ${cls}">
             <div class="msg-bubble">
-                ${sender}${body}
-                <div class="msg-meta">${m.time} ${tick}</div>
+                ${body}
+                <div class="msg-footer">${time} ${tick}</div>
             </div>
         </div>`;
     },
 
-    // ── Send text ─────────────────────────────────────────────────
+    /* ── Send text ───────────────────────────────────────────── */
     async sendText() {
         if (!this.convId) return;
-        const el = document.getElementById('msgInput');
+        const el   = document.getElementById('msgInput');
         const text = el.innerText.trim();
         if (!text) return;
         el.innerText = '';
-        const fd = new FormData();
-        fd.append('conv_id', this.convId);
-        fd.append('type', 'text');
-        fd.append('content', text);
-        await fetch(API + 'send.php', { method: 'POST', body: fd });
-        await this.fetchMessages(false);
-    },
-
-    // ── Start direct chat ─────────────────────────────────────────
-    async startDirect(userId, name) {
-        bootstrap.Modal.getInstance(document.getElementById('newChatModal'))?.hide();
-        const fd = new FormData();
-        fd.append('user_id', userId);
-        const r = await fetch(API + 'conversations.php', { method: 'POST', body: fd });
-        const d = await r.json();
-        if (d.conv_id) {
-            await this.loadConversations();
-            this.openConv(d.conv_id, name);
+        this._setSendMode('mic');
+        try {
+            await apiPost('send.php', {
+                conversation_id: this.convId,
+                content: text,
+            });
+            await this._fetchMsgs(false);
+        } catch (e) {
+            console.error('sendText:', e);
         }
     },
 
-    // ── File upload ───────────────────────────────────────────────
-    async uploadFile(file) {
-        if (!this.convId) return;
-        const fd = new FormData();
-        fd.append('conv_id', this.convId);
-        fd.append('file', file);
-        await fetch(API + 'upload.php', { method: 'POST', body: fd });
-        await this.fetchMessages(false);
+    /* ── Send or stop recording (unified send button) ────────── */
+    sendOrStopRec() {
+        if (this.isRecording) {
+            this.stopRec();
+        } else {
+            const text = document.getElementById('msgInput').innerText.trim();
+            if (text) {
+                this.sendText();
+            } else {
+                this.startRec();
+            }
+        }
     },
 
-    // ── Voice recording ───────────────────────────────────────────
-    async startRecording() {
-        if (this.mediaRecorder) return;
+    /* ── Key handler for input ───────────────────────────────── */
+    onKey(event) {
+        const text = document.getElementById('msgInput').innerText.trim();
+        this._setSendMode(text ? 'send' : 'mic');
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            this.sendText();
+        }
+    },
+
+    _setSendMode(mode) {
+        const btn  = document.getElementById('sendBtn');
+        const icon = document.getElementById('sendIcon');
+        if (mode === 'send') {
+            icon.className = 'fa fa-paper-plane';
+            btn.title = 'Send message';
+        } else {
+            icon.className = 'fa fa-microphone';
+            btn.title = 'Record voice note';
+        }
+    },
+
+    /* ── Voice recording ─────────────────────────────────────── */
+    async startRec() {
+        if (!this.convId || this.isRecording) return;
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.audioChunks = [];
-            this.mediaRecorder = new MediaRecorder(stream);
-            this.mediaRecorder.ondataavailable = e => this.audioChunks.push(e.data);
-            this.mediaRecorder.start();
+            this.mediaRec = new MediaRecorder(stream, { mimeType: this._bestMime() });
+            this.mediaRec.ondataavailable = ev => this.audioChunks.push(ev.data);
+            this.mediaRec.start(100);
+            this.isRecording = true;
 
-            document.getElementById('recordBtn').classList.add('recording');
             document.getElementById('msgInput').style.display = 'none';
-            document.getElementById('recordingBar').classList.add('active');
+            document.getElementById('recBar').classList.add('on');
+            const btn = document.getElementById('sendBtn');
+            btn.classList.add('recording');
+            document.getElementById('sendIcon').className = 'fa fa-stop';
+            btn.title = 'Stop recording';
 
-            this.recSeconds = 0;
+            this.recSecs = 0;
+            document.getElementById('recTimer').textContent = '0:00';
             this.recTimerInt = setInterval(() => {
-                this.recSeconds++;
-                document.getElementById('recTimer').textContent = this._fmtDur(this.recSeconds);
+                this.recSecs++;
+                document.getElementById('recTimer').textContent = fmtDur(this.recSecs);
             }, 1000);
         } catch (err) {
-            alert('Microphone access denied. Please allow microphone access.');
+            alert('Microphone access denied. Please allow microphone access in your browser.');
         }
     },
 
-    async stopRecording() {
-        if (!this.mediaRecorder) return;
-        const dur = this.recSeconds;
-        clearInterval(this.recTimerInt);
-        document.getElementById('recordBtn').classList.remove('recording');
-        document.getElementById('msgInput').style.display = '';
-        document.getElementById('recordingBar').classList.remove('active');
-
-        this.mediaRecorder.stop();
-        this.mediaRecorder.onstop = async () => {
-            const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
-            this.mediaRecorder.stream.getTracks().forEach(t => t.stop());
-            this.mediaRecorder = null;
-
-            if (dur < 1) return; // too short
-            const fd = new FormData();
-            fd.append('conv_id', this.convId);
-            fd.append('voice', blob, 'voice.webm');
-            fd.append('duration', dur);
-            await fetch(API + 'upload.php', { method: 'POST', body: fd });
-            await this.fetchMessages(false);
-        };
+    _bestMime() {
+        const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+        for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+        return '';
     },
 
-    cancelRecording() {
-        if (!this.mediaRecorder) return;
+    async stopRec() {
+        if (!this.isRecording || !this.mediaRec) return;
+        const dur = this.recSecs;
         clearInterval(this.recTimerInt);
-        this.mediaRecorder.stream.getTracks().forEach(t => t.stop());
-        this.mediaRecorder = null;
-        document.getElementById('recordBtn').classList.remove('recording');
+        this.isRecording = false;
+
         document.getElementById('msgInput').style.display = '';
-        document.getElementById('recordingBar').classList.remove('active');
+        document.getElementById('recBar').classList.remove('on');
+        const btn = document.getElementById('sendBtn');
+        btn.classList.remove('recording');
+        this._setSendMode('mic');
+
+        return new Promise(resolve => {
+            this.mediaRec.onstop = async () => {
+                const mimeType = this.mediaRec.mimeType || 'audio/webm';
+                const ext      = mimeType.includes('ogg') ? 'ogg' : 'webm';
+                const blob     = new Blob(this.audioChunks, { type: mimeType });
+                this.mediaRec.stream.getTracks().forEach(t => t.stop());
+                this.mediaRec = null;
+
+                if (dur < 1 || !this.convId) { resolve(); return; }
+
+                const fd = new FormData();
+                fd.append('conversation_id', this.convId);
+                fd.append('file', blob, `voice.${ext}`);
+                fd.append('voice', '1');
+                fd.append('duration', dur);
+                try {
+                    await apiUpload('upload.php', fd);
+                    await this._fetchMsgs(false);
+                } catch (e) {
+                    console.error('stopRec upload:', e);
+                }
+                resolve();
+            };
+            this.mediaRec.stop();
+        });
     },
 
-    // ── Voice playback ─────────────────────────────────────────────
-    _currentAudio: null,
-    playVoice(btn, src) {
-        if (this._currentAudio) { this._currentAudio.pause(); this._currentAudio = null; }
-        const wrap = btn.closest('.msg-voice');
-        const wf   = wrap.querySelector('.waveform');
+    cancelRec() {
+        if (!this.isRecording || !this.mediaRec) return;
+        clearInterval(this.recTimerInt);
+        this.isRecording = false;
+        this.mediaRec.stream.getTracks().forEach(t => t.stop());
+        this.mediaRec = null;
+        document.getElementById('msgInput').style.display = '';
+        document.getElementById('recBar').classList.remove('on');
+        const btn = document.getElementById('sendBtn');
+        btn.classList.remove('recording');
+        this._setSendMode('mic');
+    },
+
+    /* ── File upload ─────────────────────────────────────────── */
+    async uploadFile(file) {
+        if (!this.convId) return;
+        const fd = new FormData();
+        fd.append('conversation_id', this.convId);
+        fd.append('file', file, file.name);
+        try {
+            await apiUpload('upload.php', fd);
+            await this._fetchMsgs(false);
+        } catch (e) {
+            console.error('uploadFile:', e);
+        }
+    },
+
+    /* ── Voice playback ──────────────────────────────────────── */
+    _audio: null,
+    playVoice(src, uid) {
+        // Stop any currently playing audio
+        if (this._audio) {
+            this._audio.pause();
+            this._audio = null;
+            // Reset all play buttons
+            document.querySelectorAll('.msg-voice-btn i').forEach(i => i.className = 'fa fa-play');
+            document.querySelectorAll('.msg-voice-waveform').forEach(w => w.style.setProperty('--prog','0%'));
+        }
+
+        const pbBtn = document.getElementById('pb' + uid);
+        const wf    = document.getElementById('wf' + uid);
+        const dr    = document.getElementById('dr' + uid);
+
         const audio = new Audio(src);
-        this._currentAudio = audio;
-        btn.innerHTML = '<i class="fa fa-pause"></i>';
+        this._audio = audio;
+        pbBtn.innerHTML = '<i class="fa fa-pause"></i>';
+
         audio.addEventListener('timeupdate', () => {
-            const pct = (audio.currentTime / (audio.duration || 1)) * 100;
-            wf.style.setProperty('--prog', pct + '%');
+            const pct = audio.duration ? (audio.currentTime / audio.duration * 100) : 0;
+            wf.style.setProperty('--prog', pct.toFixed(1) + '%');
+            if (dr) dr.textContent = fmtDur(Math.floor(audio.currentTime));
         });
         audio.addEventListener('ended', () => {
-            btn.innerHTML = '<i class="fa fa-play"></i>';
+            pbBtn.innerHTML = '<i class="fa fa-play"></i>';
             wf.style.setProperty('--prog', '0%');
-            this._currentAudio = null;
+            this._audio = null;
         });
-        audio.play();
-        btn.onclick = () => { audio.pause(); btn.innerHTML = '<i class="fa fa-play"></i>'; btn.onclick = () => ChatApp.playVoice(btn, src); };
-    },
+        audio.play().catch(() => {});
 
-    // ── WebRTC Call ───────────────────────────────────────────────
-    _stun: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] },
-
-    async initiateCall(type) {
-        if (!this.convId) return;
-        this.iceCandidates = [];
-        const name = document.getElementById('hdrName').textContent;
-        this._showCallOverlay(name, type, false);
-        document.getElementById('callStatus').textContent = 'Calling…';
-
-        this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
-        if (type === 'video') {
-            const lv = document.getElementById('localVideo');
-            lv.srcObject = this.localStream; lv.style.display = 'block';
-        }
-
-        this.peerConn = new RTCPeerConnection(this._stun);
-        this.localStream.getTracks().forEach(t => this.peerConn.addTrack(t, this.localStream));
-        this.peerConn.onicecandidate = e => { if (e.candidate) this.iceCandidates.push(e.candidate); };
-        this.peerConn.ontrack = e => {
-            this.remoteStream = e.streams[0];
-            const rv = document.getElementById('remoteVideo');
-            rv.srcObject = this.remoteStream;
-            if (type === 'video') rv.style.display = 'block';
+        pbBtn.onclick = () => {
+            audio.pause();
+            pbBtn.innerHTML = '<i class="fa fa-play"></i>';
+            pbBtn.onclick = () => Chat.playVoice(src, uid);
+            this._audio = null;
         };
-
-        const offer = await this.peerConn.createOffer();
-        await this.peerConn.setLocalDescription(offer);
-
-        const fd = new FormData();
-        fd.append('action', 'initiate');
-        fd.append('conv_id', this.convId);
-        fd.append('call_type', type);
-        fd.append('offer_sdp', JSON.stringify(offer));
-        const r = await fetch(API + 'call.php', { method: 'POST', body: fd });
-        const d = await r.json();
-        this.activeCallId = d.call_id;
-
-        // Poll for answer
-        this.callPollTimer = setInterval(() => this._pollCallStatus(), 2000);
     },
 
-    async _pollCallStatus() {
-        if (!this.activeCallId) return;
-        const r = await fetch(`${API}call.php?action=status&call_id=${this.activeCallId}`);
-        const d = await r.json();
-
-        if (d.status === 'active' && d.answer_sdp && this.peerConn?.signalingState !== 'stable') {
-            const answer = JSON.parse(d.answer_sdp);
-            await this.peerConn.setRemoteDescription(answer);
-            // Send ICE candidates
-            const fd = new FormData();
-            fd.append('action', 'ice'); fd.append('call_id', this.activeCallId);
-            fd.append('role', 'caller'); fd.append('ice', JSON.stringify(this.iceCandidates));
-            await fetch(API + 'call.php', { method: 'POST', body: fd });
-            // Receive callee ICE
-            if (d.callee_ice) {
-                JSON.parse(d.callee_ice).forEach(c => this.peerConn.addIceCandidate(new RTCIceCandidate(c)));
+    /* ── Start direct conversation ───────────────────────────── */
+    async startDirect(userId, name, color) {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('newChatModal'));
+        if (modal) modal.hide();
+        try {
+            const d = await apiPost('conversations.php', { user_id: userId });
+            if (d.conversation_id) {
+                await this.loadConvs();
+                // Find user's id from the response to get callee_id
+                await this.openConv(d.conversation_id, name, color, userId);
             }
-            document.getElementById('callStatus').textContent = 'Connected';
-            this._startCallTimer();
-        } else if (d.status === 'rejected' || d.status === 'missed') {
-            this._endCallCleanup();
-            document.getElementById('callStatus').textContent = d.status === 'rejected' ? 'Call rejected' : 'No answer';
-            setTimeout(() => this._hideCallOverlay(), 2500);
-        } else if (d.status === 'ended') {
-            this._endCallCleanup();
-            this._hideCallOverlay();
+        } catch (e) {
+            console.error('startDirect:', e);
         }
     },
 
-    async _handleIncomingCall(callData) {
-        if (this.activeCallId) return; // already in call
-        this.activeCallId  = callData.id;
-        this.isIncoming    = true;
-        this.iceCandidates = [];
-        document.getElementById('acceptBtn').classList.remove('d-none');
-        this._showCallOverlay(callData.caller_name, callData.call_type, true);
-        document.getElementById('callStatus').textContent = `Incoming ${callData.call_type} call…`;
+    /* ── Image lightbox ──────────────────────────────────────── */
+    lightbox(src) {
+        document.getElementById('lbImg').src = src;
+        document.getElementById('imgLightbox').classList.add('on');
+    },
+    closeLightbox() {
+        document.getElementById('imgLightbox').classList.remove('on');
+        document.getElementById('lbImg').src = '';
+    },
+
+    /* ══════════════════════════════════════════════════════════════
+       WebRTC CALL
+    ══════════════════════════════════════════════════════════════ */
+    async call(type) {
+        if (!this.convId || !this.calleeId) return;
+        this.pendingIce = [];
+        const name  = this.convName;
+        const color = this.convColor;
+
+        this._showOverlay(name, color, type, false);
+        document.getElementById('callStatusTxt').textContent = 'Calling…';
+
+        try {
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: type === 'video',
+            });
+            if (type === 'video') {
+                const lv = document.getElementById('localVid');
+                lv.srcObject = this.localStream;
+                lv.style.display = 'block';
+                document.getElementById('btnCam').classList.remove('d-none');
+            }
+
+            this.peerConn = new RTCPeerConnection(this.STUN);
+            this.localStream.getTracks().forEach(t => this.peerConn.addTrack(t, this.localStream));
+
+            this.peerConn.onicecandidate = ev => {
+                if (ev.candidate) this.pendingIce.push(ev.candidate.toJSON());
+            };
+            this.peerConn.ontrack = ev => {
+                const rv = document.getElementById('remoteVid');
+                rv.srcObject = ev.streams[0];
+                if (type === 'video') rv.style.display = 'block';
+            };
+
+            const offer = await this.peerConn.createOffer();
+            await this.peerConn.setLocalDescription(offer);
+
+            const d = await apiPost('call.php', {
+                action:          'initiate',
+                conversation_id: this.convId,
+                callee_id:       this.calleeId,
+                call_type:       type,
+                offer_sdp:       JSON.stringify(offer),
+            });
+            if (!d.call_id) throw new Error('No call_id returned');
+            this.activeCallId = d.call_id;
+
+            this.callPoll = setInterval(() => this._pollCall(), 2000);
+        } catch (err) {
+            console.error('call:', err);
+            this._hideOverlay();
+            alert('Could not start call: ' + err.message);
+        }
+    },
+
+    async _pollCall() {
+        if (!this.activeCallId) return;
+        try {
+            const d = await apiPost('call.php', {
+                action:  'status',
+                call_id: this.activeCallId,
+            });
+            if (d.status === 'active' && d.answer_sdp &&
+                this.peerConn?.signalingState !== 'stable') {
+                clearInterval(this.callPoll);
+                const answer = JSON.parse(d.answer_sdp);
+                await this.peerConn.setRemoteDescription(new RTCSessionDescription(answer));
+
+                // Add remote ICE candidates
+                (d.callee_ice || []).forEach(c => {
+                    try { this.peerConn.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+                });
+
+                // Send our ICE candidates
+                await apiPost('call.php', {
+                    action:     'ice',
+                    call_id:    this.activeCallId,
+                    candidates: this.pendingIce,
+                });
+
+                document.getElementById('callStatusTxt').textContent = 'Connected';
+                this._startTimer();
+            } else if (d.status === 'rejected') {
+                this._endCleanup();
+                document.getElementById('callStatusTxt').textContent = 'Call rejected';
+                setTimeout(() => this._hideOverlay(), 2500);
+            } else if (d.status === 'missed') {
+                this._endCleanup();
+                document.getElementById('callStatusTxt').textContent = 'No answer';
+                setTimeout(() => this._hideOverlay(), 2500);
+            } else if (d.status === 'ended') {
+                this._endCleanup();
+                this._hideOverlay();
+            }
+        } catch (e) {
+            console.error('_pollCall:', e);
+        }
     },
 
     async acceptCall() {
-        const r = await fetch(`${API}call.php?action=status&call_id=${this.activeCallId}`);
-        const d = await r.json();
-        if (!d.offer_sdp) return;
+        try {
+            const d = await apiPost('call.php', {
+                action:  'status',
+                call_id: this.activeCallId,
+            });
+            if (!d.offer_sdp) return;
 
-        this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: d.call_type === 'video' });
-        if (d.call_type === 'video') { const lv = document.getElementById('localVideo'); lv.srcObject = this.localStream; lv.style.display = 'block'; }
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: d.call_type === 'video',
+            });
+            if (d.call_type === 'video') {
+                const lv = document.getElementById('localVid');
+                lv.srcObject = this.localStream;
+                lv.style.display = 'block';
+            }
 
-        this.peerConn = new RTCPeerConnection(this._stun);
-        this.localStream.getTracks().forEach(t => this.peerConn.addTrack(t, this.localStream));
-        this.peerConn.onicecandidate = e => { if (e.candidate) this.iceCandidates.push(e.candidate); };
-        this.peerConn.ontrack = e => {
-            const rv = document.getElementById('remoteVideo');
-            rv.srcObject = e.streams[0];
-            if (d.call_type === 'video') rv.style.display = 'block';
-        };
+            this.peerConn = new RTCPeerConnection(this.STUN);
+            this.localStream.getTracks().forEach(t => this.peerConn.addTrack(t, this.localStream));
+            this.peerConn.onicecandidate = ev => {
+                if (ev.candidate) this.pendingIce.push(ev.candidate.toJSON());
+            };
+            this.peerConn.ontrack = ev => {
+                const rv = document.getElementById('remoteVid');
+                rv.srcObject = ev.streams[0];
+                if (d.call_type === 'video') rv.style.display = 'block';
+            };
 
-        const offer = JSON.parse(d.offer_sdp);
-        await this.peerConn.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await this.peerConn.createAnswer();
-        await this.peerConn.setLocalDescription(answer);
+            const offer = JSON.parse(d.offer_sdp);
+            await this.peerConn.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await this.peerConn.createAnswer();
+            await this.peerConn.setLocalDescription(answer);
 
-        const fd = new FormData();
-        fd.append('action', 'answer'); fd.append('call_id', this.activeCallId);
-        fd.append('answer_sdp', JSON.stringify(answer));
-        await fetch(API + 'call.php', { method: 'POST', body: fd });
+            await apiPost('call.php', {
+                action:     'answer',
+                call_id:    this.activeCallId,
+                answer_sdp: JSON.stringify(answer),
+            });
 
-        document.getElementById('acceptBtn').classList.add('d-none');
-        document.getElementById('callStatus').textContent = 'Connected';
-        this._startCallTimer();
+            // Add caller's ICE after a short delay
+            setTimeout(async () => {
+                try {
+                    const d2 = await apiPost('call.php', { action: 'status', call_id: this.activeCallId });
+                    (d2.caller_ice || []).forEach(c => {
+                        try { this.peerConn.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+                    });
+                    await apiPost('call.php', {
+                        action:     'ice',
+                        call_id:    this.activeCallId,
+                        candidates: this.pendingIce,
+                    });
+                } catch {}
+            }, 1500);
 
-        // Poll for caller ICE
-        setTimeout(async () => {
-            const r2 = await fetch(`${API}call.php?action=status&call_id=${this.activeCallId}`);
-            const d2 = await r2.json();
-            if (d2.caller_ice) { JSON.parse(d2.caller_ice).forEach(c => this.peerConn.addIceCandidate(new RTCIceCandidate(c))); }
-            // Send callee ICE
-            const fd2 = new FormData();
-            fd2.append('action','ice'); fd2.append('call_id', this.activeCallId);
-            fd2.append('role','callee'); fd2.append('ice', JSON.stringify(this.iceCandidates));
-            await fetch(API + 'call.php', { method: 'POST', body: fd2 });
-        }, 2000);
+            document.getElementById('btnAccept').classList.add('d-none');
+            document.getElementById('callStatusTxt').textContent = 'Connected';
+            this._startTimer();
+        } catch (err) {
+            console.error('acceptCall:', err);
+        }
     },
 
     async hangup() {
         if (this.activeCallId) {
-            const fd = new FormData();
-            fd.append('action', 'end'); fd.append('call_id', this.activeCallId);
-            await fetch(API + 'call.php', { method: 'POST', body: fd });
+            try {
+                await apiPost('call.php', { action: 'end', call_id: this.activeCallId });
+            } catch {}
         }
-        this._endCallCleanup();
-        this._hideCallOverlay();
+        this._endCleanup();
+        this._hideOverlay();
     },
 
     toggleMute() {
         this.isMuted = !this.isMuted;
         this.localStream?.getAudioTracks().forEach(t => t.enabled = !this.isMuted);
-        const btn = document.getElementById('muteBtn');
-        btn.innerHTML = this.isMuted ? '<i class="fa fa-microphone-slash"></i>' : '<i class="fa fa-microphone"></i>';
-        btn.style.background = this.isMuted ? '#dc2626' : 'rgba(255,255,255,.2)';
+        const btn = document.getElementById('btnMute');
+        btn.innerHTML = this.isMuted
+            ? '<i class="fa fa-microphone-slash"></i>'
+            : '<i class="fa fa-microphone"></i>';
+        btn.classList.toggle('off', this.isMuted);
     },
 
-    toggleCamera() {
+    toggleCam() {
         this.isCamOff = !this.isCamOff;
         this.localStream?.getVideoTracks().forEach(t => t.enabled = !this.isCamOff);
-        const btn = document.getElementById('camBtn');
-        btn.innerHTML = this.isCamOff ? '<i class="fa fa-video-slash"></i>' : '<i class="fa fa-video"></i>';
+        const btn = document.getElementById('btnCam');
+        btn.innerHTML = this.isCamOff
+            ? '<i class="fa fa-video-slash"></i>'
+            : '<i class="fa fa-video"></i>';
+        btn.classList.toggle('off', this.isCamOff);
     },
 
-    _showCallOverlay(name, type, incoming) {
-        document.getElementById('callOverlay').classList.add('active');
-        document.getElementById('callAvatar').textContent = name.charAt(0).toUpperCase();
-        document.getElementById('callName').textContent   = name;
-        if (type === 'video') document.getElementById('camBtn').classList.remove('d-none');
+    _showOverlay(name, color, type, incoming) {
+        const ov = document.getElementById('callOverlay');
+        ov.classList.add('on');
+        document.getElementById('callAvatar').textContent          = initials(name);
+        document.getElementById('callAvatar').style.background     = color || '#128c7e';
+        document.getElementById('callName').textContent            = name;
+        document.getElementById('callTimer').textContent           = '';
+        document.getElementById('btnAccept').classList.toggle('d-none', !incoming);
+        document.getElementById('btnCam').classList.toggle('d-none', type !== 'video');
+        // Reset mute
+        this.isMuted = false;
+        document.getElementById('btnMute').innerHTML = '<i class="fa fa-microphone"></i>';
+        document.getElementById('btnMute').classList.remove('off');
     },
-    _hideCallOverlay() {
-        document.getElementById('callOverlay').classList.remove('active');
-        document.getElementById('remoteVideo').style.display = 'none';
-        document.getElementById('localVideo').style.display  = 'none';
-        document.getElementById('callTimer').classList.add('d-none');
-        document.getElementById('camBtn').classList.add('d-none');
-        document.getElementById('acceptBtn').classList.add('d-none');
-        this.isIncoming = false;
+
+    _hideOverlay() {
+        document.getElementById('callOverlay').classList.remove('on');
+        document.getElementById('remoteVid').style.display = 'none';
+        document.getElementById('remoteVid').srcObject     = null;
+        document.getElementById('localVid').style.display  = 'none';
+        document.getElementById('localVid').srcObject      = null;
+        document.getElementById('btnAccept').classList.add('d-none');
+        document.getElementById('btnCam').classList.add('d-none');
     },
-    _endCallCleanup() {
-        clearInterval(this.callPollTimer);
+
+    _endCleanup() {
+        clearInterval(this.callPoll);
         clearInterval(this.callTimerInt);
-        this.peerConn?.close(); this.peerConn = null;
-        this.localStream?.getTracks().forEach(t => t.stop()); this.localStream = null;
+        this.peerConn?.close();
+        this.peerConn     = null;
+        this.localStream?.getTracks().forEach(t => t.stop());
+        this.localStream  = null;
         this.activeCallId = null;
+        this.isMuted      = false;
+        this.isCamOff     = false;
+        this.isIncoming   = false;
+        this.pendingIce   = [];
     },
-    _startCallTimer() {
+
+    _startTimer() {
         let s = 0;
         const el = document.getElementById('callTimer');
-        el.classList.remove('d-none');
-        this.callTimerInt = setInterval(() => { s++; el.textContent = this._fmtDur(s); }, 1000);
+        this.callTimerInt = setInterval(() => {
+            s++;
+            el.textContent = fmtDur(s);
+        }, 1000);
     },
 
-    // ── Incoming call poll (separate from message poll) ──────────
-    async _checkIncomingCall() {
+    /* ── Poll for incoming calls ─────────────────────────────── */
+    async _checkIncoming() {
         if (this.activeCallId) return;
-        const r = await fetch(`${API}call.php?action=incoming`);
-        const d = await r.json();
-        if (d.call_id) this._handleIncomingCall(d);
+        try {
+            const d = await apiPost('call.php', { action: 'incoming' });
+            if (d.incoming && d.call && !this.activeCallId) {
+                const c = d.call;
+                this.activeCallId = parseInt(c.id);
+                this.isIncoming   = true;
+                this.pendingIce   = [];
+                this._showOverlay(c.caller_name, avatarColor(c.caller_id), c.call_type, true);
+                document.getElementById('callStatusTxt').textContent =
+                    `Incoming ${c.call_type} call…`;
+            }
+        } catch {}
     },
 
-    // ── Helpers ───────────────────────────────────────────────────
-    _fmtDur(s) { return Math.floor(s/60)+':'+(String(s%60).padStart(2,'0')); },
-    _fmtSize(b) {
-        if (b > 1048576) return (b/1048576).toFixed(1)+' MB';
-        if (b > 1024)    return (b/1024).toFixed(0)+' KB';
-        return b + ' B';
-    },
-    _fileIcon(mime) {
-        if (mime.includes('pdf'))   return 'fa-file-pdf text-danger';
-        if (mime.includes('word'))  return 'fa-file-word text-primary';
-        if (mime.includes('excel') || mime.includes('sheet')) return 'fa-file-excel text-success';
-        if (mime.includes('zip') || mime.includes('rar'))     return 'fa-file-zipper text-warning';
-        if (mime.includes('image')) return 'fa-file-image text-info';
-        return 'fa-file text-muted';
-    },
-
+    /* ── Init ────────────────────────────────────────────────── */
     init() {
-        this.loadConversations();
-        // Poll incoming calls every 5s
-        setInterval(() => this._checkIncomingCall(), 5000);
-        // Attach file input
-        document.getElementById('fileInput').addEventListener('change', async (ev) => {
-            for (const f of ev.target.files) await this.uploadFile(f);
+        // Load conversation list
+        this.loadConvs();
+
+        // Poll for incoming calls every 5s
+        setInterval(() => this._checkIncoming(), 5000);
+
+        // File input handler
+        document.getElementById('fileIn').addEventListener('change', async (ev) => {
+            for (const f of Array.from(ev.target.files)) {
+                await this.uploadFile(f);
+            }
             ev.target.value = '';
         });
+
         // Conversation search filter
-        document.getElementById('convSearch').addEventListener('input', function() {
-            const q = this.value.toLowerCase();
+        document.getElementById('convSearch').addEventListener('input', function () {
+            const q = this.value.toLowerCase().trim();
             document.querySelectorAll('.conv-item').forEach(el => {
-                el.style.display = el.querySelector('.conv-name').textContent.toLowerCase().includes(q) ? '' : 'none';
+                const name = el.querySelector('.conv-name')?.textContent.toLowerCase() || '';
+                el.style.display = !q || name.includes(q) ? '' : 'none';
             });
         });
-        // User search in modal
-        document.getElementById('userSearch').addEventListener('input', function() {
-            const q = this.value.toLowerCase();
+
+        // User search in new chat modal
+        document.getElementById('userSearch').addEventListener('input', function () {
+            const q = this.value.toLowerCase().trim();
             document.querySelectorAll('.user-pick-item').forEach(el => {
-                el.style.display = el.dataset.name.toLowerCase().includes(q) ? '' : 'none';
+                const name = (el.dataset.name || '').toLowerCase();
+                el.style.display = !q || name.includes(q) ? '' : 'none';
             });
         });
-    }
+
+        // Track input content for mic/send toggle
+        document.getElementById('msgInput').addEventListener('input', () => {
+            const text = document.getElementById('msgInput').innerText.trim();
+            this._setSendMode(text ? 'send' : 'mic');
+        });
+
+        // Mobile back button
+        document.getElementById('chatBackBtn').addEventListener('click', () => {
+            document.getElementById('chatPanelRight').classList.add('mobile-hidden');
+            clearInterval(this.pollTimer);
+        });
+
+        // Lightbox ESC key
+        document.addEventListener('keydown', ev => {
+            if (ev.key === 'Escape') {
+                this.closeLightbox();
+                if (this.activeCallId) this.hangup();
+            }
+        });
+    },
 };
 
-function e(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-}
-
-ChatApp.init();
+Chat.init();
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
