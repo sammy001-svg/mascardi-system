@@ -57,5 +57,6 @@
     }
 }());
 </script>
+<?php if (isset($extraModal)) echo $extraModal; ?>
 </body>
 </html>

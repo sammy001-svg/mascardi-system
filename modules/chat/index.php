@@ -1404,9 +1404,11 @@ const Chat = {
 document.addEventListener('DOMContentLoaded', () => Chat.init());
 </script>
 
-<?php include __DIR__ . '/../../includes/footer.php'; ?>
-
-<!-- ══ NEW CHAT MODAL — direct child of <body>, outside page-body stacking context ══ -->
+<?php
+// NEW CHAT MODAL — rendered as direct child of <body> (via footer.php $extraModal hook)
+// This places it OUTSIDE the .page-body stacking context, fixing the black-overlay bug.
+ob_start(); ?>
+<!-- ── NEW CHAT MODAL ──────────────────────────────────────────── -->
 <div class="modal fade" id="newChatModal" tabindex="-1">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
@@ -1452,4 +1454,7 @@ document.addEventListener('DOMContentLoaded', () => Chat.init());
         </div>
     </div>
 </div>
+<?php $extraModal = ob_get_clean(); ?>
+
+<?php include __DIR__ . '/../../includes/footer.php'; ?>
 
