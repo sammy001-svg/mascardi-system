@@ -1419,7 +1419,7 @@ const Chat = {
     },
 };
 
-Chat.init();
+document.addEventListener('DOMContentLoaded', () => Chat.init());
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
