@@ -77,32 +77,32 @@ if ($method === 'POST') {
         http_response_code(400); echo json_encode(['error'=>'Invalid user']); exit;
     }
 
-    // Check target exists
-    $target = $db->prepare("SELECT id, name AS full_name FROM users WHERE id=?");
-    $target->execute([$targetId]);
-    if (!$target->fetch()) {
-        http_response_code(404); echo json_encode(['error'=>'User not found']); exit;
-    }
-
-    // Find existing direct conversation between the two
-    $existing = $db->prepare("
-        SELECT cc.id FROM chat_conversations cc
-        JOIN chat_participants cp1 ON cp1.conversation_id = cc.id AND cp1.user_id = ?
-        JOIN chat_participants cp2 ON cp2.conversation_id = cc.id AND cp2.user_id = ?
-        WHERE cc.type = 'direct'
-        LIMIT 1
-    ");
-    $existing->execute([$me['id'], $targetId]);
-    $conv = $existing->fetch();
-
-    if ($conv) {
-        echo json_encode(['conversation_id' => (int)$conv['id'], 'existing' => true]);
-        exit;
-    }
-
-    // Create new direct conversation
-    $db->beginTransaction();
     try {
+        // Check target exists
+        $target = $db->prepare("SELECT id FROM users WHERE id=?");
+        $target->execute([$targetId]);
+        if (!$target->fetch()) {
+            http_response_code(404); echo json_encode(['error'=>'User not found']); exit;
+        }
+
+        // Find existing direct conversation between the two
+        $existing = $db->prepare("
+            SELECT cc.id FROM chat_conversations cc
+            JOIN chat_participants cp1 ON cp1.conversation_id = cc.id AND cp1.user_id = ?
+            JOIN chat_participants cp2 ON cp2.conversation_id = cc.id AND cp2.user_id = ?
+            WHERE cc.type = 'direct'
+            LIMIT 1
+        ");
+        $existing->execute([$me['id'], $targetId]);
+        $conv = $existing->fetch();
+
+        if ($conv) {
+            echo json_encode(['conversation_id' => (int)$conv['id'], 'existing' => true]);
+            exit;
+        }
+
+        // Create new direct conversation
+        $db->beginTransaction();
         $db->prepare("INSERT INTO chat_conversations (type, created_by) VALUES ('direct', ?)")
            ->execute([$me['id']]);
         $convId = (int)$db->lastInsertId();
@@ -113,9 +113,11 @@ if ($method === 'POST') {
 
         $db->commit();
         echo json_encode(['conversation_id' => $convId, 'existing' => false]);
+
     } catch (Exception $e) {
-        $db->rollBack();
-        http_response_code(500); echo json_encode(['error' => 'Could not create conversation']);
+        if ($db->inTransaction()) $db->rollBack();
+        http_response_code(500);
+        echo json_encode(['error' => 'Chat tables not set up. Please visit /modules/chat/setup.php first.']);
     }
     exit;
 }
