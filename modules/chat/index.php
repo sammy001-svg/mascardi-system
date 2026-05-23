@@ -25,6 +25,15 @@ include __DIR__ . '/../../includes/header.php';
 ═══════════════════════════════════════════════════════════════ */
 .page-body { padding: 0 !important; overflow: hidden !important; }
 
+/* ── Modal stacking-context isolation ───────────────────────── */
+/* Prevents the page-body CSS animation (which uses transform) from
+   creating a stacking context that traps Bootstrap modals behind
+   their own backdrop. Modal + backdrop are moved to <body> in JS,
+   but we add explicit z-index overrides here as a safety net.    */
+#newChatModal               { z-index: 1055 !important; }
+#newChatModal + .modal-backdrop,
+body > .modal-backdrop      { z-index: 1050 !important; }
+
 /* ── Root shell ─────────────────────────────────────────────── */
 .chat-root {
     display: flex !important;
