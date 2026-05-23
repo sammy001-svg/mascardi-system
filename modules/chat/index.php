@@ -20,14 +20,14 @@ $allUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 include __DIR__ . '/../../includes/header.php';
 ?>
 <style>
-/* ═══════════════════════════════════════════════════════════════
-   CHAT MODULE — injected after header (header.php has no extraCss hook)
-═══════════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   CHAT MODULE â€” injected after header (header.php has no extraCss hook)
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .page-body { padding: 0 !important; overflow: hidden !important; }
 
 /* Chat page: strip ALL stacking-context-creating properties from page-body
    so Bootstrap's backdrop (appended to <body>) cannot paint over the modal.
-   transform, filter, will-change:transform, opacity<1, isolation — any of
+   transform, filter, will-change:transform, opacity<1, isolation â€” any of
    these on an ancestor would trap the modal inside a nested context.        */
 .page-body {
     padding: 0 !important;
@@ -51,7 +51,7 @@ body > .modal-backdrop,
 }
 
 
-/* ── Root shell ─────────────────────────────────────────────── */
+/* â”€â”€ Root shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .chat-root {
     display: flex !important;
     height: calc(100vh - 60px);   /* topbar is exactly 60px */
@@ -61,9 +61,9 @@ body > .modal-backdrop,
     font-size: 14px;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   LEFT PANEL – conversation list
-═══════════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   LEFT PANEL â€“ conversation list
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .cp-left {
     width: 360px; min-width: 360px;
     display: flex; flex-direction: column;
@@ -135,9 +135,9 @@ body > .modal-backdrop,
     margin: 0 auto 16px; font-size: 28px; color: #aebac1;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   RIGHT PANEL – active chat
-═══════════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   RIGHT PANEL â€“ active chat
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .cp-right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
 /* Welcome */
@@ -177,7 +177,7 @@ body > .modal-backdrop,
 .ch-sub  { font-size: 12px; color: #667781; }
 .ch-acts { display: flex; gap: 2px; }
 
-/* ── Messages area ────────────────────────────────────────── */
+/* â”€â”€ Messages area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .chat-msgs {
     flex: 1; overflow-y: auto; padding: 12px 16px 8px;
     display: flex; flex-direction: column;
@@ -236,7 +236,7 @@ body > .modal-backdrop,
     background: #fff;
     border-radius: 2px 10px 10px 10px;
 }
-/* Grouped bubbles (not first in group) — no sharp corner change needed */
+/* Grouped bubbles (not first in group) â€” no sharp corner change needed */
 .msg-row.s.group-mid .bubble,
 .msg-row.s.group-end .bubble { border-radius: 10px 10px 2px 10px; }
 .msg-row.r.group-mid .bubble,
@@ -252,7 +252,7 @@ body > .modal-backdrop,
     font-size: 11px; color: #8696a0; white-space: nowrap;
 }
 .b-tick { color: #53bdeb; font-size: 11px; }
-/* Hide meta on non-last grouped messages — show only on last */
+/* Hide meta on non-last grouped messages â€” show only on last */
 .msg-row:not(.group-last):not(.group-solo) .b-meta { display: none; }
 .msg-row:not(.group-last):not(.group-solo) .bubble  { padding-bottom: 8px; }
 
@@ -307,7 +307,7 @@ body > .modal-backdrop,
     box-shadow: 0 1px 2px rgba(0,0,0,.07);
 }
 
-/* ── Scroll-to-bottom FAB ─────────────────────────────────── */
+/* â”€â”€ Scroll-to-bottom FAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .scroll-fab {
     position: absolute; bottom: 80px; right: 20px; z-index: 10;
     width: 42px; height: 42px; border-radius: 50%;
@@ -326,9 +326,9 @@ body > .modal-backdrop,
     display: flex; align-items: center; justify-content: center;
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    INPUT AREA
-═══════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .chat-input-wrap {
     position: relative;
     flex-shrink: 0;
@@ -411,9 +411,9 @@ body > .modal-backdrop,
 .bar-send:active { transform: scale(.9); }
 .bar-send.rec-on { background: #dc2626; }
 
-/* ═══════════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    CALL OVERLAY
-═══════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .call-ov {
     position: fixed; inset: 0; z-index: 9990;
     background: #1f2c34;
@@ -436,16 +436,16 @@ body > .modal-backdrop,
 .cb-accept { background:#43a047; }
 .cb-mute.muted { background:#e0e0e0;color:#333; }
 
-/* ═══════════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    LIGHTBOX
-═══════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .lightbox { position:fixed;inset:0;z-index:9995;background:rgba(0,0,0,.92);align-items:center;justify-content:center; }
 .lightbox img { max-width:92vw;max-height:88vh;border-radius:6px;object-fit:contain; }
 .lb-close { position:absolute;top:16px;right:20px;color:#fff;font-size:28px;cursor:pointer;background:none;border:none;line-height:1; }
 
-/* ═══════════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    NEW CHAT MODAL
-═══════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .up-list { max-height: 360px; overflow-y: auto; }
 .up-item {
     display: flex; align-items: center; gap: 12px;
@@ -457,12 +457,12 @@ body > .modal-backdrop,
 .up-name { font-size:14px;font-weight:600;color:#111b21; }
 .up-role { font-size:12px;color:#667781; }
 
-/* ── Shared icon button ──────────────────────────────────── */
+/* â”€â”€ Shared icon button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .ic-btn { width:36px;height:36px;border-radius:50%;background:none;border:none;color:#54656f;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;flex-shrink:0;transition:background .15s; }
 .ic-btn:hover { background:#e9edef; }
 .ch-acts .ic-btn { font-size:19px; }
 
-/* ── Mobile ──────────────────────────────────────────────── */
+/* â”€â”€ Mobile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media (max-width:767px) {
     .cp-left  { width:100%;min-width:100%; }
     .cp-right { position:absolute;inset:0;z-index:5; }
@@ -471,9 +471,9 @@ body > .modal-backdrop,
 }
 </style>
 
-<!-- ════════════════════════════════════════════════════════════
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      LAYOUT
-════════════════════════════════════════════════════════════ -->
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div class="chat-root">
 
     <!-- LEFT: Conversation list -->
@@ -487,7 +487,7 @@ body > .modal-backdrop,
         <div class="cp-search">
             <div class="cp-si">
                 <i class="fa fa-magnifying-glass"></i>
-                <input type="text" id="convSearch" placeholder="Search conversations…" autocomplete="off">
+                <input type="text" id="convSearch" placeholder="Search conversationsâ€¦" autocomplete="off">
             </div>
         </div>
         <div class="conv-list" id="convList"></div>
@@ -515,9 +515,9 @@ body > .modal-backdrop,
                 <button class="ic-btn ch-back-mob" id="chBack" style="display:none" title="Back">
                     <i class="fa fa-arrow-left"></i>
                 </button>
-                <div class="ch-av" id="chAv" style="background:#128c7e">–</div>
+                <div class="ch-av" id="chAv" style="background:#128c7e">â€“</div>
                 <div class="ch-info">
-                    <div class="ch-name" id="chName">—</div>
+                    <div class="ch-name" id="chName">â€”</div>
                     <div class="ch-sub"  id="chSub"></div>
                 </div>
                 <div class="ch-acts">
@@ -555,7 +555,7 @@ body > .modal-backdrop,
 
                     <div class="bar-center">
                         <div class="bar-input" id="msgIn"
-                             contenteditable="true" data-ph="Type a message…"
+                             contenteditable="true" data-ph="Type a messageâ€¦"
                              role="textbox" aria-multiline="true"></div>
                         <div class="rec-bar" id="recBar" style="display:none">
                             <div class="rec-dot"></div>
@@ -583,9 +583,9 @@ body > .modal-backdrop,
     <video class="call-rv" id="remoteVid" autoplay playsinline style="display:none"></video>
     <video class="call-lv" id="localVid"  autoplay muted playsinline style="display:none"></video>
     <div class="call-body">
-        <div class="call-avatar" id="callAv" style="background:#128c7e">–</div>
-        <div class="call-name"  id="callName">—</div>
-        <div class="call-stat"  id="callStat">Calling…</div>
+        <div class="call-avatar" id="callAv" style="background:#128c7e">â€“</div>
+        <div class="call-name"  id="callName">â€”</div>
+        <div class="call-stat"  id="callStat">Callingâ€¦</div>
         <div class="call-timer" id="callTimer"></div>
         <div class="call-btns">
             <button class="call-btn cb-mute"   id="btnMute"  ><i class="fa fa-microphone"></i></button>
@@ -606,9 +606,9 @@ body > .modal-backdrop,
      the page-body CSS stacking context caused by its animation/transform. -->
 
 <script>
-/* ════════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    Constants & helpers
-════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const ME   = { id: <?= (int)$me['id'] ?>, name: <?= json_encode($me['name']) ?> };
 const BASE = <?= json_encode(rtrim(BASE_URL, '/')) ?>;
 const API  = BASE + '/modules/chat/api/';
@@ -619,7 +619,7 @@ function esc(s) {
     d.textContent = s == null ? '' : String(s);
     return d.innerHTML;
 }
-function $(id) { return document.getElementById(id); }
+function el(id) { return document.getElementById(id); }
 function show(el,d=''){  el.style.display = d || ''; }
 function hide(el)      { el.style.display = 'none'; }
 function flex(el)      { el.style.display = 'flex'; }
@@ -672,7 +672,7 @@ async function apiUpload(ep,fd){
     try { return JSON.parse(txt); } catch { return {}; }
 }
 
-/* ── Ping sound via Web Audio API (no external file needed) ─ */
+/* â”€â”€ Ping sound via Web Audio API (no external file needed) â”€ */
 function pingSound() {
     try {
         const ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -689,7 +689,7 @@ function pingSound() {
     } catch {}
 }
 
-/* ── Browser Notification API ───────────────────────────── */
+/* â”€â”€ Browser Notification API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function requestNotifPerm() {
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission().catch(()=>{});
@@ -708,20 +708,20 @@ function pushNotification(title, body) {
     } catch {}
 }
 
-/* ════════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    Emoji picker data
-════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const EMOJIS = [
-    '😀','😂','🤣','😊','😍','🥰','😎','🤔','😅','😭','😱','🥳',
-    '😆','😜','😇','😴','😡','🤩','🥺','😏','😒','🙄','🤗','😬',
-    '👍','👎','👏','🙏','🤝','💪','👋','✌️','🫶','❤️','💔','🔥',
-    '✨','💯','🎉','🎊','🎯','🚀','💡','⭐','🌟','✅','❌','⚡',
-    '😋','🤭','🫡','🫠','😮','😯','😲','🤯','🥴','😵','🤤','😪',
+    'ðŸ˜€','ðŸ˜‚','ðŸ¤£','ðŸ˜Š','ðŸ˜','ðŸ¥°','ðŸ˜Ž','ðŸ¤”','ðŸ˜…','ðŸ˜­','ðŸ˜±','ðŸ¥³',
+    'ðŸ˜†','ðŸ˜œ','ðŸ˜‡','ðŸ˜´','ðŸ˜¡','ðŸ¤©','ðŸ¥º','ðŸ˜','ðŸ˜’','ðŸ™„','ðŸ¤—','ðŸ˜¬',
+    'ðŸ‘','ðŸ‘Ž','ðŸ‘','ðŸ™','ðŸ¤','ðŸ’ª','ðŸ‘‹','âœŒï¸','ðŸ«¶','â¤ï¸','ðŸ’”','ðŸ”¥',
+    'âœ¨','ðŸ’¯','ðŸŽ‰','ðŸŽŠ','ðŸŽ¯','ðŸš€','ðŸ’¡','â­','ðŸŒŸ','âœ…','âŒ','âš¡',
+    'ðŸ˜‹','ðŸ¤­','ðŸ«¡','ðŸ« ','ðŸ˜®','ðŸ˜¯','ðŸ˜²','ðŸ¤¯','ðŸ¥´','ðŸ˜µ','ðŸ¤¤','ðŸ˜ª',
 ];
 
-/* ════════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    Chat application
-════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const Chat = {
     convId:0, convName:'', convColor:'#128c7e', calleeId:null,
     lastMsgId:0, lastDay:'',
@@ -738,9 +738,9 @@ const Chat = {
 
     STUN:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]},
 
-    /* ── Build emoji picker ──────────────────────────────── */
+    /* â”€â”€ Build emoji picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     buildEmojiPicker() {
-        const el = $('emojiPicker');
+        const el = el('emojiPicker');
         el.innerHTML = EMOJIS.map(e =>
             `<button title="${e}" data-emoji="${e}">${e}</button>`
         ).join('');
@@ -751,7 +751,7 @@ const Chat = {
         });
     },
     insertEmoji(emoji) {
-        const el = $('msgIn');
+        const el = el('msgIn');
         el.focus();
         // Insert at cursor position
         const sel = window.getSelection();
@@ -768,17 +768,17 @@ const Chat = {
     },
     toggleEmoji() {
         this.emojiOpen = !this.emojiOpen;
-        const el = $('emojiPicker');
+        const el = el('emojiPicker');
         this.emojiOpen ? show(el,'flex') : hide(el);
-        $('btnEmoji').classList.toggle('active-emoji', this.emojiOpen);
+        el('btnEmoji').classList.toggle('active-emoji', this.emojiOpen);
     },
 
-    /* ── Load conversations ──────────────────────────────── */
+    /* â”€â”€ Load conversations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async loadConvs() {
         try {
             const d = await apiGet('conversations.php');
             const convs = d.conversations || [];
-            const list = $('convList');
+            const list = el('convList');
             if (!convs.length) {
                 list.innerHTML = `<div class="conv-empty">
                     <div class="ce-icon"><i class="fa fa-message"></i></div>
@@ -804,7 +804,7 @@ const Chat = {
             }
         } catch(e) {
             console.error('loadConvs', e);
-            $('convList').innerHTML = `<div class="conv-empty">
+            el('convList').innerHTML = `<div class="conv-empty">
                 <div class="ce-icon"><i class="fa fa-triangle-exclamation"></i></div>
                 Could not load conversations.<br>
                 <small>Make sure the database migration has been run.</small>
@@ -839,7 +839,7 @@ const Chat = {
         </div>`;
     },
 
-    /* ── Open conversation ───────────────────────────────── */
+    /* â”€â”€ Open conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async openConv(cid, cname, ccolor, callee) {
         this.convId    = parseInt(cid)||0;
         this.convName  = cname;
@@ -852,21 +852,21 @@ const Chat = {
         this.scrollUnread = 0;
 
         // Update header
-        $('chAv').textContent = initials(cname);
-        $('chAv').style.background = this.convColor;
-        $('chName').textContent = cname;
-        $('chSub').textContent  = '';
+        el('chAv').textContent = initials(cname);
+        el('chAv').style.background = this.convColor;
+        el('chName').textContent = cname;
+        el('chSub').textContent  = '';
 
         // Call buttons visible only for direct chats
         const sc = !!this.calleeId;
-        $('btnCallA').style.display = sc ? '' : 'none';
-        $('btnCallV').style.display = sc ? '' : 'none';
+        el('btnCallA').style.display = sc ? '' : 'none';
+        el('btnCallV').style.display = sc ? '' : 'none';
 
         // Show right panel
-        const rp = $('cpRight');
+        const rp = el('cpRight');
         rp.style.display = 'flex'; rp.style.flexDirection = 'column';
-        hide($('chatWelcome'));
-        const ca = $('chatActive');
+        hide(el('chatWelcome'));
+        const ca = el('chatActive');
         ca.style.display = 'flex'; ca.style.flexDirection = 'column';
 
         // Sidebar active state
@@ -874,29 +874,29 @@ const Chat = {
         document.querySelector(`[data-cid="${this.convId}"]`)?.classList.add('active');
 
         // Reset scroll FAB
-        hide($('scrollFab'));
+        hide(el('scrollFab'));
 
-        $('chatMsgs').innerHTML = `<div style="text-align:center;color:#8696a0;padding:40px 0;font-size:13px">
-            <i class="fa fa-spinner fa-spin me-1"></i> Loading messages…</div>`;
+        el('chatMsgs').innerHTML = `<div style="text-align:center;color:#8696a0;padding:40px 0;font-size:13px">
+            <i class="fa fa-spinner fa-spin me-1"></i> Loading messagesâ€¦</div>`;
 
         clearInterval(this.pollTimer);
         await this._fetchMsgs(true);
         this.pollTimer = setInterval(()=>this._fetchMsgs(false), 2000);
-        $('msgIn').focus();
+        el('msgIn').focus();
         // Close emoji picker if open
         if (this.emojiOpen) this.toggleEmoji();
     },
 
-    /* ── Fetch & render messages ─────────────────────────── */
+    /* â”€â”€ Fetch & render messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async _fetchMsgs(initial) {
         try {
             const d = await apiGet('messages.php', { conversation_id:this.convId, after:this.lastMsgId });
             const msgs = d.messages || [];
-            const box = $('chatMsgs');
+            const box = el('chatMsgs');
 
             if (!msgs.length) {
                 if (initial) box.innerHTML = `<div style="text-align:center;color:#8696a0;padding:60px 0;font-size:13px">
-                    No messages yet — say hello 👋</div>`;
+                    No messages yet â€” say hello ðŸ‘‹</div>`;
                 return;
             }
 
@@ -920,10 +920,10 @@ const Chat = {
             if (atBottom) {
                 box.scrollTop = box.scrollHeight;
             } else if (!initial && newFromOthers > 0) {
-                // Scrolled up — show FAB with unread count
+                // Scrolled up â€” show FAB with unread count
                 this.scrollUnread += newFromOthers;
-                show($('scrollFab'), 'flex');
-                const fb = $('fabBadge');
+                show(el('scrollFab'), 'flex');
+                const fb = el('fabBadge');
                 fb.textContent = this.scrollUnread > 99 ? '99+' : this.scrollUnread;
                 show(fb);
                 // Ping + notification
@@ -931,7 +931,7 @@ const Chat = {
                 if (msgs.length) {
                     const last = msgs[msgs.length-1];
                     if (parseInt(last.sender_id) !== ME.id) {
-                        pushNotification(last.sender_name||'New message', last.content||'📎 Attachment');
+                        pushNotification(last.sender_name||'New message', last.content||'ðŸ“Ž Attachment');
                     }
                 }
             }
@@ -945,7 +945,7 @@ const Chat = {
         } catch(e) { console.error('_fetchMsgs', e); }
     },
 
-    /* ── Render a single message ─────────────────────────── */
+    /* â”€â”€ Render a single message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     _msgHtml(m) {
         const sent    = parseInt(m.sender_id) === ME.id;
         const sid     = parseInt(m.sender_id);
@@ -953,7 +953,7 @@ const Chat = {
         const tick    = sent ? `<span class="b-tick"><i class="fa fa-check-double"></i></span>` : '';
         const time    = fmtTime(m.created_at);
 
-        // Call / system — centered chip, no grouping
+        // Call / system â€” centered chip, no grouping
         if (m.type==='call'||m.type==='system') {
             this.prevSenderId = null; this.prevMsgTs = null;
             const ico = m.type==='call'?(m.content?.includes('video')?'fa-video':'fa-phone'):'fa-circle-info';
@@ -970,7 +970,7 @@ const Chat = {
         let groupClass = 'group-solo';
         if (sameGroup) {
             // Find and update the last bubble in the DOM to be group-mid/group-start
-            const prevRows = $('chatMsgs').querySelectorAll('.msg-row:not(.chip-row)');
+            const prevRows = el('chatMsgs').querySelectorAll('.msg-row:not(.chip-row)');
             const lastRow  = prevRows[prevRows.length-1];
             if (lastRow) {
                 lastRow.classList.remove('group-solo','group-end');
@@ -1027,10 +1027,10 @@ const Chat = {
         </div>`;
     },
 
-    /* ── Send text ───────────────────────────────────────── */
+    /* â”€â”€ Send text â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async sendText() {
         if (!this.convId) return;
-        const el   = $('msgIn');
+        const el   = el('msgIn');
         const text = (el.innerText||'').trim();
         if (!text) return;
         el.innerText = ''; this._syncBtn();
@@ -1040,14 +1040,14 @@ const Chat = {
             await apiPost('send.php', { conversation_id:this.convId, content:text });
             await this._fetchMsgs(false);
             // Scroll to bottom on own message
-            const box = $('chatMsgs');
+            const box = el('chatMsgs');
             box.scrollTop = box.scrollHeight;
         } catch(e) { console.error('sendText',e); }
     },
 
-    /* ── Start direct conversation ───────────────────────── */
+    /* â”€â”€ Start direct conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async startDirect(uid, uname, ucolor) {
-        bootstrap.Modal.getOrCreateInstance($('newChatModal')).hide();
+        bootstrap.Modal.getOrCreateInstance(el('newChatModal')).hide();
         try {
             const d = await apiPost('conversations.php', { user_id:parseInt(uid) });
             if (d.conversation_id) {
@@ -1057,7 +1057,7 @@ const Chat = {
         } catch(e) { console.error('startDirect',e); }
     },
 
-    /* ── File upload ─────────────────────────────────────── */
+    /* â”€â”€ File upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async uploadFile(file) {
         if (!this.convId) return;
         const fd = new FormData();
@@ -1066,11 +1066,11 @@ const Chat = {
         try {
             await apiUpload('upload.php', fd);
             await this._fetchMsgs(false);
-            $('chatMsgs').scrollTop = $('chatMsgs').scrollHeight;
+            el('chatMsgs').scrollTop = el('chatMsgs').scrollHeight;
         } catch(e) { console.error('uploadFile',e); }
     },
 
-    /* ── Voice recording ─────────────────────────────────── */
+    /* â”€â”€ Voice recording â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     _bestMime() {
         const t = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
         for (const m of t) if (MediaRecorder.isTypeSupported(m)) return m;
@@ -1085,13 +1085,13 @@ const Chat = {
             this.mediaRec.ondataavailable = ev => this.audioChunks.push(ev.data);
             this.mediaRec.start(100);
             this.isRecording = true;
-            hide($('msgIn')); $('recBar').style.display='flex';
-            $('sendBtn').classList.add('rec-on');
-            $('sendIco').className='fa fa-stop';
-            this.recSecs=0; $('recTime').textContent='0:00';
+            hide(el('msgIn')); el('recBar').style.display='flex';
+            el('sendBtn').classList.add('rec-on');
+            el('sendIco').className='fa fa-stop';
+            this.recSecs=0; el('recTime').textContent='0:00';
             this.recTimerInt = setInterval(()=>{
                 this.recSecs++;
-                $('recTime').textContent = fmtDur(this.recSecs);
+                el('recTime').textContent = fmtDur(this.recSecs);
             },1000);
         } catch(e) { alert('Microphone access denied. Please allow it in your browser settings.'); }
     },
@@ -1099,8 +1099,8 @@ const Chat = {
         if (!this.isRecording||!this.mediaRec) return;
         const dur = this.recSecs;
         clearInterval(this.recTimerInt); this.isRecording=false;
-        show($('msgIn')); hide($('recBar'));
-        $('sendBtn').classList.remove('rec-on'); this._syncBtn();
+        show(el('msgIn')); hide(el('recBar'));
+        el('sendBtn').classList.remove('rec-on'); this._syncBtn();
         return new Promise(resolve => {
             this.mediaRec.onstop = async () => {
                 const mime = this.mediaRec.mimeType||'audio/webm';
@@ -1115,7 +1115,7 @@ const Chat = {
                     fd.append('voice','1'); fd.append('duration', dur);
                     await apiUpload('upload.php', fd);
                     await this._fetchMsgs(false);
-                    $('chatMsgs').scrollTop = $('chatMsgs').scrollHeight;
+                    el('chatMsgs').scrollTop = el('chatMsgs').scrollHeight;
                 } catch(e) { console.error('stopRec',e); }
                 resolve();
             };
@@ -1126,26 +1126,26 @@ const Chat = {
         if (!this.isRecording||!this.mediaRec) return;
         clearInterval(this.recTimerInt); this.isRecording=false;
         this.mediaRec.stream.getTracks().forEach(t=>t.stop()); this.mediaRec=null;
-        show($('msgIn')); hide($('recBar'));
-        $('sendBtn').classList.remove('rec-on'); this._syncBtn();
+        show(el('msgIn')); hide(el('recBar'));
+        el('sendBtn').classList.remove('rec-on'); this._syncBtn();
     },
 
     _syncBtn() {
-        const text = ($('msgIn').innerText||'').trim();
+        const text = (el('msgIn').innerText||'').trim();
         if (this.isRecording) {
-            $('sendIco').className='fa fa-stop'; $('sendBtn').title='Stop recording';
+            el('sendIco').className='fa fa-stop'; el('sendBtn').title='Stop recording';
         } else if (text) {
-            $('sendIco').className='fa fa-paper-plane'; $('sendBtn').title='Send message';
+            el('sendIco').className='fa fa-paper-plane'; el('sendBtn').title='Send message';
         } else {
-            $('sendIco').className='fa fa-microphone'; $('sendBtn').title='Record voice note';
+            el('sendIco').className='fa fa-microphone'; el('sendBtn').title='Record voice note';
         }
     },
     onSend() {
         if (this.isRecording) { this.stopRec(); return; }
-        if (($('msgIn').innerText||'').trim()) this.sendText(); else this.startRec();
+        if ((el('msgIn').innerText||'').trim()) this.sendText(); else this.startRec();
     },
 
-    /* ── Voice playback ──────────────────────────────────── */
+    /* â”€â”€ Voice playback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     playVoice(src, vid) {
         if (this.curAudio) {
             this.curAudio.pause(); this.curAudio=null;
@@ -1153,7 +1153,7 @@ const Chat = {
             document.querySelectorAll('.b-wf').forEach(w=>w.style.setProperty('--p','0%'));
         }
         const btn=document.querySelector(`[data-vid="${vid}"]`);
-        const wf=$('wf'+vid), dr=$('dr'+vid);
+        const wf=el('wf'+vid), dr=el('dr'+vid);
         const audio=new Audio(src); this.curAudio=audio;
         if (btn) btn.innerHTML='<i class="fa fa-pause"></i>';
         audio.addEventListener('timeupdate',()=>{
@@ -1170,19 +1170,19 @@ const Chat = {
         if (btn) btn.onclick=()=>{ audio.pause(); btn.innerHTML='<i class="fa fa-play"></i>'; btn.onclick=null; this.curAudio=null; };
     },
 
-    /* ── WebRTC Calls ────────────────────────────────────── */
+    /* â”€â”€ WebRTC Calls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async call(type) {
         if (!this.convId||!this.calleeId) return;
         this.pendingIce=[];
         this._showCall(this.convName, this.convColor, type, false);
-        $('callStat').textContent='Calling…';
+        el('callStat').textContent='Callingâ€¦';
         try {
             this.localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:type==='video'});
-            if (type==='video') { const lv=$('localVid'); lv.srcObject=this.localStream; show(lv); show($('btnCam')); }
+            if (type==='video') { const lv=el('localVid'); lv.srcObject=this.localStream; show(lv); show(el('btnCam')); }
             this.peerConn=new RTCPeerConnection(this.STUN);
             this.localStream.getTracks().forEach(t=>this.peerConn.addTrack(t,this.localStream));
             this.peerConn.onicecandidate=ev=>{ if(ev.candidate) this.pendingIce.push(ev.candidate.toJSON()); };
-            this.peerConn.ontrack=ev=>{ const rv=$('remoteVid'); rv.srcObject=ev.streams[0]; if(type==='video') show(rv); };
+            this.peerConn.ontrack=ev=>{ const rv=el('remoteVid'); rv.srcObject=ev.streams[0]; if(type==='video') show(rv); };
             const offer=await this.peerConn.createOffer();
             await this.peerConn.setLocalDescription(offer);
             const d=await apiPost('call.php',{action:'initiate',conversation_id:this.convId,callee_id:this.calleeId,call_type:type,offer_sdp:JSON.stringify(offer)});
@@ -1200,9 +1200,9 @@ const Chat = {
                 await this.peerConn.setRemoteDescription(new RTCSessionDescription(JSON.parse(d.answer_sdp)));
                 (d.callee_ice||[]).forEach(c=>{try{this.peerConn.addIceCandidate(new RTCIceCandidate(c));}catch{}});
                 await apiPost('call.php',{action:'ice',call_id:this.activeCallId,candidates:this.pendingIce});
-                $('callStat').textContent='Connected'; this._startCallTimer();
-            } else if (d.status==='rejected') { this._endCall(); $('callStat').textContent='Call rejected'; setTimeout(()=>this._hideCall(),2500); }
-            else if (d.status==='missed')     { this._endCall(); $('callStat').textContent='No answer';    setTimeout(()=>this._hideCall(),2500); }
+                el('callStat').textContent='Connected'; this._startCallTimer();
+            } else if (d.status==='rejected') { this._endCall(); el('callStat').textContent='Call rejected'; setTimeout(()=>this._hideCall(),2500); }
+            else if (d.status==='missed')     { this._endCall(); el('callStat').textContent='No answer';    setTimeout(()=>this._hideCall(),2500); }
             else if (d.status==='ended')      { this._endCall(); this._hideCall(); }
         } catch {}
     },
@@ -1211,16 +1211,16 @@ const Chat = {
             const d=await apiPost('call.php',{action:'status',call_id:this.activeCallId});
             if (!d.offer_sdp) return;
             this.localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:d.call_type==='video'});
-            if (d.call_type==='video') { const lv=$('localVid'); lv.srcObject=this.localStream; show(lv); }
+            if (d.call_type==='video') { const lv=el('localVid'); lv.srcObject=this.localStream; show(lv); }
             this.peerConn=new RTCPeerConnection(this.STUN);
             this.localStream.getTracks().forEach(t=>this.peerConn.addTrack(t,this.localStream));
             this.peerConn.onicecandidate=ev=>{ if(ev.candidate) this.pendingIce.push(ev.candidate.toJSON()); };
-            this.peerConn.ontrack=ev=>{ const rv=$('remoteVid'); rv.srcObject=ev.streams[0]; if(d.call_type==='video') show(rv); };
+            this.peerConn.ontrack=ev=>{ const rv=el('remoteVid'); rv.srcObject=ev.streams[0]; if(d.call_type==='video') show(rv); };
             await this.peerConn.setRemoteDescription(new RTCSessionDescription(JSON.parse(d.offer_sdp)));
             const ans=await this.peerConn.createAnswer();
             await this.peerConn.setLocalDescription(ans);
             await apiPost('call.php',{action:'answer',call_id:this.activeCallId,answer_sdp:JSON.stringify(ans)});
-            hide($('btnAccept')); $('callStat').textContent='Connected'; this._startCallTimer();
+            hide(el('btnAccept')); el('callStat').textContent='Connected'; this._startCallTimer();
             setTimeout(async()=>{
                 try {
                     const d2=await apiPost('call.php',{action:'status',call_id:this.activeCallId});
@@ -1237,26 +1237,26 @@ const Chat = {
     toggleMute() {
         this.isMuted=!this.isMuted;
         this.localStream?.getAudioTracks().forEach(t=>t.enabled=!this.isMuted);
-        $('btnMute').innerHTML=this.isMuted?'<i class="fa fa-microphone-slash"></i>':'<i class="fa fa-microphone"></i>';
-        $('btnMute').classList.toggle('muted',this.isMuted);
+        el('btnMute').innerHTML=this.isMuted?'<i class="fa fa-microphone-slash"></i>':'<i class="fa fa-microphone"></i>';
+        el('btnMute').classList.toggle('muted',this.isMuted);
     },
     toggleCam() {
         this.isCamOff=!this.isCamOff;
         this.localStream?.getVideoTracks().forEach(t=>t.enabled=!this.isCamOff);
-        $('btnCam').innerHTML=this.isCamOff?'<i class="fa fa-video-slash"></i>':'<i class="fa fa-video"></i>';
+        el('btnCam').innerHTML=this.isCamOff?'<i class="fa fa-video-slash"></i>':'<i class="fa fa-video"></i>';
     },
     _showCall(name,color,type,incoming) {
-        const ov=$('callOv'); ov.style.display='flex'; ov.style.flexDirection='column'; ov.style.alignItems='center'; ov.style.justifyContent='center';
-        $('callAv').textContent=initials(name); $('callAv').style.background=color||'#128c7e';
-        $('callName').textContent=name; $('callTimer').textContent='';
-        incoming?show($('btnAccept')):hide($('btnAccept'));
-        type==='video'?show($('btnCam')):hide($('btnCam'));
-        this.isMuted=false; $('btnMute').innerHTML='<i class="fa fa-microphone"></i>'; $('btnMute').classList.remove('muted');
+        const ov=el('callOv'); ov.style.display='flex'; ov.style.flexDirection='column'; ov.style.alignItems='center'; ov.style.justifyContent='center';
+        el('callAv').textContent=initials(name); el('callAv').style.background=color||'#128c7e';
+        el('callName').textContent=name; el('callTimer').textContent='';
+        incoming?show(el('btnAccept')):hide(el('btnAccept'));
+        type==='video'?show(el('btnCam')):hide(el('btnCam'));
+        this.isMuted=false; el('btnMute').innerHTML='<i class="fa fa-microphone"></i>'; el('btnMute').classList.remove('muted');
     },
     _hideCall() {
-        hide($('callOv'));
+        hide(el('callOv'));
         ['remoteVid','localVid'].forEach(id=>{const v=$(id);v.srcObject=null;hide(v);});
-        hide($('btnAccept')); hide($('btnCam'));
+        hide(el('btnAccept')); hide(el('btnCam'));
     },
     _endCall() {
         clearInterval(this.callPoll); clearInterval(this.callTimerInt);
@@ -1265,7 +1265,7 @@ const Chat = {
         this.activeCallId=null; this.isMuted=false; this.isCamOff=false; this.pendingIce=[];
     },
     _startCallTimer() {
-        let s=0; const el=$('callTimer');
+        let s=0; const el=el('callTimer');
         this.callTimerInt=setInterval(()=>{ el.textContent=fmtDur(++s); },1000);
     },
     async _checkIncoming() {
@@ -1275,13 +1275,13 @@ const Chat = {
             if (d.incoming&&d.call&&!this.activeCallId) {
                 const c=d.call; this.activeCallId=parseInt(c.id); this.pendingIce=[];
                 this._showCall(c.caller_name, avatarColor(c.caller_id), c.call_type, true);
-                $('callStat').textContent=`Incoming ${c.call_type} call…`;
+                el('callStat').textContent=`Incoming ${c.call_type} callâ€¦`;
                 pingSound();
             }
         } catch {}
     },
 
-    /* ── Init ─────────────────────────────────────────────── */
+    /* â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     init() {
         // .page-body has a CSS animation that keeps transform:translateY(0) applied,
         // creating a stacking context. Bootstrap's backdrop (appended to body after
@@ -1295,38 +1295,38 @@ const Chat = {
         setInterval(()=>this._checkIncoming(), 5000);
 
         // Conversation clicks
-        $('convList').addEventListener('click', e=>{
+        el('convList').addEventListener('click', e=>{
             const item=e.target.closest('.conv-item');
             if (item) this.openConv(item.dataset.cid,item.dataset.cname,item.dataset.ccolor,item.dataset.callee);
         });
 
         // New chat
-        $('btnNewChat').addEventListener('click',()=>bootstrap.Modal.getOrCreateInstance($('newChatModal')).show());
+        el('btnNewChat').addEventListener('click',()=>bootstrap.Modal.getOrCreateInstance(el('newChatModal')).show());
 
         // User picker
-        $('upList').addEventListener('click', e=>{
+        el('upList').addEventListener('click', e=>{
             const item=e.target.closest('.up-item');
             if (item) this.startDirect(item.dataset.uid,item.dataset.uname,item.dataset.ucolor);
         });
 
         // Emoji toggle
-        $('btnEmoji').addEventListener('click',()=>this.toggleEmoji());
+        el('btnEmoji').addEventListener('click',()=>this.toggleEmoji());
 
         // File attach
-        $('btnAttach').addEventListener('click',()=>$('fileIn').click());
-        $('fileIn').addEventListener('change',async ev=>{
+        el('btnAttach').addEventListener('click',()=>el('fileIn').click());
+        el('fileIn').addEventListener('change',async ev=>{
             for (const f of Array.from(ev.target.files)) await this.uploadFile(f);
             ev.target.value='';
         });
 
         // Send button
-        $('sendBtn').addEventListener('click',()=>this.onSend());
+        el('sendBtn').addEventListener('click',()=>this.onSend());
 
         // Text input
-        $('msgIn').addEventListener('keydown', ev=>{
+        el('msgIn').addEventListener('keydown', ev=>{
             if (ev.key==='Enter'&&!ev.shiftKey) { ev.preventDefault(); this.sendText(); }
         });
-        $('msgIn').addEventListener('input',()=>this._syncBtn());
+        el('msgIn').addEventListener('input',()=>this._syncBtn());
 
         // Close emoji if click outside
         document.addEventListener('click', e=>{
@@ -1335,57 +1335,57 @@ const Chat = {
         });
 
         // Cancel recording
-        $('recCancel').addEventListener('click',()=>this.cancelRec());
+        el('recCancel').addEventListener('click',()=>this.cancelRec());
 
         // Call buttons
-        $('btnCallA').addEventListener('click',()=>this.call('audio'));
-        $('btnCallV').addEventListener('click',()=>this.call('video'));
-        $('btnEnd').addEventListener('click',()=>this.hangup());
-        $('btnMute').addEventListener('click',()=>this.toggleMute());
-        $('btnCam').addEventListener('click',()=>this.toggleCam());
-        $('btnAccept').addEventListener('click',()=>this.acceptCall());
+        el('btnCallA').addEventListener('click',()=>this.call('audio'));
+        el('btnCallV').addEventListener('click',()=>this.call('video'));
+        el('btnEnd').addEventListener('click',()=>this.hangup());
+        el('btnMute').addEventListener('click',()=>this.toggleMute());
+        el('btnCam').addEventListener('click',()=>this.toggleCam());
+        el('btnAccept').addEventListener('click',()=>this.acceptCall());
 
         // Mobile back
-        $('chBack').addEventListener('click',()=>{
-            hide($('cpRight')); clearInterval(this.pollTimer);
+        el('chBack').addEventListener('click',()=>{
+            hide(el('cpRight')); clearInterval(this.pollTimer);
         });
 
         // Scroll-to-bottom FAB
-        $('chatMsgs').addEventListener('scroll', ()=>{
-            const box=$('chatMsgs');
+        el('chatMsgs').addEventListener('scroll', ()=>{
+            const box=el('chatMsgs');
             const nearBottom = box.scrollHeight-box.scrollTop-box.clientHeight < 80;
             if (nearBottom) {
-                hide($('scrollFab'));
-                this.scrollUnread=0; hide($('fabBadge'));
+                hide(el('scrollFab'));
+                this.scrollUnread=0; hide(el('fabBadge'));
             } else {
                 // show FAB only if there are unread
             }
         });
-        $('scrollFab').addEventListener('click',()=>{
-            $('chatMsgs').scrollTop=$('chatMsgs').scrollHeight;
-            hide($('scrollFab')); this.scrollUnread=0; hide($('fabBadge'));
+        el('scrollFab').addEventListener('click',()=>{
+            el('chatMsgs').scrollTop=el('chatMsgs').scrollHeight;
+            hide(el('scrollFab')); this.scrollUnread=0; hide(el('fabBadge'));
         });
 
         // Messages area delegation (images + voice)
-        $('chatMsgs').addEventListener('click', e=>{
+        el('chatMsgs').addEventListener('click', e=>{
             const img=e.target.closest('.b-img');
-            if (img) { $('lbImg').src=img.dataset.src||img.src; $('lightbox').style.display='flex'; return; }
+            if (img) { el('lbImg').src=img.dataset.src||img.src; el('lightbox').style.display='flex'; return; }
             const pb=e.target.closest('.b-play');
             if (pb&&pb.dataset.src&&!pb.onclick) this.playVoice(pb.dataset.src,pb.dataset.vid);
         });
 
         // Lightbox
-        $('lbClose').addEventListener('click',()=>{ hide($('lightbox')); $('lbImg').src=''; });
-        $('lightbox').addEventListener('click', e=>{ if(e.target===e.currentTarget){hide($('lightbox'));$('lbImg').src='';} });
+        el('lbClose').addEventListener('click',()=>{ hide(el('lightbox')); el('lbImg').src=''; });
+        el('lightbox').addEventListener('click', e=>{ if(e.target===e.currentTarget){hide(el('lightbox'));el('lbImg').src='';} });
 
         // Searches
-        $('convSearch').addEventListener('input',function(){
+        el('convSearch').addEventListener('input',function(){
             const q=this.value.toLowerCase();
             document.querySelectorAll('.conv-item').forEach(el=>{
                 el.style.display=!q||(el.dataset.cname||'').toLowerCase().includes(q)?'':'none';
             });
         });
-        $('userSearch').addEventListener('input',function(){
+        el('userSearch').addEventListener('input',function(){
             const q=this.value.toLowerCase();
             document.querySelectorAll('.up-item').forEach(el=>{
                 el.style.display=!q||(el.dataset.uname||'').toLowerCase().includes(q)?'':'none';
@@ -1395,7 +1395,7 @@ const Chat = {
         // ESC
         document.addEventListener('keydown', ev=>{
             if (ev.key!=='Escape') return;
-            hide($('lightbox'));
+            hide(el('lightbox'));
             if (this.activeCallId) this.hangup();
         });
     },
@@ -1405,10 +1405,10 @@ document.addEventListener('DOMContentLoaded', () => Chat.init());
 </script>
 
 <?php
-// NEW CHAT MODAL — rendered as direct child of <body> (via footer.php $extraModal hook)
+// NEW CHAT MODAL â€” rendered as direct child of <body> (via footer.php $extraModal hook)
 // This places it OUTSIDE the .page-body stacking context, fixing the black-overlay bug.
 ob_start(); ?>
-<!-- ── NEW CHAT MODAL ──────────────────────────────────────────── -->
+<!-- â”€â”€ NEW CHAT MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div class="modal fade" id="newChatModal" tabindex="-1">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
@@ -1426,7 +1426,7 @@ ob_start(); ?>
                         <input type="text" id="userSearch"
                                class="form-control form-control-sm"
                                style="padding-left:32px;background:#f0f2f5;border:none;border-radius:8px"
-                               placeholder="Search people…" autocomplete="off">
+                               placeholder="Search peopleâ€¦" autocomplete="off">
                     </div>
                 </div>
                 <div class="up-list" id="upList">
@@ -1457,4 +1457,5 @@ ob_start(); ?>
 <?php $extraModal = ob_get_clean(); ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
+
 
