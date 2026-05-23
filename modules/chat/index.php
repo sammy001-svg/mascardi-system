@@ -464,12 +464,7 @@ include __DIR__ . '/../../includes/header.php';
                 <input type="text" id="convSearch" placeholder="Search conversations…" autocomplete="off">
             </div>
         </div>
-        <div class="conv-list" id="convList">
-            <div class="conv-empty">
-                <div class="ce-icon"><i class="fa fa-spinner fa-spin"></i></div>
-                Loading conversations…
-            </div>
-        </div>
+        <div class="conv-list" id="convList"></div>
     </div>
 
     <!-- RIGHT: Active chat -->
@@ -481,7 +476,7 @@ include __DIR__ . '/../../includes/header.php';
             <h6>Mascardi Chat</h6>
             <p>Select a conversation from the list, or start a new one below.</p>
             <button class="btn btn-success btn-sm px-4 mt-2"
-                    onclick="new bootstrap.Modal(document.getElementById('newChatModal')).show()">
+                    onclick="bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).show()">
                 <i class="fa fa-pen-to-square me-2"></i>New Conversation
             </button>
         </div>
@@ -679,9 +674,21 @@ function fileIcon(mime) {
     return ['fa-file','text-muted'];
 }
 // footer.php patches window.fetch to add X-CSRF-Token to every POST
-async function apiGet(ep,p){ const r=await fetch(API+ep+(p?'?'+new URLSearchParams(p):'')); return r.json(); }
-async function apiPost(ep,b){ const r=await fetch(API+ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); }
-async function apiUpload(ep,fd){ const r=await fetch(API+ep,{method:'POST',body:fd}); return r.json(); }
+async function apiGet(ep,p){
+    const r = await fetch(API+ep+(p?'?'+new URLSearchParams(p):''));
+    const txt = await r.text();
+    try { return JSON.parse(txt); } catch { return {}; }
+}
+async function apiPost(ep,b){
+    const r = await fetch(API+ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+    const txt = await r.text();
+    try { return JSON.parse(txt); } catch { return {}; }
+}
+async function apiUpload(ep,fd){
+    const r = await fetch(API+ep,{method:'POST',body:fd});
+    const txt = await r.text();
+    try { return JSON.parse(txt); } catch { return {}; }
+}
 
 /* ── Ping sound via Web Audio API (no external file needed) ─ */
 function pingSound() {
@@ -796,7 +803,7 @@ const Chat = {
                     No conversations yet.<br>
                     <small style="display:block;margin:8px 0 12px">Search for a colleague below to start chatting.</small>
                     <button class="btn btn-success btn-sm px-4"
-                        onclick="new bootstrap.Modal(document.getElementById('newChatModal')).show()">
+                        onclick="bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).show()">
                         <i class="fa fa-pen-to-square me-1"></i> New Conversation
                     </button>
                 </div>`;
@@ -1058,7 +1065,7 @@ const Chat = {
 
     /* ── Start direct conversation ───────────────────────── */
     async startDirect(uid, uname, ucolor) {
-        bootstrap.Modal.getInstance($('newChatModal'))?.hide();
+        bootstrap.Modal.getOrCreateInstance($('newChatModal')).hide();
         try {
             const d = await apiPost('conversations.php', { user_id:parseInt(uid) });
             if (d.conversation_id) {
@@ -1294,6 +1301,12 @@ const Chat = {
 
     /* ── Init ─────────────────────────────────────────────── */
     init() {
+        // .page-body has a CSS animation that keeps transform:translateY(0) applied,
+        // creating a stacking context. Bootstrap's backdrop (appended to body after
+        // .page-body) would paint over the modal inside that context. Moving the
+        // modal to <body> puts it outside the stacking context so it layers correctly.
+        document.body.appendChild($('newChatModal'));
+
         this.buildEmojiPicker();
         this.loadConvs();
         requestNotifPerm();
@@ -1306,7 +1319,7 @@ const Chat = {
         });
 
         // New chat
-        $('btnNewChat').addEventListener('click',()=>new bootstrap.Modal($('newChatModal')).show());
+        $('btnNewChat').addEventListener('click',()=>bootstrap.Modal.getOrCreateInstance($('newChatModal')).show());
 
         // User picker
         $('upList').addEventListener('click', e=>{
