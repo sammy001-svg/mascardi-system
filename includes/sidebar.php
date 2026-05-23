@@ -212,9 +212,29 @@ $__isDash = !str_contains($__uri, '/modules/');
         <div class="nav-section">Messaging</div>
         <a href="<?= BASE_URL ?>/modules/chat/index.php"
            class="nav-item <?= isActive('/modules/chat/') ?>"
-           data-label="Chat">
+           data-label="Chat" style="position:relative">
             <i class="fa fa-comments"></i><span>Chat</span>
+            <span id="chatNavBadge" style="display:none;position:absolute;top:6px;right:8px;
+                  background:#25d366;color:#fff;border-radius:10px;font-size:10px;
+                  font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
         </a>
+        <script>
+        (function(){
+            var badge = document.getElementById('chatNavBadge');
+            if (!badge) return;
+            function poll(){
+                fetch('<?= BASE_URL ?>/modules/chat/api/unread.php')
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        var n = d.count || 0;
+                        if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
+                        else       { badge.style.display = 'none'; }
+                    }).catch(function(){});
+            }
+            poll();
+            setInterval(poll, 15000); // refresh every 15 s
+        }());
+        </script>
         <?php endif; ?>
 
         <!-- Analytics -->
