@@ -294,6 +294,28 @@ $__isDash = !str_contains($__uri, '/modules/');
         </a>
         <?php endif; ?>
 
+        <!-- HR -->
+        <?php if (canAccess('attendance') || canAccess('payroll')): ?>
+        <div class="nav-section">HR</div>
+
+        <?php if (canAccess('attendance')): ?>
+        <a href="<?= BASE_URL ?>/modules/attendance/index.php"
+           class="nav-item <?= isActive('/modules/attendance/') ?>"
+           data-label="Attendance">
+            <i class="fa fa-calendar-days"></i><span>Attendance</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (canAccess('payroll')): ?>
+        <a href="<?= BASE_URL ?>/modules/payroll/index.php"
+           class="nav-item <?= isActive('/modules/payroll/') ?>"
+           data-label="Payroll">
+            <i class="fa fa-money-bill-wave"></i><span>Payroll</span>
+        </a>
+        <?php endif; ?>
+
+        <?php endif; ?>
+
         <!-- Analytics -->
         <?php if (canAccess('reports')): ?>
         <div class="nav-section">Analytics</div>

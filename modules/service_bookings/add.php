@@ -2,8 +2,7 @@
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/notifications.php';
 require_once __DIR__ . '/../../includes/mailer.php';
-requireLogin();
-requireRole(['admin', 'manager', 'sales_person', 'sales_officer', 'workshop_manager']);
+requireWrite('service_bookings');
 $pageTitle = 'New Service Booking';
 $db   = getDB();
 $user = authUser();

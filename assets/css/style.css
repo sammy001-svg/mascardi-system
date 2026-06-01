@@ -766,6 +766,7 @@ a:hover { text-decoration: underline; }
     min-width: 260px;
     max-width: 380px;
     cursor: pointer;
+    -webkit-user-select: none;
     user-select: none;
 }
 .toast-item.toast-show { transform: translateX(0); opacity: 1; }

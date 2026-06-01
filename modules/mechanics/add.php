@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
-requireLogin();
+requireWrite('mechanics');
 $pageTitle = 'Add Mechanic';
 $db = getDB();
 $errors = [];

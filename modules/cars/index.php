@@ -112,8 +112,10 @@ include __DIR__ . '/../../includes/header.php';
                     <td>
                         <div class="d-flex gap-1">
                             <a href="view.php?id=<?= $car['id'] ?>" class="btn btn-xs btn-outline-primary" title="View"><i class="fa fa-eye"></i></a>
-                            <?php if (canEditDelete()): ?>
+                            <?php if (canWrite('cars')): ?>
                             <a href="edit.php?id=<?= $car['id'] ?>" class="btn btn-xs btn-outline-secondary" title="Edit"><i class="fa fa-pen"></i></a>
+                            <?php endif; ?>
+                            <?php if (canEditDelete()): ?>
                             <a href="delete.php?id=<?= $car['id'] ?>" class="btn btn-xs btn-outline-danger confirm-delete" title="Delete"><i class="fa fa-trash"></i></a>
                             <?php endif; ?>
                         </div>

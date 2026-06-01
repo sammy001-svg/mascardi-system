@@ -38,14 +38,25 @@ include __DIR__ . '/../../includes/header.php';
                     <td>
                         <?php
                         $roleColors = [
-                            'admin'            => ['danger',    'Admin'],
-                            'workshop_manager' => ['primary',   'Workshop Manager'],
-                            'sales_person'     => ['success',   'Sales Person'],
-                            'sales_officer'    => ['info',      'Sales Officer'],
-                            'manager'          => ['primary',   'Manager'],
-                            'mechanic'         => ['secondary', 'Mechanic'],
+                            'admin'               => ['danger',    'Admin'],
+                            'general_manager'     => ['dark',      'General Manager'],
+                            'finance_manager'     => ['warning',   'Finance Manager'],
+                            'accountant'          => ['warning',   'Accountant'],
+                            'cashier'             => ['warning',   'Cashier'],
+                            'sales_manager'       => ['success',   'Sales Manager'],
+                            'sales_officer'       => ['info',      'Sales Officer'],
+                            'sales_person'        => ['success',   'Sales Person'],
+                            'customer_relations'  => ['info',      'Customer Relations'],
+                            'receptionist'        => ['secondary', 'Receptionist'],
+                            'workshop_manager'    => ['primary',   'Workshop Manager'],
+                            'mechanic'            => ['secondary', 'Mechanic'],
+                            'driver'              => ['secondary', 'Driver'],
+                            'inventory_manager'   => ['primary',   'Inventory Manager'],
+                            'procurement_officer' => ['primary',   'Procurement Officer'],
+                            'hr_manager'          => ['dark',      'HR Manager'],
+                            'manager'             => ['primary',   'Manager (Legacy)'],
                         ];
-                        [$rc, $rl] = $roleColors[$u['role']] ?? ['secondary', ucfirst($u['role'])];
+                        [$rc, $rl] = $roleColors[$u['role']] ?? ['secondary', ucfirst(str_replace('_', ' ', $u['role']))];
                         ?>
                         <span class="badge bg-<?= $rc ?>"><?= $rl ?></span>
                     </td>

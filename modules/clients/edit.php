@@ -1,7 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
-requireLogin();
-requireRole('admin');
+requireWrite('clients');
 $db = getDB();
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/clients/index.php');

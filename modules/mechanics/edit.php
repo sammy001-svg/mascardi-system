@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
-requireLogin(); requireRole('admin');
+requireWrite('mechanics');
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/mechanics/index.php');
 $db = getDB();
