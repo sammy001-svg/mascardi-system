@@ -74,6 +74,12 @@
                 <div id="notifList">
                     <div class="notif-empty"><i class="fa fa-bell-slash fa-lg mb-2 d-block"></i>No notifications yet</div>
                 </div>
+                <div class="sticky-bottom bg-white border-top text-center py-2">
+                    <a href="<?= BASE_URL ?>/modules/notifications/index.php"
+                       class="text-primary small fw-medium text-decoration-none">
+                        View all notifications <i class="fa fa-arrow-right ms-1" style="font-size:10px"></i>
+                    </a>
+                </div>
             </div>
         </div>
 

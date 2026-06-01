@@ -1,0 +1,387 @@
+<?php
+require_once __DIR__ . '/../../includes/functions.php';
+requireLogin();
+canAccess('crm') || redirect(BASE_URL . '/index.php');
+
+$pageTitle = 'Lead';
+$db  = getDB();
+$id  = (int)($_GET['id'] ?? 0);
+if (!$id) redirect(BASE_URL . '/modules/crm/leads.php');
+
+$lead = $db->prepare("
+    SELECT l.*, u.name AS assigned_name, c.name AS client_name
+    FROM crm_leads l
+    LEFT JOIN users u ON u.id = l.assigned_to
+    LEFT JOIN clients c ON c.id = l.client_id
+    WHERE l.id = ?
+");
+$lead->execute([$id]); $lead = $lead->fetch();
+if (!$lead) { setFlash('error','Lead not found.'); redirect(BASE_URL.'/modules/crm/leads.php'); }
+
+$pageTitle = $lead['name'];
+
+$stages = [
+    'new'         => ['New Lead',    'secondary', 'fa-user-plus'],
+    'contacted'   => ['Contacted',   'primary',   'fa-phone'],
+    'interested'  => ['Interested',  'info',      'fa-heart'],
+    'test_drive'  => ['Test Drive',  'purple',    'fa-car-side'],
+    'negotiation' => ['Negotiation', 'warning',   'fa-handshake'],
+    'closed_won'  => ['Closed Won',  'success',   'fa-circle-check'],
+    'closed_lost' => ['Lost',        'danger',    'fa-circle-xmark'],
+];
+
+$activityTypes = [
+    'call'       => ['Call',       'fa-phone',        'text-success'],
+    'whatsapp'   => ['WhatsApp',   'fa-comment-dots', 'text-success'],
+    'email'      => ['Email',      'fa-envelope',     'text-primary'],
+    'visit'      => ['Visit',      'fa-location-dot', 'text-warning'],
+    'test_drive' => ['Test Drive', 'fa-car-side',     'text-purple'],
+    'meeting'    => ['Meeting',    'fa-users',        'text-info'],
+    'note'       => ['Note',       'fa-note-sticky',  'text-secondary'],
+];
+
+$sourceLabels = [
+    'walk_in'    => 'Walk-in',    'referral'   => 'Referral',
+    'facebook'   => 'Facebook',   'instagram'  => 'Instagram',
+    'website'    => 'Website',    'phone_call' => 'Phone Call',
+    'whatsapp'   => 'WhatsApp',   'other'      => 'Other',
+];
+
+$salesUsers = $db->query("SELECT id, name FROM users WHERE status='active' ORDER BY name")->fetchAll();
+
+// ── POST handlers ─────────────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if ($action === 'update_stage' && canWrite('crm')) {
+        $newStage = $_POST['stage'] ?? '';
+        if (array_key_exists($newStage, $stages)) {
+            $db->prepare("UPDATE crm_leads SET stage=?, updated_at=NOW() WHERE id=?")->execute([$newStage, $id]);
+            if ($newStage === 'closed_won') {
+                $db->prepare("UPDATE crm_leads SET converted_at=NOW() WHERE id=? AND converted_at IS NULL")->execute([$id]);
+            }
+            logActivity('update','crm_leads',$id,"Stage changed to: $newStage");
+            setFlash('success','Stage updated.');
+        }
+        redirect(BASE_URL.'/modules/crm/view_lead.php?id='.$id);
+    }
+
+    if ($action === 'log_activity' && canWrite('crm')) {
+        $type      = $_POST['type']           ?? 'note';
+        $summary   = trim($_POST['summary']   ?? '');
+        $outcome   = trim($_POST['outcome']   ?? '') ?: null;
+        $followUp  = trim($_POST['follow_up_date'] ?? '') ?: null;
+
+        if ($summary) {
+            $db->prepare("INSERT INTO crm_activities (lead_id, type, summary, outcome, follow_up_date, created_by) VALUES (?,?,?,?,?,?)")
+               ->execute([$id, $type, $summary, $outcome, $followUp, authUser()['id']]);
+
+            if ($followUp) {
+                $db->prepare("UPDATE crm_leads SET follow_up_date=?, updated_at=NOW() WHERE id=?")->execute([$followUp, $id]);
+            }
+            setFlash('success','Activity logged.');
+        }
+        redirect(BASE_URL.'/modules/crm/view_lead.php?id='.$id);
+    }
+
+    if ($action === 'update_details' && canWrite('crm')) {
+        $name        = trim($_POST['name']           ?? '');
+        $phone       = trim($_POST['phone']          ?? '') ?: null;
+        $email       = trim($_POST['email']          ?? '') ?: null;
+        $interestedIn = trim($_POST['interested_in'] ?? '') ?: null;
+        $budget      = $_POST['budget'] !== '' ? (float)$_POST['budget'] : null;
+        $assignedTo  = (int)($_POST['assigned_to']   ?? 0) ?: null;
+        $notes       = trim($_POST['notes']          ?? '') ?: null;
+        $followUp    = trim($_POST['follow_up_date'] ?? '') ?: null;
+        $lostReason  = trim($_POST['lost_reason']    ?? '') ?: null;
+
+        if ($name) {
+            $db->prepare("UPDATE crm_leads SET name=?,phone=?,email=?,interested_in=?,budget=?,assigned_to=?,notes=?,follow_up_date=?,lost_reason=?,updated_at=NOW() WHERE id=?")
+               ->execute([$name,$phone,$email,$interestedIn,$budget,$assignedTo,$notes,$followUp,$lostReason,$id]);
+            setFlash('success','Lead updated.');
+        }
+        redirect(BASE_URL.'/modules/crm/view_lead.php?id='.$id);
+    }
+
+    if ($action === 'convert' && canWrite('crm')) {
+        // Convert to client if not already linked
+        if (!$lead['client_id']) {
+            $db->prepare("INSERT INTO clients (name,phone,email,status) VALUES (?,?,?,'active')")
+               ->execute([$lead['name'], $lead['phone'], $lead['email']]);
+            $clientId = (int)$db->lastInsertId();
+            $db->prepare("UPDATE crm_leads SET client_id=?,stage='closed_won',converted_at=NOW(),updated_at=NOW() WHERE id=?")
+               ->execute([$clientId, $id]);
+            logActivity('create','clients',$clientId,"Converted from CRM lead #{$id}");
+            setFlash('success','Lead converted to client. You can now record a sale.');
+            redirect(BASE_URL.'/modules/clients/view.php?id='.$clientId);
+        }
+        redirect(BASE_URL.'/modules/crm/view_lead.php?id='.$id);
+    }
+}
+
+// Load activities
+$activities = $db->prepare("
+    SELECT a.*, u.name AS by_name
+    FROM crm_activities a
+    LEFT JOIN users u ON u.id = a.created_by
+    WHERE a.lead_id = ?
+    ORDER BY a.created_at DESC
+");
+$activities->execute([$id]); $activities = $activities->fetchAll();
+
+[$stageLabel, $stageColor, $stageIcon] = $stages[$lead['stage']] ?? ['Unknown','secondary','fa-circle'];
+$isOverdue = $lead['follow_up_date'] && $lead['follow_up_date'] < date('Y-m-d')
+             && !in_array($lead['stage'],['closed_won','closed_lost']);
+
+include __DIR__ . '/../../includes/header.php';
+?>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h5 class="mb-1"><i class="fa fa-user me-2 text-primary"></i><?= e($lead['name']) ?></h5>
+        <span class="badge bg-<?= $stageColor ?> me-1"><i class="fa <?= $stageIcon ?> me-1"></i><?= $stageLabel ?></span>
+        <?php if ($isOverdue): ?>
+        <span class="badge bg-danger">Follow-up overdue</span>
+        <?php endif; ?>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <?php if ($lead['client_id']): ?>
+        <a href="<?= BASE_URL ?>/modules/clients/view.php?id=<?= $lead['client_id'] ?>"
+           class="btn btn-sm btn-success">
+            <i class="fa fa-user-check me-1"></i>View Client
+        </a>
+        <?php elseif (canWrite('crm') && $lead['stage'] !== 'closed_lost'): ?>
+        <form method="POST" class="d-inline"
+              onsubmit="return confirm('Convert this lead to a client?')">
+            <input type="hidden" name="action" value="convert">
+            <button class="btn btn-sm btn-success">
+                <i class="fa fa-user-plus me-1"></i>Convert to Client
+            </button>
+        </form>
+        <?php endif; ?>
+        <a href="leads.php" class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-arrow-left me-1"></i>Back
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left: details + stage -->
+    <div class="col-lg-4">
+
+        <!-- Stage changer -->
+        <?php if (canWrite('crm')): ?>
+        <div class="card mb-3">
+            <div class="card-header fw-semibold"><i class="fa fa-arrow-right me-2"></i>Move Stage</div>
+            <div class="card-body p-2">
+                <form method="POST">
+                    <input type="hidden" name="action" value="update_stage">
+                    <div class="d-flex flex-wrap gap-1">
+                    <?php foreach ($stages as $sk => [$sl,$sc,$si]): ?>
+                        <button type="submit" name="stage" value="<?= $sk ?>"
+                                class="btn btn-sm <?= $lead['stage'] === $sk ? 'btn-'.$sc : 'btn-outline-'.$sc ?>">
+                            <i class="fa <?= $si ?> me-1"></i><?= $sl ?>
+                        </button>
+                    <?php endforeach; ?>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Details -->
+        <div class="card mb-3">
+            <div class="card-header fw-semibold d-flex justify-content-between">
+                <span><i class="fa fa-id-card me-2"></i>Lead Details</span>
+            </div>
+            <div class="card-body" style="font-size:13.5px">
+                <dl class="row mb-0">
+                    <dt class="col-5 text-muted">Phone</dt>
+                    <dd class="col-7"><?= $lead['phone'] ? e($lead['phone']) : '—' ?></dd>
+                    <dt class="col-5 text-muted">Email</dt>
+                    <dd class="col-7 small"><?= $lead['email'] ? e($lead['email']) : '—' ?></dd>
+                    <dt class="col-5 text-muted">Source</dt>
+                    <dd class="col-7"><?= e($sourceLabels[$lead['source']] ?? $lead['source']) ?></dd>
+                    <dt class="col-5 text-muted">Interested In</dt>
+                    <dd class="col-7 small"><?= $lead['interested_in'] ? e($lead['interested_in']) : '—' ?></dd>
+                    <dt class="col-5 text-muted">Budget</dt>
+                    <dd class="col-7 fw-semibold text-success"><?= $lead['budget'] ? money((float)$lead['budget']) : '—' ?></dd>
+                    <dt class="col-5 text-muted">Assigned To</dt>
+                    <dd class="col-7"><?= e($lead['assigned_name'] ?? '—') ?></dd>
+                    <dt class="col-5 text-muted">Follow-up</dt>
+                    <dd class="col-7">
+                        <?php if ($lead['follow_up_date']): ?>
+                        <span class="badge <?= $isOverdue ? 'bg-danger' : 'bg-warning text-dark' ?>">
+                            <?= fmtDate($lead['follow_up_date'],'d M Y') ?>
+                        </span>
+                        <?php else: ?>—<?php endif; ?>
+                    </dd>
+                    <dt class="col-5 text-muted">Added</dt>
+                    <dd class="col-7 small text-muted"><?= fmtDate($lead['created_at'],'d M Y') ?></dd>
+                    <?php if ($lead['notes']): ?>
+                    <dt class="col-5 text-muted">Notes</dt>
+                    <dd class="col-7 small"><?= nl2br(e($lead['notes'])) ?></dd>
+                    <?php endif; ?>
+                    <?php if ($lead['lost_reason']): ?>
+                    <dt class="col-5 text-muted">Lost Reason</dt>
+                    <dd class="col-7 small text-danger"><?= e($lead['lost_reason']) ?></dd>
+                    <?php endif; ?>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Edit details -->
+        <?php if (canWrite('crm')): ?>
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="fa fa-pen me-2"></i>Edit Details</div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="action" value="update_details">
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Name</label>
+                        <input type="text" name="name" class="form-control form-control-sm" value="<?= e($lead['name']) ?>" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Phone</label>
+                        <input type="text" name="phone" class="form-control form-control-sm" value="<?= e($lead['phone'] ?? '') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Email</label>
+                        <input type="email" name="email" class="form-control form-control-sm" value="<?= e($lead['email'] ?? '') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Interested In</label>
+                        <input type="text" name="interested_in" class="form-control form-control-sm" value="<?= e($lead['interested_in'] ?? '') ?>">
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold">Budget (KES)</label>
+                            <input type="number" name="budget" class="form-control form-control-sm" value="<?= e($lead['budget'] ?? '') ?>" step="1000">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold">Follow-up</label>
+                            <input type="date" name="follow_up_date" class="form-control form-control-sm" value="<?= e($lead['follow_up_date'] ?? '') ?>">
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Assigned To</label>
+                        <select name="assigned_to" class="form-select form-select-sm">
+                            <option value="">— Unassigned —</option>
+                            <?php foreach ($salesUsers as $u): ?>
+                            <option value="<?= $u['id'] ?>" <?= $lead['assigned_to'] == $u['id'] ? 'selected' : '' ?>><?= e($u['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Notes</label>
+                        <textarea name="notes" class="form-control form-control-sm" rows="2"><?= e($lead['notes'] ?? '') ?></textarea>
+                    </div>
+                    <?php if (in_array($lead['stage'],['closed_lost'])): ?>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Lost Reason</label>
+                        <input type="text" name="lost_reason" class="form-control form-control-sm" value="<?= e($lead['lost_reason'] ?? '') ?>" placeholder="e.g. Price too high, bought elsewhere…">
+                    </div>
+                    <?php else: ?>
+                    <input type="hidden" name="lost_reason" value="<?= e($lead['lost_reason'] ?? '') ?>">
+                    <?php endif; ?>
+                    <button class="btn btn-sm btn-primary w-100 mt-1"><i class="fa fa-save me-1"></i>Save Changes</button>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Right: log activity + activity timeline -->
+    <div class="col-lg-8">
+
+        <!-- Log Activity -->
+        <?php if (canWrite('crm')): ?>
+        <div class="card mb-4">
+            <div class="card-header fw-semibold"><i class="fa fa-plus me-2 text-success"></i>Log Activity</div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="action" value="log_activity">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">Type</label>
+                            <select name="type" class="form-select form-select-sm">
+                                <?php foreach ($activityTypes as $k => [$lbl, $ico, $cls]): ?>
+                                <option value="<?= $k ?>"><?= $lbl ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Summary <span class="text-danger">*</span></label>
+                            <input type="text" name="summary" class="form-control form-control-sm" required
+                                   placeholder="e.g. Called client, discussed Land Cruiser pricing…">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">Next Follow-up</label>
+                            <input type="date" name="follow_up_date" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold">Outcome / Notes</label>
+                            <textarea name="outcome" class="form-control form-control-sm" rows="2"
+                                      placeholder="What was the outcome? Any next steps?"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <button class="btn btn-sm btn-success"><i class="fa fa-check me-1"></i>Log Activity</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Activity Timeline -->
+        <div class="card">
+            <div class="card-header fw-semibold">
+                <i class="fa fa-clock-rotate-left me-2 text-primary"></i>Activity Timeline
+                <span class="badge bg-secondary ms-1"><?= count($activities) ?></span>
+            </div>
+            <?php if (empty($activities)): ?>
+            <div class="card-body text-center py-4 text-muted">
+                <i class="fa fa-clipboard fa-2x mb-2 d-block opacity-25"></i>No activities logged yet.
+            </div>
+            <?php else: ?>
+            <div class="card-body p-0">
+                <div class="timeline ps-3 pe-3 pt-3">
+                <?php foreach ($activities as $act):
+                    [$aLabel, $aIcon, $aClass] = $activityTypes[$act['type']] ?? ['Note','fa-note-sticky','text-secondary'];
+                ?>
+                <div class="d-flex gap-3 mb-3">
+                    <div class="flex-shrink-0" style="width:32px;height:32px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center">
+                        <i class="fa <?= $aIcon ?> <?= $aClass ?>"></i>
+                    </div>
+                    <div class="flex-grow-1 border-bottom pb-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="badge bg-light text-dark border me-1" style="font-size:10px"><?= $aLabel ?></span>
+                                <span class="fw-medium" style="font-size:13.5px"><?= e($act['summary']) ?></span>
+                            </div>
+                            <span class="text-muted small flex-shrink-0 ms-2"><?= fmtDate($act['created_at'],'d M Y, H:i') ?></span>
+                        </div>
+                        <?php if ($act['outcome']): ?>
+                        <div class="text-muted mt-1" style="font-size:12.5px"><?= nl2br(e($act['outcome'])) ?></div>
+                        <?php endif; ?>
+                        <?php if ($act['follow_up_date']): ?>
+                        <div class="mt-1">
+                            <span class="badge bg-warning text-dark" style="font-size:10px">
+                                <i class="fa fa-calendar me-1"></i>Follow-up: <?= fmtDate($act['follow_up_date'],'d M Y') ?>
+                            </span>
+                        </div>
+                        <?php endif; ?>
+                        <div class="text-muted mt-1" style="font-size:11px">
+                            By <?= e($act['by_name'] ?? 'System') ?>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<?php include __DIR__ . '/../../includes/footer.php'; ?>

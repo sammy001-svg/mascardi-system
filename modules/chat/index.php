@@ -1047,14 +1047,34 @@ const Chat = {
 
     /* â”€â”€ Start direct conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async startDirect(uid, uname, ucolor) {
-        bootstrap.Modal.getOrCreateInstance(el('newChatModal')).hide();
+        const modal   = bootstrap.Modal.getOrCreateInstance(el('newChatModal'));
+        const modalEl = el('newChatModal');
+
+        // Resolve once backdrop is fully gone so it doesn't cover the chat panel
+        const hidden = new Promise(res =>
+            modalEl.addEventListener('hidden.bs.modal', res, { once: true })
+        );
+        modal.hide();
+
         try {
-            const d = await apiPost('conversations.php', { user_id:parseInt(uid) });
+            // Fire API in parallel with the modal fade animation (~300 ms)
+            const d = await apiPost('conversations.php', { user_id: parseInt(uid) });
+            await hidden; // ensure backdrop removed before opening chat
+
             if (d.conversation_id) {
                 await this.loadConvs();
                 await this.openConv(d.conversation_id, uname, ucolor, uid);
+            } else {
+                const msg = d.error
+                    ? 'Chat error: ' + d.error
+                    : 'Could not open conversation. Make sure chat tables exist — visit /modules/chat/setup.php';
+                alert(msg);
             }
-        } catch(e) { console.error('startDirect',e); }
+        } catch(e) {
+            console.error('startDirect', e);
+            await hidden;
+            alert('Connection error. Please try again.');
+        }
     },
 
     /* â”€â”€ File upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */

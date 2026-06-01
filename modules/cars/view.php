@@ -53,6 +53,12 @@ include __DIR__ . '/../../includes/header.php';
             </a>
             <?php endif; ?>
         <?php endif; ?>
+        <?php if (canAccess('inspections')): ?>
+        <a href="<?= BASE_URL ?>/modules/inspections/create.php?car_id=<?= $id ?>"
+           class="btn btn-sm btn-outline-info">
+            <i class="fa fa-clipboard-check me-1"></i>Inspect
+        </a>
+        <?php endif; ?>
         <?php if (canEditDelete()): ?>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <?php endif; ?>
@@ -303,4 +309,196 @@ if (in_array($car['status'], ['delivered','sold']))     $activeStep = 6;
         <?php endif; ?>
     </div>
 </div>
+<?php
+// ── Car Import Costs ──────────────────────────────────────────────────────────
+if (canAccess('car_costs')):
+    try {
+        $costRow = $db->prepare("SELECT * FROM car_costs WHERE car_id=?");
+        $costRow->execute([$id]); $costRow = $costRow->fetch();
+        $totalCost = $costRow
+            ? array_sum(array_map(fn($f)=>(float)($costRow[$f]??0),
+                ['purchase_price','freight','marine_insurance','port_charges','duty_tax',
+                 'clearing_fees','transport_to_yard','workshop_costs','other_costs']))
+            : null;
+        $saleForCost = $db->prepare("SELECT sale_price FROM car_sales WHERE car_id=? AND status='active' LIMIT 1");
+        $saleForCost->execute([$id]); $saleForCost = $saleForCost->fetch();
+    } catch (\Throwable $e) { $costRow = null; $totalCost = null; $saleForCost = null; }
+?>
+<div class="card mt-4" id="costs">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fa fa-calculator me-2 text-primary"></i>Import Costs & Margin</span>
+        <?php if (canWrite('car_costs')): ?>
+        <a href="<?= BASE_URL ?>/modules/car_costs/edit.php?car_id=<?= $id ?>&back=<?= urlencode(BASE_URL.'/modules/cars/view.php?id='.$id.'#costs') ?>"
+           class="btn btn-sm btn-outline-primary">
+            <i class="fa fa-<?= $costRow ? 'pen' : 'plus' ?> me-1"></i><?= $costRow ? 'Edit Costs' : 'Record Costs' ?>
+        </a>
+        <?php endif; ?>
+    </div>
+    <?php if (!$costRow): ?>
+    <div class="card-body text-center py-3 text-muted">
+        <i class="fa fa-calculator fa-2x mb-2 d-block opacity-25"></i>No import costs recorded yet.
+        <?php if (canWrite('car_costs')): ?>
+        <div class="mt-2">
+            <a href="<?= BASE_URL ?>/modules/car_costs/edit.php?car_id=<?= $id ?>&back=<?= urlencode(BASE_URL.'/modules/cars/view.php?id='.$id.'#costs') ?>"
+               class="btn btn-sm btn-outline-primary">Record Import Costs</a>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php else:
+        $salePrice = $saleForCost ? (float)$saleForCost['sale_price'] : null;
+        $profit    = $salePrice !== null ? $salePrice - $totalCost : null;
+        $margin    = $salePrice && $salePrice > 0 && $profit !== null ? round($profit / $salePrice * 100, 1) : null;
+        $costItems = [
+            'purchase_price'    => 'Purchase Price',
+            'freight'           => 'Freight',
+            'marine_insurance'  => 'Marine Insurance',
+            'port_charges'      => 'Port Charges',
+            'duty_tax'          => 'Duty & Taxes',
+            'clearing_fees'     => 'Clearing Fees',
+            'transport_to_yard' => 'Transport to Yard',
+            'workshop_costs'    => 'Workshop Costs',
+            'other_costs'       => 'Other Costs',
+        ];
+    ?>
+    <div class="card-body p-0">
+        <div class="row g-0">
+            <div class="col-md-8">
+                <table class="table table-sm mb-0" style="font-size:13px">
+                    <tbody>
+                    <?php foreach ($costItems as $field => $label):
+                        $val = (float)($costRow[$field] ?? 0);
+                        if ($val <= 0) continue;
+                    ?>
+                    <tr>
+                        <td class="ps-3 text-muted"><?= $label ?></td>
+                        <td class="text-end pe-3 fw-medium"><?= money($val) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <tr class="table-dark">
+                        <td class="ps-3 fw-bold">Total Cost</td>
+                        <td class="text-end pe-3 fw-bold"><?= money($totalCost) ?></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-4 border-start d-flex flex-column justify-content-center align-items-center p-4 text-center">
+                <?php if ($salePrice !== null): ?>
+                <div class="text-muted small mb-1">Sale Price</div>
+                <div class="fw-bold text-success fs-6 mb-2"><?= money($salePrice) ?></div>
+                <div class="text-muted small mb-1">Gross Profit</div>
+                <div class="fw-bold fs-5 <?= $profit >= 0 ? 'text-success' : 'text-danger' ?> mb-2"><?= money($profit) ?></div>
+                <span class="badge fs-6 <?= $margin >= 20 ? 'bg-success' : ($margin >= 10 ? 'bg-warning text-dark' : 'bg-danger') ?>"><?= $margin ?>% margin</span>
+                <?php else: ?>
+                <div class="text-muted small"><i class="fa fa-tag me-1"></i>Profit will show once the car is sold.</div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<?php
+// ── Car Documents ─────────────────────────────────────────────────────────────
+if (canAccess('car_documents')):
+    $docTypes = [
+        'logbook'           => ['Logbook',                  'fa-book',             'primary'],
+        'import_entry'      => ['Import Entry',              'fa-file-import',      'info'],
+        'ntsa_inspection'   => ['NTSA Inspection',           'fa-clipboard-check',  'success'],
+        'ntsa_registration' => ['NTSA Registration',         'fa-id-card',          'success'],
+        'insurance'         => ['Insurance',                 'fa-shield-halved',    'warning'],
+        'duty_clearance'    => ['Duty Clearance',            'fa-stamp',            'secondary'],
+        'purchase_invoice'  => ['Purchase Invoice',          'fa-file-invoice',     'dark'],
+        'other'             => ['Other',                     'fa-file',             'secondary'],
+    ];
+    try {
+        $carDocs = $db->prepare("SELECT * FROM car_documents WHERE car_id=? ORDER BY created_at DESC");
+        $carDocs->execute([$id]);
+        $carDocs = $carDocs->fetchAll();
+    } catch (\Throwable $e) { $carDocs = []; }
+?>
+<div class="card mt-4" id="documents">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">
+            <i class="fa fa-folder-open me-2 text-primary"></i>Documents
+            <?php if ($carDocs): ?>
+            <span class="badge bg-secondary ms-1"><?= count($carDocs) ?></span>
+            <?php endif; ?>
+        </span>
+        <?php if (canWrite('car_documents')): ?>
+        <a href="<?= BASE_URL ?>/modules/car_documents/upload.php?car_id=<?= $id ?>&back=<?= urlencode(BASE_URL . '/modules/cars/view.php?id=' . $id . '#documents') ?>"
+           class="btn btn-sm btn-primary">
+            <i class="fa fa-upload me-1"></i>Upload
+        </a>
+        <?php endif; ?>
+    </div>
+    <?php if (empty($carDocs)): ?>
+    <div class="card-body text-center py-4 text-muted">
+        <i class="fa fa-folder-open fa-2x mb-2 d-block opacity-25"></i>
+        No documents uploaded yet.
+        <?php if (canWrite('car_documents')): ?>
+        <div class="mt-2">
+            <a href="<?= BASE_URL ?>/modules/car_documents/upload.php?car_id=<?= $id ?>&back=<?= urlencode(BASE_URL . '/modules/cars/view.php?id=' . $id . '#documents') ?>"
+               class="btn btn-sm btn-outline-primary">
+                <i class="fa fa-upload me-1"></i>Upload first document
+            </a>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php else: ?>
+    <div class="list-group list-group-flush">
+        <?php foreach ($carDocs as $doc):
+            [$dtLabel, $dtIcon, $dtColor] = $docTypes[$doc['doc_type']] ?? ['Other','fa-file','secondary'];
+            $expired  = $doc['expiry_date'] && $doc['expiry_date'] < date('Y-m-d');
+            $expSoon  = !$expired && $doc['expiry_date'] && $doc['expiry_date'] <= date('Y-m-d', strtotime('+30 days'));
+        ?>
+        <div class="list-group-item d-flex align-items-center gap-3 px-3 py-2">
+            <div class="flex-shrink-0 text-<?= $dtColor ?>" style="width:32px;text-align:center">
+                <i class="fa <?= $dtIcon ?> fa-lg"></i>
+            </div>
+            <div class="flex-grow-1 min-w-0">
+                <div class="fw-medium"><?= e($doc['title']) ?></div>
+                <div class="d-flex gap-2 align-items-center mt-1 flex-wrap">
+                    <span class="badge bg-<?= $dtColor ?>-subtle text-<?= $dtColor ?> border border-<?= $dtColor ?>-subtle"
+                          style="font-size:10px"><?= $dtLabel ?></span>
+                    <?php if ($doc['expiry_date']): ?>
+                    <span class="badge bg-<?= $expired ? 'danger' : ($expSoon ? 'warning' : 'success') ?>"
+                          style="font-size:10px">
+                        <i class="fa fa-<?= $expired ? 'circle-xmark' : ($expSoon ? 'triangle-exclamation' : 'circle-check') ?> me-1"></i>
+                        <?= $expired ? 'Expired ' : ($expSoon ? 'Expires ' : 'Valid until ') ?>
+                        <?= fmtDate($doc['expiry_date'], 'd M Y') ?>
+                    </span>
+                    <?php endif; ?>
+                    <span class="text-muted small"><?= fmtDate($doc['created_at'], 'd M Y') ?></span>
+                </div>
+            </div>
+            <div class="d-flex gap-1 flex-shrink-0">
+                <a href="<?= BASE_URL ?>/modules/car_documents/download.php?id=<?= $doc['id'] ?>&view=1"
+                   class="btn btn-xs btn-outline-secondary" target="_blank" title="View">
+                    <i class="fa fa-eye"></i>
+                </a>
+                <a href="<?= BASE_URL ?>/modules/car_documents/download.php?id=<?= $doc['id'] ?>"
+                   class="btn btn-xs btn-outline-primary" title="Download">
+                    <i class="fa fa-download"></i>
+                </a>
+                <?php if (canWrite('car_documents')): ?>
+                <form method="POST" action="<?= BASE_URL ?>/modules/car_documents/delete.php"
+                      class="d-inline"
+                      onsubmit="return confirm('Delete this document?')">
+                    <input type="hidden" name="id" value="<?= $doc['id'] ?>">
+                    <input type="hidden" name="redirect"
+                           value="<?= e(BASE_URL . '/modules/cars/view.php?id=' . $id . '#documents') ?>">
+                    <button class="btn btn-xs btn-outline-danger" title="Delete">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </form>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

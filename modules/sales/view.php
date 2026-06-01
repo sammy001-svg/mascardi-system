@@ -45,6 +45,12 @@ include __DIR__ . '/../../includes/header.php';
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fa fa-tag me-2 text-success"></i>Sale: <strong><?= e($sale['sale_number']) ?></strong></h5>
     <div class="d-flex gap-2">
+        <?php if (canAccess('inspections')): ?>
+        <a href="<?= BASE_URL ?>/modules/inspections/create.php?car_id=<?= $sale['car_id'] ?>&sale_id=<?= $id ?>"
+           class="btn btn-sm btn-outline-info">
+            <i class="fa fa-clipboard-check me-1"></i>Pre-Delivery Check
+        </a>
+        <?php endif; ?>
         <?php if (canWrite('sales') && $sale['status'] === 'active'): ?>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <?php endif; ?>
@@ -173,4 +179,130 @@ include __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
     </div>
 </div>
+
+<?php
+// ── Cost & Profit (if car_costs recorded) ─────────────────────────────────────
+if (canAccess('car_costs')):
+    try {
+        $costRow2 = $db->prepare("SELECT * FROM car_costs WHERE car_id=?");
+        $costRow2->execute([$sale['car_id']]); $costRow2 = $costRow2->fetch();
+        if ($costRow2) {
+            $tc = array_sum(array_map(fn($f)=>(float)($costRow2[$f]??0),
+                ['purchase_price','freight','marine_insurance','port_charges','duty_tax',
+                 'clearing_fees','transport_to_yard','workshop_costs','other_costs']));
+            $sp     = (float)$sale['sale_price'];
+            $profit = $sp - $tc;
+            $margin = $sp > 0 ? round($profit / $sp * 100, 1) : 0;
+        }
+    } catch (\Throwable $e) { $costRow2 = null; }
+?>
+<?php if (isset($costRow2) && $costRow2): ?>
+<div class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fa fa-chart-line me-2 text-success"></i>Profit &amp; Margin</span>
+        <?php if (canWrite('car_costs')): ?>
+        <a href="<?= BASE_URL ?>/modules/car_costs/edit.php?car_id=<?= $sale['car_id'] ?>&back=<?= urlencode($_SERVER['REQUEST_URI']) ?>"
+           class="btn btn-xs btn-outline-secondary">Edit Costs</a>
+        <?php endif; ?>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 text-center">
+            <div class="col-4">
+                <div class="text-muted small mb-1">Total Cost</div>
+                <div class="fw-bold text-danger fs-6"><?= money($tc) ?></div>
+            </div>
+            <div class="col-4">
+                <div class="text-muted small mb-1">Sale Price</div>
+                <div class="fw-bold text-primary fs-6"><?= money($sp) ?></div>
+            </div>
+            <div class="col-4">
+                <div class="text-muted small mb-1">Gross Profit</div>
+                <div class="fw-bold fs-5 <?= $profit >= 0 ? 'text-success' : 'text-danger' ?>"><?= money($profit) ?></div>
+                <span class="badge <?= $margin >= 20 ? 'bg-success' : ($margin >= 10 ? 'bg-warning text-dark' : 'bg-danger') ?>"><?= $margin ?>% margin</span>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+<?php endif; ?>
+
+<?php
+// ── Installment Payment Plan ───────────────────────────────────────────────────
+if (canAccess('installments')):
+    try {
+        $instPlan = $db->prepare("
+            SELECT p.*,
+                   COUNT(i.id)                        AS total_inst,
+                   SUM(i.status='paid')               AS paid_inst,
+                   COALESCE(SUM(i.amount_paid),0)     AS collected,
+                   SUM(i.status='overdue')             AS overdue_inst
+            FROM sale_payment_plans p
+            LEFT JOIN sale_installments i ON i.plan_id = p.id
+            WHERE p.sale_id = ?
+            GROUP BY p.id
+        ");
+        $instPlan->execute([$id]); $instPlan = $instPlan->fetch();
+    } catch (\Throwable $e) { $instPlan = null; }
+?>
+<div class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fa fa-calendar-check me-2 text-primary"></i>Instalment Payment Plan</span>
+        <?php if (!$instPlan && canWrite('installments') && $sale['status']==='active'): ?>
+        <a href="<?= BASE_URL ?>/modules/installments/create.php?sale_id=<?= $id ?>"
+           class="btn btn-sm btn-outline-primary"><i class="fa fa-plus me-1"></i>Create Plan</a>
+        <?php elseif ($instPlan): ?>
+        <a href="<?= BASE_URL ?>/modules/installments/view.php?id=<?= $instPlan['id'] ?>"
+           class="btn btn-sm btn-outline-primary"><i class="fa fa-arrow-right me-1"></i>Manage Plan</a>
+        <?php endif; ?>
+    </div>
+    <?php if (!$instPlan): ?>
+    <div class="card-body text-center py-3 text-muted">
+        <i class="fa fa-calendar fa-2x mb-2 d-block opacity-25"></i>No payment plan set up for this sale.
+        <?php if (canWrite('installments') && $sale['status']==='active'): ?>
+        <div class="mt-2">
+            <a href="<?= BASE_URL ?>/modules/installments/create.php?sale_id=<?= $id ?>"
+               class="btn btn-sm btn-outline-primary">Set Up Payment Plan</a>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php else:
+        $outstanding = (float)$instPlan['balance_financed'] - (float)$instPlan['collected'];
+        $pct = $instPlan['balance_financed'] > 0 ? min(100,round((float)$instPlan['collected']/(float)$instPlan['balance_financed']*100)) : 0;
+    ?>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-sm-3 text-center">
+                <div class="text-muted small">Financed</div>
+                <div class="fw-bold"><?= money((float)$instPlan['balance_financed']) ?></div>
+            </div>
+            <div class="col-sm-3 text-center">
+                <div class="text-muted small">Collected</div>
+                <div class="fw-bold text-success"><?= money((float)$instPlan['collected']) ?></div>
+            </div>
+            <div class="col-sm-3 text-center">
+                <div class="text-muted small">Outstanding</div>
+                <div class="fw-bold <?= $outstanding > 0 ? 'text-danger' : 'text-success' ?>"><?= money($outstanding) ?></div>
+            </div>
+            <div class="col-sm-3 text-center">
+                <div class="text-muted small">Status</div>
+                <?= statusBadge($instPlan['status']) ?>
+                <?php if ($instPlan['overdue_inst'] > 0): ?>
+                <div><span class="badge bg-danger mt-1"><?= $instPlan['overdue_inst'] ?> overdue</span></div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <div class="mt-3">
+            <div class="d-flex justify-content-between small text-muted mb-1">
+                <span><?= (int)$instPlan['paid_inst'] ?>/<?= (int)$instPlan['total_inst'] ?> instalments paid</span>
+                <span><?= $pct ?>%</span>
+            </div>
+            <div class="progress" style="height:8px">
+                <div class="progress-bar <?= $pct >= 100 ? 'bg-success' : 'bg-primary' ?>" style="width:<?= $pct ?>%"></div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

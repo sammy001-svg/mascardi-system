@@ -60,6 +60,14 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-id-card"></i><span>Drivers</span>
         </a>
         <?php endif; ?>
+
+        <?php if (canAccess('car_documents')): ?>
+        <a href="<?= BASE_URL ?>/modules/car_documents/index.php"
+           class="nav-item <?= isActive('/modules/car_documents/') ?>"
+           data-label="Car Documents">
+            <i class="fa fa-folder-open"></i><span>Car Documents</span>
+        </a>
+        <?php endif; ?>
         <?php endif; ?>
 
         <!-- Logistics -->
@@ -205,6 +213,37 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-tag"></i><span>Sales</span>
         </a>
         <?php endif; ?>
+
+        <?php if (canAccess('installments')): ?>
+        <a href="<?= BASE_URL ?>/modules/installments/index.php"
+           class="nav-item <?= isActive('/modules/installments/') ?>"
+           data-label="Payment Plans">
+            <i class="fa fa-calendar-check"></i><span>Payment Plans</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (canAccess('car_costs')): ?>
+        <a href="<?= BASE_URL ?>/modules/car_costs/index.php"
+           class="nav-item <?= isActive('/modules/car_costs/') ?>"
+           data-label="Import Costs">
+            <i class="fa fa-calculator"></i><span>Import Costs</span>
+        </a>
+        <?php endif; ?>
+        <?php endif; ?>
+
+        <!-- CRM -->
+        <?php if (canAccess('crm')): ?>
+        <div class="nav-section">CRM</div>
+        <a href="<?= BASE_URL ?>/modules/crm/index.php"
+           class="nav-item <?= isActive('/modules/crm/index') ?>"
+           data-label="Pipeline">
+            <i class="fa fa-filter"></i><span>Pipeline</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/crm/leads.php"
+           class="nav-item <?= isActive('/modules/crm/leads') || isActive('/modules/crm/view_lead') || isActive('/modules/crm/add_lead') ? 'active' : '' ?>"
+           data-label="Leads">
+            <i class="fa fa-users"></i><span>Leads</span>
+        </a>
         <?php endif; ?>
 
         <!-- Chat -->
@@ -235,6 +274,25 @@ $__isDash = !str_contains($__uri, '/modules/');
             setInterval(poll, 15000); // refresh every 15 s
         }());
         </script>
+        <?php endif; ?>
+
+        <!-- Expenses -->
+        <?php if (canAccess('expenses')): ?>
+        <a href="<?= BASE_URL ?>/modules/expenses/index.php"
+           class="nav-item <?= isActive('/modules/expenses/') ?>"
+           data-label="Expenses">
+            <i class="fa fa-receipt"></i><span>Expenses</span>
+        </a>
+        <?php endif; ?>
+
+        <!-- Inspections -->
+        <?php if (canAccess('inspections')): ?>
+        <a href="<?= BASE_URL ?>/modules/inspections/index.php"
+           class="nav-item <?= isActive('/modules/inspections/') ?>"
+           data-label="Inspections">
+            <i class="fa fa-clipboard-check"></i><span>Inspections</span>
+        </a>
+        <?php endif; ?>
         <?php endif; ?>
 
         <!-- Analytics -->

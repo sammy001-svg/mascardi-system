@@ -692,4 +692,346 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<?php
+// ── Expenses for P&L ─────────────────────────────────────────────────────────
+try {
+    $expSummary = $db->prepare("
+        SELECT
+            COALESCE(SUM(amount),0)                                            AS total_expenses,
+            COALESCE(SUM(CASE WHEN category='salaries'  THEN amount END), 0)  AS salaries,
+            COALESCE(SUM(CASE WHEN category='rent'      THEN amount END), 0)  AS rent,
+            COALESCE(SUM(CASE WHEN category='fuel'      THEN amount END), 0)  AS fuel,
+            COALESCE(SUM(CASE WHEN category='utilities' THEN amount END), 0)  AS utilities,
+            COALESCE(SUM(CASE WHEN category='marketing' THEN amount END), 0)  AS marketing,
+            COALESCE(SUM(CASE WHEN category='maintenance' THEN amount END), 0) AS maintenance,
+            COALESCE(SUM(CASE WHEN category='office'    THEN amount END), 0)  AS office,
+            COALESCE(SUM(CASE WHEN category='insurance' THEN amount END), 0)  AS insurance,
+            COALESCE(SUM(CASE WHEN category='taxes'     THEN amount END), 0)  AS taxes,
+            COALESCE(SUM(CASE WHEN category='other'     THEN amount END), 0)  AS other
+        FROM expenses
+        WHERE DATE(expense_date) BETWEEN ? AND ?
+    ");
+    $expSummary->execute([$dateFrom, $dateTo]);
+    $expSummary = $expSummary->fetch();
+    $hasExpenses = true;
+} catch (\Throwable $e) { $hasExpenses = false; $expSummary = null; }
+
+// ── P&L / Profit section (requires car_costs table) ──────────────────────────
+try {
+    $profitRows = $db->prepare("
+        SELECT c.make, c.model, c.year, c.chassis_number,
+               cs.sale_number, cs.sale_date, cs.buyer_name,
+               cs.sale_price,
+               (cc.purchase_price + cc.freight + cc.marine_insurance + cc.port_charges
+                + cc.duty_tax + cc.clearing_fees + cc.transport_to_yard
+                + cc.workshop_costs + cc.other_costs) AS total_cost,
+               cs.sale_price - (cc.purchase_price + cc.freight + cc.marine_insurance + cc.port_charges
+                + cc.duty_tax + cc.clearing_fees + cc.transport_to_yard
+                + cc.workshop_costs + cc.other_costs) AS gross_profit,
+               cs.id AS sale_id
+        FROM car_sales cs
+        JOIN cars c ON c.id = cs.car_id
+        JOIN car_costs cc ON cc.car_id = cs.car_id
+        WHERE cs.status = 'active'
+          AND DATE(cs.sale_date) BETWEEN ? AND ?
+        ORDER BY gross_profit DESC
+    ");
+    $profitRows->execute([$dateFrom, $dateTo]);
+    $profitRows = $profitRows->fetchAll();
+
+    $plSummary = $db->prepare("
+        SELECT
+            COUNT(cs.id)                                                                AS total_sold,
+            COALESCE(SUM(cs.sale_price), 0)                                             AS total_revenue,
+            COALESCE(SUM(cc.purchase_price + cc.freight + cc.marine_insurance
+                       + cc.port_charges + cc.duty_tax + cc.clearing_fees
+                       + cc.transport_to_yard + cc.workshop_costs + cc.other_costs), 0) AS total_costs,
+            COALESCE(SUM(cs.sale_price - (cc.purchase_price + cc.freight + cc.marine_insurance
+                       + cc.port_charges + cc.duty_tax + cc.clearing_fees
+                       + cc.transport_to_yard + cc.workshop_costs + cc.other_costs)), 0) AS gross_profit
+        FROM car_sales cs
+        JOIN car_costs cc ON cc.car_id = cs.car_id
+        WHERE cs.status = 'active'
+          AND DATE(cs.sale_date) BETWEEN ? AND ?
+    ");
+    $plSummary->execute([$dateFrom, $dateTo]);
+    $plSummary = $plSummary->fetch();
+    $hasProfit = true;
+} catch (\Throwable $e) { $hasProfit = false; $profitRows = []; $plSummary = null; }
+
+// ── CRM stats ────────────────────────────────────────────────────────────────
+try {
+    $crmStats = $db->query("
+        SELECT
+            COUNT(*)                              AS total_leads,
+            SUM(stage NOT IN ('closed_won','closed_lost')) AS active,
+            SUM(stage = 'closed_won')             AS won,
+            SUM(stage = 'closed_lost')            AS lost,
+            SUM(stage = 'new')                    AS new_leads,
+            SUM(stage = 'negotiation')            AS negotiation
+        FROM crm_leads
+    ")->fetch();
+    $crmSources = $db->query("
+        SELECT source, COUNT(*) AS cnt FROM crm_leads GROUP BY source ORDER BY cnt DESC
+    ")->fetchAll();
+    $hasCrm = true;
+} catch (\Throwable $e) { $hasCrm = false; $crmStats = null; $crmSources = []; }
+
+// ── Installment performance ───────────────────────────────────────────────────
+try {
+    $instStats = $db->query("
+        SELECT
+            COUNT(DISTINCT p.id)                                                AS total_plans,
+            SUM(p.status = 'active')                                            AS active_plans,
+            SUM(p.status = 'completed')                                         AS completed_plans,
+            COALESCE(SUM(i.amount_paid), 0)                                     AS total_collected,
+            COALESCE(SUM(CASE WHEN i.status = 'overdue' THEN i.amount_due - i.amount_paid ELSE 0 END), 0) AS overdue_amount,
+            SUM(i.status = 'overdue')                                           AS overdue_count
+        FROM sale_payment_plans p
+        LEFT JOIN sale_installments i ON i.plan_id = p.id
+    ")->fetch();
+    $hasInst = true;
+} catch (\Throwable $e) { $hasInst = false; $instStats = null; }
+?>
+
+<?php if ($hasExpenses && $expSummary): ?>
+<!-- ── Expenses Breakdown ─────────────────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="fa fa-receipt me-2 text-danger"></i>Operational Expenses — <?= e($label) ?></span>
+        <a href="<?= BASE_URL ?>/modules/expenses/index.php" class="btn btn-xs btn-outline-secondary">View All</a>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-4 text-center">
+                <div class="fs-4 fw-bold text-danger"><?= money((float)$expSummary['total_expenses']) ?></div>
+                <div class="text-muted small">Total Expenses</div>
+            </div>
+            <?php if ($hasProfit && $plSummary):
+                $grossProfit = (float)($plSummary['gross_profit'] ?? 0);
+                $totalExp    = (float)$expSummary['total_expenses'];
+                $netProfit   = $grossProfit - $totalExp;
+                $netColor    = $netProfit >= 0 ? 'success' : 'danger';
+            ?>
+            <div class="col-md-4 text-center">
+                <div class="fs-4 fw-bold text-success"><?= money($grossProfit) ?></div>
+                <div class="text-muted small">Gross Profit (Sales − COGS)</div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="fs-3 fw-bold text-<?= $netColor ?>"><?= money($netProfit) ?></div>
+                <div class="text-muted small fw-semibold">NET PROFIT</div>
+                <?php if ($grossProfit > 0): ?>
+                <div class="badge bg-<?= $netColor ?> mt-1"><?= round($netProfit/$grossProfit*100,1) ?>% of gross</div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <!-- Expense breakdown bars -->
+        <?php
+        $expCats = [
+            'salaries'=>'Salaries & Wages','rent'=>'Rent','fuel'=>'Fuel & Transport',
+            'utilities'=>'Utilities','marketing'=>'Marketing','maintenance'=>'Maintenance',
+            'office'=>'Office','insurance'=>'Insurance','taxes'=>'Taxes','other'=>'Other'
+        ];
+        $expColors = [
+            'salaries'=>'#2563eb','rent'=>'#7c3aed','fuel'=>'#d97706','utilities'=>'#0891b2',
+            'marketing'=>'#ec4899','maintenance'=>'#16a34a','office'=>'#64748b',
+            'insurance'=>'#0284c7','taxes'=>'#dc2626','other'=>'#94a3b8'
+        ];
+        $totalExp = (float)$expSummary['total_expenses'];
+        foreach ($expCats as $key => $lbl):
+            $val = (float)($expSummary[$key] ?? 0);
+            if ($val <= 0) continue;
+            $pct = $totalExp > 0 ? round($val/$totalExp*100) : 0;
+            $col = $expColors[$key] ?? '#64748b';
+        ?>
+        <div class="d-flex align-items-center gap-3 mb-2" style="font-size:13px">
+            <span style="min-width:140px;color:<?= $col ?>;font-weight:500"><?= $lbl ?></span>
+            <div class="progress flex-grow-1" style="height:8px">
+                <div class="progress-bar" style="width:<?= $pct ?>%;background:<?= $col ?>"></div>
+            </div>
+            <span class="fw-semibold" style="min-width:100px;text-align:right"><?= money($val) ?></span>
+            <span class="text-muted small" style="min-width:36px"><?= $pct ?>%</span>
+        </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($hasProfit): ?>
+<!-- ── P&L Summary ─────────────────────────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold">
+        <i class="fa fa-scale-balanced me-2 text-success"></i>Profit &amp; Loss Summary — <?= e($label) ?>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 text-center mb-4">
+            <div class="col-sm-3">
+                <div class="text-muted small">Cars Sold (with costs)</div>
+                <div class="fs-4 fw-bold text-primary"><?= (int)($plSummary['total_sold'] ?? 0) ?></div>
+            </div>
+            <div class="col-sm-3">
+                <div class="text-muted small">Total Revenue</div>
+                <div class="fs-5 fw-bold text-success"><?= money((float)($plSummary['total_revenue'] ?? 0)) ?></div>
+            </div>
+            <div class="col-sm-3">
+                <div class="text-muted small">Total Cost of Goods</div>
+                <div class="fs-5 fw-bold text-danger"><?= money((float)($plSummary['total_costs'] ?? 0)) ?></div>
+            </div>
+            <div class="col-sm-3">
+                <?php $gp = (float)($plSummary['gross_profit'] ?? 0); ?>
+                <div class="text-muted small">Gross Profit</div>
+                <div class="fs-5 fw-bold <?= $gp >= 0 ? 'text-success' : 'text-danger' ?>"><?= money($gp) ?></div>
+                <?php if ($plSummary['total_revenue'] > 0): ?>
+                <div class="text-muted small"><?= round($gp / $plSummary['total_revenue'] * 100, 1) ?>% margin</div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <?php if (!empty($profitRows)): ?>
+        <table class="table table-hover mb-0" style="font-size:13px">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-3">Vehicle</th>
+                    <th>Sale #</th>
+                    <th>Buyer</th>
+                    <th>Sale Date</th>
+                    <th class="text-end">Cost</th>
+                    <th class="text-end">Sale Price</th>
+                    <th class="text-end">Profit</th>
+                    <th class="text-end">Margin</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($profitRows as $pr):
+                $margin = $pr['sale_price'] > 0 ? round($pr['gross_profit'] / $pr['sale_price'] * 100, 1) : 0;
+                $mc = $margin >= 20 ? 'bg-success' : ($margin >= 10 ? 'bg-warning text-dark' : 'bg-danger');
+            ?>
+            <tr>
+                <td class="ps-3 fw-medium"><?= e($pr['make'].' '.$pr['model'].' '.$pr['year']) ?></td>
+                <td><a href="<?= BASE_URL ?>/modules/sales/view.php?id=<?= $pr['sale_id'] ?>" class="text-decoration-none"><?= e($pr['sale_number']) ?></a></td>
+                <td class="small"><?= e($pr['buyer_name']) ?></td>
+                <td class="text-muted small"><?= fmtDate($pr['sale_date']) ?></td>
+                <td class="text-end text-danger"><?= money((float)$pr['total_cost']) ?></td>
+                <td class="text-end text-success fw-semibold"><?= money((float)$pr['sale_price']) ?></td>
+                <td class="text-end fw-bold <?= $pr['gross_profit'] >= 0 ? 'text-success' : 'text-danger' ?>"><?= money((float)$pr['gross_profit']) ?></td>
+                <td class="text-end"><span class="badge <?= $mc ?>"><?= $margin ?>%</span></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php else: ?>
+        <div class="text-center text-muted py-3">
+            <i class="fa fa-circle-info me-1"></i>No sales with import costs recorded in this period.
+            <a href="<?= BASE_URL ?>/modules/car_costs/index.php" class="ms-1">Add costs →</a>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($hasCrm || $hasInst): ?>
+<div class="row g-4 mb-4">
+
+    <?php if ($hasCrm && $crmStats): ?>
+    <!-- CRM Pipeline Stats -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold"><i class="fa fa-funnel-dollar me-2 text-primary"></i>CRM Lead Pipeline</div>
+            <div class="card-body">
+                <div class="row g-3 text-center mb-3">
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-secondary"><?= (int)$crmStats['total_leads'] ?></div>
+                        <div class="text-muted small">Total Leads</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-primary"><?= (int)$crmStats['active'] ?></div>
+                        <div class="text-muted small">Active</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-success"><?= (int)$crmStats['won'] ?></div>
+                        <div class="text-muted small">Won</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-danger"><?= (int)$crmStats['lost'] ?></div>
+                        <div class="text-muted small">Lost</div>
+                    </div>
+                </div>
+                <?php if ($crmStats['total_leads'] > 0):
+                    $convRate = round($crmStats['won'] / $crmStats['total_leads'] * 100, 1);
+                ?>
+                <div class="mb-2 d-flex justify-content-between small text-muted">
+                    <span>Conversion Rate</span><span class="fw-semibold text-success"><?= $convRate ?>%</span>
+                </div>
+                <div class="progress mb-3" style="height:8px">
+                    <div class="progress-bar bg-success" style="width:<?= $convRate ?>%"></div>
+                </div>
+                <?php endif; ?>
+                <?php if (!empty($crmSources)): ?>
+                <div class="small fw-semibold text-muted mb-2">Leads by Source</div>
+                <?php $srcLabels=['walk_in'=>'Walk-in','referral'=>'Referral','facebook'=>'Facebook','instagram'=>'Instagram','website'=>'Website','phone_call'=>'Phone Call','whatsapp'=>'WhatsApp','other'=>'Other'];
+                $totalSrc = array_sum(array_column($crmSources,'cnt'));
+                foreach ($crmSources as $src):
+                    $pct = $totalSrc > 0 ? round($src['cnt']/$totalSrc*100) : 0;
+                ?>
+                <div class="d-flex align-items-center gap-2 mb-1" style="font-size:12px">
+                    <span style="min-width:90px"><?= e($srcLabels[$src['source']] ?? $src['source']) ?></span>
+                    <div class="progress flex-grow-1" style="height:5px">
+                        <div class="progress-bar bg-primary" style="width:<?= $pct ?>%"></div>
+                    </div>
+                    <span class="text-muted" style="min-width:24px"><?= $src['cnt'] ?></span>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($hasInst && $instStats): ?>
+    <!-- Installment Performance -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold"><i class="fa fa-calendar-check me-2 text-warning"></i>Instalment Plan Performance</div>
+            <div class="card-body">
+                <div class="row g-3 text-center mb-3">
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-primary"><?= (int)$instStats['total_plans'] ?></div>
+                        <div class="text-muted small">Plans</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-info"><?= (int)$instStats['active_plans'] ?></div>
+                        <div class="text-muted small">Active</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-success"><?= (int)$instStats['completed_plans'] ?></div>
+                        <div class="text-muted small">Completed</div>
+                    </div>
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-danger"><?= (int)$instStats['overdue_count'] ?></div>
+                        <div class="text-muted small">Overdue Inst.</div>
+                    </div>
+                </div>
+                <dl class="row mb-0" style="font-size:13.5px">
+                    <dt class="col-7 text-muted">Total Collected</dt>
+                    <dd class="col-5 text-end fw-semibold text-success"><?= money((float)$instStats['total_collected']) ?></dd>
+                    <dt class="col-7 text-muted">Overdue Balance</dt>
+                    <dd class="col-5 text-end fw-semibold <?= $instStats['overdue_amount'] > 0 ? 'text-danger' : 'text-success' ?>"><?= money((float)$instStats['overdue_amount']) ?></dd>
+                </dl>
+                <?php if ($instStats['overdue_amount'] > 0): ?>
+                <div class="alert alert-warning py-2 px-3 mt-3 mb-0 small">
+                    <i class="fa fa-triangle-exclamation me-1"></i>
+                    <?= (int)$instStats['overdue_count'] ?> overdue instalment<?= $instStats['overdue_count'] > 1 ? 's' : '' ?> totalling
+                    <strong><?= money((float)$instStats['overdue_amount']) ?></strong> need follow-up.
+                    <a href="<?= BASE_URL ?>/modules/installments/index.php?status=active" class="ms-1">View plans →</a>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+</div>
+<?php endif; ?>
+
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
