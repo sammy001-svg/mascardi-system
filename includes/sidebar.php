@@ -293,7 +293,6 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-clipboard-check"></i><span>Inspections</span>
         </a>
         <?php endif; ?>
-        <?php endif; ?>
 
         <!-- Analytics -->
         <?php if (canAccess('reports')): ?>
