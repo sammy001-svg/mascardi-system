@@ -176,11 +176,6 @@ include __DIR__ . '/../../includes/header.php';
                 </tr>
             </thead>
             <tbody>
-            <?php if (empty($expenses)): ?>
-            <tr><td colspan="9" class="text-center py-5 text-muted">
-                <i class="fa fa-receipt fa-2x mb-2 d-block opacity-25"></i>No expenses recorded for this period
-            </td></tr>
-            <?php endif; ?>
             <?php foreach ($expenses as $exp):
                 $ci = $categories[$exp['category']] ?? ['label'=>ucfirst($exp['category']),'color'=>'#64748b','icon'=>'fa-circle-dot'];
             ?>
@@ -220,17 +215,14 @@ include __DIR__ . '/../../includes/header.php';
             </tr>
             <?php endforeach; ?>
             </tbody>
-            <?php if (!empty($expenses)): ?>
-            <tfoot>
-                <tr class="table-light fw-bold">
-                    <td colspan="6" class="ps-3 text-end">Period Total:</td>
-                    <td class="text-end text-danger"><?= money((float)$summary['total']) ?></td>
-                    <td colspan="2"></td>
-                </tr>
-            </tfoot>
-            <?php endif; ?>
         </table>
     </div>
+    <?php if (!empty($expenses)): ?>
+    <div class="card-footer bg-white d-flex justify-content-end align-items-center gap-3 py-2 px-4">
+        <span class="text-muted small"><?= count($expenses) ?> record<?= count($expenses) !== 1 ? 's' : '' ?> in period</span>
+        <span class="fw-bold text-danger fs-6"><?= money((float)$summary['total']) ?></span>
+    </div>
+    <?php endif; ?>
 </div>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

@@ -124,9 +124,6 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if (empty($sales)): ?>
-                <tr><td colspan="9" class="text-center text-muted py-5">No sales recorded yet. <a href="add.php">Record the first sale.</a></td></tr>
-                <?php endif; ?>
             </tbody>
         </table>
     </div>

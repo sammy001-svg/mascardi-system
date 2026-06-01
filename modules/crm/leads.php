@@ -128,11 +128,6 @@ include __DIR__ . '/../../includes/header.php';
                 </tr>
             </thead>
             <tbody>
-            <?php if (empty($leads)): ?>
-                <tr><td colspan="10" class="text-center py-5 text-muted">
-                    <i class="fa fa-users fa-2x mb-2 d-block opacity-25"></i>No leads found
-                </td></tr>
-            <?php endif; ?>
             <?php foreach ($leads as $l):
                 [$stageLabel, $stageColor] = $stages[$l['stage']] ?? ['Unknown','secondary'];
                 $isOverdue = $l['follow_up_date'] && $l['follow_up_date'] < date('Y-m-d')

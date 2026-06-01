@@ -112,9 +112,6 @@ include __DIR__ . '/../../includes/header.php';
                 </tr>
             </thead>
             <tbody>
-            <?php if (empty($plans)): ?>
-            <tr><td colspan="9" class="text-center py-5 text-muted"><i class="fa fa-file-invoice fa-2x mb-2 d-block opacity-25"></i>No payment plans yet</td></tr>
-            <?php endif; ?>
             <?php foreach ($plans as $p):
                 $outstanding  = (float)$p['balance_financed'] - (float)$p['total_collected'];
                 $pctCollected = $p['balance_financed'] > 0 ? min(100, round((float)$p['total_collected'] / (float)$p['balance_financed'] * 100)) : 0;

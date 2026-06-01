@@ -122,7 +122,12 @@ $(function () {
         $('.datatable').each(function () {
             $(this).DataTable({
                 pageLength: 25,
-                language: { search: '', searchPlaceholder: 'Search...' },
+                language: {
+                    search: '',
+                    searchPlaceholder: 'Search...',
+                    emptyTable: 'No records found',
+                    zeroRecords: 'No matching records found',
+                },
                 dom: '<"d-flex justify-content-between align-items-center mb-3"lf>t<"d-flex justify-content-between align-items-center mt-3"ip>',
             });
         });
