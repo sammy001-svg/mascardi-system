@@ -1254,10 +1254,158 @@ html[data-theme="dark"] { color-scheme: dark; }
 .notif-empty { padding: 32px 16px; text-align: center; color: var(--text-3); font-size: 13px; }
 
 /* ─────────────────────────────────────────────────────────
+   PWA — INSTALL BANNER
+   ───────────────────────────────────────────────────────── */
+.pwa-install-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9998;
+    padding: 0 16px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(110%);
+    transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+    pointer-events: none;
+}
+.pwa-install-banner.pwa-banner-visible {
+    transform: translateY(0);
+    pointer-events: all;
+}
+.pwa-install-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.12), 0 -2px 8px rgba(0,0,0,0.06);
+    padding: 14px 18px;
+    max-width: 560px;
+    margin: 0 auto;
+}
+.pwa-install-icon img {
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+.pwa-install-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.pwa-install-text strong { font-size: 13.5px; color: var(--text); font-weight: 700; }
+.pwa-install-text span   { font-size: 12px;   color: var(--text-3); }
+.pwa-install-action {
+    flex-shrink: 0;
+    background: var(--brand);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, box-shadow 0.15s;
+    white-space: nowrap;
+}
+.pwa-install-action:hover {
+    background: var(--brand-dark);
+    box-shadow: 0 4px 14px rgba(37,99,235,0.35);
+}
+.pwa-install-dismiss {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-3);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.12s, color 0.12s;
+}
+.pwa-install-dismiss:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+
+[data-theme="dark"] .pwa-install-inner { background: #1e293b; border-color: var(--border); }
+
+/* ─────────────────────────────────────────────────────────
+   PWA — NETWORK STATUS DOT
+   ───────────────────────────────────────────────────────── */
+.network-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    position: relative;
+    transition: background-color 0.3s;
+}
+.network-online  { background: #22c55e; }
+.network-offline { background: #ef4444; }
+/* Ripple pulse using compositor-only transform+opacity (no paint triggered) */
+.network-offline::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.45);
+    animation: netPulse 1.5s ease-out infinite;
+}
+@keyframes netPulse {
+    0%   { transform: scale(1);   opacity: 0.8; }
+    100% { transform: scale(2.4); opacity: 0;   }
+}
+
+/* ─────────────────────────────────────────────────────────
+   PWA — SAFE AREA SUPPORT (iPhone notch + home indicator)
+   ───────────────────────────────────────────────────────── */
+.app-topbar {
+    padding-top: max(0px, env(safe-area-inset-top, 0px));
+}
+.app-sidebar {
+    padding-top: max(0px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+}
+.page-body {
+    padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+}
+.toast-stack {
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    right:  calc(24px + env(safe-area-inset-right,  0px));
+}
+
+/* ─────────────────────────────────────────────────────────
+   MOBILE — TOUCH IMPROVEMENTS
+   ───────────────────────────────────────────────────────── */
+/* Prevent text inflation on orientation change */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+/* Momentum scrolling on iOS */
+.app-sidebar, .notif-panel, .sidebar-nav { -webkit-overflow-scrolling: touch; }
+
+/* Remove tap highlight on all interactive elements */
+a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch-friendly active states */
+.btn:active       { transform: scale(0.97); }
+.nav-item:active  { background: rgba(255,255,255,0.12) !important; }
+.quick-action-card:active { transform: scale(0.96); box-shadow: none; }
+
+/* Table horizontal scroll on mobile — show scroll indicator */
+.table-responsive {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+/* ─────────────────────────────────────────────────────────
    PRINT
    ───────────────────────────────────────────────────────── */
 @media print {
-    .app-sidebar, .app-topbar, .no-print, .sidebar-backdrop, .toast-stack { display: none !important; }
+    .app-sidebar, .app-topbar, .no-print, .sidebar-backdrop, .toast-stack,
+    .pwa-install-banner { display: none !important; }
     .page-body { padding: 0 !important; animation: none !important; }
     .card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
     body { background: #fff !important; }

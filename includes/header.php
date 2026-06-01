@@ -2,12 +2,39 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title><?= isset($pageTitle) ? e($pageTitle) . ' — ' : '' ?><?= e(getSetting('company_name', APP_NAME)) ?></title>
-<!-- Inter font -->
+
+<!-- PWA — Web App Manifest -->
+<link rel="manifest" href="<?= BASE_URL ?>/manifest.php">
+
+<!-- PWA — Theme & status bar -->
+<meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1e3a8a" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="<?= e(getSetting('company_name', APP_NAME)) ?>">
+
+<!-- PWA — Apple / iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="<?= e(getSetting('company_name', APP_NAME)) ?>">
+<link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
+
+<!-- PWA — Microsoft (Edge/Windows) -->
+<meta name="msapplication-TileColor" content="#2563eb">
+<meta name="msapplication-tap-highlight" content="no">
+
+<!-- SEO / sharing -->
+<meta name="description" content="Car Yard Management — fleet, workshop, sales and finance.">
+<link rel="icon" type="image/svg+xml" href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
+<link rel="shortcut icon" href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
+
+<!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
 <!-- Bootstrap 5 -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <!-- Font Awesome 6 -->
@@ -82,6 +109,9 @@
                 </div>
             </div>
         </div>
+
+        <!-- Network status indicator -->
+        <span id="networkStatusDot" class="network-dot network-online" title="Online"></span>
 
         <!-- Dark mode toggle -->
         <button class="topbar-icon-btn" id="themeToggle" title="Toggle dark mode">
