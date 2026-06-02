@@ -155,34 +155,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= $isFirstRun ? 'Setup — ' : 'Login — ' ?><?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= $isFirstRun ? 'Setup — ' : 'Staff Login — ' ?><?= htmlspecialchars(APP_NAME) ?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <style>
-*{box-sizing:border-box}
-body{background:linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.75)), url('IMG_4604.jpg');background-size:cover;background-position:center;background-attachment:fixed;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',system-ui,sans-serif;padding:20px}
-.login-wrap{width:100%;max-width:420px}
-.login-card{background:rgba(255, 255, 255, 0.95);backdrop-filter:blur(10px);border-radius:24px;padding:42px 38px;box-shadow:0 25px 60px rgba(0,0,0,.5);border:1px solid rgba(255,255,255,0.3)}
-.brand-icon{width:58px;height:58px;background:#2563eb;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;margin:0 auto 16px}
-.login-title{font-size:23px;font-weight:800;color:#0f172a;text-align:center;margin-bottom:4px}
-.login-sub{color:#64748b;font-size:13px;text-align:center;margin-bottom:28px}
-.form-label{font-size:13px;font-weight:600;color:#374151;margin-bottom:5px}
-.form-control{font-size:14px;border-color:#e2e8f0;padding:10px 40px;border-radius:8px}
-.form-control:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
-.field-wrap{position:relative}
-.field-wrap > i:first-child{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px;pointer-events:none}
-.password-toggle{position:absolute;right:13px;top:50%;transform:translateY(-50%);color:#94a3b8;cursor:pointer;z-index:10;transition:color .15s;background:none;border:none;padding:0;font-size:14px;display:flex;align-items:center}
-.password-toggle:hover{color:#2563eb}
-.btn-login{background:#2563eb;border:none;padding:12px;font-size:15px;font-weight:700;border-radius:10px;letter-spacing:.3px}
-.btn-login:hover{background:#1d4ed8}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    padding: 24px;
+    position: relative;
+}
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+}
+.back-link {
+    position: fixed;
+    top: 20px;
+    left: 24px;
+    color: rgba(255,255,255,.6);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 8px;
+    background: rgba(255,255,255,.05);
+    transition: all .15s;
+    z-index: 10;
+}
+.back-link:hover { color: #fff; border-color: rgba(255,255,255,.3); background: rgba(255,255,255,.1); text-decoration: none; }
+.login-wrap { width: 100%; max-width: 420px; position: relative; z-index: 1; }
+.login-card {
+    background: rgba(255,255,255,.97);
+    backdrop-filter: blur(20px);
+    border-radius: 24px;
+    padding: 42px 38px;
+    box-shadow: 0 32px 80px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.2);
+    border: 1px solid rgba(255,255,255,.4);
+}
+.brand-icon { width: 58px; height: 58px; background: linear-gradient(135deg,#3b82f6,#1d4ed8); border-radius: 16px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 26px; margin: 0 auto 16px; box-shadow: 0 8px 24px rgba(37,99,235,.4); }
+.login-title { font-size: 23px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 4px; letter-spacing: -.4px; }
+.login-sub { color: #64748b; font-size: 13px; text-align: center; margin-bottom: 28px; }
+.form-label { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 5px; }
+.form-control { font-size: 14px; border-color: #e2e8f0; padding: 10px 40px; border-radius: 10px; transition: border-color .15s, box-shadow .15s; }
+.form-control:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.15); outline: none; }
+.field-wrap { position: relative; }
+.field-wrap > i:first-child { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 14px; pointer-events: none; }
+.password-toggle { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); color: #94a3b8; cursor: pointer; z-index: 10; transition: color .15s; background: none; border: none; padding: 0; font-size: 14px; display: flex; align-items: center; }
+.password-toggle:hover { color: #2563eb; }
+.btn-login { background: linear-gradient(135deg,#2563eb,#1d4ed8); border: none; padding: 13px; font-size: 15px; font-weight: 700; border-radius: 12px; letter-spacing: .3px; transition: box-shadow .15s, transform .1s; }
+.btn-login:hover { box-shadow: 0 6px 20px rgba(37,99,235,.45); transform: translateY(-1px); }
+.first-run-badge { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #1d4ed8; margin-bottom: 18px; }
 </style>
 </head>
 <body>
+
+<!-- Back to showroom -->
+<a href="<?= BASE_URL ?>/showroom/" class="back-link">
+    <i class="fa fa-arrow-left"></i> Back to Showroom
+</a>
+
 <div class="login-wrap">
     <div class="login-card">
         <div class="brand-icon"><i class="fa fa-car-side"></i></div>
         <div class="login-title"><?= $isFirstRun ? 'System Setup' : htmlspecialchars(APP_NAME) ?></div>
-        <div class="login-sub"><?= $isFirstRun ? 'Create your administrator account to get started.' : 'Sign in to continue' ?></div>
+        <div class="login-sub"><?= $isFirstRun ? 'Create your administrator account to get started.' : 'Staff portal — sign in to continue' ?></div>
 
         <?php if ($isFirstRun && !$setupDone): ?>
         <div class="first-run-badge"><i class="fa fa-star me-2"></i><strong>First-time setup:</strong> No admin account exists yet. Create one below.</div>
@@ -263,9 +315,15 @@ body{background:linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.75)),
         <?php endif; ?>
     </div>
 
-    <p class="text-center text-white-50 mt-3" style="font-size:12px">
-        <?= htmlspecialchars(APP_NAME) ?> &mdash; Car Yard Management System
-    </p>
+    <div class="text-center mt-3">
+        <p style="font-size:12px;color:rgba(255,255,255,.35);margin:0 0 8px">
+            <?= htmlspecialchars(APP_NAME) ?> &mdash; Staff Portal
+        </p>
+        <a href="<?= BASE_URL ?>/showroom/" style="font-size:12.5px;color:rgba(255,255,255,.5);text-decoration:none;transition:color .15s"
+           onmouseover="this.style.color='rgba(255,255,255,.9)'" onmouseout="this.style.color='rgba(255,255,255,.5)'">
+            <i class="fa fa-store me-1"></i> Browse public showroom →
+        </a>
+    </div>
 </div>
 
 <script>
