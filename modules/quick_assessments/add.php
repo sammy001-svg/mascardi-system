@@ -7,26 +7,64 @@ $pageTitle = 'New Quick Assessment';
 $db = getDB();
 $errors = [];
 
+// ── Inline migration: run once, safe to repeat ────────────────────────────
+// Adds new columns to quick_assessments if they don't exist yet.
+foreach ([
+    "ALTER TABLE quick_assessments MODIFY COLUMN check_tyres      VARCHAR(255) NULL DEFAULT NULL",
+    "ALTER TABLE quick_assessments MODIFY COLUMN check_lights     VARCHAR(255) NULL DEFAULT NULL",
+    "ALTER TABLE quick_assessments MODIFY COLUMN check_exterior   VARCHAR(255) NULL DEFAULT NULL",
+    "ALTER TABLE quick_assessments MODIFY COLUMN check_engine     VARCHAR(255) NULL DEFAULT NULL",
+    "ALTER TABLE quick_assessments MODIFY COLUMN check_interior   VARCHAR(255) NULL DEFAULT NULL",
+    "ALTER TABLE quick_assessments MODIFY COLUMN check_brakes     VARCHAR(255) NULL DEFAULT NULL",
+    "ALTER TABLE quick_assessments MODIFY COLUMN check_fluids     VARCHAR(255) NULL DEFAULT NULL",
+    "ALTER TABLE quick_assessments MODIFY COLUMN check_electrical VARCHAR(255) NULL DEFAULT NULL",
+    "ALTER TABLE quick_assessments ADD COLUMN check_jack          VARCHAR(255) NULL",
+    "ALTER TABLE quick_assessments ADD COLUMN check_dents         TEXT         NULL",
+    "ALTER TABLE quick_assessments ADD COLUMN check_items_left    TEXT         NULL",
+    "ALTER TABLE quick_assessments ADD COLUMN check_mileage       VARCHAR(50)  NULL",
+    "ALTER TABLE quick_assessments ADD COLUMN check_fuel_level    VARCHAR(50)  NULL",
+    "ALTER TABLE quick_assessments ADD COLUMN check_radio         VARCHAR(255) NULL",
+    "ALTER TABLE quick_assessments ADD COLUMN client_email        VARCHAR(150) NULL",
+] as $_mig) {
+    try { $db->exec($_mig); } catch (\Throwable $_me) { /* already applied or no change needed */ }
+}
+
 $preBookingId = (int)($_GET['booking_id'] ?? 0);
 $preBooking   = null;
 if ($preBookingId) {
-    $s = $db->prepare("SELECT * FROM service_bookings WHERE id=?");
-    $s->execute([$preBookingId]);
-    $preBooking = $s->fetch();
+    try {
+        $s = $db->prepare("SELECT * FROM service_bookings WHERE id=?");
+        $s->execute([$preBookingId]);
+        $preBooking = $s->fetch() ?: null;
+    } catch (\Throwable $e) {}
 }
 
-// Service bookings for auto-fill — fetch all client + vehicle fields
-$bookings = $db->query("
-    SELECT id, booking_number,
-           COALESCE(cl.name,  sb.client_name)  AS client_name,
-           COALESCE(cl.phone, sb.client_phone) AS client_phone,
-           COALESCE(cl.email, sb.client_email) AS client_email,
-           sb.car_make, sb.car_model, sb.car_registration
-    FROM service_bookings sb
-    LEFT JOIN clients cl ON cl.id = sb.client_id
-    ORDER BY sb.id DESC
-    LIMIT 100
-")->fetchAll(PDO::FETCH_ASSOC);
+// Service bookings for the dropdown — fetch client + vehicle fields
+$bookings = [];
+try {
+    $bookings = $db->query("
+        SELECT sb.id, sb.booking_number,
+               COALESCE(cl.name,  sb.client_name)  AS client_name,
+               COALESCE(cl.phone, sb.client_phone) AS client_phone,
+               COALESCE(cl.email, sb.client_email, '') AS client_email,
+               sb.car_make, sb.car_model, sb.car_registration
+        FROM service_bookings sb
+        LEFT JOIN clients cl ON cl.id = sb.client_id
+        ORDER BY sb.id DESC
+        LIMIT 100
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $e) {
+    // Fallback: query without email if column doesn't exist in this DB version
+    try {
+        $bookings = $db->query("
+            SELECT id, booking_number, client_name,
+                   client_phone, '' AS client_email,
+                   car_make, car_model, car_registration
+            FROM service_bookings
+            ORDER BY id DESC LIMIT 100
+        ")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (\Throwable $e2) { $bookings = []; }
+}
 
 // Check items definition
 $checkItems = [
