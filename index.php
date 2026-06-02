@@ -1,5 +1,12 @@
 <?php
 require_once __DIR__ . '/includes/functions.php';
+
+// Guests land on the public showroom — staff use login.php directly
+if (!isLoggedIn()) {
+    header('Location: ' . BASE_URL . '/showroom/');
+    exit;
+}
+
 requireLogin();
 $pageTitle = 'Dashboard';
 $db   = getDB();
