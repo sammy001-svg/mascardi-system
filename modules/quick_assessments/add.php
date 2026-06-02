@@ -421,41 +421,51 @@ include __DIR__ . '/../../includes/header.php';
     </div><!-- /row -->
 </form>
 
+<?php include __DIR__ . '/../../includes/footer.php'; ?>
+
 <script>
+/* NOTE: this block must be AFTER the footer include so jQuery and Select2 are available */
 $(function() {
 
-    // ── Service Booking → auto-fill all fields ──────────────────────────────
-    $('#bookingSelect').on('change', function() {
-        const opt = this.options[this.selectedIndex];
-        if (!opt || !opt.value) return;
+    // ── Service Booking → auto-fill vehicle + client fields ─────────────────
+    function applyBookingFill() {
+        // Use $(this).find(':selected') — reliable with Select2
+        const opt = $('#bookingSelect').find(':selected')[0];
+        if (!opt || !opt.value) {
+            // Clear fields when "none" is selected
+            ['carMake','carModel','carReg','clientName','clientPhone','clientEmail']
+                .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            return;
+        }
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+        set('carMake',     opt.dataset.make);
+        set('carModel',    opt.dataset.model);
+        set('carReg',      (opt.dataset.reg || '').toUpperCase());
+        set('clientName',  opt.dataset.clientName);
+        set('clientPhone', opt.dataset.clientPhone);
+        set('clientEmail', opt.dataset.clientEmail);
+    }
 
-        const fill = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    // select2:select fires when user picks an item; change covers programmatic changes
+    $('#bookingSelect').on('select2:select select2:clear', applyBookingFill);
 
-        fill('carMake',     opt.dataset.make);
-        fill('carModel',    opt.dataset.model);
-        fill('carReg',      opt.dataset.reg  ? opt.dataset.reg.toUpperCase() : '');
-        fill('clientName',  opt.dataset.clientName);
-        fill('clientPhone', opt.dataset.clientPhone);
-        fill('clientEmail', opt.dataset.clientEmail);
-    });
-
-    // ── Overall Condition select → show coloured badge below ────────────────
+    // ── Overall Condition select → live colour badge ─────────────────────────
     function updateCondBadge() {
         const val = document.getElementById('overallCondition').value;
         document.querySelectorAll('.cond-display').forEach(el => {
             el.classList.toggle('d-none', el.dataset.cond !== val);
         });
-        document.getElementById('condBadge').style.removeProperty('display');
-        document.getElementById('condBadge').style.display = val ? '' : 'none';
+        const badge = document.getElementById('condBadge');
+        if (badge) {
+            badge.style.display = val ? '' : 'none';
+        }
     }
     document.getElementById('overallCondition').addEventListener('change', updateCondBadge);
-    updateCondBadge(); // run on load for pre-selected value
+    updateCondBadge();
 
-    // ── Pre-select booking if coming from URL param ──────────────────────────
+    // ── Pre-fill from URL booking_id param ───────────────────────────────────
     <?php if ($preBookingId): ?>
-    $('#bookingSelect').trigger('change');
+    applyBookingFill();
     <?php endif; ?>
 });
 </script>
-
-<?php include __DIR__ . '/../../includes/footer.php'; ?>
