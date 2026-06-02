@@ -31,7 +31,7 @@ $moduleGroups = [
     'Workshop' => [
         ['key' => 'jobs',               'label' => 'Job Cards',           'icon' => 'fa-toolbox'],
         ['key' => 'lpo',                'label' => 'LPO',                 'icon' => 'fa-file-import'],
-        ['key' => 'parts_requests',     'label' => 'Part Requests',       'icon' => 'fa-hand-holding-box'],
+        ['key' => 'parts_requests',     'label' => 'Quote Requests',      'icon' => 'fa-file-invoice'],
         ['key' => 'issues',             'label' => 'Issues',              'icon' => 'fa-triangle-exclamation'],
     ],
     'Inventory' => [
@@ -424,7 +424,7 @@ function permDesc(string $key): string {
         'assessments'      => 'Conduct and view vehicle assessments',
         'jobs'             => 'Create and manage workshop job cards',
         'lpo'              => 'Issue and manage Local Purchase Orders',
-        'parts_requests'   => 'Request parts from inventory',
+        'parts_requests'   => 'Submit and manage quote requests for parts',
         'issues'           => 'View outstanding vehicle issues (read-only)',
         'inventory'        => 'View and adjust parts stock levels',
         'suppliers'        => 'Manage supplier contacts',

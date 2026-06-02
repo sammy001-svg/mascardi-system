@@ -133,8 +133,8 @@ function isActive(string $path): string {
         <?php if (canAccess('parts_requests')): ?>
         <a href="<?= BASE_URL ?>/modules/parts_requests/index.php"
            class="nav-item <?= isActive('/modules/parts_requests/') ?>"
-           data-label="Part Requests">
-            <i class="fa fa-hand-holding-box"></i><span>Part Requests</span>
+           data-label="Quote Requests">
+            <i class="fa fa-file-invoice"></i><span>Quote Requests</span>
         </a>
         <?php endif; ?>
 

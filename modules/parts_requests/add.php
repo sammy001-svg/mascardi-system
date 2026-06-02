@@ -1,82 +1,107 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireWrite('parts_requests');
-$pageTitle = 'New Part Request';
+$pageTitle = 'New Quote Request';
 $db   = getDB();
 $user = authUser();
-$role = $user['role'];
 
-// Resolve mechanic_id: mechanic uses their linked record; admin/manager picks
-$linkedMechId = ($role === 'mechanic') ? (int)($user['linked_id'] ?? 0) : 0;
+// ── Inline migration (runs once, safe to repeat) ──────────────────────────
+foreach ([
+    "ALTER TABLE parts_requests MODIFY COLUMN mechanic_id INT NULL",
+    "ALTER TABLE parts_requests ADD COLUMN quick_assessment_id INT NULL AFTER request_number",
+    "ALTER TABLE parts_requests ADD COLUMN client_name      VARCHAR(150) NULL",
+    "ALTER TABLE parts_requests ADD COLUMN client_phone     VARCHAR(50)  NULL",
+    "ALTER TABLE parts_requests ADD COLUMN client_email     VARCHAR(150) NULL",
+    "ALTER TABLE parts_requests ADD COLUMN car_make         VARCHAR(100) NULL",
+    "ALTER TABLE parts_requests ADD COLUMN car_model        VARCHAR(100) NULL",
+    "ALTER TABLE parts_requests ADD COLUMN car_registration VARCHAR(50)  NULL",
+    "ALTER TABLE parts_requests ADD COLUMN car_chassis      VARCHAR(100) NULL",
+    "ALTER TABLE parts_request_items ADD COLUMN part_number VARCHAR(100) NULL AFTER id",
+] as $_mig) {
+    try { $db->exec($_mig); } catch (\Throwable $_e) { /* already applied */ }
+}
 
-$errors  = [];
-$preJobId = (int)($_GET['job_id'] ?? 0);
+$errors = [];
 
-// Fetch data for dropdowns
-$mechanics = $db->query("SELECT id, name FROM mechanics WHERE status='active' ORDER BY name")->fetchAll();
-$jobs = $role === 'mechanic' && $linkedMechId
-    ? $db->prepare("SELECT id, job_number FROM workshop_jobs WHERE mechanic_id=? AND status NOT IN ('completed','cancelled') ORDER BY created_at DESC")
-    : $db->query("SELECT id, job_number FROM workshop_jobs WHERE status NOT IN ('completed','cancelled') ORDER BY created_at DESC");
-if ($role === 'mechanic' && $linkedMechId) { $jobs->execute([$linkedMechId]); }
-$jobs = $jobs->fetchAll();
-
-// Inventory items for the part picker (no prices for mechanics)
-$invItems = $db->query("SELECT id, part_name, part_number, unit, quantity FROM inventory WHERE quantity > 0 ORDER BY part_name")->fetchAll();
+// Quick Assessments for the selector
+$assessments = [];
+try {
+    $assessments = $db->query("
+        SELECT qa.id, qa.assessment_number, qa.assessment_date,
+               qa.client_name, qa.client_phone, qa.client_email,
+               qa.car_make, qa.car_model, qa.car_registration,
+               c.chassis_number
+        FROM quick_assessments qa
+        LEFT JOIN cars c ON c.id = qa.car_id
+        ORDER BY qa.id DESC
+        LIMIT 150
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $e) { $assessments = []; }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $mechId  = $linkedMechId ?: (int)($_POST['mechanic_id'] ?? 0);
-    $jobId   = (int)($_POST['job_id'] ?? 0) ?: null;
-    $notes   = trim($_POST['notes'] ?? '');
-    $invIds  = $_POST['inventory_id']  ?? [];
-    $customs = $_POST['custom_part']   ?? [];
-    $qtys    = $_POST['qty']           ?? [];
-    $units   = $_POST['unit']          ?? [];
-    $inotes  = $_POST['item_notes']    ?? [];
+    $assessmentId = (int)($_POST['assessment_id'] ?? 0) ?: null;
+    $clientName   = trim($_POST['client_name']    ?? '');
+    $clientPhone  = trim($_POST['client_phone']   ?? '');
+    $clientEmail  = trim($_POST['client_email']   ?? '');
+    $carMake      = trim($_POST['car_make']        ?? '');
+    $carModel     = trim($_POST['car_model']       ?? '');
+    $carReg       = strtoupper(trim($_POST['car_registration'] ?? ''));
+    $carChassis   = trim($_POST['car_chassis']     ?? '');
+    $notes        = trim($_POST['notes']           ?? '');
 
-    if (!$mechId) $errors[] = 'Mechanic is required.';
+    $partNos   = $_POST['part_number'] ?? [];
+    $partNames = $_POST['part_name']   ?? [];
+    $qtys      = $_POST['qty']         ?? [];
+    $itemNotes = $_POST['item_notes']  ?? [];
 
-    // Build items list
+    // Build validated items list
     $items = [];
-    foreach ($qtys as $i => $qty) {
-        $qty = (float)$qty;
-        if ($qty <= 0) continue;
-        $invId    = (int)($invIds[$i] ?? 0) ?: null;
-        $partName = $invId
-            ? ($invItems[array_search($invId, array_column($invItems,'id'))]['part_name'] ?? trim($customs[$i] ?? ''))
-            : trim($customs[$i] ?? '');
-        if ($invId) {
-            foreach ($invItems as $inv) { if ($inv['id'] == $invId) { $partName = $inv['part_name']; break; } }
-        }
-        if (!$partName) continue;
+    foreach ($partNames as $i => $pname) {
+        $pname = trim($pname);
+        $qty   = (float)($qtys[$i] ?? 0);
+        if (!$pname || $qty <= 0) continue;
         $items[] = [
-            'inventory_id' => $invId,
-            'part_name'    => $partName,
-            'qty'          => $qty,
-            'unit'         => $units[$i] ?? 'piece',
-            'notes'        => trim($inotes[$i] ?? ''),
+            'part_number' => trim($partNos[$i] ?? '') ?: null,
+            'part_name'   => $pname,
+            'qty'         => $qty,
+            'notes'       => trim($itemNotes[$i] ?? ''),
         ];
     }
 
-    if (empty($items)) $errors[] = 'Add at least one part to request.';
+    if (empty($items)) $errors[] = 'Add at least one part to the quote request.';
 
     if (empty($errors)) {
         $db->beginTransaction();
         try {
-            $reqNum = nextNumber('parts_requests', 'request_number', 'REQ');
-            $db->prepare("INSERT INTO parts_requests (request_number, job_id, mechanic_id, requested_by, notes) VALUES (?,?,?,?,?)")
-               ->execute([$reqNum, $jobId, $mechId, $user['id'], $notes]);
+            $reqNum = nextNumber('parts_requests', 'request_number', 'QR');
+            $db->prepare("
+                INSERT INTO parts_requests
+                    (request_number, quick_assessment_id, mechanic_id, requested_by,
+                     client_name, client_phone, client_email,
+                     car_make, car_model, car_registration, car_chassis, notes)
+                VALUES (?,?,?,?, ?,?,?, ?,?,?,?,?)
+            ")->execute([
+                $reqNum, $assessmentId, null, $user['id'],
+                $clientName ?: null, $clientPhone ?: null, $clientEmail ?: null,
+                $carMake ?: null, $carModel ?: null, $carReg ?: null, $carChassis ?: null,
+                $notes ?: null,
+            ]);
             $reqId = (int)$db->lastInsertId();
 
-            $ins = $db->prepare("INSERT INTO parts_request_items (request_id, inventory_id, part_name, quantity_requested, unit, notes) VALUES (?,?,?,?,?,?)");
+            $ins = $db->prepare("
+                INSERT INTO parts_request_items
+                    (request_id, part_number, part_name, quantity_requested, unit, notes)
+                VALUES (?,?,?,?,?,?)
+            ");
             foreach ($items as $it) {
-                $ins->execute([$reqId, $it['inventory_id'], $it['part_name'], $it['qty'], $it['unit'], $it['notes']]);
+                $ins->execute([$reqId, $it['part_number'], $it['part_name'], $it['qty'], 'piece', $it['notes']]);
             }
 
             $db->commit();
-            logActivity('create', 'parts_requests', $reqId, "Created part request {$reqNum} with " . count($items) . " item(s)");
-            setFlash('success', 'Part request ' . $reqNum . ' submitted. Waiting for approval.');
+            logActivity('create', 'parts_requests', $reqId, "Created quote request {$reqNum} with " . count($items) . " item(s)");
+            setFlash('success', "Quote request {$reqNum} submitted successfully.");
             redirect(BASE_URL . '/modules/parts_requests/view.php?id=' . $reqId);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $db->rollBack();
             $errors[] = 'Save failed: ' . $e->getMessage();
         }
@@ -87,147 +112,231 @@ include __DIR__ . '/../../includes/header.php';
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0"><i class="fa fa-hand-holding-box me-2 text-primary"></i>New Part Request</h5>
+    <h5 class="mb-0"><i class="fa fa-file-invoice me-2 text-primary"></i>New Quote Request</h5>
     <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
 </div>
 
 <?php if ($errors): ?>
 <div class="alert alert-danger mb-3">
-    <?php foreach ($errors as $e) echo '<div><i class="fa fa-circle-exclamation me-2"></i>'.htmlspecialchars($e).'</div>'; ?>
+    <?php foreach ($errors as $err) echo '<div><i class="fa fa-circle-exclamation me-2"></i>' . e($err) . '</div>'; ?>
 </div>
 <?php endif; ?>
 
-<form method="POST" id="reqForm">
+<form method="POST" id="qrForm">
 
-<!-- Header -->
-<div class="card mb-4">
-    <div class="card-header"><i class="fa fa-info-circle me-2"></i>Request Details</div>
-    <div class="card-body">
-        <div class="row g-3">
-            <?php if ($role !== 'mechanic'): ?>
-            <div class="col-md-4">
-                <label class="form-label">Mechanic <span class="text-danger">*</span></label>
-                <select name="mechanic_id" class="form-select select2" required>
-                    <option value="">— Select mechanic —</option>
-                    <?php foreach ($mechanics as $m): ?>
-                    <option value="<?= $m['id'] ?>"><?= e($m['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
+    <!-- ── Quick Assessment (top, full width) ─────────────────────────────── -->
+    <div class="card mb-4 border-primary border-opacity-50">
+        <div class="card-header fw-semibold bg-primary bg-opacity-10">
+            <i class="fa fa-magnifying-glass-chart me-2 text-primary"></i>Quick Assessment
+            <span class="text-muted fw-normal small ms-1">— select to auto-fill client &amp; vehicle details</span>
+        </div>
+        <div class="card-body">
+            <select name="assessment_id" id="assessmentSelect" class="form-select select2">
+                <option value="">— No linked assessment / Walk-in —</option>
+                <?php foreach ($assessments as $qa): ?>
+                <option value="<?= $qa['id'] ?>"
+                        data-client-name="<?= e($qa['client_name']    ?? '') ?>"
+                        data-client-phone="<?= e($qa['client_phone']   ?? '') ?>"
+                        data-client-email="<?= e($qa['client_email']   ?? '') ?>"
+                        data-car-make="<?= e($qa['car_make']       ?? '') ?>"
+                        data-car-model="<?= e($qa['car_model']      ?? '') ?>"
+                        data-car-reg="<?= e($qa['car_registration'] ?? '') ?>"
+                        data-chassis="<?= e($qa['chassis_number']  ?? '') ?>"
+                        <?= (($_POST['assessment_id'] ?? 0) == $qa['id']) ? 'selected' : '' ?>>
+                    <?= e($qa['assessment_number']) ?>
+                    — <?= e($qa['client_name'] ?: 'No name') ?>
+                    <?php if ($qa['car_make']): ?>
+                     (<?= e(trim($qa['car_make'] . ' ' . $qa['car_model'])) ?><?= $qa['car_registration'] ? ' · ' . e($qa['car_registration']) : '' ?>)
+                    <?php endif; ?>
+                    — <?= fmtDate($qa['assessment_date']) ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+
+        <!-- ── Client Details ─────────────────────────────────────────────── -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold">
+                    <i class="fa fa-user me-2 text-primary"></i>Client Details
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Client Name</label>
+                        <input type="text" name="client_name" id="clientName" class="form-control"
+                               placeholder="Auto-filled from assessment"
+                               value="<?= e($_POST['client_name'] ?? '') ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Phone</label>
+                        <input type="text" name="client_phone" id="clientPhone" class="form-control"
+                               placeholder="Auto-filled from assessment"
+                               value="<?= e($_POST['client_phone'] ?? '') ?>">
+                    </div>
+                    <div>
+                        <label class="form-label small fw-semibold">Email</label>
+                        <input type="email" name="client_email" id="clientEmail" class="form-control"
+                               placeholder="Auto-filled from assessment"
+                               value="<?= e($_POST['client_email'] ?? '') ?>">
+                    </div>
+                </div>
             </div>
-            <?php endif; ?>
-            <div class="col-md-4">
-                <label class="form-label">Linked Job <span class="text-muted small">(optional)</span></label>
-                <select name="job_id" class="form-select select2">
-                    <option value="">— No specific job —</option>
-                    <?php foreach ($jobs as $j): ?>
-                    <option value="<?= $j['id'] ?>" <?= (int)($_POST['job_id'] ?? $preJobId) === (int)$j['id'] ? 'selected' : '' ?>>
-                        <?= e($j['job_number']) ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
+        </div>
+
+        <!-- ── Vehicle Details ────────────────────────────────────────────── -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold">
+                    <i class="fa fa-car me-2 text-primary"></i>Vehicle Details
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Make</label>
+                            <input type="text" name="car_make" id="carMake" class="form-control"
+                                   placeholder="e.g. Toyota"
+                                   value="<?= e($_POST['car_make'] ?? '') ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Model</label>
+                            <input type="text" name="car_model" id="carModel" class="form-control"
+                                   placeholder="e.g. Hilux"
+                                   value="<?= e($_POST['car_model'] ?? '') ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Registration No.</label>
+                            <input type="text" name="car_registration" id="carReg" class="form-control text-uppercase"
+                                   placeholder="KDA 000Q"
+                                   value="<?= e($_POST['car_registration'] ?? '') ?>"
+                                   oninput="this.value=this.value.toUpperCase()">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Chassis Number</label>
+                            <input type="text" name="car_chassis" id="carChassis" class="form-control"
+                                   placeholder="Auto-filled if linked"
+                                   value="<?= e($_POST['car_chassis'] ?? '') ?>">
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-<?= $role !== 'mechanic' ? '4' : '8' ?>">
-                <label class="form-label">Request Notes</label>
-                <input type="text" name="notes" class="form-control" placeholder="e.g. Urgently needed for brake repair on KAA 123X" value="<?= e($_POST['notes'] ?? '') ?>">
+        </div>
+
+    </div><!-- /row -->
+
+    <!-- ── Parts Needed ──────────────────────────────────────────────────── -->
+    <div class="card mb-4">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="fa fa-list-ul me-2 text-primary"></i>Parts Needed for Quotation</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="addPartBtn">
+                <i class="fa fa-plus me-1"></i>Add Part
+            </button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+            <table class="table table-hover mb-0" id="partsTable">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3" style="width:3%">#</th>
+                        <th style="width:15%">Part No.</th>
+                        <th>Part Name <span class="text-danger">*</span></th>
+                        <th style="width:10%">QTY <span class="text-danger">*</span></th>
+                        <th>Note</th>
+                        <th style="width:48px"></th>
+                    </tr>
+                </thead>
+                <tbody id="partsBody">
+                    <tr class="part-row">
+                        <td class="ps-3 text-muted row-num">1</td>
+                        <td><input type="text" name="part_number[]" class="form-control form-control-sm" placeholder="e.g. OIL-001"></td>
+                        <td><input type="text" name="part_name[]" class="form-control form-control-sm" placeholder="Part name / description" required></td>
+                        <td><input type="number" name="qty[]" class="form-control form-control-sm" min="0.01" step="0.01" value="1" required></td>
+                        <td><input type="text" name="item_notes[]" class="form-control form-control-sm" placeholder="Any additional note…"></td>
+                        <td class="pe-2">
+                            <button type="button" class="btn btn-xs btn-outline-danger remove-row" title="Remove row">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Parts Line Items -->
-<div class="card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="fa fa-list me-2"></i>Parts Needed</span>
-        <button type="button" class="btn btn-sm btn-outline-primary" id="addRowBtn">
-            <i class="fa fa-plus me-1"></i>Add Part
+    <!-- ── Notes + Submit ────────────────────────────────────────────────── -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <label class="form-label fw-semibold">Additional Notes</label>
+            <textarea name="notes" class="form-control" rows="3"
+                      placeholder="e.g. Parts needed urgently for brake service on KDA 000Q…"><?= e($_POST['notes'] ?? '') ?></textarea>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2">
+        <a href="index.php" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary px-4">
+            <i class="fa fa-paper-plane me-2"></i>Submit Quote Request
         </button>
     </div>
-    <div class="card-body p-0">
-        <table class="table mb-0" id="itemsTable">
-            <thead>
-                <tr>
-                    <th class="ps-4" style="width:35%">Part (from stock or custom)</th>
-                    <th style="width:20%">Custom Name <span class="text-muted small">(if not in stock)</span></th>
-                    <th style="width:12%">Qty <span class="text-danger">*</span></th>
-                    <th style="width:12%">Unit</th>
-                    <th>Notes / Purpose</th>
-                    <th style="width:48px"></th>
-                </tr>
-            </thead>
-            <tbody id="itemsBody">
-                <!-- first row always present -->
-                <tr class="item-row">
-                    <td class="ps-4">
-                        <select name="inventory_id[]" class="form-select form-select-sm select2-inv">
-                            <option value="">— Pick from stock —</option>
-                            <?php foreach ($invItems as $inv): ?>
-                            <option value="<?= $inv['id'] ?>" data-unit="<?= e($inv['unit']) ?>">
-                                <?= e($inv['part_name']) ?><?= $inv['part_number'] ? ' (' . e($inv['part_number']) . ')' : '' ?>
-                                — <?= number_format((float)$inv['quantity'], 0) ?> in stock
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </td>
-                    <td>
-                        <input type="text" name="custom_part[]" class="form-control form-control-sm custom-part" placeholder="e.g. Oil filter">
-                    </td>
-                    <td><input type="number" name="qty[]" class="form-control form-control-sm" min="0.01" step="0.01" value="1" required></td>
-                    <td><input type="text"   name="unit[]"  class="form-control form-control-sm unit-field" value="piece" placeholder="piece"></td>
-                    <td><input type="text"   name="item_notes[]" class="form-control form-control-sm" placeholder="Why this part is needed…"></td>
-                    <td class="pe-3"><button type="button" class="btn btn-xs btn-outline-danger remove-row" title="Remove"><i class="fa fa-trash"></i></button></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="d-flex justify-content-end gap-2">
-    <a href="index.php" class="btn btn-outline-secondary">Cancel</a>
-    <button type="submit" class="btn btn-primary px-4">
-        <i class="fa fa-paper-plane me-2"></i>Submit Request
-    </button>
-</div>
 
 </form>
 
-<?php
-$invJson = json_encode(array_map(fn($i) => ['id'=>$i['id'],'name'=>$i['part_name'],'pn'=>$i['part_number'],'unit'=>$i['unit'],'qty'=>(float)$i['quantity']], $invItems));
-$extraJs = <<<JS
+<?php include __DIR__ . '/../../includes/footer.php'; ?>
+
 <script>
-var invItems = {$invJson};
+$(function () {
 
-function initRow(row) {
-    var sel = row.querySelector('.select2-inv');
-    if (window.jQuery && \$.fn.select2) {
-        \$(sel).select2({ theme: 'bootstrap-5', width: '100%' });
-        \$(sel).on('change', function () { syncUnit(row, this.value); });
-    } else {
-        sel.addEventListener('change', function () { syncUnit(row, this.value); });
+    // ── Assessment → auto-fill client + vehicle ──────────────────────────
+    function applyAssessmentFill() {
+        const opt = $('#assessmentSelect').find(':selected')[0];
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+        if (!opt || !opt.value) {
+            ['clientName','clientPhone','clientEmail','carMake','carModel','carReg','carChassis']
+                .forEach(id => set(id, ''));
+            return;
+        }
+        set('clientName',  opt.dataset.clientName);
+        set('clientPhone', opt.dataset.clientPhone);
+        set('clientEmail', opt.dataset.clientEmail);
+        set('carMake',     opt.dataset.carMake);
+        set('carModel',    opt.dataset.carModel);
+        set('carReg',      (opt.dataset.carReg || '').toUpperCase());
+        set('carChassis',  opt.dataset.chassis);
     }
-    row.querySelector('.remove-row').addEventListener('click', function () {
-        if (document.querySelectorAll('.item-row').length > 1) row.remove();
+    $('#assessmentSelect').on('select2:select select2:clear', applyAssessmentFill);
+
+    // ── Dynamic rows ─────────────────────────────────────────────────────
+    function renumberRows() {
+        document.querySelectorAll('#partsBody .part-row').forEach((r, i) => {
+            const n = r.querySelector('.row-num');
+            if (n) n.textContent = i + 1;
+        });
+    }
+
+    function initRow(row) {
+        row.querySelector('.remove-row').addEventListener('click', function () {
+            if (document.querySelectorAll('.part-row').length > 1) {
+                row.remove();
+                renumberRows();
+            }
+        });
+    }
+
+    document.querySelectorAll('.part-row').forEach(initRow);
+
+    document.getElementById('addPartBtn').addEventListener('click', function () {
+        const template = document.querySelector('.part-row');
+        const clone    = template.cloneNode(true);
+        clone.querySelectorAll('input').forEach(inp => {
+            inp.value = inp.type === 'number' ? '1' : '';
+        });
+        document.getElementById('partsBody').appendChild(clone);
+        initRow(clone);
+        renumberRows();
+        clone.querySelector('input[name="part_name[]"]').focus();
     });
-}
-
-function syncUnit(row, invId) {
-    var item = invItems.find(function(i){ return i.id == invId; });
-    if (item) row.querySelector('.unit-field').value = item.unit || 'piece';
-}
-
-document.getElementById('addRowBtn').addEventListener('click', function () {
-    var first = document.querySelector('.item-row');
-    var clone = first.cloneNode(true);
-    clone.querySelectorAll('input').forEach(function(i){ i.value = i.name.includes('qty') ? '1' : ''; });
-    var sel = clone.querySelector('.select2-inv');
-    if (window.jQuery && \$(sel).data('select2')) \$(sel).select2('destroy');
-    sel.value = '';
-    document.getElementById('itemsBody').appendChild(clone);
-    initRow(clone);
-    if (window.jQuery && \$.fn.select2) \$(clone).find('.select2-inv').select2({ theme: 'bootstrap-5', width: '100%' });
 });
-
-document.querySelectorAll('.item-row').forEach(initRow);
 </script>
-JS;
-include __DIR__ . '/../../includes/footer.php';
-?>

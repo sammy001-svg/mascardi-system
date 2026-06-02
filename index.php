@@ -258,7 +258,7 @@ include __DIR__ . '/includes/header.php';
     <div class="col-sm-6 col-xl-3">
         <a href="<?= BASE_URL ?>/modules/parts_requests/index.php" class="stat-card stat-card-link" style="border-left:4px solid #db2777">
             <div class="stat-icon" style="background:#fce7f3;color:#db2777"><i class="fa fa-hand-holding-box"></i></div>
-            <div class="stat-info"><div class="stat-label">Part Requests</div><div class="stat-value"><?= $stats['parts_requested'] ?></div></div>
+            <div class="stat-info"><div class="stat-label">Quote Requests</div><div class="stat-value"><?= $stats['parts_requested'] ?></div></div>
         </a>
     </div>
 
