@@ -620,6 +620,126 @@ include __DIR__ . '/header.php';
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════
+     BOOK A SERVICE
+═══════════════════════════════════════════════════════════════ -->
+<section id="book-service" style="background:#f0f9ff;padding:88px 0;position:relative;overflow:hidden">
+    <div style="position:absolute;top:-80px;right:-40px;width:340px;height:340px;border-radius:50%;background:radial-gradient(rgba(37,99,235,.07),transparent 70%);pointer-events:none"></div>
+    <div style="position:absolute;bottom:-60px;left:-20px;width:240px;height:240px;border-radius:50%;background:radial-gradient(rgba(124,58,237,.06),transparent 70%);pointer-events:none"></div>
+
+    <div class="container-xl" style="position:relative;z-index:1">
+        <div class="row align-items-center g-5">
+
+            <!-- Left: intro + service type tiles -->
+            <div class="col-lg-5">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#2563eb;margin-bottom:12px">Client Self-Service</div>
+                <h2 style="font-size:clamp(26px,4vw,40px);font-weight:900;color:#0f172a;letter-spacing:-1px;margin:0 0 14px;line-height:1.15">
+                    Book Your Vehicle<br>Service Online
+                </h2>
+                <p style="font-size:15.5px;color:#64748b;line-height:1.7;margin:0 0 32px;max-width:420px">
+                    No need to call. Choose a date, describe the issue, and we'll confirm your workshop slot fast.
+                </p>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:32px">
+                    <?php foreach ([
+                        ['fa-engine',            'Engine Service', '#2563eb'],
+                        ['fa-screwdriver-wrench','Major Service',  '#7c3aed'],
+                        ['fa-stethoscope',       'Diagnostics',    '#0891b2'],
+                        ['fa-brush',             'Paint Job',      '#d97706'],
+                        ['fa-car-burst',         'Body Work',      '#dc2626'],
+                        ['fa-circle-dot',        'Buffing',        '#16a34a'],
+                    ] as [$ico, $label, $color]): ?>
+                    <div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;box-shadow:0 1px 5px rgba(0,0,0,.04)">
+                        <div style="width:34px;height:34px;border-radius:9px;background:<?= $color ?>18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="fa <?= $ico ?>" style="font-size:14px;color:<?= $color ?>"></i>
+                        </div>
+                        <span style="font-size:13px;font-weight:700;color:#0f172a"><?= $label ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <a href="<?= BASE_URL ?>/showroom/book-service.php"
+                   style="display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border-radius:12px;padding:14px 28px;font-size:15px;font-weight:800;text-decoration:none;transition:box-shadow .2s,transform .1s;letter-spacing:-.2px"
+                   onmouseover="this.style.boxShadow='0 8px 28px rgba(37,99,235,.4)';this.style.transform='translateY(-1px)'"
+                   onmouseout="this.style.boxShadow='none';this.style.transform=''">
+                    <i class="fa fa-calendar-check fa-lg"></i>Book a Service Slot
+                </a>
+            </div>
+
+            <!-- Right: quick booking mini-form -->
+            <div class="col-lg-7">
+                <div style="background:#fff;border-radius:24px;border:1px solid #e2e8f0;box-shadow:0 8px 48px rgba(0,0,0,.08);padding:36px 32px">
+                    <div style="margin-bottom:24px">
+                        <h3 style="font-size:19px;font-weight:900;color:#0f172a;letter-spacing:-.4px;margin:0 0 4px">
+                            <i class="fa fa-calendar-plus me-2" style="color:#2563eb;font-size:.85em"></i>Quick Booking
+                        </h3>
+                        <p style="font-size:13px;color:#94a3b8;margin:0">Fill in your details and we'll get back to you right away.</p>
+                    </div>
+
+                    <form method="GET" action="<?= BASE_URL ?>/showroom/book-service.php" style="display:grid;gap:16px">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                            <div>
+                                <label style="display:block;font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Full Name <span style="color:#dc2626">*</span></label>
+                                <input type="text" name="name" placeholder="Your full name" required class="qb-input">
+                            </div>
+                            <div>
+                                <label style="display:block;font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Phone <span style="color:#dc2626">*</span></label>
+                                <input type="tel" name="phone" placeholder="e.g. 0712 345 678" required class="qb-input">
+                            </div>
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                            <div>
+                                <label style="display:block;font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Service Needed <span style="color:#dc2626">*</span></label>
+                                <select name="service" required class="qb-input">
+                                    <option value="">Select service...</option>
+                                    <option>Engine Service</option>
+                                    <option>Major Service</option>
+                                    <option>Diagnostics</option>
+                                    <option>Paint Job</option>
+                                    <option>Body Work</option>
+                                    <option>Buffing</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display:block;font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Preferred Date</label>
+                                <input type="date" name="date" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" class="qb-input">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display:block;font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Car Reg. <span style="color:#94a3b8;font-weight:500;text-transform:none;letter-spacing:0;font-size:11px">(optional)</span></label>
+                            <input type="text" name="reg" placeholder="e.g. KDA 000Q" class="qb-input"
+                                   style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+                        </div>
+
+                        <button type="submit"
+                                style="width:100%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:11px;padding:13px 20px;font-size:14.5px;font-weight:800;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px;transition:box-shadow .15s,transform .1s"
+                                onmouseover="this.style.boxShadow='0 6px 20px rgba(37,99,235,.4)';this.style.transform='translateY(-1px)'"
+                                onmouseout="this.style.boxShadow='none';this.style.transform=''">
+                            <i class="fa fa-arrow-right"></i>Continue &amp; Confirm Booking
+                        </button>
+
+                        <p style="font-size:12px;color:#94a3b8;margin:0;line-height:1.5">
+                            <i class="fa fa-circle-info me-1 text-primary"></i>You'll complete the full details on the next page. We confirm your slot within a few hours.
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+.qb-input {
+    width:100%; border:1.5px solid #e2e8f0; border-radius:10px;
+    padding:11px 14px; font-size:14px; font-family:inherit; outline:none;
+    color:#0f172a; background:#fff; transition:border-color .15s, box-shadow .15s;
+}
+.qb-input:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+select.qb-input { cursor:pointer; }
+</style>
+
+<!-- ═══════════════════════════════════════════════════════════
      INQUIRY CTA BAND
 ═══════════════════════════════════════════════════════════════ -->
 <section style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:64px 0">

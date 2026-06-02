@@ -159,6 +159,15 @@ h1,h2,h3,h4,h5,h6 { font-weight: 800; letter-spacing: -.4px; }
 }
 .nav-links a:hover { color: #fff; background: rgba(255,255,255,.08); }
 .nav-links a.active { color: #fff; background: rgba(37,99,235,.25); }
+#navBookLink {
+    background: rgba(37,99,235,.18);
+    border: 1px solid rgba(59,130,246,.3);
+    color: #93c5fd !important;
+}
+#navBookLink:hover {
+    background: rgba(37,99,235,.35) !important;
+    color: #fff !important;
+}
 
 .nav-ctas { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 
@@ -281,11 +290,12 @@ h1,h2,h3,h4,h5,h6 { font-weight: 800; letter-spacing: -.4px; }
 
         <div class="nav-links-wrap" id="navLinksWrap">
             <ul class="nav-links">
-                <li><a href="<?= BASE_URL ?>/showroom/#hero"       class="active">Home</a></li>
+                <li><a href="<?= BASE_URL ?>/showroom/#hero"              class="active">Home</a></li>
                 <li><a href="<?= BASE_URL ?>/showroom/#inventory">All Cars</a></li>
                 <li><a href="<?= BASE_URL ?>/showroom/#categories">Categories</a></li>
                 <li><a href="<?= BASE_URL ?>/showroom/#why-us">About Us</a></li>
-                <li><a href="<?= BASE_URL ?>/showroom/#contact">Contact</a></li>
+                <li><a href="<?= BASE_URL ?>/showroom/book-service.php"   id="navBookLink">Book Service</a></li>
+                <li><a href="<?= BASE_URL ?>/showroom/contact.php">Contact</a></li>
             </ul>
         </div>
 
@@ -313,13 +323,21 @@ document.getElementById('navToggle').addEventListener('click', function() {
     var wrap = document.getElementById('navLinksWrap');
     wrap.classList.toggle('open');
 });
-// Highlight nav link based on scroll position
+// Darken nav on scroll
 window.addEventListener('scroll', function() {
     var nav = document.getElementById('siteNav');
-    if (window.scrollY > 60) {
-        nav.style.background = 'rgba(15,23,42,1)';
-    } else {
-        nav.style.background = 'rgba(15,23,42,.97)';
-    }
+    nav.style.background = window.scrollY > 60 ? 'rgba(15,23,42,1)' : 'rgba(15,23,42,.97)';
 });
+// Highlight active nav link by current URL path
+(function() {
+    var path = window.location.pathname;
+    document.querySelectorAll('.nav-links a').forEach(function(a) {
+        var href = a.getAttribute('href');
+        if (!href) return;
+        var linkPath = href.split('#')[0];
+        if (linkPath && path.endsWith(linkPath.replace(/.*\/showroom/, '/showroom'))) {
+            a.classList.add('active');
+        }
+    });
+}());
 </script>

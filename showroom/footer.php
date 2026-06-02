@@ -52,12 +52,13 @@
             <div class="col-sm-6 col-lg-2">
                 <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.3);margin-bottom:16px">Quick Links</div>
                 <?php foreach ([
-                    ['Home',        BASE_URL . '/showroom/'],
-                    ['All Cars',    BASE_URL . '/showroom/#inventory'],
-                    ['Categories',  BASE_URL . '/showroom/#categories'],
-                    ['About Us',    BASE_URL . '/showroom/#why-us'],
-                    ['Contact',     BASE_URL . '/showroom/#contact'],
-                    ['Staff Login', BASE_URL . '/login.php'],
+                    ['Home',         BASE_URL . '/showroom/'],
+                    ['All Cars',     BASE_URL . '/showroom/#inventory'],
+                    ['Categories',   BASE_URL . '/showroom/#categories'],
+                    ['About Us',     BASE_URL . '/showroom/#why-us'],
+                    ['Book Service', BASE_URL . '/showroom/book-service.php'],
+                    ['Contact Us',   BASE_URL . '/showroom/contact.php'],
+                    ['Staff Login',  BASE_URL . '/login.php'],
                 ] as [$lbl, $url]): ?>
                 <div style="margin-bottom:10px">
                     <a href="<?= $url ?>" style="color:rgba(255,255,255,.55);font-size:14px;font-weight:500;text-decoration:none;transition:color .15s"
