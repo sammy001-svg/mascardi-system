@@ -68,11 +68,47 @@ if ($method === 'GET') {
     exit;
 }
 
-// ── POST: start or find a direct conversation ──────────────────────────────
+// ── POST: start a direct chat or create a group ────────────────────────────
 if ($method === 'POST') {
-    $body = json_decode(file_get_contents('php://input'), true) ?? [];
-    $targetId = (int)($body['user_id'] ?? 0);
+    $body   = json_decode(file_get_contents('php://input'), true) ?? [];
+    $action = $body['action'] ?? 'direct';
 
+    // ── Create group conversation ─────────────────────────────────────────
+    if ($action === 'create_group') {
+        $name      = trim($body['name'] ?? '');
+        $memberIds = array_values(array_unique(array_filter(array_map('intval', (array)($body['member_ids'] ?? [])))));
+        if (!\in_array((int)$me['id'], $memberIds)) $memberIds[] = (int)$me['id'];
+
+        if (!$name) { http_response_code(400); echo json_encode(['error'=>'Group name is required']); exit; }
+        if (count($memberIds) < 2) { http_response_code(400); echo json_encode(['error'=>'A group needs at least 2 members']); exit; }
+
+        try {
+            $db->beginTransaction();
+            $db->prepare("INSERT INTO chat_conversations (type, name, created_by) VALUES ('group', ?, ?)")
+               ->execute([$name, $me['id']]);
+            $convId = (int)$db->lastInsertId();
+
+            $ins = $db->prepare("INSERT INTO chat_participants (conversation_id, user_id) VALUES (?,?)");
+            foreach ($memberIds as $uid) {
+                if ($uid > 0) $ins->execute([$convId, $uid]);
+            }
+
+            // System message
+            $db->prepare("INSERT INTO chat_messages (conversation_id, sender_id, type, content) VALUES (?,?,'system',?)")
+               ->execute([$convId, $me['id'], $me['name'] . ' created the group "' . $name . '"']);
+
+            $db->commit();
+            echo json_encode(['conversation_id' => $convId, 'existing' => false]);
+        } catch (Exception $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            http_response_code(500);
+            echo json_encode(['error' => 'Could not create group. ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // ── Start or find a direct conversation ──────────────────────────────
+    $targetId = (int)($body['user_id'] ?? 0);
     if (!$targetId || $targetId === (int)$me['id']) {
         http_response_code(400); echo json_encode(['error'=>'Invalid user']); exit;
     }

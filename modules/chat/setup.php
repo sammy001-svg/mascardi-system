@@ -95,6 +95,24 @@ foreach ($indexes as $sql) {
     try { $db->exec($sql); } catch (Exception $e) { /* ignore */ }
 }
 
+// ── Phase-2 migrations (safe to re-run) ────────────────────────────────────
+$migrations = [
+    'chat_messages.reply_to_id' => "ALTER TABLE chat_messages ADD COLUMN reply_to_id INT NULL DEFAULT NULL AFTER is_deleted",
+];
+foreach ($migrations as $label => $sql) {
+    try {
+        $db->exec($sql);
+        $done[] = "Migration <strong>{$label}</strong> — applied";
+    } catch (Exception $e) {
+        // "Duplicate column name" means it already exists — not an error
+        if (str_contains($e->getMessage(), 'Duplicate column')) {
+            $done[] = "Migration <strong>{$label}</strong> — already applied";
+        } else {
+            $errors[] = "Migration {$label}: " . htmlspecialchars($e->getMessage());
+        }
+    }
+}
+
 ?><!DOCTYPE html>
 <html>
 <head>

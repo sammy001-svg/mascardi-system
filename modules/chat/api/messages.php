@@ -20,15 +20,21 @@ try {
     $participant = $check->fetch();
     if (!$participant) { http_response_code(403); echo json_encode(['error'=>'Access denied']); exit; }
 
-    // Fetch messages after the given id
+    // Fetch messages after the given id (with reply-to preview)
     $stmt = $db->prepare("
         SELECT
             cm.id, cm.conversation_id, cm.sender_id, cm.type,
             cm.content, cm.file_path, cm.file_name, cm.file_size, cm.mime_type,
-            cm.duration, cm.is_deleted, cm.created_at,
-            u.name AS sender_name, u.role AS sender_role
+            cm.duration, cm.is_deleted, cm.created_at, cm.reply_to_id,
+            u.name AS sender_name, u.role AS sender_role,
+            rm.type    AS reply_to_type,
+            rm.content AS reply_to_content,
+            rm.file_name AS reply_to_file_name,
+            ru.name    AS reply_to_sender_name
         FROM chat_messages cm
         JOIN users u ON u.id = cm.sender_id
+        LEFT JOIN chat_messages rm ON rm.id = cm.reply_to_id
+        LEFT JOIN users ru ON ru.id = rm.sender_id
         WHERE cm.conversation_id = ?
           AND cm.id > ?
           AND cm.is_deleted = 0
