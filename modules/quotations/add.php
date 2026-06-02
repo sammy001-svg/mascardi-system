@@ -27,8 +27,13 @@ $jobs      = $db->query("SELECT id, job_number, car_id FROM workshop_jobs WHERE 
 $clients   = $db->query("SELECT id, name, phone, email FROM clients WHERE status='active' ORDER BY name ASC")->fetchAll();
 $inventory = $db->query("SELECT id, part_number, part_name, selling_price FROM inventory ORDER BY part_name")->fetchAll();
 $serviceBookings = $db->query("
-    SELECT sb.*, cl.name AS client_name, cl.phone AS client_phone, cl.email AS client_email,
-           ca.make, ca.model, ca.chassis_number, ca.registration_number,
+    SELECT sb.id, sb.booking_number, sb.client_id, sb.car_id,
+           COALESCE(cl.name,  sb.client_name)  AS client_name,
+           COALESCE(cl.phone, sb.client_phone) AS client_phone,
+           COALESCE(cl.email, sb.client_email) AS client_email,
+           sb.car_make, sb.car_model, sb.car_registration,
+           ca.make AS car_make_db, ca.model AS car_model_db,
+           ca.chassis_number, ca.registration_number,
            wj.id AS job_id
     FROM service_bookings sb
     LEFT JOIN clients cl ON cl.id = sb.client_id
@@ -183,7 +188,11 @@ $(function(){
                         <label class="form-label">Service Booking <small class="text-muted">(optional)</small></label>
                         <select name="booking_id" id="booking_select" class="form-select select2">
                             <option value="">— Select booking —</option>
-                            <?php foreach ($serviceBookings as $sb): ?>
+                            <?php foreach ($serviceBookings as $sb):
+                                $sbVehicleReg = $sb['car_registration'] ?: $sb['registration_number'] ?: '';
+                                $sbCarMake    = $sb['car_make'] ?: $sb['car_make_db'] ?: '';
+                                $sbCarModel   = $sb['car_model'] ?: $sb['car_model_db'] ?: '';
+                            ?>
                             <option value="<?= $sb['id'] ?>"
                                     data-car-id="<?= $sb['car_id'] ?>"
                                     data-job-id="<?= $sb['job_id'] ?? '' ?>"
@@ -191,8 +200,11 @@ $(function(){
                                     data-client-name="<?= e($sb['client_name'] ?: '') ?>"
                                     data-client-phone="<?= e($sb['client_phone'] ?: '') ?>"
                                     data-client-email="<?= e($sb['client_email'] ?: '') ?>"
+                                    data-car-make="<?= e($sbCarMake) ?>"
+                                    data-car-model="<?= e($sbCarModel) ?>"
+                                    data-car-reg="<?= e($sbVehicleReg) ?>"
                                     <?= (($preBookingId == $sb['id']) ? 'selected' : '') ?>>
-                                <?= e($sb['booking_number'] . ' — ' . ($sb['client_name'] ?: 'No Name') . ' (' . ($sb['car_registration'] ?: $sb['registration_number'] ?: 'No Reg') . ')') ?>
+                                <?= e($sb['booking_number'] . ' — ' . ($sb['client_name'] ?: 'Walk-in') . ($sbVehicleReg ? ' (' . $sbVehicleReg . ')' : '')) ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
@@ -202,13 +214,14 @@ $(function(){
                         <select name="car_id" id="car_select" class="form-select select2" required>
                             <option value="">Select car...</option>
                             <?php foreach ($cars as $c): ?>
-                            <option value="<?= $c['id'] ?>" 
+                            <option value="<?= $c['id'] ?>"
                                 data-type="<?= $c['car_type'] ?>"
                                 data-owner="<?= e($c['owner_name']) ?>"
                                 data-phone="<?= e($c['owner_phone']) ?>"
                                 <?= (($_POST['car_id']??$preCarId)==$c['id'])?'selected':'' ?>><?= e($c['make'].' '.$c['model'].' — '.$c['chassis_number']) ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <div id="booking-vehicle-hint" class="alert alert-info py-2 px-3 mt-2 mb-0 small" style="display:none"></div>
                     </div>
                     <div class="col-12">
                         <label class="form-label">Job Card (optional)</label>
@@ -241,52 +254,88 @@ $(function(){
         <script>
         function populateCustomer() {
             var opt = $('#car_select').find('option:selected');
-            if(opt.val() && opt.data('type') === 'client'){
+            if (opt.val() && opt.data('type') === 'client') {
                 $('#customer_name').val(opt.data('owner'));
                 $('#customer_phone').val(opt.data('phone'));
             }
         }
-        $(document).on('change', '#booking_select', function(){
+
+        $(document).on('change', '#booking_select', function () {
             var opt = $(this).find('option:selected');
-            if(opt.val()){
-                var carId = opt.data('car-id');
-                var jobId = opt.data('job-id');
-                var clientId = opt.data('client-id');
-                
-                if(carId) {
-                    $('#car_select').val(carId).trigger('change');
-                }
-                if(jobId) {
-                    $('select[name="job_id"]').val(jobId).trigger('change');
-                }
-                if(clientId) {
-                    $('#client_select').val(clientId).trigger('change');
+            var hint = $('#booking-vehicle-hint');
+
+            if (!opt.val()) {
+                hint.hide();
+                return;
+            }
+
+            var carId    = opt.data('car-id');
+            var jobId    = opt.data('job-id');
+            var clientId = opt.data('client-id');
+
+            // ── Vehicle ───────────────────────────────────────────
+            if (carId) {
+                $('#car_select').val(carId).trigger('change.select2');
+                hint.hide();
+            } else {
+                // Booking was made by a walk-in/online client — no car in system yet
+                var carMake  = opt.data('car-make')  || '';
+                var carModel = opt.data('car-model') || '';
+                var carReg   = opt.data('car-reg')   || '';
+                var parts    = [carMake, carModel, carReg].filter(Boolean);
+                if (parts.length) {
+                    hint.html(
+                        '<i class="fa fa-car me-1"></i>Vehicle from booking: <strong>' +
+                        $('<span>').text(parts.join(' ')).html() +
+                        '</strong> <span class="text-muted">(not yet registered in system)</span>'
+                    ).show();
                 } else {
-                    $('#customer_name').val(opt.data('client-name'));
-                    $('#customer_phone').val(opt.data('client-phone'));
-                    $('input[name="customer_email"]').val(opt.data('client-email'));
+                    hint.hide();
                 }
             }
+
+            // ── Job card ──────────────────────────────────────────
+            if (jobId) {
+                $('select[name="job_id"]').val(jobId).trigger('change.select2');
+            }
+
+            // ── Client / customer fields ──────────────────────────
+            var clientName  = opt.data('client-name')  || '';
+            var clientPhone = opt.data('client-phone') || '';
+            var clientEmail = opt.data('client-email') || '';
+
+            if (clientId) {
+                $('#client_select').val(clientId).trigger('change.select2');
+            }
+
+            // Always fill the free-text customer fields from booking data
+            // so the quotation always shows the right person even if no client record exists
+            if (clientName)  $('#customer_name').val(clientName);
+            if (clientPhone) $('#customer_phone').val(clientPhone);
+            if (clientEmail) $('input[name="customer_email"]').val(clientEmail);
         });
-        $(document).on('change', '#car_select', function(){
+
+        $(document).on('change', '#car_select', function () {
             var opt = $(this).find('option:selected');
-            if(opt.data('type') === 'client'){
+            if (opt.data('type') === 'client') {
                 $('#customer_name').val(opt.data('owner'));
                 $('#customer_phone').val(opt.data('phone'));
-            } else if(!$('#client_select').val() && !$('#booking_select').val()) {
+            } else if (!$('#client_select').val() && !$('#booking_select').val()) {
                 $('#customer_name').val('');
                 $('#customer_phone').val('');
             }
         });
-        $(document).on('change', '#client_select', function(){
+
+        $(document).on('change', '#client_select', function () {
             var opt = $(this).find('option:selected');
-            if(opt.val()){
+            if (opt.val()) {
                 $('#customer_name').val(opt.data('name'));
                 $('#customer_phone').val(opt.data('phone'));
                 $('input[name="customer_email"]').val(opt.data('email'));
             }
         });
-        $(function(){
+
+        $(function () {
             populateCustomer();
             if ($('#booking_select').val()) {
                 $('#booking_select').trigger('change');
