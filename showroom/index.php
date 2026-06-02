@@ -93,17 +93,21 @@ include __DIR__ . '/header.php';
      HERO
 ═══════════════════════════════════════════════════════════════ -->
 <section id="hero" style="
-    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #1d4ed8 100%);
+    background:
+        linear-gradient(105deg,
+            rgba(10,16,35,0.97)  0%,
+            rgba(10,16,35,0.88) 38%,
+            rgba(10,16,35,0.55) 62%,
+            rgba(10,16,35,0.25) 100%
+        ),
+        url('<?= BASE_URL ?>/assets/images/hero.webp') center center / cover no-repeat;
     min-height: 88vh;
     display: flex; align-items: center;
     position: relative; overflow: hidden;
     padding: 80px 0;
 ">
-    <!-- Decorative circles -->
-    <div style="position:absolute;top:-120px;right:-120px;width:500px;height:500px;border-radius:50%;background:rgba(59,130,246,.08);pointer-events:none"></div>
-    <div style="position:absolute;bottom:-80px;left:-80px;width:350px;height:350px;border-radius:50%;background:rgba(59,130,246,.06);pointer-events:none"></div>
-    <!-- Grid overlay -->
-    <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:60px 60px;pointer-events:none"></div>
+    <!-- Subtle grid overlay on text side only -->
+    <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:60px 60px;pointer-events:none"></div>
 
     <div class="container-xl" style="position:relative;z-index:1">
         <div class="row align-items-center g-5">
@@ -516,7 +520,7 @@ include __DIR__ . '/header.php';
                     <?php foreach ($filteredCars as $car):
                         $img = $car['primary_image'] ? BASE_URL . '/uploads/cars/' . $car['primary_image'] : null;
                         $waMsg = urlencode("Hi, I'm interested in the {$car['year']} {$car['make']} {$car['model']} (KES " . number_format((float)$car['asking_price']) . ") listed on your showroom.");
-                        $isNew = (strtotime($car['created_at']) > strtotime('-30 days'));
+                        $isNew = strtotime($car['created_at']) > strtotime('-30 days');
                     ?>
                     <div class="inv-card">
                         <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="inv-img-wrap">
