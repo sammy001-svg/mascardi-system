@@ -9,7 +9,7 @@ $stmt = $db->prepare("
     SELECT c.*, l.name AS location_name
     FROM cars c
     LEFT JOIN locations l ON l.id = c.location_id
-    WHERE c.id = ? AND c.car_type = 'inventory' AND c.asking_price > 0
+    WHERE c.id = ? AND c.car_type = 'inventory'
 ");
 $stmt->execute([$id]);
 $car = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -119,11 +119,17 @@ include __DIR__ . '/header.php';
             <!-- Price card -->
             <div class="card border-0 shadow-sm mb-3" style="border-radius:16px;overflow:hidden">
                 <div style="background:linear-gradient(120deg,#1e3a8a,#2563eb);padding:24px;color:#fff">
+                    <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
                     <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;opacity:.65;margin-bottom:6px">Asking Price</div>
                     <div style="font-size:36px;font-weight:800;letter-spacing:-1px">
                         KES <?= number_format((float)$car['asking_price']) ?>
                     </div>
                     <div style="opacity:.6;font-size:13px;margin-top:4px">Finance available &bull; Contact us for details</div>
+                    <?php else: ?>
+                    <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;opacity:.65;margin-bottom:6px">Price</div>
+                    <div style="font-size:26px;font-weight:800;letter-spacing:-.5px">Contact for Price</div>
+                    <div style="opacity:.6;font-size:13px;margin-top:4px">Send an enquiry below or WhatsApp us directly</div>
+                    <?php endif; ?>
                 </div>
                 <div class="card-body pb-3">
                     <div class="d-flex gap-2 flex-wrap">

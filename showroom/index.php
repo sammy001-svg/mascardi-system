@@ -12,10 +12,7 @@ $filterMax   = (int)($_GET['max']  ?? 0);
 $sort        = $_GET['sort'] ?? 'featured';
 $search      = trim($_GET['q']     ?? '');
 
-// ── Showroom base condition ───────────────────────────────────────────────────
-$baseWhere = ["c.car_type='inventory'", "c.asking_price IS NOT NULL", "c.asking_price > 0"];
-
-// ── All available cars (for stats + category counts) ──────────────────────────
+// ── All inventory cars (stats + category counts) ──────────────────────────────
 $allCars = $db->query("
     SELECT c.id, c.make, c.model, c.year, c.color, c.body_type,
            c.transmission, c.fuel_type, c.asking_price, c.mileage,
@@ -23,7 +20,7 @@ $allCars = $db->query("
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image,
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
     FROM cars c
-    WHERE c.car_type='inventory' AND c.asking_price IS NOT NULL AND c.asking_price > 0
+    WHERE c.car_type='inventory'
     ORDER BY c.featured DESC, c.created_at DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -41,35 +38,29 @@ arsort($catCounts);
 // ── Make list for filter ──────────────────────────────────────────────────────
 $makes = $db->query("
     SELECT DISTINCT make FROM cars
-    WHERE car_type='inventory' AND asking_price IS NOT NULL AND asking_price > 0
+    WHERE car_type='inventory' AND make != ''
     ORDER BY make
 ")->fetchAll(PDO::FETCH_COLUMN);
 
-// ── Price range ───────────────────────────────────────────────────────────────
-$priceRange = $db->query("
-    SELECT MIN(asking_price) AS min_p, MAX(asking_price) AS max_p
-    FROM cars WHERE car_type='inventory' AND asking_price > 0
-")->fetch(PDO::FETCH_ASSOC);
-$globalMin = (int)($priceRange['min_p'] ?? 0);
-$globalMax = (int)($priceRange['max_p'] ?? 0);
-
 // ── Filtered inventory ────────────────────────────────────────────────────────
-$where  = $baseWhere;
+$where  = ["c.car_type='inventory'"];
 $params = [];
 if ($filterMake)  { $where[] = 'c.make = ?';          $params[] = $filterMake; }
 if ($filterBody)  { $where[] = 'c.body_type = ?';     $params[] = $filterBody; }
 if ($filterFuel)  { $where[] = 'c.fuel_type = ?';     $params[] = $filterFuel; }
 if ($filterTrans) { $where[] = 'c.transmission = ?';  $params[] = $filterTrans; }
-if ($filterMin)   { $where[] = 'c.asking_price >= ?'; $params[] = $filterMin; }
-if ($filterMax)   { $where[] = 'c.asking_price <= ?'; $params[] = $filterMax; }
+// Price filter only applies to cars that have a price set
+if ($filterMin)   { $where[] = 'c.asking_price IS NOT NULL AND c.asking_price >= ?'; $params[] = $filterMin; }
+if ($filterMax)   { $where[] = 'c.asking_price IS NOT NULL AND c.asking_price <= ?'; $params[] = $filterMax; }
 if ($search) {
     $where[] = '(c.make LIKE ? OR c.model LIKE ? OR c.body_type LIKE ? OR c.color LIKE ?)';
     $params  = array_merge($params, ["%$search%", "%$search%", "%$search%", "%$search%"]);
 }
 
+// Price sorts put NULL/0 prices at the end (cars with price first)
 $orderBy = match($sort) {
-    'price_asc'  => 'c.asking_price ASC',
-    'price_desc' => 'c.asking_price DESC',
+    'price_asc'  => '(c.asking_price IS NULL OR c.asking_price = 0) ASC, c.asking_price ASC',
+    'price_desc' => '(c.asking_price IS NULL OR c.asking_price = 0) ASC, c.asking_price DESC',
     'year_desc'  => 'c.year DESC, c.created_at DESC',
     'newest'     => 'c.created_at DESC',
     default      => 'c.featured DESC, c.created_at DESC',
@@ -367,7 +358,13 @@ include __DIR__ . '/header.php';
                         <?php if ($fc['engine_cc']):   ?><span><i class="fa fa-cog me-1"></i><?= number_format($fc['engine_cc']) ?> cc</span><?php endif; ?>
                         <?php if ($fc['color']):       ?><span><i class="fa fa-palette me-1"></i><?= htmlspecialchars($fc['color']) ?></span><?php endif; ?>
                     </div>
-                    <div class="featured-price">KES <?= number_format((float)$fc['asking_price']) ?></div>
+                    <div class="featured-price">
+                        <?php if (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
+                            KES <?= number_format((float)$fc['asking_price']) ?>
+                        <?php else: ?>
+                            <span style="font-size:15px;font-weight:700;color:#64748b">Contact for Price</span>
+                        <?php endif; ?>
+                    </div>
                     <div class="featured-actions">
                         <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fc['id'] ?>" class="btn-view">View Details <i class="fa fa-arrow-right ms-1"></i></a>
                         <?php if ($__waClean): ?>
@@ -553,7 +550,13 @@ include __DIR__ . '/header.php';
                                 <?php if ($car['mileage']):   ?><span><?= number_format($car['mileage']) ?> km</span><?php endif; ?>
                                 <?php if ($car['color']):     ?><span><?= htmlspecialchars($car['color']) ?></span><?php endif; ?>
                             </div>
-                            <div class="inv-price">KES <?= number_format((float)$car['asking_price']) ?></div>
+                            <div class="inv-price">
+                                <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
+                                    KES <?= number_format((float)$car['asking_price']) ?>
+                                <?php else: ?>
+                                    <span style="font-size:14px;font-weight:700;color:#64748b">Contact for Price</span>
+                                <?php endif; ?>
+                            </div>
                             <div class="inv-actions">
                                 <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="inv-btn-view">
                                     View Details
