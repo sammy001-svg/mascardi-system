@@ -28,11 +28,15 @@ $assessments = [];
 try {
     $assessments = $db->query("
         SELECT qa.id, qa.assessment_number, qa.assessment_date,
-               qa.client_name, qa.client_phone, qa.client_email,
+               qa.client_name, qa.client_phone,
+               COALESCE(NULLIF(qa.client_email,''), cl.email) AS client_email,
                qa.car_make, qa.car_model, qa.car_registration,
-               c.chassis_number
+               COALESCE(c.chassis_number, c2.chassis_number) AS chassis_number
         FROM quick_assessments qa
-        LEFT JOIN cars c ON c.id = qa.car_id
+        LEFT JOIN clients cl  ON cl.id  = qa.client_id
+        LEFT JOIN cars c      ON c.id   = qa.car_id
+        LEFT JOIN cars c2     ON c2.registration_number = qa.car_registration
+                              AND qa.car_id IS NULL
         ORDER BY qa.id DESC
         LIMIT 150
     ")->fetchAll(PDO::FETCH_ASSOC);
