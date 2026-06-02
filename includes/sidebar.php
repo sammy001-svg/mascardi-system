@@ -1,10 +1,11 @@
 <?php
-$__uri = $_SERVER['REQUEST_URI'];
+$__uri   = $_SERVER['REQUEST_URI'];
+$__isDash = !str_contains($__uri, '/modules/');
+
 function isActive(string $path): string {
     global $__uri;
     return str_contains($__uri, $path) ? 'active' : '';
 }
-$__isDash = !str_contains($__uri, '/modules/');
 ?>
 <div class="app-sidebar" id="sidebar">
 
@@ -13,7 +14,8 @@ $__isDash = !str_contains($__uri, '/modules/');
         <div class="brand-logo">
             <?php $__logo = getSetting('company_logo', ''); ?>
             <?php if ($__logo && file_exists(BASE_PATH . '/assets/images/' . $__logo)): ?>
-            <img src="<?= BASE_URL ?>/assets/images/<?= e($__logo) ?>" alt="Logo" style="height:32px;width:32px;object-fit:contain;border-radius:4px">
+            <img src="<?= BASE_URL ?>/assets/images/<?= e($__logo) ?>" alt="Logo"
+                 style="height:32px;width:32px;object-fit:contain;border-radius:4px">
             <?php else: ?>
             <i class="fa fa-car-side" style="font-size:16px"></i>
             <?php endif; ?>
@@ -27,14 +29,15 @@ $__isDash = !str_contains($__uri, '/modules/');
     <!-- Navigation -->
     <nav class="sidebar-nav">
 
+        <!-- Dashboard -->
         <a href="<?= BASE_URL ?>/index.php"
            class="nav-item <?= $__isDash ? 'active' : '' ?>"
            data-label="Dashboard">
             <i class="fa fa-gauge-high"></i><span>Dashboard</span>
         </a>
 
-        <!-- Fleet -->
-        <?php if (canAccess('cars') || canAccess('mechanics') || canAccess('drivers')): ?>
+        <!-- ══ FLEET ══════════════════════════════════════════════ -->
+        <?php if (canAccess('cars') || canAccess('mechanics') || canAccess('drivers') || canAccess('car_documents')): ?>
         <div class="nav-section">Fleet</div>
 
         <?php if (canAccess('cars')): ?>
@@ -70,9 +73,9 @@ $__isDash = !str_contains($__uri, '/modules/');
         <?php endif; ?>
         <?php endif; ?>
 
-        <!-- Logistics -->
-        <?php if (canAccess('intake') || canAccess('assessments')): ?>
-        <div class="nav-section">Logistics</div>
+        <!-- ══ OPERATIONS ═════════════════════════════════════════ -->
+        <?php if (canAccess('intake') || canAccess('assessments') || canAccess('quick_assessments') || canAccess('inspections')): ?>
+        <div class="nav-section">Operations</div>
 
         <?php if (canAccess('intake')): ?>
         <a href="<?= BASE_URL ?>/modules/intake/index.php"
@@ -89,10 +92,26 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-clipboard-check"></i><span>Assessments</span>
         </a>
         <?php endif; ?>
+
+        <?php if (canAccess('quick_assessments')): ?>
+        <a href="<?= BASE_URL ?>/modules/quick_assessments/index.php"
+           class="nav-item <?= isActive('/modules/quick_assessments/') ?>"
+           data-label="Quick Assessment">
+            <i class="fa fa-magnifying-glass-chart"></i><span>Quick Assessment</span>
+        </a>
         <?php endif; ?>
 
-        <!-- Workshop -->
-        <?php if (canAccess('jobs') || canAccess('parts_requests') || canAccess('issues') || canAccess('lpo')): ?>
+        <?php if (canAccess('inspections')): ?>
+        <a href="<?= BASE_URL ?>/modules/inspections/index.php"
+           class="nav-item <?= isActive('/modules/inspections/') ?>"
+           data-label="Inspections">
+            <i class="fa fa-clipboard-list"></i><span>Inspections</span>
+        </a>
+        <?php endif; ?>
+        <?php endif; ?>
+
+        <!-- ══ WORKSHOP ═══════════════════════════════════════════ -->
+        <?php if (canAccess('jobs') || canAccess('lpo') || canAccess('parts_requests') || canAccess('issues')): ?>
         <div class="nav-section">Workshop</div>
 
         <?php if (canAccess('jobs')): ?>
@@ -128,7 +147,7 @@ $__isDash = !str_contains($__uri, '/modules/');
         <?php endif; ?>
         <?php endif; ?>
 
-        <!-- Inventory -->
+        <!-- ══ INVENTORY ══════════════════════════════════════════ -->
         <?php if (canAccess('inventory') || canAccess('suppliers')): ?>
         <div class="nav-section">Inventory</div>
 
@@ -149,9 +168,13 @@ $__isDash = !str_contains($__uri, '/modules/');
         <?php endif; ?>
         <?php endif; ?>
 
-        <!-- Clients -->
-        <?php if (canAccess('clients') || canAccess('service_bookings') || canAccess('quick_assessments')): ?>
-        <div class="nav-section">Clients</div>
+        <!-- ══ SALES & CRM ════════════════════════════════════════ -->
+        <?php
+        $__hasSales = canAccess('clients') || canAccess('service_bookings') || canAccess('crm')
+                   || hasRole(['admin','general_manager','sales_manager','sales_officer','sales_person','customer_relations','receptionist']);
+        ?>
+        <?php if ($__hasSales): ?>
+        <div class="nav-section">Sales &amp; CRM</div>
 
         <?php if (canAccess('clients')): ?>
         <a href="<?= BASE_URL ?>/modules/clients/index.php"
@@ -169,18 +192,55 @@ $__isDash = !str_contains($__uri, '/modules/');
         </a>
         <?php endif; ?>
 
-        <?php if (canAccess('quick_assessments')): ?>
-        <a href="<?= BASE_URL ?>/modules/quick_assessments/index.php"
-           class="nav-item <?= isActive('/modules/quick_assessments/') ?>"
-           data-label="Quick Assessment">
-            <i class="fa fa-magnifying-glass-chart"></i><span>Quick Assessment</span>
+        <?php if (canAccess('crm')): ?>
+        <a href="<?= BASE_URL ?>/modules/crm/index.php"
+           class="nav-item <?= isActive('/modules/crm/index') ?>"
+           data-label="Sales Pipeline">
+            <i class="fa fa-filter"></i><span>Sales Pipeline</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/crm/leads.php"
+           class="nav-item <?= (isActive('/modules/crm/leads') || isActive('/modules/crm/view_lead') || isActive('/modules/crm/add_lead')) ? 'active' : '' ?>"
+           data-label="Leads">
+            <i class="fa fa-user-plus"></i><span>Leads</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (hasRole(['admin','general_manager','sales_manager','sales_officer','sales_person','customer_relations','receptionist'])): ?>
+        <a href="<?= BASE_URL ?>/modules/showroom/index.php"
+           class="nav-item <?= isActive('/modules/showroom/') ?>"
+           data-label="Inquiries"
+           style="position:relative">
+            <i class="fa fa-inbox"></i><span>Inquiries</span>
+            <?php
+            try {
+                $__inqCount = (int)getDB()->query("SELECT COUNT(*) FROM showroom_inquiries WHERE status='new'")->fetchColumn();
+                if ($__inqCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__inqCount > 99 ? '99+' : $__inqCount ?>
+            </span>
+            <?php endif; } catch (Exception $e) {} ?>
+        </a>
+        <a href="<?= BASE_URL ?>/showroom/" target="_blank"
+           class="nav-item"
+           data-label="Public Showroom">
+            <i class="fa fa-store"></i><span>Public Showroom</span>
+            <i class="fa fa-external-link" style="font-size:10px;opacity:.4;margin-left:auto"></i>
         </a>
         <?php endif; ?>
         <?php endif; ?>
 
-        <!-- Financial -->
-        <?php if (canAccess('payments') || canAccess('quotations') || canAccess('invoices')): ?>
-        <div class="nav-section">Financial</div>
+        <!-- ══ FINANCE ════════════════════════════════════════════ -->
+        <?php if (canAccess('sales') || canAccess('payments') || canAccess('quotations') || canAccess('invoices')
+               || canAccess('installments') || canAccess('car_costs') || canAccess('expenses')): ?>
+        <div class="nav-section">Finance</div>
+
+        <?php if (canAccess('sales')): ?>
+        <a href="<?= BASE_URL ?>/modules/sales/index.php"
+           class="nav-item <?= isActive('/modules/sales/') ?>"
+           data-label="Sales">
+            <i class="fa fa-tag"></i><span>Sales</span>
+        </a>
+        <?php endif; ?>
 
         <?php if (canAccess('payments')): ?>
         <a href="<?= BASE_URL ?>/modules/payments/index.php"
@@ -206,19 +266,11 @@ $__isDash = !str_contains($__uri, '/modules/');
         </a>
         <?php endif; ?>
 
-        <?php if (canAccess('sales')): ?>
-        <a href="<?= BASE_URL ?>/modules/sales/index.php"
-           class="nav-item <?= isActive('/modules/sales/') ?>"
-           data-label="Sales">
-            <i class="fa fa-tag"></i><span>Sales</span>
-        </a>
-        <?php endif; ?>
-
         <?php if (canAccess('installments')): ?>
         <a href="<?= BASE_URL ?>/modules/installments/index.php"
            class="nav-item <?= isActive('/modules/installments/') ?>"
            data-label="Payment Plans">
-            <i class="fa fa-calendar-check"></i><span>Payment Plans</span>
+            <i class="fa fa-calendar-dollar"></i><span>Payment Plans</span>
         </a>
         <?php endif; ?>
 
@@ -229,54 +281,7 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-calculator"></i><span>Import Costs</span>
         </a>
         <?php endif; ?>
-        <?php endif; ?>
 
-        <!-- CRM -->
-        <?php if (canAccess('crm')): ?>
-        <div class="nav-section">CRM</div>
-        <a href="<?= BASE_URL ?>/modules/crm/index.php"
-           class="nav-item <?= isActive('/modules/crm/index') ?>"
-           data-label="Pipeline">
-            <i class="fa fa-filter"></i><span>Pipeline</span>
-        </a>
-        <a href="<?= BASE_URL ?>/modules/crm/leads.php"
-           class="nav-item <?= isActive('/modules/crm/leads') || isActive('/modules/crm/view_lead') || isActive('/modules/crm/add_lead') ? 'active' : '' ?>"
-           data-label="Leads">
-            <i class="fa fa-users"></i><span>Leads</span>
-        </a>
-        <?php endif; ?>
-
-        <!-- Chat -->
-        <?php if (canAccess('chat')): ?>
-        <div class="nav-section">Messaging</div>
-        <a href="<?= BASE_URL ?>/modules/chat/index.php"
-           class="nav-item <?= isActive('/modules/chat/') ?>"
-           data-label="Chat" style="position:relative">
-            <i class="fa fa-comments"></i><span>Chat</span>
-            <span id="chatNavBadge" style="display:none;position:absolute;top:6px;right:8px;
-                  background:#25d366;color:#fff;border-radius:10px;font-size:10px;
-                  font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
-        </a>
-        <script>
-        (function(){
-            var badge = document.getElementById('chatNavBadge');
-            if (!badge) return;
-            function poll(){
-                fetch('<?= BASE_URL ?>/modules/chat/api/unread.php')
-                    .then(function(r){ return r.json(); })
-                    .then(function(d){
-                        var n = d.count || 0;
-                        if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
-                        else       { badge.style.display = 'none'; }
-                    }).catch(function(){});
-            }
-            poll();
-            setInterval(poll, 15000); // refresh every 15 s
-        }());
-        </script>
-        <?php endif; ?>
-
-        <!-- Expenses -->
         <?php if (canAccess('expenses')): ?>
         <a href="<?= BASE_URL ?>/modules/expenses/index.php"
            class="nav-item <?= isActive('/modules/expenses/') ?>"
@@ -284,19 +289,11 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-receipt"></i><span>Expenses</span>
         </a>
         <?php endif; ?>
-
-        <!-- Inspections -->
-        <?php if (canAccess('inspections')): ?>
-        <a href="<?= BASE_URL ?>/modules/inspections/index.php"
-           class="nav-item <?= isActive('/modules/inspections/') ?>"
-           data-label="Inspections">
-            <i class="fa fa-clipboard-check"></i><span>Inspections</span>
-        </a>
         <?php endif; ?>
 
-        <!-- HR -->
+        <!-- ══ HR ═════════════════════════════════════════════════ -->
         <?php if (canAccess('attendance') || canAccess('payroll')): ?>
-        <div class="nav-section">HR</div>
+        <div class="nav-section">Human Resources</div>
 
         <?php if (canAccess('attendance')): ?>
         <a href="<?= BASE_URL ?>/modules/attendance/index.php"
@@ -313,10 +310,9 @@ $__isDash = !str_contains($__uri, '/modules/');
             <i class="fa fa-money-bill-wave"></i><span>Payroll</span>
         </a>
         <?php endif; ?>
-
         <?php endif; ?>
 
-        <!-- Analytics -->
+        <!-- ══ ANALYTICS ══════════════════════════════════════════ -->
         <?php if (canAccess('reports')): ?>
         <div class="nav-section">Analytics</div>
         <a href="<?= BASE_URL ?>/modules/reports/index.php"
@@ -326,38 +322,44 @@ $__isDash = !str_contains($__uri, '/modules/');
         </a>
         <?php endif; ?>
 
-        <!-- Showroom -->
-        <?php if (hasRole(['admin','general_manager','sales_manager','sales_officer','sales_person','customer_relations','receptionist'])): ?>
-        <div class="nav-section">Showroom</div>
-        <a href="<?= BASE_URL ?>/modules/showroom/index.php"
-           class="nav-item <?= isActive('/modules/showroom/') ?>"
-           data-label="Inquiries"
+        <!-- ══ COMMUNICATION ══════════════════════════════════════ -->
+        <?php if (canAccess('chat')): ?>
+        <div class="nav-section">Communication</div>
+        <a href="<?= BASE_URL ?>/modules/chat/index.php"
+           class="nav-item <?= isActive('/modules/chat/') ?>"
+           data-label="Team Chat"
            style="position:relative">
-            <i class="fa fa-inbox"></i><span>Inquiries</span>
-            <?php
-            try {
-                $__inqCount = (int)getDB()->query("SELECT COUNT(*) FROM showroom_inquiries WHERE status='new'")->fetchColumn();
-                if ($__inqCount > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
-                <?= $__inqCount > 99 ? '99+' : $__inqCount ?>
-            </span>
-            <?php endif; } catch (Exception $e) {} ?>
+            <i class="fa fa-comments"></i><span>Team Chat</span>
+            <span id="chatNavBadge" style="display:none;position:absolute;top:6px;right:8px;
+                  background:#25d366;color:#fff;border-radius:10px;font-size:10px;
+                  font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
         </a>
-        <a href="<?= BASE_URL ?>/showroom/" target="_blank"
-           class="nav-item"
-           data-label="Public Showroom">
-            <i class="fa fa-store"></i><span>Public Showroom</span>
-            <i class="fa fa-external-link" style="font-size:10px;opacity:.45;margin-left:auto"></i>
-        </a>
+        <script>
+        (function(){
+            var badge = document.getElementById('chatNavBadge');
+            if (!badge) return;
+            function poll(){
+                fetch('<?= BASE_URL ?>/modules/chat/api/unread.php')
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        var n = d.count || 0;
+                        if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
+                        else { badge.style.display = 'none'; }
+                    }).catch(function(){});
+            }
+            poll();
+            setInterval(poll, 15000);
+        }());
+        </script>
         <?php endif; ?>
 
-        <!-- Admin -->
+        <!-- ══ ADMIN ══════════════════════════════════════════════ -->
         <?php if (hasRole('admin')): ?>
-        <div class="nav-section">Admin</div>
+        <div class="nav-section">Administration</div>
         <a href="<?= BASE_URL ?>/modules/users/index.php"
            class="nav-item <?= isActive('/modules/users/') ?>"
-           data-label="Users">
-            <i class="fa fa-users-gear"></i><span>Users</span>
+           data-label="Users & Roles">
+            <i class="fa fa-users-gear"></i><span>Users &amp; Roles</span>
         </a>
         <a href="<?= BASE_URL ?>/modules/locations/index.php"
            class="nav-item <?= isActive('/modules/locations/') ?>"
