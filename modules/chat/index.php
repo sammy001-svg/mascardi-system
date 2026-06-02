@@ -469,6 +469,110 @@ body > .modal-backdrop,
     .ch-back-mob { display:flex !important; }
     .bubble { max-width: 78%; }
 }
+
+/* ── Phase 2: Group chats · Reply · Delete ───────────────────────────────── */
+
+/* Group avatar wrapper (for badge) */
+.cv-av-wrap { position:relative; flex-shrink:0; }
+.cv-grp-ic {
+    position:absolute; bottom:-2px; right:-2px;
+    width:16px; height:16px; border-radius:50%;
+    background:#128c7e; border:2px solid #fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:7px; color:#fff;
+}
+
+/* Message action bar (Reply / Delete / Copy — revealed on bubble hover) */
+.msg-row { position:relative; }
+.msg-actions {
+    position:absolute; top:50%; transform:translateY(-50%);
+    display:none; gap:2px; align-items:center;
+    background:rgba(255,255,255,.96);
+    border-radius:20px; padding:3px 6px;
+    box-shadow:0 1px 6px rgba(0,0,0,.2);
+    z-index:5; white-space:nowrap;
+}
+.msg-row.s .msg-actions { right:calc(100% + 6px); left:auto; }
+.msg-row.r .msg-actions { left:calc(100% + 6px); right:auto; }
+.msg-row:hover .msg-actions { display:flex; }
+.msg-act {
+    background:none; border:none; color:#54656f;
+    width:28px; height:28px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:12px;
+    transition:background .1s, color .1s;
+}
+.msg-act:hover { background:#f0f2f5; color:#111b21; }
+.msg-act.del:hover { color:#dc2626; }
+
+/* Reply preview block inside a bubble */
+.reply-prev {
+    background:rgba(0,0,0,.07); border-left:3px solid #128c7e;
+    border-radius:4px; padding:5px 10px; margin-bottom:6px;
+    cursor:pointer; transition:background .12s;
+    max-width:100%;
+}
+.reply-prev:hover { background:rgba(0,0,0,.11); }
+.rp-name  { font-size:11.5px; font-weight:700; color:#128c7e; margin-bottom:2px; }
+.rp-text  { font-size:12px; color:#667781; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
+.msg-row.s .reply-prev { border-color:#0d7a6d; }
+.msg-row.s .rp-name    { color:#0d7a6d; }
+
+/* Reply bar (shown above the input area when replying to a message) */
+.reply-bar { padding:8px 12px 4px; background:#f0f2f5; }
+.reply-bar-inner {
+    display:flex; align-items:center; gap:10px;
+    background:#fff; border-left:4px solid #128c7e;
+    border-radius:6px; padding:7px 12px;
+}
+.reply-bar-meta { flex:1; min-width:0; }
+.reply-bar-name { font-size:12px; font-weight:700; color:#128c7e; margin-bottom:1px; }
+.reply-bar-text { font-size:12.5px; color:#667781; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.reply-bar-cls  { background:none; border:none; color:#8696a0; font-size:18px; cursor:pointer; line-height:1; flex-shrink:0; }
+.reply-bar-cls:hover { color:#111b21; }
+
+/* Modal tabs (Direct / Group) */
+.nc-tabs { display:flex; gap:4px; margin-bottom:10px; }
+.nc-tab  { flex:1; padding:8px; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; background:#f0f2f5; color:#54656f; transition:background .15s,color .15s; font-family:inherit; }
+.nc-tab.active { background:#128c7e; color:#fff; }
+
+/* Group info modal member row */
+.gi-member { display:flex; align-items:center; gap:12px; padding:9px 4px; border-bottom:1px solid #f5f6f6; }
+.gi-member:last-child { border-bottom:none; }
+.gi-member-info { flex:1; min-width:0; }
+.gi-member-name { font-size:14px; font-weight:600; color:#111b21; }
+.gi-member-role { font-size:12px; color:#667781; }
+
+/* ── Phase 3: Load More · Typing Indicators · In-chat Search ────────────── */
+
+/* Load older messages */
+.load-more-wrap { text-align:center; padding:12px 0 6px; flex-shrink:0; }
+.load-more-btn  { background:#fff; border:1.5px solid #e9edef; border-radius:20px; padding:7px 20px; font-size:12.5px; color:#54656f; cursor:pointer; font-family:inherit; transition:background .12s,box-shadow .12s; }
+.load-more-btn:hover    { background:#f5f6f6; box-shadow:0 2px 8px rgba(0,0,0,.1); }
+.load-more-btn:disabled { opacity:.5; cursor:wait; }
+
+/* Typing indicator (in chat header) */
+.ch-typing { font-size:12px; color:#128c7e; overflow:hidden; max-height:0; transition:max-height .2s; }
+.ch-typing.visible { max-height:20px; }
+.typing-dot { display:inline-block; width:4px; height:4px; border-radius:50%; background:#128c7e; margin:0 1.5px; vertical-align:middle; animation:tdot 1.2s ease-in-out infinite; }
+.typing-dot:nth-child(2) { animation-delay:.2s; }
+.typing-dot:nth-child(3) { animation-delay:.4s; }
+@keyframes tdot { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+
+/* In-chat search bar */
+.chat-search-bar { background:#fff; border-bottom:1px solid #e9edef; padding:8px 12px; flex-shrink:0; }
+.csb-inner { display:flex; align-items:center; gap:6px; background:#f0f2f5; border-radius:10px; padding:6px 10px; }
+.csb-icon  { color:#8696a0; font-size:13px; flex-shrink:0; }
+.csb-input { flex:1; border:none; background:none; outline:none; font-size:13.5px; color:#111b21; font-family:inherit; }
+.csb-input::placeholder { color:#8696a0; }
+.csb-count { font-size:12px; color:#8696a0; white-space:nowrap; flex-shrink:0; min-width:52px; text-align:right; }
+.csb-nav { background:none; border:none; color:#54656f; width:28px; height:28px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; transition:background .1s; }
+.csb-nav:hover    { background:#e9edef; }
+.csb-nav:disabled { opacity:.3; cursor:default; }
+.csb-cls { background:none; border:none; color:#8696a0; font-size:16px; cursor:pointer; padding:0 2px; flex-shrink:0; transition:color .1s; line-height:1; }
+.csb-cls:hover    { color:#111b21; }
+mark.sh        { background:#ffd666; color:#111b21; border-radius:2px; padding:0 1px; }
+mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); border-radius:2px; }
 </style>
 
 <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -519,10 +623,25 @@ body > .modal-backdrop,
                 <div class="ch-info">
                     <div class="ch-name" id="chName">â€”</div>
                     <div class="ch-sub"  id="chSub"></div>
+                    <div class="ch-typing" id="chTyping"><span id="chTypingName"></span><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
                 </div>
                 <div class="ch-acts">
+                    <button class="ic-btn" id="btnSearch" title="Search messages"><i class="fa fa-magnifying-glass"></i></button>
+                    <button class="ic-btn" id="btnGroupInfo" title="Group info" style="display:none"><i class="fa fa-users"></i></button>
                     <button class="ic-btn" id="btnCallA" title="Voice call" style="display:none"><i class="fa fa-phone"></i></button>
                     <button class="ic-btn" id="btnCallV" title="Video call" style="display:none"><i class="fa fa-video"></i></button>
+                </div>
+            </div>
+
+            <!-- In-chat search bar -->
+            <div class="chat-search-bar" id="chatSearchBar" style="display:none">
+                <div class="csb-inner">
+                    <i class="fa fa-magnifying-glass csb-icon"></i>
+                    <input type="text" id="searchInput" class="csb-input" placeholder="Search in conversation..." autocomplete="off">
+                    <span class="csb-count" id="searchCount"></span>
+                    <button class="csb-nav" id="searchPrev" title="Previous result"><i class="fa fa-chevron-up"></i></button>
+                    <button class="csb-nav" id="searchNext" title="Next result"><i class="fa fa-chevron-down"></i></button>
+                    <button class="csb-cls" id="searchClose" title="Close search"><i class="fa fa-xmark"></i></button>
                 </div>
             </div>
 
@@ -537,6 +656,17 @@ body > .modal-backdrop,
 
             <!-- Input wrap (emoji picker + bar) -->
             <div class="chat-input-wrap">
+
+                <!-- Reply bar (shown when replying to a message) -->
+                <div class="reply-bar" id="replyBar" style="display:none">
+                    <div class="reply-bar-inner">
+                        <div class="reply-bar-meta">
+                            <div class="reply-bar-name" id="replyBarName"></div>
+                            <div class="reply-bar-text" id="replyBarText"></div>
+                        </div>
+                        <button class="reply-bar-cls" id="replyBarClose" title="Cancel reply"><i class="fa fa-xmark"></i></button>
+                    </div>
+                </div>
 
                 <!-- Emoji picker (hidden by default) -->
                 <div class="emoji-picker" id="emojiPicker" style="display:none"></div>
@@ -724,6 +854,7 @@ const EMOJIS = [
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const Chat = {
     convId:0, convName:'', convColor:'#128c7e', calleeId:null,
+    convType:'direct',      // 'direct' | 'group'
     lastMsgId:0, lastDay:'',
     pollTimer:null,
     isRecording:false, mediaRec:null, audioChunks:[], recTimerInt:null, recSecs:0,
@@ -735,6 +866,15 @@ const Chat = {
     scrollUnread:0,         // messages arrived while scrolled up
     prevSenderId:null,      // for message grouping
     prevMsgTs:null,
+    replyTo:null,           // { id, sender_name, type, content, file_name } | null
+    // Phase 3
+    oldestMsgId:Infinity,   // for load-more pagination
+    hasMoreMsgs:false,
+    typingTimer:null,       // debounce handle for sending typing signal
+    typingLastSent:0,       // timestamp of last typing POST
+    searchOpen:false,
+    searchMatches:[],       // array of <mark> elements
+    searchIdx:-1,
 
     STUN:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]},
 
@@ -813,19 +953,24 @@ const Chat = {
     },
 
     _convHtml(c) {
+        const isGroup = c.type === 'group';
         const color   = avatarColor(c.other_user_id || c.id);
         const time    = c.last_msg_at ? fmtTime(c.last_msg_at) : '';
         const preview = esc((c.last_preview||'').substring(0,55));
         const badge   = c.unread_count > 0
             ? `<div class="cv-unread">${c.unread_count>99?'99+':c.unread_count}</div>` : '';
-        const active  = this.convId == c.id ? 'active' : '';
+        const active    = this.convId == c.id ? 'active' : '';
         const timeStyle = c.unread_count > 0 ? 'color:#25d366;font-weight:700' : '';
+        const avatarEl  = isGroup
+            ? `<div class="cv-av-wrap"><div class="cv-av" style="background:${color};font-size:14px"><i class="fa fa-users"></i><div class="cv-grp-ic"><i class="fa fa-users" style="font-size:6px"></i></div></div></div>`
+            : `<div class="cv-av" style="background:${color}">${esc(initials(c.display_name))}</div>`;
         return `<div class="conv-item ${active}"
                      data-cid="${c.id}"
                      data-cname="${esc(c.display_name)}"
                      data-ccolor="${color}"
-                     data-callee="${c.other_user_id||0}">
-            <div class="cv-av" style="background:${color}">${esc(initials(c.display_name))}</div>
+                     data-callee="${c.other_user_id||0}"
+                     data-ctype="${esc(c.type||'direct')}">
+            ${avatarEl}
             <div class="cv-body">
                 <div class="cv-r1">
                     <span class="cv-name">${esc(c.display_name)}</span>
@@ -840,25 +985,36 @@ const Chat = {
     },
 
     /* â”€â”€ Open conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    async openConv(cid, cname, ccolor, callee) {
+    async openConv(cid, cname, ccolor, callee, ctype) {
         this.convId    = parseInt(cid)||0;
         this.convName  = cname;
         this.convColor = ccolor || '#128c7e';
         this.calleeId  = parseInt(callee)||null;
+        this.convType  = ctype || 'direct';
         this.lastMsgId = 0;
         this.lastDay   = '';
         this.prevSenderId = null;
         this.prevMsgTs    = null;
-        this.scrollUnread = 0;
+        this.scrollUnread  = 0;
+        this.oldestMsgId   = Infinity;
+        this.hasMoreMsgs   = false;
+        this.clearReply();
+        this.clearSearch();
 
         // Update header
-        el('chAv').textContent = initials(cname);
+        const isGrp = this.convType === 'group';
+        if (isGrp) {
+            el('chAv').innerHTML = '<i class="fa fa-users"></i>';
+        } else {
+            el('chAv').textContent = initials(cname);
+        }
         el('chAv').style.background = this.convColor;
         el('chName').textContent = cname;
-        el('chSub').textContent  = '';
+        el('chSub').textContent  = isGrp ? 'Group conversation' : '';
 
-        // Call buttons visible only for direct chats
-        const sc = !!this.calleeId;
+        // Group info button for groups; call buttons for direct only
+        el('btnGroupInfo').style.display = isGrp ? '' : 'none';
+        const sc = !isGrp && !!this.calleeId;
         el('btnCallA').style.display = sc ? '' : 'none';
         el('btnCallV').style.display = sc ? '' : 'none';
 
@@ -890,59 +1046,161 @@ const Chat = {
     /* â”€â”€ Fetch & render messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async _fetchMsgs(initial) {
         try {
-            const d = await apiGet('messages.php', { conversation_id:this.convId, after:this.lastMsgId });
+            const params = initial
+                ? { conversation_id: this.convId, initial: 1 }
+                : { conversation_id: this.convId, after: this.lastMsgId };
+
+            // Fire messages fetch and (on polls) typing check in parallel
+            const [d, td] = await Promise.all([
+                apiGet(‘messages.php’, params),
+                initial ? Promise.resolve({ typing: [] }) : apiGet(‘typing.php’, { conversation_id: this.convId }),
+            ]);
+
+            // ── Typing indicator ───────────────────────────────────────────
+            if (!initial) this._updateTyping(td.typing || []);
+
             const msgs = d.messages || [];
-            const box = el('chatMsgs');
+            const box  = el(‘chatMsgs’);
 
             if (!msgs.length) {
-                if (initial) box.innerHTML = `<div style="text-align:center;color:#8696a0;padding:60px 0;font-size:13px">
-                    No messages yet â€” say hello ðŸ‘‹</div>`;
+                if (initial) box.innerHTML = `<div style=”text-align:center;color:#8696a0;padding:60px 0;font-size:13px”>No messages yet — say hello 👋</div>`;
                 return;
             }
 
             const atBottom = initial || (box.scrollHeight - box.scrollTop - box.clientHeight < 80);
-            if (initial) { box.innerHTML = ''; this.prevSenderId = null; this.prevMsgTs = null; }
+
+            if (initial) {
+                box.innerHTML = ‘’;
+                this.prevSenderId = null; this.prevMsgTs = null; this.lastDay = ‘’;
+                // ── Load-more button ───────────────────────────────────────
+                if (d.has_more) {
+                    this.hasMoreMsgs = true;
+                    box.insertAdjacentHTML(‘afterbegin’, `<div class=”load-more-wrap” id=”loadMoreWrap”>
+                        <button class=”load-more-btn” id=”loadMoreBtn” onclick=”Chat.loadMore()”>
+                            <i class=”fa fa-clock-rotate-left me-1”></i>Load older messages
+                        </button>
+                    </div>`);
+                } else {
+                    this.hasMoreMsgs = false;
+                }
+            }
 
             let newFromOthers = 0;
             msgs.forEach(m => {
-                // Day divider
                 const day = fmtDay(m.created_at);
                 if (day && day !== this.lastDay) {
-                    box.insertAdjacentHTML('beforeend',`<div class="day-sep"><span>${esc(day)}</span></div>`);
-                    this.lastDay = day;
-                    this.prevSenderId = null; this.prevMsgTs = null;
+                    box.insertAdjacentHTML(‘beforeend’, `<div class=”day-sep”><span>${esc(day)}</span></div>`);
+                    this.lastDay = day; this.prevSenderId = null; this.prevMsgTs = null;
                 }
-                box.insertAdjacentHTML('beforeend', this._msgHtml(m));
-                this.lastMsgId = Math.max(this.lastMsgId, parseInt(m.id));
+                box.insertAdjacentHTML(‘beforeend’, this._msgHtml(m));
+                const mid = parseInt(m.id);
+                this.lastMsgId    = Math.max(this.lastMsgId,    mid);
+                this.oldestMsgId  = Math.min(this.oldestMsgId,  mid);
                 if (parseInt(m.sender_id) !== ME.id) newFromOthers++;
             });
 
             if (atBottom) {
                 box.scrollTop = box.scrollHeight;
             } else if (!initial && newFromOthers > 0) {
-                // Scrolled up â€” show FAB with unread count
                 this.scrollUnread += newFromOthers;
-                show(el('scrollFab'), 'flex');
-                const fb = el('fabBadge');
-                fb.textContent = this.scrollUnread > 99 ? '99+' : this.scrollUnread;
+                show(el(‘scrollFab’), ‘flex’);
+                const fb = el(‘fabBadge’);
+                fb.textContent = this.scrollUnread > 99 ? ‘99+’ : this.scrollUnread;
                 show(fb);
-                // Ping + notification
                 pingSound();
                 if (msgs.length) {
                     const last = msgs[msgs.length-1];
                     if (parseInt(last.sender_id) !== ME.id) {
-                        pushNotification(last.sender_name||'New message', last.content||'ðŸ“Ž Attachment');
+                        pushNotification(last.sender_name || ‘New message’, last.content || ‘📎 Attachment’);
                     }
                 }
             }
 
-            // Notification for initial load of messages while unfocused
-            if (initial && !document.hasFocus() && newFromOthers > 0) {
-                pingSound();
+            if (initial && !document.hasFocus() && newFromOthers > 0) pingSound();
+            if (!initial) {
+                this.loadConvs();
+                // Re-run search if open so new messages are included in highlights
+                if (this.searchOpen && el('searchInput').value) {
+                    this.doSearch(el('searchInput').value);
+                }
             }
+        } catch(e) { console.error(‘_fetchMsgs’, e); }
+    },
 
-            if (!initial) this.loadConvs();
-        } catch(e) { console.error('_fetchMsgs', e); }
+    /* ── Load more (older) messages ────────────────────────────────────────── */
+    async loadMore() {
+        const btn = el(‘loadMoreBtn’);
+        if (btn) btn.disabled = true;
+        const box = el(‘chatMsgs’);
+        const prevScrollHeight = box.scrollHeight;
+
+        try {
+            const d    = await apiGet(‘messages.php’, { conversation_id: this.convId, before: this.oldestMsgId });
+            const msgs = d.messages || [];
+
+            // Remove the load-more wrap
+            el(‘loadMoreWrap’)?.remove();
+
+            if (!msgs.length) return;
+
+            // Temporarily reset grouping state to render old messages cleanly
+            const savedSender = this.prevSenderId;
+            const savedTs     = this.prevMsgTs;
+            const savedDay    = this.lastDay;
+            this.prevSenderId = null; this.prevMsgTs = null; this.lastDay = ‘’;
+
+            let html = ‘’;
+            msgs.forEach(m => {
+                const day = fmtDay(m.created_at);
+                if (day && day !== this.lastDay) {
+                    html += `<div class=”day-sep”><span>${esc(day)}</span></div>`;
+                    this.lastDay = day;
+                }
+                html += this._msgHtml(m);
+                this.oldestMsgId = Math.min(this.oldestMsgId, parseInt(m.id));
+            });
+
+            // Restore current-messages grouping state
+            this.prevSenderId = savedSender;
+            this.prevMsgTs    = savedTs;
+            this.lastDay      = savedDay;
+
+            // If still more messages, prepend a new load-more button
+            let prefix = ‘’;
+            if (d.has_more) {
+                prefix = `<div class=”load-more-wrap” id=”loadMoreWrap”>
+                    <button class=”load-more-btn” id=”loadMoreBtn” onclick=”Chat.loadMore()”>
+                        <i class=”fa fa-clock-rotate-left me-1”></i>Load older messages
+                    </button>
+                </div>`;
+            }
+            // Insert before first child (keeps the new button at top if needed)
+            box.insertAdjacentHTML(‘afterbegin’, html);
+            if (prefix) box.insertAdjacentHTML(‘afterbegin’, prefix);
+
+            // Preserve scroll position (prevent jump to top)
+            box.scrollTop = box.scrollHeight - prevScrollHeight;
+        } catch(e) { console.error(‘loadMore’, e); if (btn) btn.disabled = false; }
+    },
+
+    /* ── Typing indicator ───────────────────────────────────────────────────── */
+    sendTyping() {
+        if (!this.convId) return;
+        const now = Date.now();
+        if (now - this.typingLastSent < 3000) return; // throttle: at most once per 3 s
+        this.typingLastSent = now;
+        apiPost(‘typing.php’, { conversation_id: this.convId }).catch(()=>{});
+    },
+    _updateTyping(typers) {
+        const wrap = el(‘chTyping’);
+        const nameEl = el(‘chTypingName’);
+        if (!typers || !typers.length) {
+            wrap.classList.remove(‘visible’);
+            return;
+        }
+        const names = typers.map(t => t.name.split(‘ ‘)[0]); // first name only
+        nameEl.textContent = names.join(‘, ‘) + (names.length === 1 ? ‘ is typing ‘ : ‘ are typing ‘);
+        wrap.classList.add(‘visible’);
     },
 
     /* â”€â”€ Render a single message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -991,6 +1249,25 @@ const Chat = {
             ? `<div class="msg-av" style="background:${color}" title="${esc(m.sender_name||'')}">${esc(initials(m.sender_name||'?'))}</div>`
             : (!sent ? `<div class="msg-av-ph"></div>` : '');
 
+        // Reply preview (if this message is a reply)
+        let replyBlock = '';
+        if (m.reply_to_id) {
+            const rname = esc(m.reply_to_sender_name || 'Unknown');
+            let rtext = '';
+            if (m.reply_to_type === 'image')  rtext = '📷 Photo';
+            else if (m.reply_to_type === 'voice') rtext = '🎤 Voice note';
+            else if (m.reply_to_type === 'file')  rtext = '📎 ' + esc(m.reply_to_file_name || 'File');
+            else rtext = esc((m.reply_to_content || '').substring(0, 80));
+            replyBlock = `<div class="reply-prev" data-scroll="${m.reply_to_id}">
+                <div class="rp-name">${rname}</div>
+                <div class="rp-text">${rtext}</div>
+            </div>`;
+        }
+
+        // Sender name inside bubble for group received messages
+        const senderLabel = (!sent && this.convType === 'group' && groupClass.includes('group-start'))
+            ? `<div class="b-sender" style="color:${color}">${esc(m.sender_name||'')}</div>` : '';
+
         // Bubble content
         let body = '';
         if (m.type==='image' && m.file_url) {
@@ -1018,12 +1295,24 @@ const Chat = {
             body = `<span class="b-text">${esc(m.content||'')}</span>`;
         }
 
-        return `<div class="msg-row ${sent?'s':'r'} ${groupClass}">
+        // Action bar (Reply, Delete for own messages, Copy)
+        const delBtn = sent
+            ? `<button class="msg-act del" data-act="delete" data-mid="${m.id}" title="Delete"><i class="fa fa-trash"></i></button>` : '';
+        const copyBtn = (m.type === 'text' || !m.type)
+            ? `<button class="msg-act" data-act="copy" data-mid="${m.id}" title="Copy"><i class="fa fa-copy"></i></button>` : '';
+        const actionBar = `<div class="msg-actions">
+            <button class="msg-act" data-act="reply" data-mid="${m.id}" title="Reply"><i class="fa fa-reply"></i></button>
+            ${copyBtn}${delBtn}
+        </div>`;
+
+        return `<div class="msg-row ${sent?'s':'r'} ${groupClass}" data-mid="${m.id}">
             ${avHtml}
             <div class="bubble">
+                ${senderLabel}${replyBlock}
                 ${body}
                 <div class="b-meta">${time} ${tick}</div>
             </div>
+            ${actionBar}
         </div>`;
     },
 
@@ -1034,12 +1323,13 @@ const Chat = {
         const text = (el.innerText||'').trim();
         if (!text) return;
         el.innerText = ''; this._syncBtn();
-        // Close emoji picker
         if (this.emojiOpen) this.toggleEmoji();
+        const payload = { conversation_id: this.convId, content: text };
+        if (this.replyTo) payload.reply_to_id = this.replyTo.id;
+        this.clearReply();
         try {
-            await apiPost('send.php', { conversation_id:this.convId, content:text });
+            await apiPost('send.php', payload);
             await this._fetchMsgs(false);
-            // Scroll to bottom on own message
             const box = el('chatMsgs');
             box.scrollTop = box.scrollHeight;
         } catch(e) { console.error('sendText',e); }
@@ -1288,6 +1578,242 @@ const Chat = {
         let s=0; const el=el('callTimer');
         this.callTimerInt=setInterval(()=>{ el.textContent=fmtDur(++s); },1000);
     },
+    /* ── Reply ──────────────────────────────────────────────────────────────── */
+    setReply(m) {
+        this.replyTo = m;
+        let preview = '';
+        if (m.type === 'image')  preview = '📷 Photo';
+        else if (m.type === 'voice') preview = '🎤 Voice note';
+        else if (m.type === 'file')  preview = '📎 ' + (m.file_name || 'File');
+        else preview = (m.content || '').substring(0, 100);
+        el('replyBarName').textContent = m.sender_name || 'You';
+        el('replyBarText').textContent = preview;
+        el('replyBar').style.display = '';
+        el('msgIn').focus();
+    },
+    clearReply() {
+        this.replyTo = null;
+        el('replyBar').style.display = 'none';
+        el('replyBarName').textContent = '';
+        el('replyBarText').textContent = '';
+    },
+
+    /* ── Delete message ─────────────────────────────────────────────────────── */
+    async deleteMsg(msgId) {
+        if (!confirm('Delete this message for everyone?')) return;
+        try {
+            const d = await apiPost('delete.php', { message_id: parseInt(msgId), conversation_id: this.convId });
+            if (d.ok) {
+                const row = document.querySelector(`.msg-row[data-mid="${msgId}"]`);
+                if (row) row.remove();
+            }
+        } catch(e) { console.error('deleteMsg', e); }
+    },
+
+    /* ── Group: create ─────────────────────────────────────────────────────── */
+    async createGroup() {
+        const name = (el('grpName').value || '').trim();
+        if (!name) { el('grpName').focus(); return; }
+        const checked = Array.from(document.querySelectorAll('.grp-chk:checked'));
+        const memberIds = checked.map(c => parseInt(c.value));
+        if (!memberIds.length) { alert('Please select at least one member.'); return; }
+
+        try {
+            const d = await apiPost('conversations.php', { action:'create_group', name, member_ids: memberIds });
+            if (d.conversation_id) {
+                bootstrap.Modal.getOrCreateInstance(el('newChatModal')).hide();
+                el('grpName').value = '';
+                document.querySelectorAll('.grp-chk:checked').forEach(c => c.checked = false);
+                el('grpSelCount').textContent = '0 members selected';
+                this.switchNewChatTab('direct');
+                await this.loadConvs();
+                await this.openConv(d.conversation_id, name, avatarColor(d.conversation_id), null, 'group');
+            } else {
+                alert(d.error || 'Could not create group.');
+            }
+        } catch(e) { console.error('createGroup', e); alert('Error creating group.'); }
+    },
+
+    /* ── Group: info panel ──────────────────────────────────────────────────── */
+    async openGroupInfo() {
+        try {
+            const d = await apiGet('group.php', { conversation_id: this.convId });
+            if (d.error) { alert(d.error); return; }
+
+            el('giGroupName').textContent = d.group.name || 'Group';
+            el('giAvatar').textContent    = initials(d.group.name || 'G');
+            el('giMemberCount').textContent = d.members.length + ' member' + (d.members.length !== 1 ? 's' : '');
+            el('giRenameInput').value = d.group.name || '';
+
+            // Show rename + add rows to creator/admin only
+            const canManage = d.is_creator;
+            el('giRenameRow').style.display = canManage ? '' : 'none';
+            el('giAddRow').style.display    = canManage ? '' : 'none';
+
+            const roleMap = {admin:'Admin',workshop_manager:'Workshop Mgr',sales_person:'Sales',sales_officer:'Sales Officer',mechanic:'Mechanic',manager:'Manager'};
+            el('giMemberList').innerHTML = d.members.map(m => {
+                const isMe = m.id == d.my_id;
+                const rl   = roleMap[m.role] || m.role;
+                const canRemove = canManage && !isMe;
+                const rmBtn = canRemove
+                    ? `<button class="ic-btn" onclick="Chat.removeMember(${m.id})" title="Remove"><i class="fa fa-user-minus" style="color:#dc2626"></i></button>` : '';
+                return `<div class="gi-member">
+                    <div style="width:36px;height:36px;border-radius:50%;background:${avatarColor(m.id)};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0">${esc(initials(m.name))}</div>
+                    <div class="gi-member-info">
+                        <div class="gi-member-name">${esc(m.name)}${isMe ? ' <span style="color:#128c7e;font-size:12px">(you)</span>' : ''}</div>
+                        <div class="gi-member-role">${esc(rl)}</div>
+                    </div>
+                    ${rmBtn}
+                </div>`;
+            }).join('');
+
+            bootstrap.Modal.getOrCreateInstance(el('groupInfoModal')).show();
+        } catch(e) { console.error('openGroupInfo', e); }
+    },
+    async addGroupMember() {
+        const uid = parseInt(el('giAddSelect').value);
+        if (!uid) return;
+        try {
+            const d = await apiPost('group.php', { action:'add_member', conversation_id: this.convId, user_id: uid });
+            if (d.ok) { this.openGroupInfo(); this.loadConvs(); }
+            else alert(d.error || 'Could not add member.');
+        } catch(e) { console.error('addGroupMember', e); }
+    },
+    async removeMember(uid) {
+        if (!confirm('Remove this member from the group?')) return;
+        try {
+            const d = await apiPost('group.php', { action:'remove_member', conversation_id: this.convId, user_id: uid });
+            if (d.ok) { this.openGroupInfo(); this.loadConvs(); }
+            else alert(d.error || 'Could not remove member.');
+        } catch(e) { console.error('removeMember', e); }
+    },
+    async renameGroup() {
+        const name = (el('giRenameInput').value || '').trim();
+        if (!name) return;
+        try {
+            const d = await apiPost('group.php', { action:'rename', conversation_id: this.convId, name });
+            if (d.ok) {
+                this.convName = name;
+                el('chName').textContent = name;
+                bootstrap.Modal.getOrCreateInstance(el('groupInfoModal')).hide();
+                this.loadConvs();
+                await this._fetchMsgs(false);
+            } else alert(d.error || 'Could not rename group.');
+        } catch(e) { console.error('renameGroup', e); }
+    },
+    async leaveGroup() {
+        if (!confirm('Leave this group? You will no longer receive messages.')) return;
+        try {
+            const d = await apiPost('group.php', { action:'leave', conversation_id: this.convId });
+            if (d.ok) {
+                bootstrap.Modal.getOrCreateInstance(el('groupInfoModal')).hide();
+                clearInterval(this.pollTimer);
+                this.convId = 0;
+                hide(el('chatActive'));
+                show(el('chatWelcome'));
+                await this.loadConvs();
+            } else alert(d.error || 'Could not leave group.');
+        } catch(e) { console.error('leaveGroup', e); }
+    },
+
+    /* ── In-chat search ─────────────────────────────────────────────────────── */
+    toggleSearch() {
+        this.searchOpen = !this.searchOpen;
+        const bar = el('chatSearchBar');
+        if (this.searchOpen) {
+            bar.style.display = '';
+            el('searchInput').focus();
+            el('searchInput').select();
+        } else {
+            bar.style.display = 'none';
+            this.clearSearch();
+        }
+    },
+    doSearch(q) {
+        // Clear any existing highlights first
+        el('chatMsgs').querySelectorAll('mark.sh').forEach(mark => {
+            const parent = mark.parentNode;
+            if (parent) {
+                parent.replaceChild(document.createTextNode(mark.textContent), mark);
+                parent.normalize();
+            }
+        });
+        this.searchMatches = [];
+        this.searchIdx = -1;
+
+        if (!q || !q.trim()) { this._updateSearchCount(); return; }
+
+        const safeQ   = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re      = new RegExp('(' + safeQ + ')', 'gi');
+
+        // Search only in text bubbles (safe — content is already HTML-escaped)
+        el('chatMsgs').querySelectorAll('.b-text').forEach(textEl => {
+            if (!textEl.textContent.toLowerCase().includes(q.toLowerCase())) return;
+            textEl.innerHTML = textEl.innerHTML.replace(re, '<mark class="sh">$1</mark>');
+            textEl.querySelectorAll('mark.sh').forEach(m => this.searchMatches.push(m));
+        });
+
+        if (this.searchMatches.length > 0) {
+            this.searchIdx = 0;
+            this._activateSearchMatch();
+        }
+        this._updateSearchCount();
+    },
+    searchNav(dir) {
+        if (!this.searchMatches.length) return;
+        this.searchMatches[this.searchIdx]?.classList.remove('active');
+        this.searchIdx = (this.searchIdx + dir + this.searchMatches.length) % this.searchMatches.length;
+        this._activateSearchMatch();
+        this._updateSearchCount();
+    },
+    _activateSearchMatch() {
+        const m = this.searchMatches[this.searchIdx];
+        if (!m) return;
+        m.classList.add('active');
+        m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    _updateSearchCount() {
+        const count = el('searchCount');
+        const prev  = el('searchPrev');
+        const next  = el('searchNext');
+        if (!this.searchMatches.length) {
+            count.textContent = el('searchInput').value ? '0 results' : '';
+        } else {
+            count.textContent = `${this.searchIdx + 1} / ${this.searchMatches.length}`;
+        }
+        if (prev) prev.disabled = this.searchMatches.length === 0;
+        if (next) next.disabled = this.searchMatches.length === 0;
+    },
+    clearSearch() {
+        if (!this.searchOpen) return;
+        // Remove highlights
+        el('chatMsgs')?.querySelectorAll('mark.sh').forEach(mark => {
+            const parent = mark.parentNode;
+            if (parent) {
+                parent.replaceChild(document.createTextNode(mark.textContent), mark);
+                parent.normalize();
+            }
+        });
+        this.searchMatches = [];
+        this.searchIdx = -1;
+        const inp = el('searchInput');
+        if (inp) inp.value = '';
+        this._updateSearchCount?.();
+        // Hide bar and flip flag
+        const bar = el('chatSearchBar');
+        if (bar) bar.style.display = 'none';
+        this.searchOpen = false;
+    },
+
+    /* ── New chat modal tab switch ──────────────────────────────────────────── */
+    switchNewChatTab(tab) {
+        const isDirect = tab === 'direct';
+        el('tabDirect').classList.toggle('active', isDirect);
+        el('tabGroup').classList.toggle('active', !isDirect);
+        el('ncDirect').style.display = isDirect ? '' : 'none';
+        el('ncGroup').style.display  = isDirect ? 'none' : '';
+    },
+
     async _checkIncoming() {
         if (this.activeCallId) return;
         try {
@@ -1317,7 +1843,7 @@ const Chat = {
         // Conversation clicks
         el('convList').addEventListener('click', e=>{
             const item=e.target.closest('.conv-item');
-            if (item) this.openConv(item.dataset.cid,item.dataset.cname,item.dataset.ccolor,item.dataset.callee);
+            if (item) this.openConv(item.dataset.cid,item.dataset.cname,item.dataset.ccolor,item.dataset.callee,item.dataset.ctype);
         });
 
         // New chat
@@ -1346,7 +1872,7 @@ const Chat = {
         el('msgIn').addEventListener('keydown', ev=>{
             if (ev.key==='Enter'&&!ev.shiftKey) { ev.preventDefault(); this.sendText(); }
         });
-        el('msgIn').addEventListener('input',()=>this._syncBtn());
+        el('msgIn').addEventListener('input',()=>{ this._syncBtn(); this.sendTyping(); });
 
         // Close emoji if click outside
         document.addEventListener('click', e=>{
@@ -1364,6 +1890,23 @@ const Chat = {
         el('btnMute').addEventListener('click',()=>this.toggleMute());
         el('btnCam').addEventListener('click',()=>this.toggleCam());
         el('btnAccept').addEventListener('click',()=>this.acceptCall());
+
+        // Group info
+        el('btnGroupInfo').addEventListener('click',()=>this.openGroupInfo());
+
+        // Reply bar close
+        el('replyBarClose').addEventListener('click',()=>this.clearReply());
+
+        // Search toggle + input + nav
+        el('btnSearch').addEventListener('click',()=>this.toggleSearch());
+        el('searchClose').addEventListener('click',()=>this.clearSearch());
+        el('searchPrev').addEventListener('click',()=>this.searchNav(-1));
+        el('searchNext').addEventListener('click',()=>this.searchNav(1));
+        el('searchInput').addEventListener('input', e=>this.doSearch(e.target.value));
+        el('searchInput').addEventListener('keydown', ev=>{
+            if (ev.key === 'Enter') { ev.shiftKey ? this.searchNav(-1) : this.searchNav(1); }
+            if (ev.key === 'Escape') this.clearSearch();
+        });
 
         // Mobile back
         el('chBack').addEventListener('click',()=>{
@@ -1386,12 +1929,46 @@ const Chat = {
             hide(el('scrollFab')); this.scrollUnread=0; hide(el('fabBadge'));
         });
 
-        // Messages area delegation (images + voice)
+        // Messages area delegation (images, voice, action buttons, reply-preview scroll)
         el('chatMsgs').addEventListener('click', e=>{
+            // Lightbox
             const img=e.target.closest('.b-img');
             if (img) { el('lbImg').src=img.dataset.src||img.src; el('lightbox').style.display='flex'; return; }
+            // Voice play
             const pb=e.target.closest('.b-play');
-            if (pb&&pb.dataset.src&&!pb.onclick) this.playVoice(pb.dataset.src,pb.dataset.vid);
+            if (pb&&pb.dataset.src&&!pb.onclick) { this.playVoice(pb.dataset.src,pb.dataset.vid); return; }
+            // Message action bar
+            const act=e.target.closest('.msg-act');
+            if (act) {
+                const mid = act.dataset.mid;
+                const row = act.closest('.msg-row');
+                if (act.dataset.act === 'reply' && row) {
+                    // Build a message object from DOM to pass to setReply
+                    const bubble = row.querySelector('.bubble');
+                    const textEl = bubble?.querySelector('.b-text');
+                    const isSent = row.classList.contains('s');
+                    const senderName = isSent ? ME.name
+                        : (row.querySelector('.b-sender')?.textContent || row.querySelector('.msg-av')?.title || 'Unknown');
+                    const type = bubble?.querySelector('.b-img') ? 'image'
+                               : bubble?.querySelector('.b-voice') ? 'voice'
+                               : bubble?.querySelector('.b-file') ? 'file' : 'text';
+                    const content = textEl?.textContent || '';
+                    const fname = bubble?.querySelector('.b-file-nm')?.textContent || '';
+                    this.setReply({ id: parseInt(mid), sender_name: senderName, type, content, file_name: fname });
+                } else if (act.dataset.act === 'delete') {
+                    this.deleteMsg(mid);
+                } else if (act.dataset.act === 'copy') {
+                    const bubble = row?.querySelector('.b-text');
+                    if (bubble) navigator.clipboard?.writeText(bubble.textContent).catch(()=>{});
+                }
+                return;
+            }
+            // Reply preview scroll to original message
+            const rp=e.target.closest('.reply-prev');
+            if (rp && rp.dataset.scroll) {
+                const target = el('chatMsgs').querySelector(`[data-mid="${rp.dataset.scroll}"]`);
+                if (target) target.scrollIntoView({ behavior:'smooth', block:'center' });
+            }
         });
 
         // Lightbox
@@ -1407,9 +1984,21 @@ const Chat = {
         });
         el('userSearch').addEventListener('input',function(){
             const q=this.value.toLowerCase();
-            document.querySelectorAll('.up-item').forEach(el=>{
+            document.querySelectorAll('#upList .up-item').forEach(el=>{
                 el.style.display=!q||(el.dataset.uname||'').toLowerCase().includes(q)?'':'none';
             });
+        });
+
+        // Group tab: member search + live selected count
+        el('grpSearch').addEventListener('input',function(){
+            const q=this.value.toLowerCase();
+            document.querySelectorAll('#grpUserList .up-item').forEach(item=>{
+                item.style.display=!q||(item.dataset.uname||'').toLowerCase().includes(q)?'':'none';
+            });
+        });
+        el('grpUserList').addEventListener('change',()=>{
+            const n=document.querySelectorAll('.grp-chk:checked').length;
+            el('grpSelCount').textContent = n + ' member' + (n!==1?'s':'') + ' selected';
         });
 
         // ESC
@@ -1435,18 +2024,31 @@ ob_start(); ?>
             <div class="modal-header py-2 border-bottom-0 pb-0">
                 <div>
                     <h6 class="modal-title fw-bold mb-0">New Conversation</h6>
-                    <p class="text-muted mb-0" style="font-size:12px">Select someone to chat with</p>
+                    <p class="text-muted mb-0" style="font-size:12px">Direct message or create a group</p>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-2">
+                <!-- Tabs -->
+                <div class="px-2 pb-1">
+                    <div class="nc-tabs">
+                        <button class="nc-tab active" id="tabDirect" onclick="Chat.switchNewChatTab('direct')">
+                            <i class="fa fa-user me-1"></i>Direct
+                        </button>
+                        <button class="nc-tab" id="tabGroup" onclick="Chat.switchNewChatTab('group')">
+                            <i class="fa fa-users me-1"></i>New Group
+                        </button>
+                    </div>
+                </div>
+                <!-- Direct tab -->
+                <div id="ncDirect">
                 <div class="px-2 pb-2">
                     <div style="position:relative">
                         <i class="fa fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8696a0;font-size:13px;pointer-events:none"></i>
                         <input type="text" id="userSearch"
                                class="form-control form-control-sm"
                                style="padding-left:32px;background:#f0f2f5;border:none;border-radius:8px"
-                               placeholder="Search peopleâ€¦" autocomplete="off">
+                               placeholder="Search people..." autocomplete="off">
                     </div>
                 </div>
                 <div class="up-list" id="upList">
@@ -1465,15 +2067,102 @@ ob_start(); ?>
                             <div class="up-role"><?= e($rl) ?></div>
                         </div>
                     </div>
-                <?php endforeach; ?>
-                <?php if (empty($allUsers)): ?>
-                    <p class="text-muted small text-center py-3 mb-0">No other users found.</p>
-                <?php endif; ?>
+                    <?php endforeach; ?>
+                    <?php if (empty($allUsers)): ?>
+                        <p class="text-muted small text-center py-3 mb-0">No other users found.</p>
+                    <?php endif; ?>
+                    </div>
+                </div><!-- /ncDirect -->
+
+                <!-- Group tab -->
+                <div id="ncGroup" style="display:none;padding:0 8px 8px">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" style="font-size:12px">Group Name</label>
+                        <input type="text" id="grpName" class="form-control form-control-sm"
+                               placeholder="e.g. Workshop Team" maxlength="80">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" style="font-size:12px">Select Members</label>
+                        <div style="position:relative;margin-bottom:6px">
+                            <i class="fa fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8696a0;font-size:13px;pointer-events:none"></i>
+                            <input type="text" id="grpSearch" class="form-control form-control-sm"
+                                   style="padding-left:32px;background:#f0f2f5;border:none;border-radius:8px"
+                                   placeholder="Search..." autocomplete="off">
+                        </div>
+                        <div class="up-list" id="grpUserList" style="max-height:200px">
+                        <?php foreach ($allUsers as $u):
+                            $init  = mb_strtoupper(mb_substr($u['name'], 0, 1));
+                            $color = $palette[$u['id'] % count($palette)];
+                            $rl    = $roleLabels[$u['role']] ?? ucfirst($u['role']);
+                        ?>
+                            <label class="up-item" style="cursor:pointer;margin:0" data-uname="<?= e($u['name']) ?>">
+                                <input type="checkbox" class="grp-chk me-2" value="<?= (int)$u['id'] ?>" style="flex-shrink:0;width:15px;height:15px">
+                                <div class="up-av" style="background:<?= $color ?>"><?= e($init) ?></div>
+                                <div>
+                                    <div class="up-name"><?= e($u['name']) ?></div>
+                                    <div class="up-role"><?= e($rl) ?></div>
+                                </div>
+                            </label>
+                        <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <div id="grpSelCount" style="font-size:12px;color:#667781;margin-bottom:10px">0 members selected</div>
+                    <button class="btn btn-success btn-sm w-100" onclick="Chat.createGroup()">
+                        <i class="fa fa-users me-1"></i>Create Group
+                    </button>
                 </div>
+
             </div>
         </div>
     </div>
 </div>
+
+<!-- ── GROUP INFO MODAL ──────────────────────────────────────────────────── -->
+<div class="modal fade" id="groupInfoModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <div style="display:flex;align-items:center;gap:10px">
+                    <div id="giAvatar" style="width:40px;height:40px;border-radius:50%;background:#128c7e;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;flex-shrink:0"></div>
+                    <div>
+                        <h6 class="modal-title fw-bold mb-0" id="giGroupName">Group</h6>
+                        <div class="text-muted" id="giMemberCount" style="font-size:12px"></div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div id="giRenameRow" style="display:none;margin-bottom:14px">
+                    <label class="form-label fw-semibold" style="font-size:12px">Rename Group</label>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" id="giRenameInput" class="form-control form-control-sm" placeholder="New name...">
+                        <button class="btn btn-sm btn-outline-success" onclick="Chat.renameGroup()">Save</button>
+                    </div>
+                </div>
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8696a0;margin-bottom:8px">Members</div>
+                <div id="giMemberList" style="max-height:260px;overflow-y:auto"></div>
+                <div id="giAddRow" style="display:none;margin-top:14px">
+                    <label class="form-label fw-semibold" style="font-size:12px">Add Member</label>
+                    <div style="display:flex;gap:8px">
+                        <select id="giAddSelect" class="form-select form-select-sm">
+                            <option value="">— Select user —</option>
+                            <?php foreach ($allUsers as $u): ?>
+                            <option value="<?= (int)$u['id'] ?>"><?= e($u['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button class="btn btn-sm btn-success" onclick="Chat.addGroupMember()"><i class="fa fa-plus"></i></button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button class="btn btn-sm btn-outline-danger ms-auto" onclick="Chat.leaveGroup()">
+                    <i class="fa fa-door-open me-1"></i>Leave Group
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php $extraModal = ob_get_clean(); ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

@@ -95,9 +95,19 @@ foreach ($indexes as $sql) {
     try { $db->exec($sql); } catch (Exception $e) { /* ignore */ }
 }
 
-// ── Phase-2 migrations (safe to re-run) ────────────────────────────────────
+// ── Phase-2 & 3 migrations (safe to re-run) ────────────────────────────────
 $migrations = [
     'chat_messages.reply_to_id' => "ALTER TABLE chat_messages ADD COLUMN reply_to_id INT NULL DEFAULT NULL AFTER is_deleted",
+    'chat_typing table' => "
+        CREATE TABLE IF NOT EXISTS chat_typing (
+            conversation_id INT NOT NULL,
+            user_id         INT NOT NULL,
+            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (conversation_id, user_id),
+            CONSTRAINT fk_ct_conv FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE,
+            CONSTRAINT fk_ct_user FOREIGN KEY (user_id)         REFERENCES users(id)             ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ",
 ];
 foreach ($migrations as $label => $sql) {
     try {
