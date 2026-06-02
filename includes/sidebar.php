@@ -326,6 +326,31 @@ $__isDash = !str_contains($__uri, '/modules/');
         </a>
         <?php endif; ?>
 
+        <!-- Showroom -->
+        <?php if (hasRole(['admin','general_manager','sales_manager','sales_officer','sales_person','customer_relations','receptionist'])): ?>
+        <div class="nav-section">Showroom</div>
+        <a href="<?= BASE_URL ?>/modules/showroom/index.php"
+           class="nav-item <?= isActive('/modules/showroom/') ?>"
+           data-label="Inquiries"
+           style="position:relative">
+            <i class="fa fa-inbox"></i><span>Inquiries</span>
+            <?php
+            try {
+                $__inqCount = (int)getDB()->query("SELECT COUNT(*) FROM showroom_inquiries WHERE status='new'")->fetchColumn();
+                if ($__inqCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__inqCount > 99 ? '99+' : $__inqCount ?>
+            </span>
+            <?php endif; } catch (Exception $e) {} ?>
+        </a>
+        <a href="<?= BASE_URL ?>/showroom/" target="_blank"
+           class="nav-item"
+           data-label="Public Showroom">
+            <i class="fa fa-store"></i><span>Public Showroom</span>
+            <i class="fa fa-external-link" style="font-size:10px;opacity:.45;margin-left:auto"></i>
+        </a>
+        <?php endif; ?>
+
         <!-- Admin -->
         <?php if (hasRole('admin')): ?>
         <div class="nav-section">Admin</div>

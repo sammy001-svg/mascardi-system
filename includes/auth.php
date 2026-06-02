@@ -117,23 +117,23 @@ function canAccess(string $module): bool {
         'sales_manager'     => [
             'cars','clients','service_bookings','quotations','invoices','payments',
             'quick_assessments','sales','crm','installments','car_costs','car_documents',
-            'inspections','chat','reports','expenses','assessments',
+            'inspections','chat','reports','expenses','assessments','showroom',
         ],
         'sales_officer'     => [
             'cars','clients','service_bookings','quotations','invoices','payments',
             'quick_assessments','sales','crm','installments','car_costs','car_documents',
-            'inspections','chat',
+            'inspections','chat','showroom',
         ],
         'sales_person'      => [
             'cars','clients','service_bookings','quick_assessments','quotations','invoices',
-            'payments','sales','crm','installments','car_documents','inspections','chat',
+            'payments','sales','crm','installments','car_documents','inspections','chat','showroom',
         ],
         'customer_relations' => [
             'clients','service_bookings','crm','quick_assessments','cars','chat',
-            'inspections','installments','quotations','invoices',
+            'inspections','installments','quotations','invoices','showroom',
         ],
         'receptionist'      => [
-            'clients','service_bookings','quick_assessments','cars','chat',
+            'clients','service_bookings','quick_assessments','cars','chat','showroom',
         ],
 
         // ── Workshop / Operational roles ───────────────────────────────────────

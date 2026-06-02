@@ -28,13 +28,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'body_type'           => trim($_POST['body_type'] ?? ''),
         'status'              => $_POST['status'] ?? 'in_transit',
         'notes'               => trim($_POST['notes'] ?? ''),
+        'asking_price'        => ($_POST['asking_price'] ?? '') !== '' ? (float)$_POST['asking_price'] : null,
+        'mileage'             => ($_POST['mileage']      ?? '') !== '' ? (int)$_POST['mileage']        : null,
+        'engine_cc'           => ($_POST['engine_cc']    ?? '') !== '' ? (int)$_POST['engine_cc']      : null,
+        'featured'            => isset($_POST['featured']) ? 1 : 0,
     ];
     if (!$data['chassis_number']) $errors[] = 'Chassis number is required.';
     if (!$data['make'])           $errors[] = 'Make is required.';
     if (!$data['model'])          $errors[] = 'Model is required.';
 
     if (empty($errors)) {
-        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=? WHERE id=?")
+        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,asking_price=?,mileage=?,engine_cc=?,featured=? WHERE id=?")
            ->execute([...array_values($data), $id]);
         logActivity('update', 'cars', $id, "Updated car: {$data['make']} {$data['model']} ({$data['chassis_number']})");
         setFlash('success','Car updated successfully.');
@@ -141,7 +145,43 @@ include __DIR__ . '/../../includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2"><?= e($car['notes'] ?? '') ?></textarea></div>
+                <div class="col-12"><label class="form-label">Notes / Description</label><textarea name="notes" class="form-control" rows="2" placeholder="Internal notes or public description used on the showroom"><?= e($car['notes'] ?? '') ?></textarea></div>
+
+                <!-- ── Showroom / Sales ───────────────────────────── -->
+                <div class="col-12 mt-2">
+                    <div class="form-section-title">
+                        <i class="fa fa-store me-1 text-primary"></i>Showroom &amp; Pricing
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Asking Price <small class="text-muted">(KES — leave blank to hide from showroom)</small></label>
+                    <div class="input-group">
+                        <span class="input-group-text">KES</span>
+                        <input type="number" name="asking_price" class="form-control" step="1" min="0"
+                               value="<?= $car['asking_price'] !== null ? (int)$car['asking_price'] : '' ?>"
+                               placeholder="e.g. 2500000">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Mileage <small class="text-muted">(km)</small></label>
+                    <input type="number" name="mileage" class="form-control" min="0"
+                           value="<?= $car['mileage'] ?? '' ?>" placeholder="e.g. 45000">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Engine Size <small class="text-muted">(cc)</small></label>
+                    <input type="number" name="engine_cc" class="form-control" min="0"
+                           value="<?= $car['engine_cc'] ?? '' ?>" placeholder="e.g. 1800">
+                </div>
+                <div class="col-md-3 d-flex align-items-end pb-1">
+                    <div class="form-check">
+                        <input type="checkbox" name="featured" id="featuredChk" class="form-check-input"
+                               value="1" <?= !empty($car['featured']) ? 'checked' : '' ?>>
+                        <label class="form-check-label fw-semibold" for="featuredChk">
+                            <i class="fa fa-star text-warning me-1"></i>Featured listing
+                            <div class="text-muted fw-normal" style="font-size:11.5px">Highlighted on the showroom homepage</div>
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="mt-4 d-flex gap-2">
                 <button type="submit" class="btn btn-primary"><i class="fa fa-save me-1"></i>Update Car</button>

@@ -16,11 +16,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $engine    = trim($_POST['engine_number'] ?? '');
     $trans     = $_POST['transmission'] ?? 'manual';
     $fuel      = $_POST['fuel_type'] ?? 'petrol';
-    $carType   = $_POST['car_type'] ?? 'inventory';
-    $ownerName = trim($_POST['owner_name'] ?? '');
+    $carType    = $_POST['car_type'] ?? 'inventory';
+    $ownerName  = trim($_POST['owner_name'] ?? '');
     $ownerPhone = trim($_POST['owner_phone'] ?? '');
-    $body      = trim($_POST['body_type'] ?? '');
-    $notes     = trim($_POST['notes'] ?? '');
+    $body       = trim($_POST['body_type'] ?? '');
+    $notes      = trim($_POST['notes'] ?? '');
+    $askingPrice = ($_POST['asking_price'] ?? '') !== '' ? (float)$_POST['asking_price'] : null;
+    $mileage     = ($_POST['mileage']      ?? '') !== '' ? (int)$_POST['mileage']        : null;
+    $engineCc    = ($_POST['engine_cc']    ?? '') !== '' ? (int)$_POST['engine_cc']      : null;
+    $featured    = isset($_POST['featured']) ? 1 : 0;
 
     if (!$chassis) $errors[] = 'Chassis number is required.';
     if (!$make)    $errors[] = 'Make is required.';
@@ -30,10 +34,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
-            $locId = (int)($_POST['location_id'] ?? 1);
+            $locId    = (int)($_POST['location_id'] ?? 1);
             $clientId = $_POST['client_id'] ? (int)$_POST['client_id'] : null;
-            $stmt = $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,client_id,location_id,body_type,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-            $stmt->execute([$chassis,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$clientId,$locId,$body,$notes]);
+            $stmt = $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,client_id,location_id,body_type,notes,asking_price,mileage,engine_cc,featured) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([$chassis,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$clientId,$locId,$body,$notes,$askingPrice,$mileage,$engineCc,$featured]);
             $carId = $db->lastInsertId();
             
             logActivity('create', 'cars', $carId, "Added car: $make $model ($chassis)");
@@ -156,8 +160,43 @@ include __DIR__ . '/../../includes/header.php';
                     </select>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Notes</label>
-                    <textarea name="notes" class="form-control" rows="2"><?= e($_POST['notes'] ?? '') ?></textarea>
+                    <label class="form-label">Notes / Description</label>
+                    <textarea name="notes" class="form-control" rows="2" placeholder="Internal notes or public description used on the showroom"><?= e($_POST['notes'] ?? '') ?></textarea>
+                </div>
+
+                <!-- ── Showroom / Sales ───────────────────────────── -->
+                <div class="col-12 mt-2">
+                    <div class="form-section-title">
+                        <i class="fa fa-store me-1 text-primary"></i>Showroom &amp; Pricing
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Asking Price <small class="text-muted">(KES — leave blank to hide from showroom)</small></label>
+                    <div class="input-group">
+                        <span class="input-group-text">KES</span>
+                        <input type="number" name="asking_price" class="form-control" step="1" min="0"
+                               value="<?= $_POST['asking_price'] ?? '' ?>" placeholder="e.g. 2500000">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Mileage <small class="text-muted">(km)</small></label>
+                    <input type="number" name="mileage" class="form-control" min="0"
+                           value="<?= $_POST['mileage'] ?? '' ?>" placeholder="e.g. 45000">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Engine Size <small class="text-muted">(cc)</small></label>
+                    <input type="number" name="engine_cc" class="form-control" min="0"
+                           value="<?= $_POST['engine_cc'] ?? '' ?>" placeholder="e.g. 1800">
+                </div>
+                <div class="col-md-3 d-flex align-items-end pb-1">
+                    <div class="form-check">
+                        <input type="checkbox" name="featured" id="featuredChk" class="form-check-input" value="1"
+                               <?= isset($_POST['featured']) ? 'checked' : '' ?>>
+                        <label class="form-check-label fw-semibold" for="featuredChk">
+                            <i class="fa fa-star text-warning me-1"></i>Featured listing
+                            <div class="text-muted fw-normal" style="font-size:11.5px">Highlighted on the showroom homepage</div>
+                        </label>
+                    </div>
                 </div>
             </div>
             <div class="mt-4 d-flex gap-2">
