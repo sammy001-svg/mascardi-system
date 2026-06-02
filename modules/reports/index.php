@@ -286,28 +286,9 @@ $extraJs = <<<SCRIPT
 SCRIPT;
 
 include __DIR__ . '/../../includes/header.php';
+include __DIR__ . '/_nav.php';
 ?>
-
-<!-- Period filter -->
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-    <h5 class="mb-0"><i class="fa fa-chart-bar me-2 text-primary"></i>Reports &amp; Analytics</h5>
-    <form class="d-flex align-items-center gap-2 flex-wrap" method="GET">
-        <select name="period" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
-            <option value="this_month"    <?= $period === 'this_month'    ? 'selected' : '' ?>>This Month</option>
-            <option value="last_month"    <?= $period === 'last_month'    ? 'selected' : '' ?>>Last Month</option>
-            <option value="last_3_months" <?= $period === 'last_3_months' ? 'selected' : '' ?>>Last 3 Months</option>
-            <option value="this_year"     <?= $period === 'this_year'     ? 'selected' : '' ?>>This Year</option>
-            <option value="custom"        <?= $period === 'custom'        ? 'selected' : '' ?>>Custom Range</option>
-        </select>
-        <?php if ($period === 'custom'): ?>
-        <input type="date" name="date_from" class="form-control form-control-sm" value="<?= e($dateFrom) ?>">
-        <span class="text-muted small">to</span>
-        <input type="date" name="date_to" class="form-control form-control-sm" value="<?= e($dateTo) ?>">
-        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
-        <?php endif; ?>
-        <span class="badge bg-light text-dark border px-3 py-2"><?= e($label) ?></span>
-    </form>
-</div>
+<?php // nav already renders the period filter and tab bar ?>
 
 <!-- ── KPI Cards ────────────────────────────────────────────────────────────── -->
 <div class="row g-3 mb-4">
@@ -500,6 +481,9 @@ include __DIR__ . '/../../includes/header.php';
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
         <span><i class="fa fa-file-invoice-dollar me-2"></i>Invoices — <?= e($label) ?></span>
+        <a href="<?= BASE_URL ?>/modules/reports/export.php?type=invoices&period=<?= urlencode($period) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>" class="btn btn-xs btn-outline-secondary">
+            <i class="fa fa-download me-1"></i>Export CSV
+        </a>
         <div class="d-flex gap-3 text-muted small">
             <span><i class="fa fa-circle-check text-success me-1"></i><?= $revSummary['paid_count'] ?> paid</span>
             <span><i class="fa fa-clock text-warning me-1"></i><?= $revSummary['partial'] ?> partial</span>

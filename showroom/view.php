@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../includes/functions.php';
 
 $db = getDB();
 $id = (int)($_GET['id'] ?? 0);

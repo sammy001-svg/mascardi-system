@@ -5,7 +5,7 @@
  */
 header('Content-Type: application/json');
 
-require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../includes/functions.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -89,7 +89,7 @@ try {
             if ($message) $body .= "<tr><td style='padding:6px 16px 6px 0;color:#64748b;font-weight:600;vertical-align:top'>Message</td><td>" . nl2br(htmlspecialchars($message)) . "</td></tr>";
             $body .= "</table>";
             $body .= "<p style='margin-top:20px'><a href='{$viewUrl}' style='background:#2563eb;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:700'>View All Inquiries</a></p>";
-            sendMail($adminEmail, "New Inquiry: {$carLabel}", $body);
+            sendMail($adminEmail, 'Admin', "New Inquiry: {$carLabel}", $body);
         }
     } catch (Exception $e) {
         // Email failure is non-fatal

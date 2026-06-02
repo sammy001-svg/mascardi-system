@@ -3,7 +3,7 @@
  * Public showroom header — no authentication required.
  * Loads company info from settings for branding.
  */
-require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../includes/functions.php';
 
 $__companyName  = getSetting('company_name',  'Mascardi Car Yard');
 $__companyPhone = getSetting('company_phone', '');
