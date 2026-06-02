@@ -98,6 +98,12 @@ include __DIR__ . '/../../includes/header.php';
         <span class="badge bg-<?= $statusColor ?> fs-6 px-3 py-2">
             <i class="fa <?= $statusIcon ?> me-1"></i><?= $statusLabel ?>
         </span>
+        <?php if (canAccess('quotations') && canWrite('quotations') && $req['status'] !== 'rejected'): ?>
+        <a href="<?= BASE_URL ?>/modules/quotations/add.php?from_qr=<?= $id ?>"
+           class="btn btn-sm btn-success">
+            <i class="fa fa-file-invoice-dollar me-1"></i>Quote from Stock
+        </a>
+        <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
 </div>

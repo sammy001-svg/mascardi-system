@@ -22,6 +22,87 @@ if ($preBookingId) {
     }
 }
 
+// ── Pre-fill from Quote Request ──────────────────────────────────────────
+$fromQrId          = (int)($_GET['from_qr'] ?? 0);
+$fromQr            = null;
+$fromQrMatchedLines = [];
+$fromQrCustomer    = [];
+$fromQrUnmatched   = [];
+$fromQrVehicleHint = '';
+
+if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    try {
+        $s = $db->prepare("SELECT * FROM parts_requests WHERE id = ?");
+        $s->execute([$fromQrId]);
+        $fromQr = $s->fetch() ?: null;
+    } catch (\Throwable $e) {}
+
+    if ($fromQr) {
+        // Match car by chassis then registration
+        if (!$preCarId) {
+            if ($fromQr['car_chassis']) {
+                $s = $db->prepare("SELECT id FROM cars WHERE chassis_number = ? LIMIT 1");
+                $s->execute([$fromQr['car_chassis']]);
+                $preCarId = (int)($s->fetchColumn() ?: 0);
+            }
+            if (!$preCarId && $fromQr['car_registration']) {
+                $s = $db->prepare("SELECT id FROM cars WHERE registration_number = ? LIMIT 1");
+                $s->execute([$fromQr['car_registration']]);
+                $preCarId = (int)($s->fetchColumn() ?: 0);
+            }
+        }
+
+        if (!$preCarId) {
+            $v = trim(($fromQr['car_make'] ?? '') . ' ' . ($fromQr['car_model'] ?? ''));
+            if ($fromQr['car_registration']) $v .= ' — ' . $fromQr['car_registration'];
+            $fromQrVehicleHint = $v ?: 'Unknown vehicle';
+        }
+
+        $fromQrCustomer = [
+            'name'  => $fromQr['client_name']  ?? '',
+            'phone' => $fromQr['client_phone'] ?? '',
+            'email' => $fromQr['client_email'] ?? '',
+        ];
+
+        // Match each requested part to inventory
+        $s = $db->prepare("SELECT * FROM parts_request_items WHERE request_id = ? ORDER BY id");
+        $s->execute([$fromQrId]);
+        foreach ($s->fetchAll() as $item) {
+            $inv = null;
+            if (!empty($item['part_number'])) {
+                $q = $db->prepare("SELECT id, part_name, selling_price, quantity FROM inventory WHERE part_number = ? LIMIT 1");
+                $q->execute([$item['part_number']]);
+                $inv = $q->fetch() ?: null;
+            }
+            if (!$inv) {
+                $q = $db->prepare("SELECT id, part_name, selling_price, quantity FROM inventory WHERE LOWER(part_name) = LOWER(?) LIMIT 1");
+                $q->execute([$item['part_name']]);
+                $inv = $q->fetch() ?: null;
+            }
+            $inStock  = $inv ? (float)$inv['quantity'] : 0;
+            $hasStock = $inv && $inStock > 0;
+            $fromQrMatchedLines[] = [
+                'type'    => 'part',
+                'desc'    => $item['part_name'],
+                'inv_id'  => $hasStock ? $inv['id'] : '',
+                'qty'     => $item['quantity_requested'],
+                'price'   => $hasStock ? $inv['selling_price'] : 0,
+                'disc'    => 0,
+                'in_stock'=> $inStock,
+                'matched' => $inv !== null,
+            ];
+            if (!$hasStock) {
+                $fromQrUnmatched[] = $item['part_name'] . ($item['part_number'] ? ' [' . $item['part_number'] . ']' : '');
+            }
+        }
+        if (empty($fromQrMatchedLines)) {
+            $fromQrMatchedLines[] = ['type'=>'part','desc'=>'','inv_id'=>'','qty'=>1,'price'=>0,'disc'=>0,'in_stock'=>null,'matched'=>false];
+        }
+    }
+}
+// shorthand for use inside form rendering
+$usePreFill = !empty($fromQrMatchedLines) && !isset($_POST['item_desc']);
+
 $cars      = $db->query("SELECT id, chassis_number, registration_number, make, model, owner_name, owner_phone, owner_email, car_type FROM cars ORDER BY make ASC")->fetchAll();
 $jobs      = $db->query("SELECT id, job_number, car_id FROM workshop_jobs WHERE status NOT IN ('completed','cancelled') ORDER BY job_number")->fetchAll();
 $clients   = $db->query("SELECT id, name, phone, email FROM clients WHERE status='active' ORDER BY name ASC")->fetchAll();
@@ -121,6 +202,33 @@ $(function(){
 </div>
 <?php if ($errors): ?><div class="alert alert-danger"><ul class="mb-0"><?php foreach($errors as $err) echo "<li>".e($err)."</li>"; ?></ul></div><?php endif; ?>
 
+<?php if ($fromQr): ?>
+<div class="alert alert-info d-flex flex-wrap align-items-start gap-3 mb-3">
+    <i class="fa fa-file-invoice-dollar fa-lg mt-1 text-primary flex-shrink-0"></i>
+    <div class="flex-fill">
+        <div class="fw-semibold mb-1">
+            Converting Quote Request
+            <a href="<?= BASE_URL ?>/modules/parts_requests/view.php?id=<?= $fromQrId ?>" class="text-decoration-none">
+                <?= e($fromQr['request_number']) ?>
+            </a> to Quotation
+        </div>
+        <?php if ($fromQrVehicleHint): ?>
+        <div class="small text-warning fw-semibold mt-1">
+            <i class="fa fa-triangle-exclamation me-1"></i>
+            Vehicle <strong><?= e($fromQrVehicleHint) ?></strong> is not yet registered in the system — please select or create it in the Vehicle field below.
+        </div>
+        <?php endif; ?>
+        <?php if ($fromQrUnmatched): ?>
+        <div class="small text-muted mt-1">
+            <i class="fa fa-box-open me-1"></i>
+            Parts not found in stock (added without price — update manually):
+            <strong><?= e(implode(', ', $fromQrUnmatched)) ?></strong>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <form method="POST">
 <div class="row g-4">
     <div class="col-lg-8">
@@ -132,31 +240,43 @@ $(function(){
                     <table class="table table-sm mb-2" id="lineItemsTable">
                         <thead><tr><th>Type</th><th style="width:30%">Description</th><th>Part</th><th>Qty</th><th>Unit Price</th><th>Disc%</th><th>Total</th><th></th></tr></thead>
                         <tbody class="line-items-body">
-                            <?php $lineItems = isset($_POST['item_desc']) ? array_keys($_POST['item_desc']) : [0]; ?>
-                            <?php foreach ($lineItems as $i): ?>
+                            <?php
+                            $lineItems = isset($_POST['item_desc'])
+                                ? array_keys($_POST['item_desc'])
+                                : ($usePreFill ? array_keys($fromQrMatchedLines) : [0]);
+                            ?>
+                            <?php foreach ($lineItems as $i):
+                                $pre    = $usePreFill ? ($fromQrMatchedLines[$i] ?? []) : [];
+                                $pType  = $_POST['item_type'][$i]   ?? $pre['type']   ?? 'part';
+                                $pDesc  = $_POST['item_desc'][$i]   ?? $pre['desc']   ?? '';
+                                $pInvId = $_POST['item_inv_id'][$i] ?? $pre['inv_id'] ?? '';
+                                $pQty   = $_POST['item_qty'][$i]    ?? $pre['qty']    ?? 1;
+                                $pPrice = $_POST['item_price'][$i]  ?? $pre['price']  ?? 0;
+                                $pDisc  = $_POST['item_disc'][$i]   ?? $pre['disc']   ?? 0;
+                            ?>
                             <tr class="line-item-row">
                                 <td>
                                     <select name="item_type[]" class="form-select form-select-sm" style="width:100px">
-                                        <option value="part" <?= ($_POST['item_type'][$i]??'part')==='part'?'selected':'' ?>>Part</option>
-                                        <option value="labour" <?= ($_POST['item_type'][$i]??'')==='labour'?'selected':'' ?>>Labour</option>
-                                        <option value="service" <?= ($_POST['item_type'][$i]??'')==='service'?'selected':'' ?>>Service</option>
+                                        <option value="part"    <?= $pType==='part'   ?'selected':'' ?>>Part</option>
+                                        <option value="labour"  <?= $pType==='labour' ?'selected':'' ?>>Labour</option>
+                                        <option value="service" <?= $pType==='service'?'selected':'' ?>>Service</option>
                                     </select>
                                 </td>
-                                <td><input type="text" name="item_desc[]" class="form-control form-control-sm item-desc" value="<?= e($_POST['item_desc'][$i]??'') ?>" placeholder="Description..." required></td>
+                                <td><input type="text" name="item_desc[]" class="form-control form-control-sm item-desc" value="<?= e($pDesc) ?>" placeholder="Description..." required></td>
                                 <td>
                                     <select name="item_inv_id[]" class="form-select form-select-sm select2 inventory-select" style="min-width:150px">
                                         <option value="">From stock...</option>
                                         <?php foreach ($inventory as $inv): ?>
-                                        <option value="<?= $inv['id'] ?>" data-price="<?= $inv['selling_price'] ?>" data-desc="<?= e($inv['part_name']) ?>" <?= ($_POST['item_inv_id'][$i]??'')==$inv['id']?'selected':'' ?>>
+                                        <option value="<?= $inv['id'] ?>" data-price="<?= $inv['selling_price'] ?>" data-desc="<?= e($inv['part_name']) ?>" <?= $pInvId==$inv['id']?'selected':'' ?>>
                                             <?= e(($inv['part_number']?$inv['part_number'].' — ':'').$inv['part_name']) ?>
                                         </option>
                                         <?php endforeach; ?>
                                     </select>
                                 </td>
-                                <td><input type="number" name="item_qty[]" class="form-control form-control-sm item-qty" style="width:65px" value="<?= e($_POST['item_qty'][$i]??1) ?>" min="0.01" step="0.01"></td>
-                                <td><input type="number" name="item_price[]" class="form-control form-control-sm item-price" style="width:90px" value="<?= e($_POST['item_price'][$i]??0) ?>" min="0" step="0.01"></td>
-                                <td><input type="number" name="item_disc[]" class="form-control form-control-sm item-discount" style="width:65px" value="<?= e($_POST['item_disc'][$i]??0) ?>" min="0" max="100" step="0.01"></td>
-                                <td><strong class="item-total"><?= number_format(($_POST['item_qty'][$i]??1)*($_POST['item_price'][$i]??0),2) ?></strong></td>
+                                <td><input type="number" name="item_qty[]"   class="form-control form-control-sm item-qty"      style="width:65px" value="<?= e($pQty) ?>"   min="0.01" step="0.01"></td>
+                                <td><input type="number" name="item_price[]" class="form-control form-control-sm item-price"    style="width:90px" value="<?= e($pPrice) ?>" min="0"    step="0.01"></td>
+                                <td><input type="number" name="item_disc[]"  class="form-control form-control-sm item-discount" style="width:65px" value="<?= e($pDisc) ?>"  min="0"    max="100" step="0.01"></td>
+                                <td><strong class="item-total"><?= number_format((float)$pQty * (float)$pPrice, 2) ?></strong></td>
                                 <td><button type="button" class="btn btn-xs btn-outline-danger remove-line-item"><i class="fa fa-times"></i></button></td>
                             </tr>
                             <?php endforeach; ?>
@@ -203,7 +323,7 @@ $(function(){
                                     data-car-make="<?= e($sbCarMake) ?>"
                                     data-car-model="<?= e($sbCarModel) ?>"
                                     data-car-reg="<?= e($sbVehicleReg) ?>"
-                                    <?= (($preBookingId == $sb['id']) ? 'selected' : '') ?>>
+                                    <?= $preBookingId == $sb['id'] ? 'selected' : '' ?>>
                                 <?= e($sb['booking_number'] . ' — ' . ($sb['client_name'] ?: 'Walk-in') . ($sbVehicleReg ? ' (' . $sbVehicleReg . ')' : '')) ?>
                             </option>
                             <?php endforeach; ?>
@@ -221,7 +341,11 @@ $(function(){
                                 <?= (($_POST['car_id']??$preCarId)==$c['id'])?'selected':'' ?>><?= e($c['make'].' '.$c['model'].' — '.$c['chassis_number']) ?></option>
                             <?php endforeach; ?>
                         </select>
-                        <div id="booking-vehicle-hint" class="alert alert-info py-2 px-3 mt-2 mb-0 small" style="display:none"></div>
+                        <div id="booking-vehicle-hint" class="alert alert-warning py-2 px-3 mt-2 mb-0 small" <?= $fromQrVehicleHint ? '' : 'style="display:none"' ?>>
+                            <?php if ($fromQrVehicleHint): ?>
+                            <i class="fa fa-triangle-exclamation me-1"></i>Vehicle from quote request: <strong><?= e($fromQrVehicleHint) ?></strong> — not yet registered in the system.
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="col-12">
                         <label class="form-label">Job Card (optional)</label>
@@ -245,9 +369,9 @@ $(function(){
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-12"><label class="form-label">Customer Name</label><input type="text" id="customer_name" name="customer_name" class="form-control" value="<?= e($_POST['customer_name']??'') ?>"></div>
-                    <div class="col-6"><label class="form-label">Phone</label><input type="text" id="customer_phone" name="customer_phone" class="form-control" value="<?= e($_POST['customer_phone']??'') ?>"></div>
-                    <div class="col-6"><label class="form-label">Email</label><input type="email" name="customer_email" class="form-control" value="<?= e($_POST['customer_email']??'') ?>"></div>
+                    <div class="col-12"><label class="form-label">Customer Name</label><input type="text" id="customer_name" name="customer_name" class="form-control" value="<?= e($_POST['customer_name'] ?? $fromQrCustomer['name']  ?? '') ?>"></div>
+                    <div class="col-6"><label class="form-label">Phone</label><input type="text" id="customer_phone" name="customer_phone" class="form-control" value="<?= e($_POST['customer_phone'] ?? $fromQrCustomer['phone'] ?? '') ?>"></div>
+                    <div class="col-6"><label class="form-label">Email</label><input type="email" name="customer_email" class="form-control" value="<?= e($_POST['customer_email'] ?? $fromQrCustomer['email'] ?? '') ?>"></div>
                 </div>
             </div>
         </div>
