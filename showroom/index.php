@@ -432,7 +432,9 @@ include __DIR__ . '/header.php';
                         ['Fuel Type', 'fuel', ['petrol','diesel','hybrid','electric'], 'All Fuel Types', $filterFuel, true],
                         ['Transmission', 'trans', ['automatic','manual','cvt'], 'All Types', $filterTrans, true],
                     ];
-                    foreach ($filterGroups as [$label, $name, $options, $placeholder, $current, $ucfirst = false]):
+                    foreach ($filterGroups as $fg):
+                    [$label, $name, $options, $placeholder, $current] = $fg;
+                    $ucfirst = $fg[5] ?? false;
                     ?>
                     <div>
                         <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;display:block;margin-bottom:8px"><?= $label ?></label>
