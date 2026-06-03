@@ -506,28 +506,51 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
         </div>
     </div>
 </div>
+
+<!-- ── Sticky save bar — always visible while the form is open ─────────── -->
+<div class="bg-white border-top py-2 px-3 mt-3" style="position:sticky;bottom:0;z-index:99;box-shadow:0 -2px 8px rgba(0,0,0,.08)">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="text-muted small">Total: KES <strong id="sticky_total">0.00</strong></span>
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm"
+                    onclick="document.getElementById('_after_save').value='view'">
+                <i class="fa fa-save me-1"></i>Save
+            </button>
+            <button type="submit" class="btn btn-outline-secondary btn-sm"
+                    onclick="document.getElementById('_after_save').value='print'">
+                <i class="fa fa-print me-1"></i>Save &amp; Print
+            </button>
+            <button type="submit" class="btn btn-outline-info btn-sm"
+                    onclick="document.getElementById('_after_save').value='send'">
+                <i class="fa fa-envelope me-1"></i>Save &amp; Send
+            </button>
+        </div>
+    </div>
+</div>
+
 </form>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
 <script>
 $(function () {
 
-    /* ── QR pre-fill data from PHP ─────────────────────────────────────── */
+    /* ── PHP data injected for QR pre-fill ───────────────────────────────── */
     var _qr = <?= json_encode($fromQr ? [
         'name'  => $fromQrCustomer['name']  ?? '',
         'phone' => $fromQrCustomer['phone'] ?? '',
         'email' => $fromQrCustomer['email'] ?? '',
     ] : null) ?>;
 
-    /* ── populateCustomer (car owner → customer fields) ─────────────────── */
-    function populateCustomer() {
-        var opt = $('#car_select').find('option:selected');
-        if (opt.val() && opt.data('type') === 'client') {
-            $('#customer_name').val(opt.data('owner') || '');
-            $('#customer_phone').val(opt.data('phone') || '');
-        }
+    /* ── Sync sticky-bar total to the main total display ─────────────────── */
+    var totalEl  = document.getElementById('total_display');
+    var stickyEl = document.getElementById('sticky_total');
+    if (totalEl && stickyEl) {
+        new MutationObserver(function () {
+            stickyEl.textContent = totalEl.textContent;
+        }).observe(totalEl, { childList: true, subtree: true, characterData: true });
+        stickyEl.textContent = totalEl.textContent;
     }
 
-    /* ── Quote Request select → auto-fill car / client / customer ──────────── */
+    /* ── Auto-fill when Quote Request changes ────────────────────────────── */
     function applyQrFill(opt) {
         if (!opt || !opt.val()) return;
         var carId   = parseInt(opt.data('car-id')) || 0;
@@ -545,7 +568,8 @@ $(function () {
         if (email) $('input[name="customer_email"]').val(email);
 
         if (carId) {
-            $('#car_select').val(carId).trigger('change.select2');
+            /* .trigger('change') tells select2 to update its displayed value */
+            $('#car_select').val(String(carId)).trigger('change');
             hint.hide();
         } else if (make || model || reg) {
             var parts = [make, model, reg].filter(Boolean);
@@ -553,7 +577,7 @@ $(function () {
                 '<i class="fa fa-triangle-exclamation me-1"></i>' +
                 'Vehicle: <strong>' + $('<span>').text(parts.join(' ')).html() + '</strong>' +
                 (chassis ? ' &mdash; Chassis: <code>' + $('<span>').text(chassis).html() + '</code>' : '') +
-                ' — not yet registered in system.'
+                ' — not yet registered in the system.'
             ).show();
         }
     }
@@ -562,12 +586,12 @@ $(function () {
         applyQrFill($(this).find('option:selected'));
     });
 
-    // Auto-apply on page load if a QR is pre-selected
+    /* Auto-apply on page load for pre-selected QR */
     if ($('#qr_select').length && $('#qr_select').val()) {
         applyQrFill($('#qr_select').find('option:selected'));
     }
 
-    /* ── Booking select → auto-fill car / job / client / customer ────────── */
+    /* ── Booking select → auto-fill ──────────────────────────────────────── */
     $(document).on('change', '#booking_select', function () {
         var opt  = $(this).find('option:selected');
         var hint = $('#booking-vehicle-hint');
@@ -578,7 +602,7 @@ $(function () {
         var clientId = opt.data('client-id');
 
         if (carId) {
-            $('#car_select').val(carId).trigger('change.select2');
+            $('#car_select').val(String(carId)).trigger('change');
             hint.hide();
         } else {
             var parts = [opt.data('car-make')||'', opt.data('car-model')||'', opt.data('car-reg')||''].filter(Boolean);
@@ -589,15 +613,15 @@ $(function () {
             } else { hint.hide(); }
         }
 
-        if (jobId)    $('select[name="job_id"]').val(jobId).trigger('change.select2');
-        if (clientId) $('#client_select').val(clientId).trigger('change.select2');
+        if (jobId)    $('select[name="job_id"]').val(String(jobId)).trigger('change');
+        if (clientId) $('#client_select').val(String(clientId)).trigger('change');
 
         if (opt.data('client-name'))  $('#customer_name').val(opt.data('client-name'));
         if (opt.data('client-phone')) $('#customer_phone').val(opt.data('client-phone'));
         if (opt.data('client-email')) $('input[name="customer_email"]').val(opt.data('client-email'));
     });
 
-    /* ── Car select → fill owner or clear customer fields ───────────────── */
+    /* ── Car select → fill owner / clear customer ────────────────────────── */
     $(document).on('change', '#car_select', function () {
         var opt = $(this).find('option:selected');
         if (opt.data('type') === 'client') {
@@ -609,7 +633,7 @@ $(function () {
         }
     });
 
-    /* ── Client select → fill name / phone / email ──────────────────────── */
+    /* ── Client select → fill customer fields ────────────────────────────── */
     $(document).on('change', '#client_select', function () {
         var opt = $(this).find('option:selected');
         if (opt.val()) {
@@ -619,18 +643,51 @@ $(function () {
         }
     });
 
-    /* ── On-load init ───────────────────────────────────────────────────── */
-    populateCustomer();
+    /* ── Populate from car owner on load ─────────────────────────────────── */
+    (function populateCustomer() {
+        var opt = $('#car_select').find('option:selected');
+        if (opt.val() && opt.data('type') === 'client') {
+            $('#customer_name').val(opt.data('owner') || '');
+            $('#customer_phone').val(opt.data('phone') || '');
+        }
+    }());
     if ($('#booking_select').val()) $('#booking_select').trigger('change');
 
-    /* ── Re-apply QR customer data after select2 may have changed fields ── */
+    /* ── Re-apply QR customer data last (overrides any JS clearing) ──────── */
     if (_qr) {
         if (_qr.name)  $('#customer_name').val(_qr.name);
         if (_qr.phone) $('#customer_phone').val(_qr.phone);
         if (_qr.email) $('input[name="customer_email"]').val(_qr.email);
     }
 
-    /* ── Recalculate totals ──────────────────────────────────────────────── */
-    recalcTotals && recalcTotals();
+    /* ── Robust Add Line: replaces main.js clone to fix select2 issue ───── */
+    $(document).off('click', '.add-line-item');
+    $(document).on('click', '.add-line-item', function () {
+        var wrapper = $(this).closest('.line-items-wrapper');
+        var first   = wrapper.find('.line-item-row:first');
+        if (!first.length) return;
+
+        /* Build a clean clone from raw HTML — avoids inheriting jQuery/select2 data */
+        var clone = $(first.prop('outerHTML'));
+
+        clone.find('input[type="text"], input[type="email"]').val('');
+        clone.find('input[type="number"]').each(function () {
+            $(this).val($(this).hasClass('item-qty') ? '1' : '0');
+        });
+        clone.find('select').each(function () {
+            $(this).prop('selectedIndex', 0);
+        });
+        clone.find('.item-total').text('0.00');
+
+        wrapper.find('.line-items-body').append(clone);
+
+        if ($.fn.select2) {
+            clone.find('.select2').select2({ theme: 'bootstrap-5', width: '100%' });
+        }
+
+        /* Trigger main.js recalcTotals via its input event listener */
+        clone.find('.item-qty').trigger('input');
+    });
+
 });
 </script>
