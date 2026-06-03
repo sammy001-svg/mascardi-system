@@ -328,19 +328,10 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
                         </tbody>
                     </table>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-primary add-line-item"><i class="fa fa-plus me-1"></i>Add Line</button>
+                <button type="button" class="btn btn-sm btn-outline-primary qr-add-line-item" id="addLineBtn"><i class="fa fa-plus me-1"></i>Add Line</button>
             </div>
         </div>
 
-        <!-- Notes & Terms -->
-        <div class="card mt-3">
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-6"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="3" placeholder="Special instructions, parts to source..."><?= e($_POST['notes']??'') ?></textarea></div>
-                    <div class="col-md-6"><label class="form-label">Terms & Conditions</label><textarea name="terms" class="form-control" rows="3" placeholder="Payment terms, warranty..."><?= e($_POST['terms']??'This quotation is valid for 30 days.') ?></textarea></div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- Right panel -->
@@ -423,6 +414,20 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
                             <i class="fa fa-triangle-exclamation me-1"></i>Vehicle from quote request: <strong><?= e($fromQrVehicleHint) ?></strong> — not yet registered in the system.
                             <?php endif; ?>
                         </div>
+                        <?php if ($fromQrId && ($fromQr['car_make'] ?? '' || $fromQr['car_registration'] ?? '' || $fromQr['car_chassis'] ?? '')): ?>
+                        <div class="alert alert-light border mt-2 py-2 px-3 small mb-0">
+                            <div class="fw-semibold text-primary mb-1"><i class="fa fa-car me-1"></i>Vehicle from Quote Request</div>
+                            <?php if ($fromQr['car_make'] ?? ''): ?>
+                            <div><?= e(trim(($fromQr['car_make'] ?? '').' '.($fromQr['car_model'] ?? ''))) ?></div>
+                            <?php endif; ?>
+                            <?php if ($fromQr['car_registration'] ?? ''): ?>
+                            <div>Reg: <strong class="text-uppercase"><?= e($fromQr['car_registration']) ?></strong></div>
+                            <?php endif; ?>
+                            <?php if ($fromQr['car_chassis'] ?? ''): ?>
+                            <div>Chassis: <code><?= e($fromQr['car_chassis']) ?></code></div>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
                     </div>
                     <div class="col-12">
                         <label class="form-label">Job Card (optional)</label>
@@ -453,77 +458,90 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
             </div>
         </div>
 
-        <!-- Totals -->
-        <div class="card">
-            <div class="card-header"><i class="fa fa-calculator me-2"></i>Totals</div>
-            <div class="card-body">
+    </div>
+</div>
+
+<!-- ── Quote Summary & Save — full width, always visible ───────────────── -->
+<div class="card mt-4 border-primary border-opacity-25">
+    <div class="card-header fw-semibold bg-primary bg-opacity-10">
+        <i class="fa fa-calculator me-2 text-primary"></i>Quote Summary &amp; Save
+    </div>
+    <div class="card-body">
+        <div class="row g-4 align-items-start">
+
+            <!-- Totals breakdown -->
+            <div class="col-md-5">
                 <table class="table table-sm mb-0">
-                    <tr><td class="text-muted">Subtotal</td><td class="text-end fw-semibold">KES <span id="subtotal_display">0.00</span></td></tr>
+                    <tr>
+                        <td class="text-muted">Subtotal</td>
+                        <td class="text-end fw-semibold">KES <span id="subtotal_display">0.00</span></td>
+                    </tr>
                     <tr>
                         <td class="text-muted">Discount</td>
                         <td class="text-end">
-                            <div class="input-group input-group-sm justify-content-end" style="max-width:120px;margin-left:auto">
-                                <input type="number" id="overall_discount" name="overall_discount" class="form-control form-control-sm" value="<?= e($_POST['overall_discount']??0) ?>" min="0" max="100" step="0.01">
+                            <div class="input-group input-group-sm justify-content-end" style="max-width:130px;margin-left:auto">
+                                <input type="number" id="overall_discount" name="overall_discount"
+                                       class="form-control form-control-sm" value="<?= e($_POST['overall_discount']??0) ?>"
+                                       min="0" max="100" step="0.01">
                                 <span class="input-group-text">%</span>
                             </div>
-                            <div class="mt-1">KES <span id="discount_display">0.00</span></div>
+                            <small class="text-muted">- KES <span id="discount_display">0.00</span></small>
                         </td>
                     </tr>
                     <tr>
                         <td class="text-muted">VAT</td>
                         <td class="text-end">
-                            <div class="input-group input-group-sm justify-content-end" style="max-width:120px;margin-left:auto">
-                                <input type="number" id="tax_rate" name="tax_rate" class="form-control form-control-sm" value="<?= e($_POST['tax_rate']??$vatRate) ?>" min="0" max="100" step="0.01">
+                            <div class="input-group input-group-sm justify-content-end" style="max-width:130px;margin-left:auto">
+                                <input type="number" id="tax_rate" name="tax_rate"
+                                       class="form-control form-control-sm" value="<?= e($_POST['tax_rate']??$vatRate) ?>"
+                                       min="0" max="100" step="0.01">
                                 <span class="input-group-text">%</span>
                             </div>
-                            <div class="mt-1">KES <span id="tax_display">0.00</span></div>
+                            <small class="text-muted">KES <span id="tax_display">0.00</span></small>
                         </td>
                     </tr>
-                    <tr class="table-primary"><td><strong>Total</strong></td><td class="text-end"><strong>KES <span id="total_display">0.00</span></strong></td></tr>
+                    <tr class="table-primary">
+                        <td><strong>Total</strong></td>
+                        <td class="text-end"><strong>KES <span id="total_display">0.00</span></strong></td>
+                    </tr>
                 </table>
                 <input type="hidden" id="hidden_subtotal" name="hidden_subtotal">
                 <input type="hidden" id="hidden_discount" name="hidden_discount">
-                <input type="hidden" id="hidden_tax" name="hidden_tax">
-                <input type="hidden" id="hidden_total" name="hidden_total">
-                <input type="hidden" name="_after_save" id="_after_save" value="view">
-                <div class="d-grid gap-2 mt-3">
-                    <button type="submit" class="btn btn-primary"
-                            onclick="document.getElementById('_after_save').value='view'">
-                        <i class="fa fa-save me-1"></i>Save Quotation
-                    </button>
-                    <div class="btn-group w-100" role="group">
-                        <button type="submit" class="btn btn-outline-secondary"
-                                onclick="document.getElementById('_after_save').value='print'">
-                            <i class="fa fa-print me-1"></i>Save &amp; Print
-                        </button>
-                        <button type="submit" class="btn btn-outline-info"
-                                onclick="document.getElementById('_after_save').value='send'">
-                            <i class="fa fa-envelope me-1"></i>Save &amp; Send
-                        </button>
-                    </div>
+                <input type="hidden" id="hidden_tax"      name="hidden_tax">
+                <input type="hidden" id="hidden_total"    name="hidden_total">
+            </div>
+
+            <!-- Notes & Terms -->
+            <div class="col-md-4">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Notes</label>
+                    <textarea name="notes" class="form-control form-control-sm" rows="3"
+                              placeholder="Special instructions, parts to source..."><?= e($_POST['notes']??'') ?></textarea>
+                </div>
+                <div>
+                    <label class="form-label fw-semibold small">Terms &amp; Conditions</label>
+                    <textarea name="terms" class="form-control form-control-sm" rows="3"
+                              placeholder="Payment terms, warranty..."><?= e($_POST['terms']??'This quotation is valid for 30 days.') ?></textarea>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
 
-<!-- ── Sticky save bar — always visible while the form is open ─────────── -->
-<div class="bg-white border-top py-2 px-3 mt-3" style="position:sticky;bottom:0;z-index:99;box-shadow:0 -2px 8px rgba(0,0,0,.08)">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span class="text-muted small">Total: KES <strong id="sticky_total">0.00</strong></span>
-        <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary btn-sm"
-                    onclick="document.getElementById('_after_save').value='view'">
-                <i class="fa fa-save me-1"></i>Save
-            </button>
-            <button type="submit" class="btn btn-outline-secondary btn-sm"
-                    onclick="document.getElementById('_after_save').value='print'">
-                <i class="fa fa-print me-1"></i>Save &amp; Print
-            </button>
-            <button type="submit" class="btn btn-outline-info btn-sm"
-                    onclick="document.getElementById('_after_save').value='send'">
-                <i class="fa fa-envelope me-1"></i>Save &amp; Send
-            </button>
+            <!-- Save buttons -->
+            <div class="col-md-3 d-flex flex-column gap-2">
+                <input type="hidden" name="_after_save" id="_after_save" value="view">
+                <button type="submit" class="btn btn-primary"
+                        onclick="document.getElementById('_after_save').value='view'">
+                    <i class="fa fa-save me-2"></i>Save Quotation
+                </button>
+                <button type="submit" class="btn btn-outline-secondary"
+                        onclick="document.getElementById('_after_save').value='print'">
+                    <i class="fa fa-print me-2"></i>Save &amp; Print
+                </button>
+                <button type="submit" class="btn btn-outline-info"
+                        onclick="document.getElementById('_after_save').value='send'">
+                    <i class="fa fa-envelope me-2"></i>Save &amp; Send
+                </button>
+            </div>
+
         </div>
     </div>
 </div>
@@ -533,160 +551,117 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
 <script>
 $(function () {
 
-    /* ── PHP data injected for QR pre-fill ───────────────────────────────── */
+    /* ── QR customer data from PHP ───────────────────────────────────────── */
     var _qr = <?= json_encode($fromQr ? [
         'name'  => $fromQrCustomer['name']  ?? '',
         'phone' => $fromQrCustomer['phone'] ?? '',
         'email' => $fromQrCustomer['email'] ?? '',
     ] : null) ?>;
 
-    /* ── Sync sticky-bar total to the main total display ─────────────────── */
-    var totalEl  = document.getElementById('total_display');
-    var stickyEl = document.getElementById('sticky_total');
-    if (totalEl && stickyEl) {
-        new MutationObserver(function () {
-            stickyEl.textContent = totalEl.textContent;
-        }).observe(totalEl, { childList: true, subtree: true, characterData: true });
-        stickyEl.textContent = totalEl.textContent;
-    }
-
-    /* ── Auto-fill when Quote Request changes ────────────────────────────── */
+    /* ── Quote Request selector → auto-fill client & car ─────────────────── */
     function applyQrFill(opt) {
         if (!opt || !opt.val()) return;
-        var carId   = parseInt(opt.data('car-id')) || 0;
-        var name    = opt.data('client-name')  || '';
-        var phone   = opt.data('client-phone') || '';
-        var email   = opt.data('client-email') || '';
-        var make    = opt.data('car-make')     || '';
-        var model   = opt.data('car-model')    || '';
-        var reg     = opt.data('car-reg')      || '';
-        var chassis = opt.data('chassis')      || '';
-        var hint    = $('#booking-vehicle-hint');
+        var carId = parseInt(opt.data('car-id')) || 0;
+        var name  = opt.data('client-name')  || '';
+        var phone = opt.data('client-phone') || '';
+        var email = opt.data('client-email') || '';
 
-        if (name)  $('#customer_name').val(name);
-        if (phone) $('#customer_phone').val(phone);
-        if (email) $('input[name="customer_email"]').val(email);
+        if (name)  { document.getElementById('customer_name').value  = name;  }
+        if (phone) { document.getElementById('customer_phone').value = phone; }
+        if (email) { document.querySelector('input[name="customer_email"]').value = email; }
 
         if (carId) {
-            /* .trigger('change') tells select2 to update its displayed value */
-            $('#car_select').val(String(carId)).trigger('change');
-            hint.hide();
-        } else if (make || model || reg) {
-            var parts = [make, model, reg].filter(Boolean);
-            hint.html(
-                '<i class="fa fa-triangle-exclamation me-1"></i>' +
-                'Vehicle: <strong>' + $('<span>').text(parts.join(' ')).html() + '</strong>' +
-                (chassis ? ' &mdash; Chassis: <code>' + $('<span>').text(chassis).html() + '</code>' : '') +
-                ' — not yet registered in the system.'
-            ).show();
+            var sel = document.getElementById('car_select');
+            if (sel) {
+                sel.value = carId;
+                /* Notify select2 so its displayed text updates */
+                $(sel).trigger('change');
+            }
         }
     }
 
-    $(document).on('change', '#qr_select', function () {
+    $('#qr_select').on('change', function () {
         applyQrFill($(this).find('option:selected'));
     });
 
-    /* Auto-apply on page load for pre-selected QR */
-    if ($('#qr_select').length && $('#qr_select').val()) {
-        applyQrFill($('#qr_select').find('option:selected'));
+    /* Auto-fill on page load when a QR is already selected */
+    var qrSel = document.getElementById('qr_select');
+    if (qrSel && qrSel.value) {
+        applyQrFill($('#qr_select').find('option[value="' + qrSel.value + '"]'));
     }
 
-    /* ── Booking select → auto-fill ──────────────────────────────────────── */
-    $(document).on('change', '#booking_select', function () {
-        var opt  = $(this).find('option:selected');
-        var hint = $('#booking-vehicle-hint');
-        if (!opt.val()) { hint.hide(); return; }
+    /* ── Re-apply QR customer data after select2 may have changed fields ─── */
+    if (_qr) {
+        if (_qr.name  && document.getElementById('customer_name'))
+            document.getElementById('customer_name').value  = _qr.name;
+        if (_qr.phone && document.getElementById('customer_phone'))
+            document.getElementById('customer_phone').value = _qr.phone;
+        var emailEl = document.querySelector('input[name="customer_email"]');
+        if (_qr.email && emailEl) emailEl.value = _qr.email;
+    }
 
+    /* ── Booking select ──────────────────────────────────────────────────── */
+    $('#booking_select').on('change', function () {
+        var opt = $(this).find('option:selected');
+        if (!opt.val()) return;
         var carId    = opt.data('car-id');
         var jobId    = opt.data('job-id');
         var clientId = opt.data('client-id');
-
-        if (carId) {
-            $('#car_select').val(String(carId)).trigger('change');
-            hint.hide();
-        } else {
-            var parts = [opt.data('car-make')||'', opt.data('car-model')||'', opt.data('car-reg')||''].filter(Boolean);
-            if (parts.length) {
-                hint.html('<i class="fa fa-car me-1"></i>Vehicle from booking: <strong>' +
-                    $('<span>').text(parts.join(' ')).html() +
-                    '</strong> <span class="text-muted">(not yet registered in system)</span>').show();
-            } else { hint.hide(); }
-        }
-
-        if (jobId)    $('select[name="job_id"]').val(String(jobId)).trigger('change');
-        if (clientId) $('#client_select').val(String(clientId)).trigger('change');
-
-        if (opt.data('client-name'))  $('#customer_name').val(opt.data('client-name'));
-        if (opt.data('client-phone')) $('#customer_phone').val(opt.data('client-phone'));
-        if (opt.data('client-email')) $('input[name="customer_email"]').val(opt.data('client-email'));
+        if (carId)    { $('#car_select').val(String(carId)).trigger('change'); }
+        if (jobId)    { $('select[name="job_id"]').val(String(jobId)).trigger('change'); }
+        if (clientId) { $('#client_select').val(String(clientId)).trigger('change'); }
+        if (opt.data('client-name'))  document.getElementById('customer_name').value  = opt.data('client-name');
+        if (opt.data('client-phone')) document.getElementById('customer_phone').value = opt.data('client-phone');
+        var em = document.querySelector('input[name="customer_email"]');
+        if (opt.data('client-email') && em) em.value = opt.data('client-email');
     });
 
-    /* ── Car select → fill owner / clear customer ────────────────────────── */
-    $(document).on('change', '#car_select', function () {
+    /* ── Client select ──────────────────────────────────────────────────── */
+    $('#client_select').on('change', function () {
         var opt = $(this).find('option:selected');
-        if (opt.data('type') === 'client') {
-            $('#customer_name').val(opt.data('owner') || '');
-            $('#customer_phone').val(opt.data('phone') || '');
-        } else if (!$('#client_select').val() && !$('#booking_select').val() && !_qr) {
-            $('#customer_name').val('');
-            $('#customer_phone').val('');
-        }
+        if (!opt.val()) return;
+        document.getElementById('customer_name').value  = opt.data('name')  || '';
+        document.getElementById('customer_phone').value = opt.data('phone') || '';
+        var em = document.querySelector('input[name="customer_email"]');
+        if (em) em.value = opt.data('email') || '';
     });
 
-    /* ── Client select → fill customer fields ────────────────────────────── */
-    $(document).on('change', '#client_select', function () {
-        var opt = $(this).find('option:selected');
-        if (opt.val()) {
-            $('#customer_name').val(opt.data('name') || '');
-            $('#customer_phone').val(opt.data('phone') || '');
-            $('input[name="customer_email"]').val(opt.data('email') || '');
-        }
-    });
+    /* ── Add Line — built from scratch, no clone conflicts ───────────────── */
+    /* Capture inventory options HTML once from the first row */
+    var _invOpts = document.querySelector('#lineItemsTable .inventory-select');
+    _invOpts = _invOpts ? _invOpts.innerHTML : '<option value="">From stock...</option>';
 
-    /* ── Populate from car owner on load ─────────────────────────────────── */
-    (function populateCustomer() {
-        var opt = $('#car_select').find('option:selected');
-        if (opt.val() && opt.data('type') === 'client') {
-            $('#customer_name').val(opt.data('owner') || '');
-            $('#customer_phone').val(opt.data('phone') || '');
-        }
-    }());
-    if ($('#booking_select').val()) $('#booking_select').trigger('change');
+    document.getElementById('addLineBtn').addEventListener('click', function () {
+        var tbody = document.querySelector('#lineItemsTable .line-items-body');
+        if (!tbody) return;
 
-    /* ── Re-apply QR customer data last (overrides any JS clearing) ──────── */
-    if (_qr) {
-        if (_qr.name)  $('#customer_name').val(_qr.name);
-        if (_qr.phone) $('#customer_phone').val(_qr.phone);
-        if (_qr.email) $('input[name="customer_email"]').val(_qr.email);
-    }
+        var tr = document.createElement('tr');
+        tr.className = 'line-item-row';
+        tr.innerHTML =
+            '<td><select name="item_type[]" class="form-select form-select-sm" style="width:100px">' +
+                '<option value="part">Part</option>' +
+                '<option value="labour">Labour</option>' +
+                '<option value="service">Service</option>' +
+            '</select></td>' +
+            '<td><input type="text" name="item_desc[]" class="form-control form-control-sm item-desc" placeholder="Description..." required></td>' +
+            '<td><select name="item_inv_id[]" class="form-select form-select-sm select2 inventory-select" style="min-width:150px">' +
+                _invOpts +
+            '</select></td>' +
+            '<td><input type="number" name="item_qty[]" class="form-control form-control-sm item-qty" style="width:65px" value="1" min="0.01" step="0.01"></td>' +
+            '<td><input type="number" name="item_price[]" class="form-control form-control-sm item-price" style="width:90px" value="0" min="0" step="0.01"></td>' +
+            '<td><input type="number" name="item_disc[]" class="form-control form-control-sm item-discount" style="width:65px" value="0" min="0" max="100" step="0.01"></td>' +
+            '<td><strong class="item-total">0.00</strong></td>' +
+            '<td><button type="button" class="btn btn-xs btn-outline-danger remove-line-item"><i class="fa fa-times"></i></button></td>';
 
-    /* ── Robust Add Line: replaces main.js clone to fix select2 issue ───── */
-    $(document).off('click', '.add-line-item');
-    $(document).on('click', '.add-line-item', function () {
-        var wrapper = $(this).closest('.line-items-wrapper');
-        var first   = wrapper.find('.line-item-row:first');
-        if (!first.length) return;
-
-        /* Build a clean clone from raw HTML — avoids inheriting jQuery/select2 data */
-        var clone = $(first.prop('outerHTML'));
-
-        clone.find('input[type="text"], input[type="email"]').val('');
-        clone.find('input[type="number"]').each(function () {
-            $(this).val($(this).hasClass('item-qty') ? '1' : '0');
-        });
-        clone.find('select').each(function () {
-            $(this).prop('selectedIndex', 0);
-        });
-        clone.find('.item-total').text('0.00');
-
-        wrapper.find('.line-items-body').append(clone);
+        tbody.appendChild(tr);
 
         if ($.fn.select2) {
-            clone.find('.select2').select2({ theme: 'bootstrap-5', width: '100%' });
+            $(tr).find('.select2').select2({ theme: 'bootstrap-5', width: '100%' });
         }
 
-        /* Trigger main.js recalcTotals via its input event listener */
-        clone.find('.item-qty').trigger('input');
+        /* Fire main.js recalcTotals via its registered input event */
+        $(tr).find('.item-qty').trigger('input');
+        $(tr).find('.item-desc').focus();
     });
 
 });
