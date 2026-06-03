@@ -275,12 +275,215 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
 <?php endif; ?>
 
 <form method="POST">
+
+<!-- ══ ACTION BAR — always at top, impossible to miss ══════════════════════ -->
+<div class="card mb-4" style="border-left:4px solid #2563eb">
+    <div class="card-body py-3">
+        <div class="row g-3 align-items-center">
+            <div class="col-sm-3">
+                <div class="text-muted small">Subtotal</div>
+                <div class="fw-bold">KES <span id="subtotal_display">0.00</span></div>
+            </div>
+            <div class="col-sm-3">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small mb-1">Disc %</label>
+                        <input type="number" id="overall_discount" name="overall_discount"
+                               class="form-control form-control-sm"
+                               value="<?= e($_POST['overall_discount']??0) ?>"
+                               min="0" max="100" step="0.01">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small mb-1">VAT %</label>
+                        <input type="number" id="tax_rate" name="tax_rate"
+                               class="form-control form-control-sm"
+                               value="<?= e($_POST['tax_rate']??$vatRate) ?>"
+                               min="0" max="100" step="0.01">
+                    </div>
+                </div>
+                <small class="text-muted">-KES <span id="discount_display">0.00</span> / VAT KES <span id="tax_display">0.00</span></small>
+            </div>
+            <div class="col-sm-2">
+                <div class="text-muted small">Total</div>
+                <div class="fw-bold fs-5" style="color:#2563eb">KES <span id="total_display">0.00</span></div>
+            </div>
+            <div class="col-sm-4 text-end">
+                <input type="hidden" name="_after_save" id="_after_save" value="view">
+                <input type="hidden" id="hidden_subtotal" name="hidden_subtotal">
+                <input type="hidden" id="hidden_discount" name="hidden_discount">
+                <input type="hidden" id="hidden_tax"      name="hidden_tax">
+                <input type="hidden" id="hidden_total"    name="hidden_total">
+                <div class="d-flex gap-2 justify-content-end flex-wrap">
+                    <button type="submit" class="btn btn-primary"
+                            onclick="document.getElementById('_after_save').value='view'">
+                        <i class="fa fa-save me-1"></i>Save
+                    </button>
+                    <button type="submit" class="btn btn-outline-secondary"
+                            onclick="document.getElementById('_after_save').value='print'">
+                        <i class="fa fa-print me-1"></i>Save &amp; Print
+                    </button>
+                    <button type="submit" class="btn btn-outline-info"
+                            onclick="document.getElementById('_after_save').value='send'">
+                        <i class="fa fa-envelope me-1"></i>Save &amp; Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══ TWO-COLUMN LAYOUT ════════════════════════════════════════════════════ -->
 <div class="row g-4">
-    <div class="col-lg-8">
-        <!-- Line Items -->
-        <div class="card">
-            <div class="card-header"><i class="fa fa-list me-2"></i>Line Items</div>
-            <div class="card-body line-items-wrapper">
+
+<!-- LEFT COLUMN ──────────────────────────────────────────────────────────── -->
+<div class="col-lg-8">
+
+    <!-- Quotation Info card -->
+    <div class="card mb-4">
+        <div class="card-header fw-semibold"><i class="fa fa-info-circle me-2 text-primary"></i>Quotation Details</div>
+        <div class="card-body">
+            <div class="row g-3">
+
+                <!-- QR or Booking selector -->
+                <div class="col-12">
+                    <?php if ($fromQrId): ?>
+                    <label class="form-label fw-semibold"><i class="fa fa-file-invoice me-1 text-primary"></i>Quote Request <small class="text-muted fw-normal">— select to auto-fill</small></label>
+                    <select name="qr_id" id="qr_select" class="form-select select2">
+                        <option value="">— Select quote request —</option>
+                        <?php foreach ($quoteRequests as $qrOpt): ?>
+                        <option value="<?= (int)$qrOpt['id'] ?>"
+                                data-car-id="<?= (int)($qrOpt['matched_car_id'] ?? 0) ?>"
+                                data-client-name="<?= e($qrOpt['client_name']   ?? '') ?>"
+                                data-client-phone="<?= e($qrOpt['client_phone'] ?? '') ?>"
+                                data-client-email="<?= e($qrOpt['client_email'] ?? '') ?>"
+                                data-car-make="<?= e($qrOpt['car_make']         ?? '') ?>"
+                                data-car-model="<?= e($qrOpt['car_model']       ?? '') ?>"
+                                data-car-reg="<?= e($qrOpt['car_registration']  ?? '') ?>"
+                                data-chassis="<?= e($qrOpt['car_chassis']       ?? '') ?>"
+                                <?= ((int)$fromQrId === (int)$qrOpt['id']) ? 'selected' : '' ?>>
+                            <?= e($qrOpt['request_number'] ?? '') ?>
+                            — <?= e($qrOpt['client_name'] ?: 'Walk-in') ?>
+                            <?php if (!empty($qrOpt['car_registration']) || !empty($qrOpt['car_make'])): ?>
+                            (<?= e(trim(($qrOpt['car_make'] ?? '').' '.($qrOpt['car_model'] ?? ''))) ?><?= !empty($qrOpt['car_registration']) ? ' · '.e($qrOpt['car_registration']) : '' ?>)
+                            <?php endif; ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select name="booking_id" id="booking_select" class="d-none"></select>
+                    <?php else: ?>
+                    <label class="form-label fw-semibold">Service Booking <small class="text-muted fw-normal">(optional)</small></label>
+                    <select name="booking_id" id="booking_select" class="form-select select2">
+                        <option value="">— Select booking —</option>
+                        <?php foreach ($serviceBookings as $sb):
+                            $sbReg   = $sb['car_registration'] ?: $sb['registration_number'] ?: '';
+                            $sbMake  = $sb['car_make']  ?: $sb['car_make_db']  ?: '';
+                            $sbModel = $sb['car_model'] ?: $sb['car_model_db'] ?: '';
+                        ?>
+                        <option value="<?= (int)$sb['id'] ?>"
+                                data-car-id="<?= (int)($sb['car_id'] ?? 0) ?>"
+                                data-job-id="<?= (int)($sb['job_id'] ?? 0) ?>"
+                                data-client-id="<?= (int)($sb['client_id'] ?? 0) ?>"
+                                data-client-name="<?= e($sb['client_name']  ?? '') ?>"
+                                data-client-phone="<?= e($sb['client_phone'] ?? '') ?>"
+                                data-client-email="<?= e($sb['client_email'] ?? '') ?>"
+                                data-car-make="<?= e($sbMake) ?>"
+                                data-car-model="<?= e($sbModel) ?>"
+                                data-car-reg="<?= e($sbReg) ?>"
+                                <?= (int)$preBookingId === (int)$sb['id'] ? 'selected' : '' ?>>
+                            <?= e($sb['booking_number'].' — '.($sb['client_name'] ?: 'Walk-in').($sbReg ? ' ('.$sbReg.')' : '')) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Vehicle selector -->
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Vehicle <span class="text-danger">*</span></label>
+                    <select name="car_id" id="car_select" class="form-select select2" required>
+                        <option value="">Select car...</option>
+                        <?php foreach ($cars as $c): ?>
+                        <option value="<?= (int)$c['id'] ?>"
+                                data-type="<?= e($c['car_type']) ?>"
+                                data-owner="<?= e($c['owner_name'] ?? '') ?>"
+                                data-phone="<?= e($c['owner_phone'] ?? '') ?>"
+                                <?= (int)(($_POST['car_id'] ?? $preCarId) ?: 0) === (int)$c['id'] ? 'selected' : '' ?>>
+                            <?= e($c['make'].' '.$c['model'].' — '.$c['chassis_number']) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php
+                    $qrMake = $fromQr['car_make']         ?? '';
+                    $qrMod  = $fromQr['car_model']        ?? '';
+                    $qrReg  = $fromQr['car_registration'] ?? '';
+                    $qrChas = $fromQr['car_chassis']      ?? '';
+                    if ($fromQrId && ($qrMake || $qrReg || $qrChas)): ?>
+                    <div class="alert alert-light border mt-2 py-2 px-3 small mb-0">
+                        <strong class="text-primary"><i class="fa fa-car me-1"></i>Vehicle from Quote Request</strong><br>
+                        <?php if ($qrMake): ?><?= e(trim($qrMake.' '.$qrMod)) ?><br><?php endif; ?>
+                        <?php if ($qrReg):  ?>Reg: <strong><?= e(strtoupper($qrReg)) ?></strong><br><?php endif; ?>
+                        <?php if ($qrChas): ?>Chassis: <code><?= e($qrChas) ?></code><?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Job card + Dates -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Job Card <small class="text-muted">(opt.)</small></label>
+                    <select name="job_id" id="job_select" class="form-select select2">
+                        <option value="">Select job...</option>
+                        <?php foreach ($jobs as $j): ?>
+                        <option value="<?= (int)$j['id'] ?>" <?= (int)(($_POST['job_id'] ?? $preJobId) ?: 0) === (int)$j['id'] ? 'selected' : '' ?>><?= e($j['job_number']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Date</label>
+                    <input type="date" name="date" class="form-control mb-2" value="<?= e($_POST['date'] ?? date('Y-m-d')) ?>">
+                    <label class="form-label fw-semibold">Valid Until</label>
+                    <input type="date" name="valid_until" class="form-control" value="<?= e($_POST['valid_until'] ?? date('Y-m-d', strtotime('+30 days'))) ?>">
+                </div>
+
+                <!-- Client -->
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Link to Client <small class="text-muted">(opt.)</small></label>
+                    <select name="client_id" id="client_select" class="form-select select2">
+                        <option value="">— No client —</option>
+                        <?php foreach ($clients as $cl): ?>
+                        <option value="<?= (int)$cl['id'] ?>"
+                                data-name="<?= e($cl['name']) ?>"
+                                data-email="<?= e($cl['email'] ?? '') ?>"
+                                data-phone="<?= e($cl['phone'] ?? '') ?>"
+                                <?= (int)(($_POST['client_id'] ?? $preClientId) ?: 0) === (int)$cl['id'] ? 'selected' : '' ?>>
+                            <?= e($cl['name']) ?><?= !empty($cl['phone']) ? ' — '.$cl['phone'] : '' ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Customer Name</label>
+                    <input type="text" id="customer_name" name="customer_name" class="form-control"
+                           value="<?= e($_POST['customer_name'] ?? $fromQrCustomer['name']  ?? '') ?>">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Phone</label>
+                    <input type="text" id="customer_phone" name="customer_phone" class="form-control"
+                           value="<?= e($_POST['customer_phone'] ?? $fromQrCustomer['phone'] ?? '') ?>">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Email</label>
+                    <input type="email" name="customer_email" class="form-control"
+                           value="<?= e($_POST['customer_email'] ?? $fromQrCustomer['email'] ?? '') ?>">
+                </div>
+
+            </div><!-- /row g-3 -->
+        </div><!-- /card-body -->
+    </div><!-- /Quotation Details card -->
+
+    <!-- Line Items card -->
+    <div class="card mb-4">
+        <div class="card-header fw-semibold"><i class="fa fa-list me-2 text-primary"></i>Line Items</div>
+        <div class="card-body line-items-wrapper">
                 <div class="table-responsive">
                     <table class="table table-sm mb-2" id="lineItemsTable">
                         <thead><tr><th>Type</th><th style="width:30%">Description</th><th>Part</th><th>Qty</th><th>Unit Price</th><th>Disc%</th><th>Total</th><th></th></tr></thead>
@@ -332,202 +535,38 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
             </div>
         </div>
 
-    </div>
+    </div><!-- /line-items card -->
 
-    <!-- Right panel -->
-    <div class="col-lg-4">
-        <div class="card mb-3">
-            <div class="card-header"><i class="fa fa-car me-2"></i>Quotation Info</div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-12">
-                        <?php if ($fromQrId): ?>
-                        <!-- Quote Request selector (replaces Service Booking when coming from QR) -->
-                        <label class="form-label">
-                            <i class="fa fa-file-invoice me-1 text-primary"></i>Quote Request
-                            <small class="text-muted fw-normal">— select to auto-fill client &amp; vehicle</small>
-                        </label>
-                        <select name="qr_id" id="qr_select" class="form-select select2">
-                            <option value="">— Select quote request —</option>
-                            <?php foreach ($quoteRequests as $qrOpt): ?>
-                            <option value="<?= $qrOpt['id'] ?>"
-                                    data-car-id="<?= (int)($qrOpt['matched_car_id'] ?? 0) ?>"
-                                    data-client-name="<?= e($qrOpt['client_name']    ?? '') ?>"
-                                    data-client-phone="<?= e($qrOpt['client_phone']  ?? '') ?>"
-                                    data-client-email="<?= e($qrOpt['client_email']  ?? '') ?>"
-                                    data-car-make="<?= e($qrOpt['car_make']        ?? '') ?>"
-                                    data-car-model="<?= e($qrOpt['car_model']       ?? '') ?>"
-                                    data-car-reg="<?= e($qrOpt['car_registration']  ?? '') ?>"
-                                    data-chassis="<?= e($qrOpt['car_chassis']       ?? '') ?>"
-                                    <?= $fromQrId == $qrOpt['id'] ? 'selected' : '' ?>>
-                                <?= e($qrOpt['request_number']) ?>
-                                — <?= e($qrOpt['client_name'] ?: 'Walk-in') ?>
-                                <?php if ($qrOpt['car_registration'] || $qrOpt['car_make']): ?>
-                                (<?= e(trim($qrOpt['car_make'].' '.$qrOpt['car_model'])) ?><?= $qrOpt['car_registration'] ? ' · '.$qrOpt['car_registration'] : '' ?>)
-                                <?php endif; ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <!-- hidden so booking_select change handler still has its element -->
-                        <select name="booking_id" id="booking_select" class="d-none"></select>
-                        <?php else: ?>
-                        <!-- Standard Service Booking selector -->
-                        <label class="form-label">Service Booking <small class="text-muted">(optional)</small></label>
-                        <select name="booking_id" id="booking_select" class="form-select select2">
-                            <option value="">— Select booking —</option>
-                            <?php foreach ($serviceBookings as $sb):
-                                $sbVehicleReg = $sb['car_registration'] ?: $sb['registration_number'] ?: '';
-                                $sbCarMake    = $sb['car_make'] ?: $sb['car_make_db'] ?: '';
-                                $sbCarModel   = $sb['car_model'] ?: $sb['car_model_db'] ?: '';
-                            ?>
-                            <option value="<?= $sb['id'] ?>"
-                                    data-car-id="<?= $sb['car_id'] ?>"
-                                    data-job-id="<?= $sb['job_id'] ?? '' ?>"
-                                    data-client-id="<?= $sb['client_id'] ?>"
-                                    data-client-name="<?= e($sb['client_name'] ?: '') ?>"
-                                    data-client-phone="<?= e($sb['client_phone'] ?: '') ?>"
-                                    data-client-email="<?= e($sb['client_email'] ?: '') ?>"
-                                    data-car-make="<?= e($sbCarMake) ?>"
-                                    data-car-model="<?= e($sbCarModel) ?>"
-                                    data-car-reg="<?= e($sbVehicleReg) ?>"
-                                    <?= $preBookingId == $sb['id'] ? 'selected' : '' ?>>
-                                <?= e($sb['booking_number'] . ' — ' . ($sb['client_name'] ?: 'Walk-in') . ($sbVehicleReg ? ' (' . $sbVehicleReg . ')' : '')) ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <?php endif; ?>
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-                        <select name="car_id" id="car_select" class="form-select select2" required>
-                            <option value="">Select car...</option>
-                            <?php foreach ($cars as $c): ?>
-                            <option value="<?= $c['id'] ?>"
-                                data-type="<?= $c['car_type'] ?>"
-                                data-owner="<?= e($c['owner_name']) ?>"
-                                data-phone="<?= e($c['owner_phone']) ?>"
-                                <?= (($_POST['car_id']??$preCarId)==$c['id'])?'selected':'' ?>><?= e($c['make'].' '.$c['model'].' — '.$c['chassis_number']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <div id="booking-vehicle-hint" class="alert alert-warning py-2 px-3 mt-2 mb-0 small" <?= $fromQrVehicleHint ? '' : 'style="display:none"' ?>>
-                            <?php if ($fromQrVehicleHint): ?>
-                            <i class="fa fa-triangle-exclamation me-1"></i>Vehicle from quote request: <strong><?= e($fromQrVehicleHint) ?></strong> — not yet registered in the system.
-                            <?php endif; ?>
-                        </div>
-                        <?php if ($fromQrId && ($fromQr['car_make'] ?? '' || $fromQr['car_registration'] ?? '' || $fromQr['car_chassis'] ?? '')): ?>
-                        <div class="alert alert-light border mt-2 py-2 px-3 small mb-0">
-                            <div class="fw-semibold text-primary mb-1"><i class="fa fa-car me-1"></i>Vehicle from Quote Request</div>
-                            <?php if ($fromQr['car_make'] ?? ''): ?>
-                            <div><?= e(trim(($fromQr['car_make'] ?? '').' '.($fromQr['car_model'] ?? ''))) ?></div>
-                            <?php endif; ?>
-                            <?php if ($fromQr['car_registration'] ?? ''): ?>
-                            <div>Reg: <strong class="text-uppercase"><?= e($fromQr['car_registration']) ?></strong></div>
-                            <?php endif; ?>
-                            <?php if ($fromQr['car_chassis'] ?? ''): ?>
-                            <div>Chassis: <code><?= e($fromQr['car_chassis']) ?></code></div>
-                            <?php endif; ?>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Job Card (optional)</label>
-                        <select name="job_id" class="form-select select2">
-                            <option value="">Select job...</option>
-                            <?php foreach ($jobs as $j): ?>
-                            <option value="<?= $j['id'] ?>" <?= (($_POST['job_id']??$preJobId)==$j['id'])?'selected':'' ?>><?= e($j['job_number']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-6"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="<?= e($_POST['date']??date('Y-m-d')) ?>"></div>
-                    <div class="col-6"><label class="form-label">Valid Until</label><input type="date" name="valid_until" class="form-control" value="<?= e($_POST['valid_until']??date('Y-m-d', strtotime('+30 days'))) ?>"></div>
-                    <div class="col-12">
-                        <label class="form-label">Link to Client <small class="text-muted">(optional)</small></label>
-                        <select name="client_id" id="client_select" class="form-select select2">
-                            <option value="">— No client —</option>
-                            <?php foreach ($clients as $cl): ?>
-                            <option value="<?= $cl['id'] ?>" data-name="<?= e($cl['name']) ?>" data-email="<?= e($cl['email']) ?>" data-phone="<?= e($cl['phone']) ?>" <?= (($_POST['client_id']??$preClientId??'')==$cl['id'])?'selected':'' ?>>
-                                <?= e($cl['name']) ?><?= $cl['phone']?' — '.$cl['phone']:'' ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-12"><label class="form-label">Customer Name</label><input type="text" id="customer_name" name="customer_name" class="form-control" value="<?= e($_POST['customer_name'] ?? $fromQrCustomer['name']  ?? '') ?>"></div>
-                    <div class="col-6"><label class="form-label">Phone</label><input type="text" id="customer_phone" name="customer_phone" class="form-control" value="<?= e($_POST['customer_phone'] ?? $fromQrCustomer['phone'] ?? '') ?>"></div>
-                    <div class="col-6"><label class="form-label">Email</label><input type="email" name="customer_email" class="form-control" value="<?= e($_POST['customer_email'] ?? $fromQrCustomer['email'] ?? '') ?>"></div>
+    <!-- Notes & Terms -->
+    <div class="card">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Notes</label>
+                    <textarea name="notes" class="form-control" rows="3" placeholder="Special instructions..."><?= e($_POST['notes'] ?? '') ?></textarea>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Terms &amp; Conditions</label>
+                    <textarea name="terms" class="form-control" rows="3" placeholder="Payment terms, warranty..."><?= e($_POST['terms'] ?? 'This quotation is valid for 30 days.') ?></textarea>
                 </div>
             </div>
         </div>
-
     </div>
-</div>
 
-<!-- ── Quote Summary & Save — full width, always visible ───────────────── -->
-<div class="card mt-4" style="border:1px solid #93c5fd">
-    <div class="card-header fw-semibold" style="background:#eff6ff">
-        <i class="fa fa-calculator me-2 text-primary"></i>Quote Summary &amp; Save
-    </div>
-    <div class="card-body">
-        <div class="row g-4 align-items-start">
+</div><!-- /col-lg-8 -->
 
-            <!-- Totals breakdown -->
-            <div class="col-md-5">
-                <table class="table table-sm mb-0">
-                    <tr>
-                        <td class="text-muted">Subtotal</td>
-                        <td class="text-end fw-semibold">KES <span id="subtotal_display">0.00</span></td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted">Discount</td>
-                        <td class="text-end">
-                            <div class="input-group input-group-sm justify-content-end" style="max-width:130px;margin-left:auto">
-                                <input type="number" id="overall_discount" name="overall_discount"
-                                       class="form-control form-control-sm" value="<?= e($_POST['overall_discount']??0) ?>"
-                                       min="0" max="100" step="0.01">
-                                <span class="input-group-text">%</span>
-                            </div>
-                            <small class="text-muted">- KES <span id="discount_display">0.00</span></small>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted">VAT</td>
-                        <td class="text-end">
-                            <div class="input-group input-group-sm justify-content-end" style="max-width:130px;margin-left:auto">
-                                <input type="number" id="tax_rate" name="tax_rate"
-                                       class="form-control form-control-sm" value="<?= e($_POST['tax_rate']??$vatRate) ?>"
-                                       min="0" max="100" step="0.01">
-                                <span class="input-group-text">%</span>
-                            </div>
-                            <small class="text-muted">KES <span id="tax_display">0.00</span></small>
-                        </td>
-                    </tr>
-                    <tr class="table-primary">
-                        <td><strong>Total</strong></td>
-                        <td class="text-end"><strong>KES <span id="total_display">0.00</span></strong></td>
-                    </tr>
-                </table>
-                <input type="hidden" id="hidden_subtotal" name="hidden_subtotal">
-                <input type="hidden" id="hidden_discount" name="hidden_discount">
-                <input type="hidden" id="hidden_tax"      name="hidden_tax">
-                <input type="hidden" id="hidden_total"    name="hidden_total">
-            </div>
-
-            <!-- Notes & Terms -->
-            <div class="col-md-4">
-                <div class="mb-3">
-                    <label class="form-label fw-semibold small">Notes</label>
-                    <textarea name="notes" class="form-control form-control-sm" rows="3"
-                              placeholder="Special instructions, parts to source..."><?= e($_POST['notes']??'') ?></textarea>
-                </div>
-                <div>
-                    <label class="form-label fw-semibold small">Terms &amp; Conditions</label>
-                    <textarea name="terms" class="form-control form-control-sm" rows="3"
-                              placeholder="Payment terms, warranty..."><?= e($_POST['terms']??'This quotation is valid for 30 days.') ?></textarea>
-                </div>
-            </div>
-
-            <!-- Save buttons -->
-            <div class="col-md-3 d-flex flex-column gap-2">
-                <input type="hidden" name="_after_save" id="_after_save" value="view">
+<!-- RIGHT SIDEBAR ────────────────────────────────────────────────────────── -->
+<div class="col-lg-4">
+    <div class="card" style="position:sticky;top:16px">
+        <div class="card-header fw-semibold"><i class="fa fa-calculator me-2 text-primary"></i>Summary</div>
+        <div class="card-body">
+            <table class="table table-sm mb-3">
+                <tr><td class="text-muted">Subtotal</td><td class="text-end fw-semibold">KES <span class="subtotal-mirror">0.00</span></td></tr>
+                <tr><td class="text-muted">Discount</td><td class="text-end text-danger">- KES <span class="discount-mirror">0.00</span></td></tr>
+                <tr><td class="text-muted">VAT</td><td class="text-end">KES <span class="tax-mirror">0.00</span></td></tr>
+                <tr class="table-primary"><td><strong>Total</strong></td><td class="text-end"><strong>KES <span class="total-mirror">0.00</span></strong></td></tr>
+            </table>
+            <div class="d-grid gap-2">
                 <button type="submit" class="btn btn-primary"
                         onclick="document.getElementById('_after_save').value='view'">
                     <i class="fa fa-save me-2"></i>Save Quotation
@@ -541,11 +580,11 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
                     <i class="fa fa-envelope me-2"></i>Save &amp; Send
                 </button>
             </div>
-
         </div>
     </div>
 </div>
 
+</div><!-- /row -->
 </form>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
 <script>
