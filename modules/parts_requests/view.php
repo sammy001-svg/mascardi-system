@@ -33,7 +33,7 @@ $items->execute([$id]);
 $items = $items->fetchAll();
 
 // ── Approve / Reject / Issue ─────────────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && hasRole(['admin','workshop_manager','manager'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && canWrite('parts_requests')) {
     $action     = $_POST['action'] ?? '';
     $adminNotes = trim($_POST['admin_notes'] ?? '');
 
@@ -186,7 +186,7 @@ include __DIR__ . '/../../includes/header.php';
 <div class="card mb-4">
     <div class="card-header fw-semibold"><i class="fa fa-list-ul me-2"></i>Parts for Quotation</div>
 
-    <?php if ($req['status'] === 'approved' && hasRole(['admin','workshop_manager','manager'])): ?>
+    <?php if ($req['status'] === 'approved' && canWrite('parts_requests')): ?>
     <!-- Issue form -->
     <form method="POST">
         <input type="hidden" name="action" value="issued">
@@ -311,7 +311,7 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <!-- Approve / Reject action -->
-<?php if (hasRole(['admin','workshop_manager','manager']) && $req['status'] === 'pending'): ?>
+<?php if (canWrite('parts_requests') && $req['status'] === 'pending'): ?>
 <div class="card" style="border-top:3px solid #2563eb">
     <div class="card-header fw-semibold"><i class="fa fa-gavel me-2"></i>Take Action</div>
     <div class="card-body">

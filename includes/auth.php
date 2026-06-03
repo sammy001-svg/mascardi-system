@@ -85,10 +85,10 @@ function canAccess(string $module): bool {
     $user = authUser();
     if (!$user) return false;
     if ($user['role'] === 'admin') return true;
-    // Custom per-user permissions override role defaults when any rows exist
+    // Custom per-user permissions override role defaults for that specific module only
     $perms = getUserPermissions();
-    if (!empty($perms)) {
-        return (bool)($perms[$module][0] ?? false);
+    if (isset($perms[$module])) {
+        return (bool)$perms[$module][0];
     }
     $map = [
         // ── Management ─────────────────────────────────────────────────────────
@@ -179,8 +179,8 @@ function canAccess(string $module): bool {
 function canWrite(string $module): bool {
     if (hasRole('admin')) return true;
     $perms = getUserPermissions();
-    if (!empty($perms)) {
-        return (bool)($perms[$module][1] ?? false);
+    if (isset($perms[$module])) {
+        return (bool)$perms[$module][1];
     }
     $map = [
         'general_manager'   => ['quotations','invoices','sales'],

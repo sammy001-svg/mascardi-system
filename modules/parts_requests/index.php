@@ -9,7 +9,7 @@ $role = $user['role'];
 
 // Handle quick approve / reject — admin/manager only
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_id'])) {
-    if (!hasRole(['admin','manager','workshop_manager'])) {
+    if (!canWrite('parts_requests')) {
         setFlash('error', 'Access denied.');
         redirect(BASE_URL . '/modules/parts_requests/index.php');
     }
@@ -62,7 +62,7 @@ include __DIR__ . '/../../includes/header.php';
     <?php endif; ?>
 </div>
 
-<?php if (hasRole(['admin','manager','workshop_manager']) && count($pending)): ?>
+<?php if (canWrite('parts_requests') && count($pending)): ?>
 <div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
     <i class="fa fa-bell"></i>
     <span><?= count($pending) ?> quote request<?= count($pending) !== 1 ? 's' : '' ?> waiting for your approval.</span>
@@ -129,7 +129,7 @@ include __DIR__ . '/../../includes/header.php';
                             <i class="fa fa-trash"></i>
                         </a>
                         <?php endif; ?>
-                        <?php if (hasRole(['admin','manager','workshop_manager']) && $r['status'] === 'pending'): ?>
+                        <?php if (canWrite('parts_requests') && $r['status'] === 'pending'): ?>
                         <button class="btn btn-xs btn-success" onclick="approveReject(<?= $r['id'] ?>, 'approved')" title="Approve">
                             <i class="fa fa-check"></i>
                         </button>

@@ -23,7 +23,7 @@ $booking->execute([$id]); $booking = $booking->fetch();
 if (!$booking) { setFlash('error','Not found.'); redirect('index.php'); }
 
 // Handle status update + notes
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && hasRole(['admin','manager','sales_officer'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && canWrite('service_bookings')) {
     $newStatus   = $_POST['status']      ?? $booking['status'];
     $adminNotes  = trim($_POST['admin_notes'] ?? '');
     $db->prepare("UPDATE service_bookings SET status=?,admin_notes=?,updated_at=NOW() WHERE id=?")
@@ -137,7 +137,7 @@ include __DIR__ . '/../../includes/header.php';
 
     <div class="col-md-7">
         <!-- Update Status -->
-        <?php if (hasRole(['admin','manager','sales_officer'])): ?>
+        <?php if (canWrite('service_bookings')): ?>
         <div class="card mb-4" style="border-top:3px solid #2563eb">
             <div class="card-header"><i class="fa fa-gavel me-2"></i>Update Booking</div>
             <div class="card-body">
@@ -185,7 +185,7 @@ include __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
 
         <!-- Create Job Card -->
-        <?php if (hasRole(['admin','manager']) && in_array($booking['status'], ['confirmed','in_progress']) && canAccess('jobs')): ?>
+        <?php if (canAccess('jobs') && canWrite('jobs') && in_array($booking['status'], ['confirmed','in_progress'])): ?>
         <div class="card">
             <div class="card-header"><i class="fa fa-toolbox me-2"></i>Linked Job Card</div>
             <div class="card-body">

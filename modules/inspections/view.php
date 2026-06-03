@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && canWrite('inspections')) {
         redirect(BASE_URL.'/modules/inspections/view.php?id='.$id);
     }
 
-    if ($action === 'approve' && hasRole(['admin','manager','workshop_manager'])) {
+    if ($action === 'approve' && canWrite('inspections')) {
         $failsQ = $db->prepare("SELECT COUNT(*) FROM inspection_items WHERE checklist_id=? AND result='fail'");
         $failsQ->execute([$id]);
         if ((int)$failsQ->fetchColumn() > 0) {
@@ -107,7 +107,7 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <?php if (canWrite('inspections') && in_array($cl['status'],['submitted']) && hasRole(['admin','manager','workshop_manager'])): ?>
+        <?php if (canWrite('inspections') && in_array($cl['status'],['submitted'])): ?>
         <form method="POST" class="d-inline">
             <input type="hidden" name="action" value="approve">
             <button class="btn btn-sm btn-success">
