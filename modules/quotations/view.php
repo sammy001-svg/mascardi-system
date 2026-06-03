@@ -82,6 +82,12 @@ include __DIR__ . '/../../includes/header.php';
         <a href="?id=<?= $id ?>&status=rejected" class="btn btn-sm btn-outline-danger">Reject</a>
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
+        <?php if (hasRole('admin')): ?>
+        <a href="delete.php?id=<?= $id ?>" class="btn btn-sm btn-danger"
+           onclick="return confirm('Permanently delete quotation <?= e($q['quotation_number']) ?>? This cannot be undone.')">
+            <i class="fa fa-trash me-1"></i>Delete
+        </a>
+        <?php endif; ?>
     </div>
 </div>
 
