@@ -162,3 +162,12 @@ include __DIR__ . '/../../includes/header.php';
   </div>
 </div>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
+<script>
+$(function () {
+    <?php if (!empty($_GET['open_email'])): ?>
+    // Auto-open email modal when redirected from "Save & Send"
+    var emailModal = new bootstrap.Modal(document.getElementById('emailModal'));
+    emailModal.show();
+    <?php endif; ?>
+});
+</script>

@@ -127,6 +127,25 @@ if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
 // shorthand for use inside form rendering
 $usePreFill = !empty($fromQrMatchedLines) && !isset($_POST['item_desc']);
 
+// Quote Requests for QR-source selector
+$quoteRequests = [];
+try {
+    $quoteRequests = $db->query("
+        SELECT pr.id, pr.request_number, pr.created_at,
+               pr.client_name, pr.client_phone, pr.client_email,
+               pr.car_make, pr.car_model, pr.car_registration, pr.car_chassis,
+               COALESCE(c.id, c2.id) AS matched_car_id
+        FROM parts_requests pr
+        LEFT JOIN cars c  ON pr.car_chassis IS NOT NULL AND pr.car_chassis != ''
+                          AND c.chassis_number = pr.car_chassis
+        LEFT JOIN cars c2 ON (pr.car_chassis IS NULL OR pr.car_chassis = '')
+                          AND pr.car_registration IS NOT NULL AND pr.car_registration != ''
+                          AND c2.registration_number = pr.car_registration
+        ORDER BY pr.id DESC
+        LIMIT 150
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $e) { $quoteRequests = []; }
+
 $cars      = $db->query("SELECT id, chassis_number, registration_number, make, model, owner_name, owner_phone, owner_email, car_type FROM cars ORDER BY make ASC")->fetchAll();
 $jobs      = $db->query("SELECT id, job_number, car_id FROM workshop_jobs WHERE status NOT IN ('completed','cancelled') ORDER BY job_number")->fetchAll();
 $clients   = $db->query("SELECT id, name, phone, email FROM clients WHERE status='active' ORDER BY name ASC")->fetchAll();
@@ -205,7 +224,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $db->commit();
             setFlash('success',"Quotation {$qNum} created.");
-            redirect(BASE_URL.'/modules/quotations/view.php?id='.$qId);
+            $afterSave = $_POST['_after_save'] ?? 'view';
+            if ($afterSave === 'print') {
+                redirect(BASE_URL.'/modules/quotations/print.php?id='.$qId);
+            } elseif ($afterSave === 'send') {
+                redirect(BASE_URL.'/modules/quotations/view.php?id='.$qId.'&open_email=1');
+            } else {
+                redirect(BASE_URL.'/modules/quotations/view.php?id='.$qId);
+            }
         } catch (\Throwable $e) {
             if($db->inTransaction()) $db->rollBack(); $errors[] = $e->getMessage();
         }
@@ -324,6 +350,37 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-12">
+                        <?php if ($fromQrId): ?>
+                        <!-- Quote Request selector (replaces Service Booking when coming from QR) -->
+                        <label class="form-label">
+                            <i class="fa fa-file-invoice me-1 text-primary"></i>Quote Request
+                            <small class="text-muted fw-normal">— select to auto-fill client &amp; vehicle</small>
+                        </label>
+                        <select name="qr_id" id="qr_select" class="form-select select2">
+                            <option value="">— Select quote request —</option>
+                            <?php foreach ($quoteRequests as $qrOpt): ?>
+                            <option value="<?= $qrOpt['id'] ?>"
+                                    data-car-id="<?= (int)($qrOpt['matched_car_id'] ?? 0) ?>"
+                                    data-client-name="<?= e($qrOpt['client_name']    ?? '') ?>"
+                                    data-client-phone="<?= e($qrOpt['client_phone']  ?? '') ?>"
+                                    data-client-email="<?= e($qrOpt['client_email']  ?? '') ?>"
+                                    data-car-make="<?= e($qrOpt['car_make']        ?? '') ?>"
+                                    data-car-model="<?= e($qrOpt['car_model']       ?? '') ?>"
+                                    data-car-reg="<?= e($qrOpt['car_registration']  ?? '') ?>"
+                                    data-chassis="<?= e($qrOpt['car_chassis']       ?? '') ?>"
+                                    <?= $fromQrId == $qrOpt['id'] ? 'selected' : '' ?>>
+                                <?= e($qrOpt['request_number']) ?>
+                                — <?= e($qrOpt['client_name'] ?: 'Walk-in') ?>
+                                <?php if ($qrOpt['car_registration'] || $qrOpt['car_make']): ?>
+                                (<?= e(trim($qrOpt['car_make'].' '.$qrOpt['car_model'])) ?><?= $qrOpt['car_registration'] ? ' · '.$qrOpt['car_registration'] : '' ?>)
+                                <?php endif; ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <!-- hidden so booking_select change handler still has its element -->
+                        <select name="booking_id" id="booking_select" class="d-none"></select>
+                        <?php else: ?>
+                        <!-- Standard Service Booking selector -->
                         <label class="form-label">Service Booking <small class="text-muted">(optional)</small></label>
                         <select name="booking_id" id="booking_select" class="form-select select2">
                             <option value="">— Select booking —</option>
@@ -347,6 +404,7 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
                             </option>
                             <?php endforeach; ?>
                         </select>
+                        <?php endif; ?>
                     </div>
                     <div class="col-12">
                         <label class="form-label">Vehicle <span class="text-danger">*</span></label>
@@ -427,7 +485,23 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
                 <input type="hidden" id="hidden_discount" name="hidden_discount">
                 <input type="hidden" id="hidden_tax" name="hidden_tax">
                 <input type="hidden" id="hidden_total" name="hidden_total">
-                <button type="submit" class="btn btn-primary w-100 mt-3"><i class="fa fa-save me-1"></i>Save Quotation</button>
+                <input type="hidden" name="_after_save" id="_after_save" value="view">
+                <div class="d-grid gap-2 mt-3">
+                    <button type="submit" class="btn btn-primary"
+                            onclick="document.getElementById('_after_save').value='view'">
+                        <i class="fa fa-save me-1"></i>Save Quotation
+                    </button>
+                    <div class="btn-group w-100" role="group">
+                        <button type="submit" class="btn btn-outline-secondary"
+                                onclick="document.getElementById('_after_save').value='print'">
+                            <i class="fa fa-print me-1"></i>Save &amp; Print
+                        </button>
+                        <button type="submit" class="btn btn-outline-info"
+                                onclick="document.getElementById('_after_save').value='send'">
+                            <i class="fa fa-envelope me-1"></i>Save &amp; Send
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -451,6 +525,46 @@ $(function () {
             $('#customer_name').val(opt.data('owner') || '');
             $('#customer_phone').val(opt.data('phone') || '');
         }
+    }
+
+    /* ── Quote Request select → auto-fill car / client / customer ──────────── */
+    function applyQrFill(opt) {
+        if (!opt || !opt.val()) return;
+        var carId   = parseInt(opt.data('car-id')) || 0;
+        var name    = opt.data('client-name')  || '';
+        var phone   = opt.data('client-phone') || '';
+        var email   = opt.data('client-email') || '';
+        var make    = opt.data('car-make')     || '';
+        var model   = opt.data('car-model')    || '';
+        var reg     = opt.data('car-reg')      || '';
+        var chassis = opt.data('chassis')      || '';
+        var hint    = $('#booking-vehicle-hint');
+
+        if (name)  $('#customer_name').val(name);
+        if (phone) $('#customer_phone').val(phone);
+        if (email) $('input[name="customer_email"]').val(email);
+
+        if (carId) {
+            $('#car_select').val(carId).trigger('change.select2');
+            hint.hide();
+        } else if (make || model || reg) {
+            var parts = [make, model, reg].filter(Boolean);
+            hint.html(
+                '<i class="fa fa-triangle-exclamation me-1"></i>' +
+                'Vehicle: <strong>' + $('<span>').text(parts.join(' ')).html() + '</strong>' +
+                (chassis ? ' &mdash; Chassis: <code>' + $('<span>').text(chassis).html() + '</code>' : '') +
+                ' — not yet registered in system.'
+            ).show();
+        }
+    }
+
+    $(document).on('change', '#qr_select', function () {
+        applyQrFill($(this).find('option:selected'));
+    });
+
+    // Auto-apply on page load if a QR is pre-selected
+    if ($('#qr_select').length && $('#qr_select').val()) {
+        applyQrFill($('#qr_select').find('option:selected'));
     }
 
     /* ── Booking select → auto-fill car / job / client / customer ────────── */
