@@ -38,8 +38,8 @@ if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
     } catch (\Throwable $e) {}
 
     if ($fromQr) {
-        // Fallback: if QR has no client/vehicle data, pull from its linked quick assessment
-        if ((!$fromQr['client_name'] && !$fromQr['client_phone']) && !empty($fromQr['quick_assessment_id'])) {
+        // Always pull missing client/vehicle fields from linked quick assessment
+        if (!empty($fromQr['quick_assessment_id'])) {
             try {
                 $qa = $db->prepare("
                     SELECT qa.client_name, qa.client_phone, qa.client_email,
@@ -52,13 +52,13 @@ if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
                 ");
                 $qa->execute([$fromQr['quick_assessment_id']]);
                 $qaRow = $qa->fetch() ?: [];
-                $fromQr['client_name']      = $fromQr['client_name']      ?: ($qaRow['client_name']       ?? '');
-                $fromQr['client_phone']     = $fromQr['client_phone']     ?: ($qaRow['client_phone']      ?? '');
-                $fromQr['client_email']     = $fromQr['client_email']     ?: ($qaRow['client_email']      ?? '');
-                $fromQr['car_make']         = $fromQr['car_make']         ?: ($qaRow['car_make']          ?? '');
-                $fromQr['car_model']        = $fromQr['car_model']        ?: ($qaRow['car_model']         ?? '');
-                $fromQr['car_registration'] = $fromQr['car_registration'] ?: ($qaRow['car_registration']  ?? '');
-                $fromQr['car_chassis']      = $fromQr['car_chassis']      ?: ($qaRow['chassis_number']    ?? '');
+                $fromQr['client_name']      = ($fromQr['client_name']      ?: '') ?: ($qaRow['client_name']      ?? '');
+                $fromQr['client_phone']     = ($fromQr['client_phone']     ?: '') ?: ($qaRow['client_phone']     ?? '');
+                $fromQr['client_email']     = ($fromQr['client_email']     ?: '') ?: ($qaRow['client_email']     ?? '');
+                $fromQr['car_make']         = ($fromQr['car_make']         ?: '') ?: ($qaRow['car_make']         ?? '');
+                $fromQr['car_model']        = ($fromQr['car_model']        ?: '') ?: ($qaRow['car_model']        ?? '');
+                $fromQr['car_registration'] = ($fromQr['car_registration'] ?: '') ?: ($qaRow['car_registration'] ?? '');
+                $fromQr['car_chassis']      = ($fromQr['car_chassis']      ?: '') ?: ($qaRow['chassis_number']   ?? '');
             } catch (\Throwable $e) {}
         }
 
@@ -328,7 +328,7 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
                         </tbody>
                     </table>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-primary qr-add-line-item" id="addLineBtn"><i class="fa fa-plus me-1"></i>Add Line</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="quotAddLine()"><i class="fa fa-plus me-1"></i>Add Line</button>
             </div>
         </div>
 
@@ -462,8 +462,8 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
 </div>
 
 <!-- ── Quote Summary & Save — full width, always visible ───────────────── -->
-<div class="card mt-4 border-primary border-opacity-25">
-    <div class="card-header fw-semibold bg-primary bg-opacity-10">
+<div class="card mt-4" style="border:1px solid #93c5fd">
+    <div class="card-header fw-semibold" style="background:#eff6ff">
         <i class="fa fa-calculator me-2 text-primary"></i>Quote Summary &amp; Save
     </div>
     <div class="card-body">
@@ -549,120 +549,141 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
 </form>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
 <script>
-$(function () {
+/* ── All code here runs after jQuery + select2 + main.js are loaded ─────── */
+(function () {
+    'use strict';
 
-    /* ── QR customer data from PHP ───────────────────────────────────────── */
-    var _qr = <?= json_encode($fromQr ? [
-        'name'  => $fromQrCustomer['name']  ?? '',
-        'phone' => $fromQrCustomer['phone'] ?? '',
-        'email' => $fromQrCustomer['email'] ?? '',
-    ] : null) ?>;
+    /* ── Add Line: capture inventory options then expose global function ──── */
+    var _invOpts = (function () {
+        var el = document.querySelector('#lineItemsTable .inventory-select');
+        return el ? el.innerHTML : '<option value="">From stock...</option>';
+    }());
 
-    /* ── Quote Request selector → auto-fill client & car ─────────────────── */
-    function applyQrFill(opt) {
-        if (!opt || !opt.val()) return;
-        var carId = parseInt(opt.data('car-id')) || 0;
-        var name  = opt.data('client-name')  || '';
-        var phone = opt.data('client-phone') || '';
-        var email = opt.data('client-email') || '';
-
-        if (name)  { document.getElementById('customer_name').value  = name;  }
-        if (phone) { document.getElementById('customer_phone').value = phone; }
-        if (email) { document.querySelector('input[name="customer_email"]').value = email; }
-
-        if (carId) {
-            var sel = document.getElementById('car_select');
-            if (sel) {
-                sel.value = carId;
-                /* Notify select2 so its displayed text updates */
-                $(sel).trigger('change');
-            }
-        }
-    }
-
-    $('#qr_select').on('change', function () {
-        applyQrFill($(this).find('option:selected'));
-    });
-
-    /* Auto-fill on page load when a QR is already selected */
-    var qrSel = document.getElementById('qr_select');
-    if (qrSel && qrSel.value) {
-        applyQrFill($('#qr_select').find('option[value="' + qrSel.value + '"]'));
-    }
-
-    /* ── Re-apply QR customer data after select2 may have changed fields ─── */
-    if (_qr) {
-        if (_qr.name  && document.getElementById('customer_name'))
-            document.getElementById('customer_name').value  = _qr.name;
-        if (_qr.phone && document.getElementById('customer_phone'))
-            document.getElementById('customer_phone').value = _qr.phone;
-        var emailEl = document.querySelector('input[name="customer_email"]');
-        if (_qr.email && emailEl) emailEl.value = _qr.email;
-    }
-
-    /* ── Booking select ──────────────────────────────────────────────────── */
-    $('#booking_select').on('change', function () {
-        var opt = $(this).find('option:selected');
-        if (!opt.val()) return;
-        var carId    = opt.data('car-id');
-        var jobId    = opt.data('job-id');
-        var clientId = opt.data('client-id');
-        if (carId)    { $('#car_select').val(String(carId)).trigger('change'); }
-        if (jobId)    { $('select[name="job_id"]').val(String(jobId)).trigger('change'); }
-        if (clientId) { $('#client_select').val(String(clientId)).trigger('change'); }
-        if (opt.data('client-name'))  document.getElementById('customer_name').value  = opt.data('client-name');
-        if (opt.data('client-phone')) document.getElementById('customer_phone').value = opt.data('client-phone');
-        var em = document.querySelector('input[name="customer_email"]');
-        if (opt.data('client-email') && em) em.value = opt.data('client-email');
-    });
-
-    /* ── Client select ──────────────────────────────────────────────────── */
-    $('#client_select').on('change', function () {
-        var opt = $(this).find('option:selected');
-        if (!opt.val()) return;
-        document.getElementById('customer_name').value  = opt.data('name')  || '';
-        document.getElementById('customer_phone').value = opt.data('phone') || '';
-        var em = document.querySelector('input[name="customer_email"]');
-        if (em) em.value = opt.data('email') || '';
-    });
-
-    /* ── Add Line — built from scratch, no clone conflicts ───────────────── */
-    /* Capture inventory options HTML once from the first row */
-    var _invOpts = document.querySelector('#lineItemsTable .inventory-select');
-    _invOpts = _invOpts ? _invOpts.innerHTML : '<option value="">From stock...</option>';
-
-    document.getElementById('addLineBtn').addEventListener('click', function () {
+    window.quotAddLine = function () {
         var tbody = document.querySelector('#lineItemsTable .line-items-body');
         if (!tbody) return;
-
         var tr = document.createElement('tr');
         tr.className = 'line-item-row';
         tr.innerHTML =
             '<td><select name="item_type[]" class="form-select form-select-sm" style="width:100px">' +
-                '<option value="part">Part</option>' +
-                '<option value="labour">Labour</option>' +
-                '<option value="service">Service</option>' +
-            '</select></td>' +
-            '<td><input type="text" name="item_desc[]" class="form-control form-control-sm item-desc" placeholder="Description..." required></td>' +
-            '<td><select name="item_inv_id[]" class="form-select form-select-sm select2 inventory-select" style="min-width:150px">' +
-                _invOpts +
-            '</select></td>' +
-            '<td><input type="number" name="item_qty[]" class="form-control form-control-sm item-qty" style="width:65px" value="1" min="0.01" step="0.01"></td>' +
-            '<td><input type="number" name="item_price[]" class="form-control form-control-sm item-price" style="width:90px" value="0" min="0" step="0.01"></td>' +
-            '<td><input type="number" name="item_disc[]" class="form-control form-control-sm item-discount" style="width:65px" value="0" min="0" max="100" step="0.01"></td>' +
+                '<option value="part">Part</option><option value="labour">Labour</option>' +
+                '<option value="service">Service</option></select></td>' +
+            '<td><input type="text" name="item_desc[]" class="form-control form-control-sm item-desc"' +
+                ' placeholder="Description..." required></td>' +
+            '<td><select name="item_inv_id[]" class="form-select form-select-sm inventory-select"' +
+                ' style="min-width:150px">' + _invOpts + '</select></td>' +
+            '<td><input type="number" name="item_qty[]"  class="form-control form-control-sm item-qty"' +
+                ' style="width:65px" value="1" min="0.01" step="0.01"></td>' +
+            '<td><input type="number" name="item_price[]" class="form-control form-control-sm item-price"' +
+                ' style="width:90px" value="0" min="0" step="0.01"></td>' +
+            '<td><input type="number" name="item_disc[]"  class="form-control form-control-sm item-discount"' +
+                ' style="width:65px" value="0" min="0" max="100" step="0.01"></td>' +
             '<td><strong class="item-total">0.00</strong></td>' +
-            '<td><button type="button" class="btn btn-xs btn-outline-danger remove-line-item"><i class="fa fa-times"></i></button></td>';
-
+            '<td><button type="button" class="btn btn-xs btn-outline-danger remove-line-item">' +
+                '<i class="fa fa-times"></i></button></td>';
         tbody.appendChild(tr);
-
-        if ($.fn.select2) {
-            $(tr).find('.select2').select2({ theme: 'bootstrap-5', width: '100%' });
+        if ($.fn && $.fn.select2) {
+            $(tr).find('.inventory-select').select2({ theme: 'bootstrap-5', width: '100%' });
         }
-
-        /* Fire main.js recalcTotals via its registered input event */
         $(tr).find('.item-qty').trigger('input');
         $(tr).find('.item-desc').focus();
-    });
+    };
 
-});
+    /* ── Safe QR data from PHP ───────────────────────────────────────────── */
+    var _qr = null;
+    try {
+        _qr = <?php
+            if ($fromQr) {
+                $arr = [
+                    'name'  => $fromQrCustomer['name']  ?? '',
+                    'phone' => $fromQrCustomer['phone'] ?? '',
+                    'email' => $fromQrCustomer['email'] ?? '',
+                    'carId' => (int)$preCarId,
+                ];
+                $enc = json_encode($arr, JSON_UNESCAPED_UNICODE);
+                echo $enc !== false ? $enc : 'null';
+            } else {
+                echo 'null';
+            }
+        ?>;
+    } catch (e) {}
+
+    /* ── Set a field value safely ────────────────────────────────────────── */
+    function setField(id, val) {
+        var el = id.indexOf('[') >= 0
+            ? document.querySelector('[name="' + id + '"]')
+            : document.getElementById(id);
+        if (el && val) el.value = val;
+    }
+
+    /* ── Update select2 dropdown display ────────────────────────────────── */
+    function setSelect(id, val) {
+        var el = document.getElementById(id);
+        if (!el || !val) return;
+        el.value = val;
+        if ($.fn.select2) $(el).trigger('change');
+    }
+
+    /* ── QR select change: fill client + car ─────────────────────────────── */
+    function applyQrOption(opt) {
+        if (!opt) return;
+        var carId = parseInt(opt.getAttribute('data-car-id')) || 0;
+        setField('customer_name',  opt.getAttribute('data-client-name')  || '');
+        setField('customer_phone', opt.getAttribute('data-client-phone') || '');
+        setField('customer_email', opt.getAttribute('data-client-email') || '');
+        if (carId) setSelect('car_select', String(carId));
+    }
+
+    var qrSel = document.getElementById('qr_select');
+    if (qrSel) {
+        qrSel.addEventListener('change', function () {
+            var opt = this.options[this.selectedIndex];
+            if (opt && opt.value) applyQrOption(opt);
+        });
+        /* Auto-apply on load for the pre-selected QR */
+        if (qrSel.value) {
+            var preOpt = qrSel.querySelector('option[value="' + qrSel.value + '"]');
+            if (preOpt) applyQrOption(preOpt);
+        }
+    }
+
+    /* ── Always re-apply PHP-injected QR customer data last ─────────────── */
+    if (_qr) {
+        setField('customer_name',  _qr.name);
+        setField('customer_phone', _qr.phone);
+        setField('customer_email', _qr.email);
+        if (_qr.carId) setSelect('car_select', String(_qr.carId));
+    }
+
+    /* ── Client select: fill customer fields ─────────────────────────────── */
+    var clientSel = document.getElementById('client_select');
+    if (clientSel) {
+        clientSel.addEventListener('change', function () {
+            var opt = this.options[this.selectedIndex];
+            if (!opt || !opt.value) return;
+            setField('customer_name',  opt.getAttribute('data-name')  || '');
+            setField('customer_phone', opt.getAttribute('data-phone') || '');
+            setField('customer_email', opt.getAttribute('data-email') || '');
+        });
+    }
+
+    /* ── Booking select: fill car / job / client / customer ──────────────── */
+    var bookSel = document.getElementById('booking_select');
+    if (bookSel) {
+        bookSel.addEventListener('change', function () {
+            var opt = this.options[this.selectedIndex];
+            if (!opt || !opt.value) return;
+            var carId    = opt.getAttribute('data-car-id')    || '';
+            var jobId    = opt.getAttribute('data-job-id')    || '';
+            var clientId = opt.getAttribute('data-client-id') || '';
+            if (carId)    setSelect('car_select', carId);
+            if (jobId)    setSelect('job_id',     jobId);
+            if (clientId) setSelect('client_select', clientId);
+            setField('customer_name',  opt.getAttribute('data-client-name')  || '');
+            setField('customer_phone', opt.getAttribute('data-client-phone') || '');
+            setField('customer_email', opt.getAttribute('data-client-email') || '');
+        });
+    }
+
+}());
 </script>
