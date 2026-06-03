@@ -38,6 +38,30 @@ if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
     } catch (\Throwable $e) {}
 
     if ($fromQr) {
+        // Fallback: if QR has no client/vehicle data, pull from its linked quick assessment
+        if ((!$fromQr['client_name'] && !$fromQr['client_phone']) && !empty($fromQr['quick_assessment_id'])) {
+            try {
+                $qa = $db->prepare("
+                    SELECT qa.client_name, qa.client_phone, qa.client_email,
+                           qa.car_make, qa.car_model, qa.car_registration,
+                           COALESCE(c.chassis_number, c2.chassis_number) AS chassis_number
+                    FROM quick_assessments qa
+                    LEFT JOIN cars c  ON c.id  = qa.car_id
+                    LEFT JOIN cars c2 ON c2.registration_number = qa.car_registration AND qa.car_id IS NULL
+                    WHERE qa.id = ?
+                ");
+                $qa->execute([$fromQr['quick_assessment_id']]);
+                $qaRow = $qa->fetch() ?: [];
+                $fromQr['client_name']      = $fromQr['client_name']      ?: ($qaRow['client_name']       ?? '');
+                $fromQr['client_phone']     = $fromQr['client_phone']     ?: ($qaRow['client_phone']      ?? '');
+                $fromQr['client_email']     = $fromQr['client_email']     ?: ($qaRow['client_email']      ?? '');
+                $fromQr['car_make']         = $fromQr['car_make']         ?: ($qaRow['car_make']          ?? '');
+                $fromQr['car_model']        = $fromQr['car_model']        ?: ($qaRow['car_model']         ?? '');
+                $fromQr['car_registration'] = $fromQr['car_registration'] ?: ($qaRow['car_registration']  ?? '');
+                $fromQr['car_chassis']      = $fromQr['car_chassis']      ?: ($qaRow['chassis_number']    ?? '');
+            } catch (\Throwable $e) {}
+        }
+
         // Match car by chassis then registration
         if (!$preCarId) {
             if ($fromQr['car_chassis']) {
@@ -189,12 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 $vatRate = getSetting('vat_rate','16');
 include __DIR__ . '/../../includes/header.php';
-$extraJs = '<script>
-$(function(){
-    // Recalc on load
-    recalcTotals && recalcTotals();
-});
-</script>';
+$extraJs = null; // all quotation JS runs in the post-footer script below
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">New Quotation</h5>
@@ -375,97 +394,6 @@ $(function(){
                 </div>
             </div>
         </div>
-        <script>
-        function populateCustomer() {
-            var opt = $('#car_select').find('option:selected');
-            if (opt.val() && opt.data('type') === 'client') {
-                $('#customer_name').val(opt.data('owner'));
-                $('#customer_phone').val(opt.data('phone'));
-            }
-        }
-
-        $(document).on('change', '#booking_select', function () {
-            var opt = $(this).find('option:selected');
-            var hint = $('#booking-vehicle-hint');
-
-            if (!opt.val()) {
-                hint.hide();
-                return;
-            }
-
-            var carId    = opt.data('car-id');
-            var jobId    = opt.data('job-id');
-            var clientId = opt.data('client-id');
-
-            // ── Vehicle ───────────────────────────────────────────
-            if (carId) {
-                $('#car_select').val(carId).trigger('change.select2');
-                hint.hide();
-            } else {
-                // Booking was made by a walk-in/online client — no car in system yet
-                var carMake  = opt.data('car-make')  || '';
-                var carModel = opt.data('car-model') || '';
-                var carReg   = opt.data('car-reg')   || '';
-                var parts    = [carMake, carModel, carReg].filter(Boolean);
-                if (parts.length) {
-                    hint.html(
-                        '<i class="fa fa-car me-1"></i>Vehicle from booking: <strong>' +
-                        $('<span>').text(parts.join(' ')).html() +
-                        '</strong> <span class="text-muted">(not yet registered in system)</span>'
-                    ).show();
-                } else {
-                    hint.hide();
-                }
-            }
-
-            // ── Job card ──────────────────────────────────────────
-            if (jobId) {
-                $('select[name="job_id"]').val(jobId).trigger('change.select2');
-            }
-
-            // ── Client / customer fields ──────────────────────────
-            var clientName  = opt.data('client-name')  || '';
-            var clientPhone = opt.data('client-phone') || '';
-            var clientEmail = opt.data('client-email') || '';
-
-            if (clientId) {
-                $('#client_select').val(clientId).trigger('change.select2');
-            }
-
-            // Always fill the free-text customer fields from booking data
-            // so the quotation always shows the right person even if no client record exists
-            if (clientName)  $('#customer_name').val(clientName);
-            if (clientPhone) $('#customer_phone').val(clientPhone);
-            if (clientEmail) $('input[name="customer_email"]').val(clientEmail);
-        });
-
-        $(document).on('change', '#car_select', function () {
-            var opt = $(this).find('option:selected');
-            if (opt.data('type') === 'client') {
-                $('#customer_name').val(opt.data('owner'));
-                $('#customer_phone').val(opt.data('phone'));
-            } else if (!$('#client_select').val() && !$('#booking_select').val()) {
-                $('#customer_name').val('');
-                $('#customer_phone').val('');
-            }
-        });
-
-        $(document).on('change', '#client_select', function () {
-            var opt = $(this).find('option:selected');
-            if (opt.val()) {
-                $('#customer_name').val(opt.data('name'));
-                $('#customer_phone').val(opt.data('phone'));
-                $('input[name="customer_email"]').val(opt.data('email'));
-            }
-        });
-
-        $(function () {
-            populateCustomer();
-            if ($('#booking_select').val()) {
-                $('#booking_select').trigger('change');
-            }
-        });
-        </script>
 
         <!-- Totals -->
         <div class="card">
@@ -506,3 +434,89 @@ $(function(){
 </div>
 </form>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
+<script>
+$(function () {
+
+    /* ── QR pre-fill data from PHP ─────────────────────────────────────── */
+    var _qr = <?= json_encode($fromQr ? [
+        'name'  => $fromQrCustomer['name']  ?? '',
+        'phone' => $fromQrCustomer['phone'] ?? '',
+        'email' => $fromQrCustomer['email'] ?? '',
+    ] : null) ?>;
+
+    /* ── populateCustomer (car owner → customer fields) ─────────────────── */
+    function populateCustomer() {
+        var opt = $('#car_select').find('option:selected');
+        if (opt.val() && opt.data('type') === 'client') {
+            $('#customer_name').val(opt.data('owner') || '');
+            $('#customer_phone').val(opt.data('phone') || '');
+        }
+    }
+
+    /* ── Booking select → auto-fill car / job / client / customer ────────── */
+    $(document).on('change', '#booking_select', function () {
+        var opt  = $(this).find('option:selected');
+        var hint = $('#booking-vehicle-hint');
+        if (!opt.val()) { hint.hide(); return; }
+
+        var carId    = opt.data('car-id');
+        var jobId    = opt.data('job-id');
+        var clientId = opt.data('client-id');
+
+        if (carId) {
+            $('#car_select').val(carId).trigger('change.select2');
+            hint.hide();
+        } else {
+            var parts = [opt.data('car-make')||'', opt.data('car-model')||'', opt.data('car-reg')||''].filter(Boolean);
+            if (parts.length) {
+                hint.html('<i class="fa fa-car me-1"></i>Vehicle from booking: <strong>' +
+                    $('<span>').text(parts.join(' ')).html() +
+                    '</strong> <span class="text-muted">(not yet registered in system)</span>').show();
+            } else { hint.hide(); }
+        }
+
+        if (jobId)    $('select[name="job_id"]').val(jobId).trigger('change.select2');
+        if (clientId) $('#client_select').val(clientId).trigger('change.select2');
+
+        if (opt.data('client-name'))  $('#customer_name').val(opt.data('client-name'));
+        if (opt.data('client-phone')) $('#customer_phone').val(opt.data('client-phone'));
+        if (opt.data('client-email')) $('input[name="customer_email"]').val(opt.data('client-email'));
+    });
+
+    /* ── Car select → fill owner or clear customer fields ───────────────── */
+    $(document).on('change', '#car_select', function () {
+        var opt = $(this).find('option:selected');
+        if (opt.data('type') === 'client') {
+            $('#customer_name').val(opt.data('owner') || '');
+            $('#customer_phone').val(opt.data('phone') || '');
+        } else if (!$('#client_select').val() && !$('#booking_select').val() && !_qr) {
+            $('#customer_name').val('');
+            $('#customer_phone').val('');
+        }
+    });
+
+    /* ── Client select → fill name / phone / email ──────────────────────── */
+    $(document).on('change', '#client_select', function () {
+        var opt = $(this).find('option:selected');
+        if (opt.val()) {
+            $('#customer_name').val(opt.data('name') || '');
+            $('#customer_phone').val(opt.data('phone') || '');
+            $('input[name="customer_email"]').val(opt.data('email') || '');
+        }
+    });
+
+    /* ── On-load init ───────────────────────────────────────────────────── */
+    populateCustomer();
+    if ($('#booking_select').val()) $('#booking_select').trigger('change');
+
+    /* ── Re-apply QR customer data after select2 may have changed fields ── */
+    if (_qr) {
+        if (_qr.name)  $('#customer_name').val(_qr.name);
+        if (_qr.phone) $('#customer_phone').val(_qr.phone);
+        if (_qr.email) $('input[name="customer_email"]').val(_qr.email);
+    }
+
+    /* ── Recalculate totals ──────────────────────────────────────────────── */
+    recalcTotals && recalcTotals();
+});
+</script>
