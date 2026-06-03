@@ -5,11 +5,13 @@ canWrite('lpo') || die('Permission denied.');
 $pageTitle = 'Create LPO';
 $db = getDB();
 $errors = [];
-$preJobId = (int)($_GET['job_id'] ?? 0);
 
-$suppliers = $db->query("SELECT id, name FROM suppliers WHERE status='active' ORDER BY name")->fetchAll();
-$jobs      = $db->query("SELECT id, job_number FROM workshop_jobs WHERE status NOT IN ('completed','cancelled') ORDER BY job_number")->fetchAll();
-$inventory = $db->query("SELECT id, part_number, part_name, unit, unit_price FROM inventory ORDER BY part_name")->fetchAll();
+// Inline migration: add parts_request_id column to lpo if not yet present
+try { $db->exec("ALTER TABLE lpo ADD COLUMN parts_request_id INT NULL"); } catch (\Throwable $_e) {}
+
+$suppliers     = $db->query("SELECT id, name FROM suppliers WHERE status='active' ORDER BY name")->fetchAll();
+$partsRequests = $db->query("SELECT id, request_number, client_name, car_make, car_model, car_registration FROM parts_requests ORDER BY id DESC LIMIT 200")->fetchAll();
+$inventory     = $db->query("SELECT id, part_number, part_name, unit, unit_price FROM inventory ORDER BY part_name")->fetchAll();
 
 // ── Pre-fill from Quote Request ──────────────────────────────────────────────
 $fromQrId = (int)($_GET['from_qr'] ?? 0);
@@ -54,8 +56,8 @@ if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
 $usePreFill = !empty($preItems) && !isset($_POST['item_desc']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $suppId   = (int)($_POST['supplier_id'] ?? 0);
-    $jobId    = $_POST['job_id'] ? (int)$_POST['job_id'] : null;
+    $suppId = (int)($_POST['supplier_id'] ?? 0);
+    $prId   = $_POST['parts_request_id'] ? (int)$_POST['parts_request_id'] : null;
     $date     = $_POST['date'] ?? date('Y-m-d');
     $expDel   = $_POST['expected_delivery'] ?: null;
     $taxRate  = (float)($_POST['tax_rate'] ?? 16);
@@ -81,8 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $total  = $subtotal + $taxAmt;
 
             $lpoNum = nextNumber('lpo','lpo_number', getSetting('lpo_prefix','LPO'));
-            $db->prepare("INSERT INTO lpo (lpo_number,supplier_id,job_id,date,expected_delivery,tax_rate,subtotal,tax_amount,total,delivery_address,notes,approved_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
-               ->execute([$lpoNum,$suppId,$jobId,$date,$expDel,$taxRate,$subtotal,$taxAmt,$total,$delAddr,$notes,$approvedBy]);
+            $db->prepare("INSERT INTO lpo (lpo_number,supplier_id,parts_request_id,date,expected_delivery,tax_rate,subtotal,tax_amount,total,delivery_address,notes,approved_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+               ->execute([$lpoNum,$suppId,$prId,$date,$expDel,$taxRate,$subtotal,$taxAmt,$total,$delAddr,$notes,$approvedBy]);
             $lpoId = $db->lastInsertId();
 
             $iStmt = $db->prepare("INSERT INTO lpo_items (lpo_id,inventory_id,description,quantity,unit,unit_price,total) VALUES (?,?,?,?,?,?,?)");
@@ -219,10 +221,19 @@ include __DIR__ . '/../../includes/header.php';
                         <?php foreach($suppliers as $s): ?><option value="<?= $s['id'] ?>" <?= ($_POST['supplier_id']??'')==$s['id']?'selected':'' ?>><?= e($s['name']) ?></option><?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-12"><label class="form-label">Linked Job Card</label>
-                    <select name="job_id" class="form-select select2">
+                <div class="col-12"><label class="form-label">Linked Quote Request</label>
+                    <select name="parts_request_id" class="form-select select2">
                         <option value="">None</option>
-                        <?php foreach($jobs as $j): ?><option value="<?= $j['id'] ?>" <?= (($_POST['job_id']??$preJobId)==$j['id'])?'selected':'' ?>><?= e($j['job_number']) ?></option><?php endforeach; ?>
+                        <?php foreach($partsRequests as $pr): ?>
+                        <option value="<?= (int)$pr['id'] ?>"
+                                <?= (($_POST['parts_request_id'] ?? $fromQrId) == $pr['id']) ? 'selected' : '' ?>>
+                            <?= e($pr['request_number']) ?>
+                            <?= $pr['client_name'] ? ' — '.e($pr['client_name']) : '' ?>
+                            <?php if ($pr['car_make'] || $pr['car_registration']): ?>
+                            (<?= e(trim(($pr['car_make']??'').' '.($pr['car_model']??''))) ?><?= $pr['car_registration'] ? ' · '.e($pr['car_registration']) : '' ?>)
+                            <?php endif; ?>
+                        </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-6"><label class="form-label">LPO Date</label><input type="date" name="date" class="form-control" value="<?= e($_POST['date']??date('Y-m-d')) ?>"></div>

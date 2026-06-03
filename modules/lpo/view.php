@@ -6,7 +6,7 @@ requireLogin();
 canAccess('lpo') || die('Access denied.');
 $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/lpo/index.php');
 $db=getDB();
-$stmt=$db->prepare("SELECT l.*,s.name AS supplier_name,s.contact_person,s.phone AS supplier_phone,s.email AS supplier_email,s.address AS supplier_address,s.pin_number AS supplier_pin,j.job_number FROM lpo l JOIN suppliers s ON s.id=l.supplier_id LEFT JOIN workshop_jobs j ON j.id=l.job_id WHERE l.id=?");
+$stmt=$db->prepare("SELECT l.*,s.name AS supplier_name,s.contact_person,s.phone AS supplier_phone,s.email AS supplier_email,s.address AS supplier_address,s.pin_number AS supplier_pin,pr.request_number AS linked_qr_number,pr.id AS linked_qr_id FROM lpo l JOIN suppliers s ON s.id=l.supplier_id LEFT JOIN parts_requests pr ON pr.id=l.parts_request_id WHERE l.id=?");
 $stmt->execute([$id]); $lpo=$stmt->fetch();
 if(!$lpo){setFlash('error','Not found.');redirect(BASE_URL.'/modules/lpo/index.php');}
 $items=$db->prepare("SELECT * FROM lpo_items WHERE lpo_id=? ORDER BY id"); $items->execute([$id]); $items=$items->fetchAll();
@@ -75,6 +75,12 @@ include __DIR__ . '/../../includes/header.php';
         <a href="?id=<?= $id ?>&status=received" class="btn btn-sm btn-success" onclick="return confirm('Mark as received and update inventory?')"><i class="fa fa-check me-1"></i>Mark Received</a>
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
+        <?php if (hasRole('admin')): ?>
+        <a href="delete.php?id=<?= $id ?>" class="btn btn-sm btn-danger"
+           onclick="return confirm('Permanently delete LPO <?= e($lpo['lpo_number']) ?>? This cannot be undone.')">
+            <i class="fa fa-trash me-1"></i>Delete
+        </a>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -95,7 +101,14 @@ include __DIR__ . '/../../includes/header.php';
                 <dt class="col-5 text-muted">Date</dt><dd class="col-7"><?= fmtDate($lpo['date']) ?></dd>
                 <dt class="col-5 text-muted">Expected Del.</dt><dd class="col-7"><?= fmtDate($lpo['expected_delivery']) ?></dd>
                 <dt class="col-5 text-muted">Delivery Date</dt><dd class="col-7"><?= fmtDate($lpo['delivery_date']) ?></dd>
-                <dt class="col-5 text-muted">Job Card</dt><dd class="col-7"><?= e($lpo['job_number']??'—') ?></dd>
+                <dt class="col-5 text-muted">Quote Request</dt>
+                <dd class="col-7">
+                    <?php if (!empty($lpo['linked_qr_number'])): ?>
+                    <a href="<?= BASE_URL ?>/modules/parts_requests/view.php?id=<?= $lpo['linked_qr_id'] ?>" class="fw-medium text-decoration-none">
+                        <?= e($lpo['linked_qr_number']) ?>
+                    </a>
+                    <?php else: ?>—<?php endif; ?>
+                </dd>
                 <dt class="col-5 text-muted">Approved By</dt><dd class="col-7"><?= e($lpo['approved_by']??'—') ?></dd>
             </dl>
         </div></div>

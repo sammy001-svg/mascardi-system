@@ -20,16 +20,19 @@ if ($lpo['status'] !== 'draft') {
 $existingItems = $db->prepare("SELECT * FROM lpo_items WHERE lpo_id=? ORDER BY id");
 $existingItems->execute([$id]); $existingItems = $existingItems->fetchAll();
 
-$suppliers = $db->query("SELECT id, name FROM suppliers WHERE status='active' ORDER BY name")->fetchAll();
-$jobs      = $db->query("SELECT id, job_number FROM workshop_jobs WHERE status NOT IN ('completed','cancelled') ORDER BY job_number")->fetchAll();
-$inventory = $db->query("SELECT id, part_number, part_name, unit, unit_price FROM inventory ORDER BY part_name")->fetchAll();
+// Inline migration: add parts_request_id column to lpo if not yet present
+try { $db->exec("ALTER TABLE lpo ADD COLUMN parts_request_id INT NULL"); } catch (\Throwable $_e) {}
+
+$suppliers     = $db->query("SELECT id, name FROM suppliers WHERE status='active' ORDER BY name")->fetchAll();
+$partsRequests = $db->query("SELECT id, request_number, client_name, car_make, car_model, car_registration FROM parts_requests ORDER BY id DESC LIMIT 200")->fetchAll();
+$inventory     = $db->query("SELECT id, part_number, part_name, unit, unit_price FROM inventory ORDER BY part_name")->fetchAll();
 
 $errors = [];
 $d = $lpo;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['supplier_id']        = (int)($_POST['supplier_id'] ?? 0);
-    $d['job_id']             = $_POST['job_id'] ? (int)$_POST['job_id'] : null;
+    $d['parts_request_id']   = $_POST['parts_request_id'] ? (int)$_POST['parts_request_id'] : null;
     $d['date']               = $_POST['date'] ?? date('Y-m-d');
     $d['expected_delivery']  = $_POST['expected_delivery'] ?: null;
     $d['tax_rate']           = (float)($_POST['tax_rate'] ?? 16);
@@ -57,12 +60,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $total  = $subtotal + $taxAmt;
 
             $db->prepare("UPDATE lpo SET
-                supplier_id=?, job_id=?, date=?, expected_delivery=?,
+                supplier_id=?, parts_request_id=?, date=?, expected_delivery=?,
                 tax_rate=?, subtotal=?, tax_amount=?, total=?,
                 delivery_address=?, notes=?, approved_by=?
                 WHERE id=?")
                ->execute([
-                   $d['supplier_id'], $d['job_id'], $d['date'], $d['expected_delivery'],
+                   $d['supplier_id'], $d['parts_request_id'], $d['date'], $d['expected_delivery'],
                    $d['tax_rate'], $subtotal, $taxAmt, $total,
                    $d['delivery_address'], $d['notes'], $d['approved_by'],
                    $id,
@@ -218,11 +221,14 @@ include __DIR__ . '/../../includes/header.php';
                         </select>
                     </div>
                     <div class="col-12">
-                        <label class="form-label">Linked Job Card</label>
-                        <select name="job_id" class="form-select select2">
+                        <label class="form-label">Linked Quote Request</label>
+                        <select name="parts_request_id" class="form-select select2">
                             <option value="">None</option>
-                            <?php foreach ($jobs as $j): ?>
-                            <option value="<?= $j['id'] ?>" <?= $d['job_id'] == $j['id'] ? 'selected' : '' ?>><?= e($j['job_number']) ?></option>
+                            <?php foreach ($partsRequests as $pr): ?>
+                            <option value="<?= (int)$pr['id'] ?>" <?= ($d['parts_request_id'] ?? '') == $pr['id'] ? 'selected' : '' ?>>
+                                <?= e($pr['request_number']) ?>
+                                <?= $pr['client_name'] ? ' — '.e($pr['client_name']) : '' ?>
+                            </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
