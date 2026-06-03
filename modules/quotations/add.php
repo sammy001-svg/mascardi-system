@@ -241,33 +241,54 @@ $vatRate = getSetting('vat_rate','16');
 include __DIR__ . '/../../includes/header.php';
 $extraJs = null; // all quotation JS runs in the post-footer script below
 ?>
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0">New Quotation</h5>
+<!-- Page Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <nav aria-label="breadcrumb" class="mb-1">
+            <ol class="breadcrumb mb-0" style="font-size:12px">
+                <li class="breadcrumb-item"><a href="index.php" class="text-decoration-none">Quotations</a></li>
+                <li class="breadcrumb-item active">New</li>
+            </ol>
+        </nav>
+        <h5 class="mb-0 d-flex align-items-center gap-2">
+            <span style="width:34px;height:34px;background:#2563eb;color:#fff;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fa fa-file-invoice-dollar" style="font-size:14px"></i>
+            </span>
+            New Quotation
+        </h5>
+    </div>
     <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
 </div>
-<?php if ($errors): ?><div class="alert alert-danger"><ul class="mb-0"><?php foreach($errors as $err) echo "<li>".e($err)."</li>"; ?></ul></div><?php endif; ?>
+
+<?php if ($errors): ?>
+<div class="alert alert-danger d-flex gap-2 align-items-start mb-4" style="border-radius:10px;border:none">
+    <i class="fa fa-circle-exclamation mt-1 flex-shrink-0"></i>
+    <ul class="mb-0 ps-2"><?php foreach($errors as $err) echo "<li>".e($err)."</li>"; ?></ul>
+</div>
+<?php endif; ?>
 
 <?php if ($fromQr): ?>
-<div class="alert alert-info d-flex flex-wrap align-items-start gap-3 mb-3">
-    <i class="fa fa-file-invoice-dollar fa-lg mt-1 text-primary flex-shrink-0"></i>
+<div class="d-flex flex-wrap align-items-start gap-3 mb-4 p-3 rounded-3" style="background:#eff6ff;border:1px solid #bfdbfe">
+    <span style="width:36px;height:36px;background:#2563eb;color:#fff;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
+        <i class="fa fa-bolt" style="font-size:14px"></i>
+    </span>
     <div class="flex-fill">
-        <div class="fw-semibold mb-1">
-            Converting Quote Request
-            <a href="<?= BASE_URL ?>/modules/parts_requests/view.php?id=<?= $fromQrId ?>" class="text-decoration-none">
+        <div class="fw-semibold text-primary mb-1">
+            Auto-filling from Quote Request
+            <a href="<?= BASE_URL ?>/modules/parts_requests/view.php?id=<?= $fromQrId ?>" class="fw-bold text-decoration-none ms-1">
                 <?= e($fromQr['request_number']) ?>
-            </a> to Quotation
+            </a>
         </div>
         <?php if ($fromQrVehicleHint): ?>
-        <div class="small text-warning fw-semibold mt-1">
+        <div class="small fw-semibold mt-1" style="color:#b45309">
             <i class="fa fa-triangle-exclamation me-1"></i>
-            Vehicle <strong><?= e($fromQrVehicleHint) ?></strong> is not yet registered in the system — please select or create it in the Vehicle field below.
+            Vehicle <strong><?= e($fromQrVehicleHint) ?></strong> is not yet registered — please select or create it in the Vehicle field.
         </div>
         <?php endif; ?>
         <?php if ($fromQrUnmatched): ?>
         <div class="small text-muted mt-1">
             <i class="fa fa-box-open me-1"></i>
-            Parts not found in stock (added without price — update manually):
-            <strong><?= e(implode(', ', $fromQrUnmatched)) ?></strong>
+            Not in stock (added without price — update manually): <strong><?= e(implode(', ', $fromQrUnmatched)) ?></strong>
         </div>
         <?php endif; ?>
     </div>
@@ -275,132 +296,275 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
 <?php endif; ?>
 
 <form method="POST">
+<input type="hidden" name="_after_save" id="_after_save" value="view">
+<input type="hidden" id="hidden_subtotal" name="hidden_subtotal">
+<input type="hidden" id="hidden_discount" name="hidden_discount">
+<input type="hidden" id="hidden_tax"      name="hidden_tax">
+<input type="hidden" id="hidden_total"    name="hidden_total">
 
-<!-- ══ ACTION BAR — always at top, impossible to miss ══════════════════════ -->
-<div class="card mb-4" style="border-left:4px solid #2563eb">
-    <div class="card-body py-3">
-        <div class="row g-3 align-items-center">
-            <div class="col-sm-3">
-                <div class="text-muted small">Subtotal</div>
-                <div class="fw-bold">KES <span id="subtotal_display">0.00</span></div>
+<div class="row g-4">
+
+<!-- ══ LEFT COLUMN ══════════════════════════════════════════════════════════ -->
+<div class="col-xl-8 col-lg-7 order-2 order-lg-1">
+
+    <!-- Source selector -->
+    <?php if ($fromQrId): ?>
+    <div class="card mb-3 border-0 shadow-sm" style="border-left:3px solid #2563eb !important">
+        <div class="card-body py-3">
+            <label class="form-label fw-semibold d-flex align-items-center gap-2 mb-2">
+                <span class="badge" style="background:#eff6ff;color:#2563eb;font-size:11px;padding:4px 9px;border-radius:6px">
+                    <i class="fa fa-file-invoice me-1"></i>Quote Request
+                </span>
+                <small class="text-muted fw-normal">Select to auto-fill client &amp; vehicle</small>
+            </label>
+            <select name="qr_id" id="qr_select" class="form-select select2">
+                <option value="">— Select quote request —</option>
+                <?php foreach ($quoteRequests as $qrOpt): ?>
+                <option value="<?= (int)$qrOpt['id'] ?>"
+                        data-car-id="<?= (int)($qrOpt['matched_car_id'] ?? 0) ?>"
+                        data-client-name="<?= e($qrOpt['client_name']   ?? '') ?>"
+                        data-client-phone="<?= e($qrOpt['client_phone'] ?? '') ?>"
+                        data-client-email="<?= e($qrOpt['client_email'] ?? '') ?>"
+                        data-car-make="<?= e($qrOpt['car_make']         ?? '') ?>"
+                        data-car-model="<?= e($qrOpt['car_model']       ?? '') ?>"
+                        data-car-reg="<?= e($qrOpt['car_registration']  ?? '') ?>"
+                        data-chassis="<?= e($qrOpt['car_chassis']       ?? '') ?>"
+                        <?= ((int)$fromQrId === (int)$qrOpt['id']) ? 'selected' : '' ?>>
+                    <?= e($qrOpt['request_number'] ?? '') ?>
+                    — <?= e($qrOpt['client_name'] ?: 'Walk-in') ?>
+                    <?php if (!empty($qrOpt['car_registration']) || !empty($qrOpt['car_make'])): ?>
+                    (<?= e(trim(($qrOpt['car_make'] ?? '').' '.($qrOpt['car_model'] ?? ''))) ?><?= !empty($qrOpt['car_registration']) ? ' · '.e($qrOpt['car_registration']) : '' ?>)
+                    <?php endif; ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+            <select name="booking_id" id="booking_select" class="d-none"></select>
+        </div>
+    </div>
+    <?php else: ?>
+    <div class="card mb-3 border-0 shadow-sm" style="border-left:3px solid #64748b !important">
+        <div class="card-body py-3">
+            <label class="form-label fw-semibold d-flex align-items-center gap-2 mb-2">
+                <span class="badge" style="background:#f8fafc;color:#475569;font-size:11px;padding:4px 9px;border-radius:6px;border:1px solid #e2e8f0">
+                    <i class="fa fa-calendar-check me-1"></i>Service Booking
+                </span>
+                <small class="text-muted fw-normal">Optional — links quotation to a booking</small>
+            </label>
+            <select name="booking_id" id="booking_select" class="form-select select2">
+                <option value="">— Select booking (optional) —</option>
+                <?php foreach ($serviceBookings as $sb):
+                    $sbReg   = $sb['car_registration'] ?: $sb['registration_number'] ?: '';
+                    $sbMake  = $sb['car_make']  ?: $sb['car_make_db']  ?: '';
+                    $sbModel = $sb['car_model'] ?: $sb['car_model_db'] ?: '';
+                ?>
+                <option value="<?= (int)$sb['id'] ?>"
+                        data-car-id="<?= (int)($sb['car_id'] ?? 0) ?>"
+                        data-job-id="<?= (int)($sb['job_id'] ?? 0) ?>"
+                        data-client-id="<?= (int)($sb['client_id'] ?? 0) ?>"
+                        data-client-name="<?= e($sb['client_name']  ?? '') ?>"
+                        data-client-phone="<?= e($sb['client_phone'] ?? '') ?>"
+                        data-client-email="<?= e($sb['client_email'] ?? '') ?>"
+                        data-car-make="<?= e($sbMake) ?>"
+                        data-car-model="<?= e($sbModel) ?>"
+                        data-car-reg="<?= e($sbReg) ?>"
+                        <?= (int)$preBookingId === (int)$sb['id'] ? 'selected' : '' ?>>
+                    <?= e($sb['booking_number'].' — '.($sb['client_name'] ?: 'Walk-in').($sbReg ? ' ('.$sbReg.')' : '')) ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- Line Items -->
+    <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-header border-bottom py-3 d-flex justify-content-between align-items-center" style="background:#fff">
+            <div class="fw-semibold d-flex align-items-center gap-2">
+                <span style="width:28px;height:28px;background:#eff6ff;color:#2563eb;border-radius:6px;display:inline-flex;align-items:center;justify-content:center">
+                    <i class="fa fa-list" style="font-size:12px"></i>
+                </span>
+                Line Items
             </div>
-            <div class="col-sm-3">
-                <div class="row g-2">
-                    <div class="col-6">
-                        <label class="form-label small mb-1">Disc %</label>
-                        <input type="number" id="overall_discount" name="overall_discount"
-                               class="form-control form-control-sm"
-                               value="<?= e($_POST['overall_discount']??0) ?>"
-                               min="0" max="100" step="0.01">
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label small mb-1">VAT %</label>
-                        <input type="number" id="tax_rate" name="tax_rate"
-                               class="form-control form-control-sm"
-                               value="<?= e($_POST['tax_rate']??$vatRate) ?>"
-                               min="0" max="100" step="0.01">
-                    </div>
+            <button type="button" class="btn btn-sm btn-primary d-flex align-items-center gap-1" onclick="quotAddLine()">
+                <i class="fa fa-plus"></i><span class="d-none d-sm-inline ms-1">Add Line</span>
+            </button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0" id="lineItemsTable" style="min-width:680px">
+                    <thead style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
+                        <tr style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#64748b;font-weight:600">
+                            <th class="ps-3 py-2" style="width:95px">Type</th>
+                            <th class="py-2">Description</th>
+                            <th class="py-2" style="width:185px">From Stock</th>
+                            <th class="py-2 text-center" style="width:68px">Qty</th>
+                            <th class="py-2 text-end" style="width:105px">Unit Price</th>
+                            <th class="py-2 text-center" style="width:62px">Disc%</th>
+                            <th class="py-2 text-end pe-3" style="width:95px">Total</th>
+                            <th style="width:38px"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="line-items-body">
+                        <?php
+                        $lineItems = isset($_POST['item_desc'])
+                            ? array_keys($_POST['item_desc'])
+                            : ($usePreFill ? array_keys($fromQrMatchedLines) : [0]);
+                        ?>
+                        <?php foreach ($lineItems as $i):
+                            $pre       = $usePreFill ? ($fromQrMatchedLines[$i] ?? []) : [];
+                            $pType     = $_POST['item_type'][$i]   ?? $pre['type']     ?? 'part';
+                            $pDesc     = $_POST['item_desc'][$i]   ?? $pre['desc']     ?? '';
+                            $pInvId    = $_POST['item_inv_id'][$i] ?? $pre['inv_id']   ?? '';
+                            $pQty      = $_POST['item_qty'][$i]    ?? $pre['qty']      ?? 1;
+                            $pPrice    = $_POST['item_price'][$i]  ?? $pre['price']    ?? 0;
+                            $pDisc     = $_POST['item_disc'][$i]   ?? $pre['disc']     ?? 0;
+                            $isMatched = $pre['matched'] ?? true;
+                            $inStock   = $pre['in_stock'] ?? null;
+                        ?>
+                        <tr class="line-item-row" style="border-bottom:1px solid #f1f5f9">
+                            <td class="ps-3 py-2">
+                                <select name="item_type[]" class="form-select form-select-sm" style="border:none;background:#f1f5f9;border-radius:6px;font-size:12px">
+                                    <option value="part"    <?= $pType==='part'   ?'selected':'' ?>>Part</option>
+                                    <option value="labour"  <?= $pType==='labour' ?'selected':'' ?>>Labour</option>
+                                    <option value="service" <?= $pType==='service'?'selected':'' ?>>Service</option>
+                                </select>
+                            </td>
+                            <td class="py-2">
+                                <input type="text" name="item_desc[]" class="form-control form-control-sm item-desc"
+                                       style="border-color:#e2e8f0;border-radius:6px"
+                                       value="<?= e($pDesc) ?>" placeholder="Item description..." required>
+                                <?php if ($usePreFill && $inStock !== null && !$isMatched): ?>
+                                <small class="text-danger d-block mt-1" style="font-size:11px"><i class="fa fa-circle-xmark me-1"></i>Not in stock</small>
+                                <?php elseif ($usePreFill && $isMatched): ?>
+                                <small class="text-success d-block mt-1" style="font-size:11px"><i class="fa fa-circle-check me-1"></i>Matched from inventory</small>
+                                <?php endif; ?>
+                            </td>
+                            <td class="py-2">
+                                <select name="item_inv_id[]" class="form-select form-select-sm select2 inventory-select" style="border-color:#e2e8f0;border-radius:6px">
+                                    <option value="">From stock...</option>
+                                    <?php foreach ($inventory as $inv): ?>
+                                    <option value="<?= $inv['id'] ?>"
+                                            data-price="<?= $inv['selling_price'] ?>"
+                                            data-desc="<?= e($inv['part_name']) ?>"
+                                            <?= $pInvId==$inv['id']?'selected':'' ?>>
+                                        <?= e(($inv['part_number']?$inv['part_number'].' — ':'').$inv['part_name']) ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </td>
+                            <td class="py-2 text-center">
+                                <input type="number" name="item_qty[]" class="form-control form-control-sm item-qty text-center"
+                                       style="border-color:#e2e8f0;border-radius:6px"
+                                       value="<?= e($pQty) ?>" min="0.01" step="0.01">
+                            </td>
+                            <td class="py-2">
+                                <input type="number" name="item_price[]" class="form-control form-control-sm item-price text-end"
+                                       style="border-color:#e2e8f0;border-radius:6px"
+                                       value="<?= e($pPrice) ?>" min="0" step="0.01">
+                            </td>
+                            <td class="py-2 text-center">
+                                <input type="number" name="item_disc[]" class="form-control form-control-sm item-discount text-center"
+                                       style="border-color:#e2e8f0;border-radius:6px"
+                                       value="<?= e($pDisc) ?>" min="0" max="100" step="0.01">
+                            </td>
+                            <td class="py-2 text-end pe-3">
+                                <span class="item-total fw-semibold" style="color:#0f172a"><?= number_format((float)$pQty * (float)$pPrice, 2) ?></span>
+                            </td>
+                            <td class="py-2 pe-2 text-center">
+                                <button type="button" class="btn btn-sm remove-line-item"
+                                        style="width:26px;height:26px;padding:0;border-radius:6px;border:1px solid #fecaca;background:#fff5f5;color:#ef4444;line-height:1"
+                                        title="Remove row">
+                                    <i class="fa fa-times" style="font-size:11px"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes & Terms -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header border-bottom py-3 d-flex align-items-center gap-2" style="background:#fff">
+            <span style="width:28px;height:28px;background:#fefce8;color:#ca8a04;border-radius:6px;display:inline-flex;align-items:center;justify-content:center">
+                <i class="fa fa-sticky-note" style="font-size:12px"></i>
+            </span>
+            <span class="fw-semibold">Notes &amp; Terms</span>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label mb-1" style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b">Notes</label>
+                    <textarea name="notes" class="form-control" rows="3"
+                              style="border-color:#e2e8f0;border-radius:8px;resize:none"
+                              placeholder="Special instructions, parts to source..."><?= e($_POST['notes'] ?? '') ?></textarea>
                 </div>
-                <small class="text-muted">-KES <span id="discount_display">0.00</span> / VAT KES <span id="tax_display">0.00</span></small>
-            </div>
-            <div class="col-sm-2">
-                <div class="text-muted small">Total</div>
-                <div class="fw-bold fs-5" style="color:#2563eb">KES <span id="total_display">0.00</span></div>
-            </div>
-            <div class="col-sm-4 text-end">
-                <input type="hidden" name="_after_save" id="_after_save" value="view">
-                <input type="hidden" id="hidden_subtotal" name="hidden_subtotal">
-                <input type="hidden" id="hidden_discount" name="hidden_discount">
-                <input type="hidden" id="hidden_tax"      name="hidden_tax">
-                <input type="hidden" id="hidden_total"    name="hidden_total">
-                <div class="d-flex gap-2 justify-content-end flex-wrap">
-                    <button type="submit" class="btn btn-primary"
-                            onclick="document.getElementById('_after_save').value='view'">
-                        <i class="fa fa-save me-1"></i>Save
-                    </button>
-                    <button type="submit" class="btn btn-outline-secondary"
-                            onclick="document.getElementById('_after_save').value='print'">
-                        <i class="fa fa-print me-1"></i>Save &amp; Print
-                    </button>
-                    <button type="submit" class="btn btn-outline-info"
-                            onclick="document.getElementById('_after_save').value='send'">
-                        <i class="fa fa-envelope me-1"></i>Save &amp; Send
-                    </button>
+                <div class="col-md-6">
+                    <label class="form-label mb-1" style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b">Terms &amp; Conditions</label>
+                    <textarea name="terms" class="form-control" rows="3"
+                              style="border-color:#e2e8f0;border-radius:8px;resize:none"
+                              placeholder="Payment terms, warranty..."><?= e($_POST['terms'] ?? 'This quotation is valid for 30 days.') ?></textarea>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- ══ TWO-COLUMN LAYOUT ════════════════════════════════════════════════════ -->
-<div class="row g-4">
+</div><!-- /col left -->
 
-<!-- LEFT COLUMN ──────────────────────────────────────────────────────────── -->
-<div class="col-lg-8">
+<!-- ══ RIGHT SIDEBAR ════════════════════════════════════════════════════════ -->
+<div class="col-xl-4 col-lg-5 order-1 order-lg-2">
+    <div style="position:sticky;top:16px">
 
-    <!-- Quotation Info card -->
-    <div class="card mb-4">
-        <div class="card-header fw-semibold"><i class="fa fa-info-circle me-2 text-primary"></i>Quotation Details</div>
-        <div class="card-body">
-            <div class="row g-3">
-
-                <!-- QR or Booking selector -->
-                <div class="col-12">
-                    <?php if ($fromQrId): ?>
-                    <label class="form-label fw-semibold"><i class="fa fa-file-invoice me-1 text-primary"></i>Quote Request <small class="text-muted fw-normal">— select to auto-fill</small></label>
-                    <select name="qr_id" id="qr_select" class="form-select select2">
-                        <option value="">— Select quote request —</option>
-                        <?php foreach ($quoteRequests as $qrOpt): ?>
-                        <option value="<?= (int)$qrOpt['id'] ?>"
-                                data-car-id="<?= (int)($qrOpt['matched_car_id'] ?? 0) ?>"
-                                data-client-name="<?= e($qrOpt['client_name']   ?? '') ?>"
-                                data-client-phone="<?= e($qrOpt['client_phone'] ?? '') ?>"
-                                data-client-email="<?= e($qrOpt['client_email'] ?? '') ?>"
-                                data-car-make="<?= e($qrOpt['car_make']         ?? '') ?>"
-                                data-car-model="<?= e($qrOpt['car_model']       ?? '') ?>"
-                                data-car-reg="<?= e($qrOpt['car_registration']  ?? '') ?>"
-                                data-chassis="<?= e($qrOpt['car_chassis']       ?? '') ?>"
-                                <?= ((int)$fromQrId === (int)$qrOpt['id']) ? 'selected' : '' ?>>
-                            <?= e($qrOpt['request_number'] ?? '') ?>
-                            — <?= e($qrOpt['client_name'] ?: 'Walk-in') ?>
-                            <?php if (!empty($qrOpt['car_registration']) || !empty($qrOpt['car_make'])): ?>
-                            (<?= e(trim(($qrOpt['car_make'] ?? '').' '.($qrOpt['car_model'] ?? ''))) ?><?= !empty($qrOpt['car_registration']) ? ' · '.e($qrOpt['car_registration']) : '' ?>)
-                            <?php endif; ?>
+        <!-- Client & Vehicle -->
+        <div class="card mb-3 border-0 shadow-sm">
+            <div class="card-header border-bottom py-3 d-flex align-items-center gap-2" style="background:#fff">
+                <span style="width:28px;height:28px;background:#eff6ff;color:#2563eb;border-radius:6px;display:inline-flex;align-items:center;justify-content:center">
+                    <i class="fa fa-user" style="font-size:12px"></i>
+                </span>
+                <span class="fw-semibold">Client &amp; Vehicle</span>
+            </div>
+            <div class="card-body">
+                <!-- Customer -->
+                <div class="mb-3 pb-3" style="border-bottom:1px solid #f1f5f9">
+                    <div class="mb-2" style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b">
+                        <i class="fa fa-user-tie me-1"></i>Customer
+                    </div>
+                    <select name="client_id" id="client_select" class="form-select form-select-sm select2 mb-2" style="border-color:#e2e8f0">
+                        <option value="">— Link to client (optional) —</option>
+                        <?php foreach ($clients as $cl): ?>
+                        <option value="<?= (int)$cl['id'] ?>"
+                                data-name="<?= e($cl['name']) ?>"
+                                data-email="<?= e($cl['email'] ?? '') ?>"
+                                data-phone="<?= e($cl['phone'] ?? '') ?>"
+                                <?= (int)(($_POST['client_id'] ?? $preClientId) ?: 0) === (int)$cl['id'] ? 'selected' : '' ?>>
+                            <?= e($cl['name']) ?><?= !empty($cl['phone']) ? ' — '.$cl['phone'] : '' ?>
                         </option>
                         <?php endforeach; ?>
                     </select>
-                    <select name="booking_id" id="booking_select" class="d-none"></select>
-                    <?php else: ?>
-                    <label class="form-label fw-semibold">Service Booking <small class="text-muted fw-normal">(optional)</small></label>
-                    <select name="booking_id" id="booking_select" class="form-select select2">
-                        <option value="">— Select booking —</option>
-                        <?php foreach ($serviceBookings as $sb):
-                            $sbReg   = $sb['car_registration'] ?: $sb['registration_number'] ?: '';
-                            $sbMake  = $sb['car_make']  ?: $sb['car_make_db']  ?: '';
-                            $sbModel = $sb['car_model'] ?: $sb['car_model_db'] ?: '';
-                        ?>
-                        <option value="<?= (int)$sb['id'] ?>"
-                                data-car-id="<?= (int)($sb['car_id'] ?? 0) ?>"
-                                data-job-id="<?= (int)($sb['job_id'] ?? 0) ?>"
-                                data-client-id="<?= (int)($sb['client_id'] ?? 0) ?>"
-                                data-client-name="<?= e($sb['client_name']  ?? '') ?>"
-                                data-client-phone="<?= e($sb['client_phone'] ?? '') ?>"
-                                data-client-email="<?= e($sb['client_email'] ?? '') ?>"
-                                data-car-make="<?= e($sbMake) ?>"
-                                data-car-model="<?= e($sbModel) ?>"
-                                data-car-reg="<?= e($sbReg) ?>"
-                                <?= (int)$preBookingId === (int)$sb['id'] ? 'selected' : '' ?>>
-                            <?= e($sb['booking_number'].' — '.($sb['client_name'] ?: 'Walk-in').($sbReg ? ' ('.$sbReg.')' : '')) ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <?php endif; ?>
+                    <input type="text" id="customer_name" name="customer_name" class="form-control form-control-sm mb-1"
+                           style="border-color:#e2e8f0" placeholder="Customer name"
+                           value="<?= e($_POST['customer_name'] ?? $fromQrCustomer['name']  ?? '') ?>">
+                    <div class="row g-1">
+                        <div class="col-6">
+                            <input type="text" id="customer_phone" name="customer_phone" class="form-control form-control-sm"
+                                   style="border-color:#e2e8f0" placeholder="Phone"
+                                   value="<?= e($_POST['customer_phone'] ?? $fromQrCustomer['phone'] ?? '') ?>">
+                        </div>
+                        <div class="col-6">
+                            <input type="email" name="customer_email" class="form-control form-control-sm"
+                                   style="border-color:#e2e8f0" placeholder="Email"
+                                   value="<?= e($_POST['customer_email'] ?? $fromQrCustomer['email'] ?? '') ?>">
+                        </div>
+                    </div>
                 </div>
-
-                <!-- Vehicle selector -->
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Vehicle <span class="text-danger">*</span></label>
-                    <select name="car_id" id="car_select" class="form-select select2" required>
+                <!-- Vehicle -->
+                <div>
+                    <div class="mb-2" style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b">
+                        <i class="fa fa-car me-1"></i>Vehicle <span class="text-danger">*</span>
+                    </div>
+                    <select name="car_id" id="car_select" class="form-select form-select-sm select2" style="border-color:#e2e8f0" required>
                         <option value="">Select car...</option>
                         <?php foreach ($cars as $c): ?>
                         <option value="<?= (int)$c['id'] ?>"
@@ -418,171 +582,137 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
                     $qrReg  = $fromQr['car_registration'] ?? '';
                     $qrChas = $fromQr['car_chassis']      ?? '';
                     if ($fromQrId && ($qrMake || $qrReg || $qrChas)): ?>
-                    <div class="alert alert-light border mt-2 py-2 px-3 small mb-0">
-                        <strong class="text-primary"><i class="fa fa-car me-1"></i>Vehicle from Quote Request</strong><br>
-                        <?php if ($qrMake): ?><?= e(trim($qrMake.' '.$qrMod)) ?><br><?php endif; ?>
-                        <?php if ($qrReg):  ?>Reg: <strong><?= e(strtoupper($qrReg)) ?></strong><br><?php endif; ?>
-                        <?php if ($qrChas): ?>Chassis: <code><?= e($qrChas) ?></code><?php endif; ?>
+                    <div class="mt-2 p-2 rounded-2 small" style="background:#f0f9ff;border:1px solid #bae6fd">
+                        <div class="fw-semibold text-primary mb-1" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px">
+                            <i class="fa fa-car me-1"></i>From Quote Request
+                        </div>
+                        <?php if ($qrMake): ?><div class="fw-medium text-dark"><?= e(trim($qrMake.' '.$qrMod)) ?></div><?php endif; ?>
+                        <?php if ($qrReg): ?><div class="text-muted">Reg: <strong class="text-dark"><?= e(strtoupper($qrReg)) ?></strong></div><?php endif; ?>
+                        <?php if ($qrChas): ?><div class="text-muted">Chassis: <code style="font-size:11px"><?= e($qrChas) ?></code></div><?php endif; ?>
                     </div>
                     <?php endif; ?>
                 </div>
+            </div>
+        </div>
 
-                <!-- Job card + Dates -->
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">Job Card <small class="text-muted">(opt.)</small></label>
-                    <select name="job_id" id="job_select" class="form-select select2">
-                        <option value="">Select job...</option>
-                        <?php foreach ($jobs as $j): ?>
-                        <option value="<?= (int)$j['id'] ?>" <?= (int)(($_POST['job_id'] ?? $preJobId) ?: 0) === (int)$j['id'] ? 'selected' : '' ?>><?= e($j['job_number']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">Date</label>
-                    <input type="date" name="date" class="form-control mb-2" value="<?= e($_POST['date'] ?? date('Y-m-d')) ?>">
-                    <label class="form-label fw-semibold">Valid Until</label>
-                    <input type="date" name="valid_until" class="form-control" value="<?= e($_POST['valid_until'] ?? date('Y-m-d', strtotime('+30 days'))) ?>">
-                </div>
-
-                <!-- Client -->
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold">Link to Client <small class="text-muted">(opt.)</small></label>
-                    <select name="client_id" id="client_select" class="form-select select2">
-                        <option value="">— No client —</option>
-                        <?php foreach ($clients as $cl): ?>
-                        <option value="<?= (int)$cl['id'] ?>"
-                                data-name="<?= e($cl['name']) ?>"
-                                data-email="<?= e($cl['email'] ?? '') ?>"
-                                data-phone="<?= e($cl['phone'] ?? '') ?>"
-                                <?= (int)(($_POST['client_id'] ?? $preClientId) ?: 0) === (int)$cl['id'] ? 'selected' : '' ?>>
-                            <?= e($cl['name']) ?><?= !empty($cl['phone']) ? ' — '.$cl['phone'] : '' ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold">Customer Name</label>
-                    <input type="text" id="customer_name" name="customer_name" class="form-control"
-                           value="<?= e($_POST['customer_name'] ?? $fromQrCustomer['name']  ?? '') ?>">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label fw-semibold">Phone</label>
-                    <input type="text" id="customer_phone" name="customer_phone" class="form-control"
-                           value="<?= e($_POST['customer_phone'] ?? $fromQrCustomer['phone'] ?? '') ?>">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label fw-semibold">Email</label>
-                    <input type="email" name="customer_email" class="form-control"
-                           value="<?= e($_POST['customer_email'] ?? $fromQrCustomer['email'] ?? '') ?>">
-                </div>
-
-            </div><!-- /row g-3 -->
-        </div><!-- /card-body -->
-    </div><!-- /Quotation Details card -->
-
-    <!-- Line Items card -->
-    <div class="card mb-4">
-        <div class="card-header fw-semibold"><i class="fa fa-list me-2 text-primary"></i>Line Items</div>
-        <div class="card-body line-items-wrapper">
-                <div class="table-responsive">
-                    <table class="table table-sm mb-2" id="lineItemsTable">
-                        <thead><tr><th>Type</th><th style="width:30%">Description</th><th>Part</th><th>Qty</th><th>Unit Price</th><th>Disc%</th><th>Total</th><th></th></tr></thead>
-                        <tbody class="line-items-body">
-                            <?php
-                            $lineItems = isset($_POST['item_desc'])
-                                ? array_keys($_POST['item_desc'])
-                                : ($usePreFill ? array_keys($fromQrMatchedLines) : [0]);
-                            ?>
-                            <?php foreach ($lineItems as $i):
-                                $pre    = $usePreFill ? ($fromQrMatchedLines[$i] ?? []) : [];
-                                $pType  = $_POST['item_type'][$i]   ?? $pre['type']   ?? 'part';
-                                $pDesc  = $_POST['item_desc'][$i]   ?? $pre['desc']   ?? '';
-                                $pInvId = $_POST['item_inv_id'][$i] ?? $pre['inv_id'] ?? '';
-                                $pQty   = $_POST['item_qty'][$i]    ?? $pre['qty']    ?? 1;
-                                $pPrice = $_POST['item_price'][$i]  ?? $pre['price']  ?? 0;
-                                $pDisc  = $_POST['item_disc'][$i]   ?? $pre['disc']   ?? 0;
-                            ?>
-                            <tr class="line-item-row">
-                                <td>
-                                    <select name="item_type[]" class="form-select form-select-sm" style="width:100px">
-                                        <option value="part"    <?= $pType==='part'   ?'selected':'' ?>>Part</option>
-                                        <option value="labour"  <?= $pType==='labour' ?'selected':'' ?>>Labour</option>
-                                        <option value="service" <?= $pType==='service'?'selected':'' ?>>Service</option>
-                                    </select>
-                                </td>
-                                <td><input type="text" name="item_desc[]" class="form-control form-control-sm item-desc" value="<?= e($pDesc) ?>" placeholder="Description..." required></td>
-                                <td>
-                                    <select name="item_inv_id[]" class="form-select form-select-sm select2 inventory-select" style="min-width:150px">
-                                        <option value="">From stock...</option>
-                                        <?php foreach ($inventory as $inv): ?>
-                                        <option value="<?= $inv['id'] ?>" data-price="<?= $inv['selling_price'] ?>" data-desc="<?= e($inv['part_name']) ?>" <?= $pInvId==$inv['id']?'selected':'' ?>>
-                                            <?= e(($inv['part_number']?$inv['part_number'].' — ':'').$inv['part_name']) ?>
-                                        </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </td>
-                                <td><input type="number" name="item_qty[]"   class="form-control form-control-sm item-qty"      style="width:65px" value="<?= e($pQty) ?>"   min="0.01" step="0.01"></td>
-                                <td><input type="number" name="item_price[]" class="form-control form-control-sm item-price"    style="width:90px" value="<?= e($pPrice) ?>" min="0"    step="0.01"></td>
-                                <td><input type="number" name="item_disc[]"  class="form-control form-control-sm item-discount" style="width:65px" value="<?= e($pDisc) ?>"  min="0"    max="100" step="0.01"></td>
-                                <td><strong class="item-total"><?= number_format((float)$pQty * (float)$pPrice, 2) ?></strong></td>
-                                <td><button type="button" class="btn btn-xs btn-outline-danger remove-line-item"><i class="fa fa-times"></i></button></td>
-                            </tr>
+        <!-- Quote Details -->
+        <div class="card mb-3 border-0 shadow-sm">
+            <div class="card-header border-bottom py-3 d-flex align-items-center gap-2" style="background:#fff">
+                <span style="width:28px;height:28px;background:#f0fdf4;color:#16a34a;border-radius:6px;display:inline-flex;align-items:center;justify-content:center">
+                    <i class="fa fa-calendar" style="font-size:12px"></i>
+                </span>
+                <span class="fw-semibold">Quote Details</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold mb-1" style="color:#475569">Date</label>
+                        <input type="date" name="date" class="form-control form-control-sm" style="border-color:#e2e8f0"
+                               value="<?= e($_POST['date'] ?? date('Y-m-d')) ?>">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold mb-1" style="color:#475569">Valid Until</label>
+                        <input type="date" name="valid_until" class="form-control form-control-sm" style="border-color:#e2e8f0"
+                               value="<?= e($_POST['valid_until'] ?? date('Y-m-d', strtotime('+30 days'))) ?>">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-semibold mb-1" style="color:#475569">
+                            Job Card <span class="fw-normal text-muted">(optional)</span>
+                        </label>
+                        <select name="job_id" id="job_select" class="form-select form-select-sm select2" style="border-color:#e2e8f0">
+                            <option value="">No job card</option>
+                            <?php foreach ($jobs as $j): ?>
+                            <option value="<?= (int)$j['id'] ?>" <?= (int)(($_POST['job_id'] ?? $preJobId) ?: 0) === (int)$j['id'] ? 'selected' : '' ?>><?= e($j['job_number']) ?></option>
                             <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="quotAddLine()"><i class="fa fa-plus me-1"></i>Add Line</button>
-            </div>
-        </div>
-
-    </div><!-- /line-items card -->
-
-    <!-- Notes & Terms -->
-    <div class="card">
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Notes</label>
-                    <textarea name="notes" class="form-control" rows="3" placeholder="Special instructions..."><?= e($_POST['notes'] ?? '') ?></textarea>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Terms &amp; Conditions</label>
-                    <textarea name="terms" class="form-control" rows="3" placeholder="Payment terms, warranty..."><?= e($_POST['terms'] ?? 'This quotation is valid for 30 days.') ?></textarea>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-</div><!-- /col-lg-8 -->
+        <!-- Summary & Save -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header border-bottom py-3 d-flex align-items-center gap-2" style="background:#fff">
+                <span style="width:28px;height:28px;background:#fdf4ff;color:#9333ea;border-radius:6px;display:inline-flex;align-items:center;justify-content:center">
+                    <i class="fa fa-calculator" style="font-size:12px"></i>
+                </span>
+                <span class="fw-semibold">Summary</span>
+            </div>
+            <div class="card-body">
+                <!-- Discount & VAT -->
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold mb-1" style="color:#475569">Discount %</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="overall_discount" name="overall_discount"
+                                   class="form-control" style="border-color:#e2e8f0"
+                                   value="<?= e($_POST['overall_discount']??0) ?>"
+                                   min="0" max="100" step="0.01">
+                            <span class="input-group-text" style="border-color:#e2e8f0;background:#f8fafc;color:#64748b;font-size:13px">%</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold mb-1" style="color:#475569">VAT %</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="tax_rate" name="tax_rate"
+                                   class="form-control" style="border-color:#e2e8f0"
+                                   value="<?= e($_POST['tax_rate']??$vatRate) ?>"
+                                   min="0" max="100" step="0.01">
+                            <span class="input-group-text" style="border-color:#e2e8f0;background:#f8fafc;color:#64748b;font-size:13px">%</span>
+                        </div>
+                    </div>
+                </div>
 
-<!-- RIGHT SIDEBAR ────────────────────────────────────────────────────────── -->
-<div class="col-lg-4">
-    <div class="card" style="position:sticky;top:16px">
-        <div class="card-header fw-semibold"><i class="fa fa-calculator me-2 text-primary"></i>Summary</div>
-        <div class="card-body">
-            <table class="table table-sm mb-3">
-                <tr><td class="text-muted">Subtotal</td><td class="text-end fw-semibold">KES <span class="subtotal-mirror">0.00</span></td></tr>
-                <tr><td class="text-muted">Discount</td><td class="text-end text-danger">- KES <span class="discount-mirror">0.00</span></td></tr>
-                <tr><td class="text-muted">VAT</td><td class="text-end">KES <span class="tax-mirror">0.00</span></td></tr>
-                <tr class="table-primary"><td><strong>Total</strong></td><td class="text-end"><strong>KES <span class="total-mirror">0.00</span></strong></td></tr>
-            </table>
-            <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-primary"
-                        onclick="document.getElementById('_after_save').value='view'">
-                    <i class="fa fa-save me-2"></i>Save Quotation
-                </button>
-                <button type="submit" class="btn btn-outline-secondary"
-                        onclick="document.getElementById('_after_save').value='print'">
-                    <i class="fa fa-print me-2"></i>Save &amp; Print
-                </button>
-                <button type="submit" class="btn btn-outline-info"
-                        onclick="document.getElementById('_after_save').value='send'">
-                    <i class="fa fa-envelope me-2"></i>Save &amp; Send
-                </button>
+                <!-- Totals breakdown -->
+                <div class="rounded-3 overflow-hidden mb-3" style="border:1px solid #e2e8f0">
+                    <div class="d-flex justify-content-between px-3 py-2" style="background:#f8fafc">
+                        <span class="text-muted small">Subtotal</span>
+                        <span class="fw-semibold small">KES <span id="subtotal_display">0.00</span></span>
+                    </div>
+                    <div class="d-flex justify-content-between px-3 py-2" style="border-top:1px solid #f1f5f9">
+                        <span class="text-muted small">Discount</span>
+                        <span class="small text-danger">− KES <span id="discount_display">0.00</span></span>
+                    </div>
+                    <div class="d-flex justify-content-between px-3 py-2" style="border-top:1px solid #f1f5f9">
+                        <span class="text-muted small">VAT</span>
+                        <span class="small">KES <span id="tax_display">0.00</span></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center px-3 py-3"
+                         style="background:linear-gradient(135deg,#1e40af,#2563eb);border-top:2px solid #1d4ed8">
+                        <span class="fw-bold text-white">Total</span>
+                        <span class="fw-bold text-white" style="font-size:18px">KES <span id="total_display">0.00</span></span>
+                    </div>
+                </div>
+
+                <!-- Save buttons -->
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary fw-semibold"
+                            style="border-radius:8px;padding:10px 16px"
+                            onclick="document.getElementById('_after_save').value='view'">
+                        <i class="fa fa-save me-2"></i>Save Quotation
+                    </button>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <button type="submit" class="btn btn-outline-dark w-100"
+                                    style="border-radius:8px"
+                                    onclick="document.getElementById('_after_save').value='print'">
+                                <i class="fa fa-print me-1"></i>Save &amp; Print
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="submit" class="btn btn-outline-info w-100"
+                                    style="border-radius:8px"
+                                    onclick="document.getElementById('_after_save').value='send'">
+                                <i class="fa fa-envelope me-1"></i>Save &amp; Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</div>
+
+    </div><!-- /sticky -->
+</div><!-- /col right -->
 
 </div><!-- /row -->
 </form>
@@ -603,23 +733,57 @@ $extraJs = null; // all quotation JS runs in the post-footer script below
         if (!tbody) return;
         var tr = document.createElement('tr');
         tr.className = 'line-item-row';
+        tr.style.borderBottom = '1px solid #f1f5f9';
         tr.innerHTML =
-            '<td><select name="item_type[]" class="form-select form-select-sm" style="width:100px">' +
-                '<option value="part">Part</option><option value="labour">Labour</option>' +
-                '<option value="service">Service</option></select></td>' +
-            '<td><input type="text" name="item_desc[]" class="form-control form-control-sm item-desc"' +
-                ' placeholder="Description..." required></td>' +
-            '<td><select name="item_inv_id[]" class="form-select form-select-sm inventory-select"' +
-                ' style="min-width:150px">' + _invOpts + '</select></td>' +
-            '<td><input type="number" name="item_qty[]"  class="form-control form-control-sm item-qty"' +
-                ' style="width:65px" value="1" min="0.01" step="0.01"></td>' +
-            '<td><input type="number" name="item_price[]" class="form-control form-control-sm item-price"' +
-                ' style="width:90px" value="0" min="0" step="0.01"></td>' +
-            '<td><input type="number" name="item_disc[]"  class="form-control form-control-sm item-discount"' +
-                ' style="width:65px" value="0" min="0" max="100" step="0.01"></td>' +
-            '<td><strong class="item-total">0.00</strong></td>' +
-            '<td><button type="button" class="btn btn-xs btn-outline-danger remove-line-item">' +
-                '<i class="fa fa-times"></i></button></td>';
+            '<td class="ps-3 py-2">' +
+                '<select name="item_type[]" class="form-select form-select-sm"' +
+                    ' style="border:none;background:#f1f5f9;border-radius:6px;font-size:12px">' +
+                    '<option value="part">Part</option>' +
+                    '<option value="labour">Labour</option>' +
+                    '<option value="service">Service</option>' +
+                '</select>' +
+            '</td>' +
+            '<td class="py-2">' +
+                '<input type="text" name="item_desc[]"' +
+                    ' class="form-control form-control-sm item-desc"' +
+                    ' style="border-color:#e2e8f0;border-radius:6px"' +
+                    ' placeholder="Item description..." required>' +
+            '</td>' +
+            '<td class="py-2">' +
+                '<select name="item_inv_id[]"' +
+                    ' class="form-select form-select-sm inventory-select"' +
+                    ' style="border-color:#e2e8f0;border-radius:6px">' +
+                    _invOpts +
+                '</select>' +
+            '</td>' +
+            '<td class="py-2 text-center">' +
+                '<input type="number" name="item_qty[]"' +
+                    ' class="form-control form-control-sm item-qty text-center"' +
+                    ' style="border-color:#e2e8f0;border-radius:6px"' +
+                    ' value="1" min="0.01" step="0.01">' +
+            '</td>' +
+            '<td class="py-2">' +
+                '<input type="number" name="item_price[]"' +
+                    ' class="form-control form-control-sm item-price text-end"' +
+                    ' style="border-color:#e2e8f0;border-radius:6px"' +
+                    ' value="0" min="0" step="0.01">' +
+            '</td>' +
+            '<td class="py-2 text-center">' +
+                '<input type="number" name="item_disc[]"' +
+                    ' class="form-control form-control-sm item-discount text-center"' +
+                    ' style="border-color:#e2e8f0;border-radius:6px"' +
+                    ' value="0" min="0" max="100" step="0.01">' +
+            '</td>' +
+            '<td class="py-2 text-end pe-3">' +
+                '<span class="item-total fw-semibold" style="color:#0f172a">0.00</span>' +
+            '</td>' +
+            '<td class="py-2 pe-2 text-center">' +
+                '<button type="button" class="btn btn-sm remove-line-item"' +
+                    ' style="width:26px;height:26px;padding:0;border-radius:6px;border:1px solid #fecaca;background:#fff5f5;color:#ef4444;line-height:1"' +
+                    ' title="Remove row">' +
+                    '<i class="fa fa-times" style="font-size:11px"></i>' +
+                '</button>' +
+            '</td>';
         tbody.appendChild(tr);
         if ($.fn && $.fn.select2) {
             $(tr).find('.inventory-select').select2({ theme: 'bootstrap-5', width: '100%' });
