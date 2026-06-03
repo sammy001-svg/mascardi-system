@@ -104,6 +104,12 @@ include __DIR__ . '/../../includes/header.php';
             <i class="fa fa-file-invoice-dollar me-1"></i>Quote from Stock
         </a>
         <?php endif; ?>
+        <?php if (canAccess('lpo') && canWrite('lpo') && $req['status'] !== 'rejected'): ?>
+        <a href="<?= BASE_URL ?>/modules/lpo/add.php?from_qr=<?= $id ?>"
+           class="btn btn-sm btn-warning text-dark">
+            <i class="fa fa-file-contract me-1"></i>Generate LPO
+        </a>
+        <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
 </div>

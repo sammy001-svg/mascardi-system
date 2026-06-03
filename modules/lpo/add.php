@@ -11,6 +11,48 @@ $suppliers = $db->query("SELECT id, name FROM suppliers WHERE status='active' OR
 $jobs      = $db->query("SELECT id, job_number FROM workshop_jobs WHERE status NOT IN ('completed','cancelled') ORDER BY job_number")->fetchAll();
 $inventory = $db->query("SELECT id, part_number, part_name, unit, unit_price FROM inventory ORDER BY part_name")->fetchAll();
 
+// ── Pre-fill from Quote Request ──────────────────────────────────────────────
+$fromQrId = (int)($_GET['from_qr'] ?? 0);
+$fromQr   = null;
+$preItems = [];
+
+if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    try {
+        $s = $db->prepare("SELECT * FROM parts_requests WHERE id = ?");
+        $s->execute([$fromQrId]);
+        $fromQr = $s->fetch() ?: null;
+    } catch (\Throwable $e) {}
+
+    if ($fromQr) {
+        $s = $db->prepare("SELECT * FROM parts_request_items WHERE request_id = ? ORDER BY id");
+        $s->execute([$fromQrId]);
+        foreach ($s->fetchAll() as $it) {
+            $inv = null;
+            if (!empty($it['part_number'])) {
+                $q = $db->prepare("SELECT id, part_name, unit_price, unit FROM inventory WHERE part_number = ? LIMIT 1");
+                $q->execute([$it['part_number']]);
+                $inv = $q->fetch() ?: null;
+            }
+            if (!$inv) {
+                $q = $db->prepare("SELECT id, part_name, unit_price, unit FROM inventory WHERE LOWER(part_name) = LOWER(?) LIMIT 1");
+                $q->execute([$it['part_name']]);
+                $inv = $q->fetch() ?: null;
+            }
+            $preItems[] = [
+                'desc'   => $it['part_name'],
+                'inv_id' => $inv ? $inv['id'] : '',
+                'qty'    => $it['quantity_requested'],
+                'unit'   => ($inv && !empty($inv['unit'])) ? $inv['unit'] : 'piece',
+                'price'  => $inv ? (float)$inv['unit_price'] : 0,
+            ];
+        }
+        if (empty($preItems)) {
+            $preItems[] = ['desc' => '', 'inv_id' => '', 'qty' => 1, 'unit' => 'piece', 'price' => 0];
+        }
+    }
+}
+$usePreFill = !empty($preItems) && !isset($_POST['item_desc']);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $suppId   = (int)($_POST['supplier_id'] ?? 0);
     $jobId    = $_POST['job_id'] ? (int)$_POST['job_id'] : null;
@@ -62,10 +104,55 @@ $vatRate = getSetting('vat_rate','16');
 include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0">Create Local Purchase Order</h5>
+    <div>
+        <nav aria-label="breadcrumb" class="mb-1">
+            <ol class="breadcrumb mb-0" style="font-size:12px">
+                <li class="breadcrumb-item"><a href="index.php" class="text-decoration-none">LPOs</a></li>
+                <li class="breadcrumb-item active">New</li>
+            </ol>
+        </nav>
+        <h5 class="mb-0 d-flex align-items-center gap-2">
+            <span style="width:32px;height:32px;background:#d97706;color:#fff;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fa fa-file-contract" style="font-size:13px"></i>
+            </span>
+            Create Local Purchase Order
+        </h5>
+    </div>
     <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
 </div>
-<?php if($errors): ?><div class="alert alert-danger"><ul class="mb-0"><?php foreach($errors as $err) echo "<li>".e($err)."</li>"; ?></ul></div><?php endif; ?>
+
+<?php if ($errors): ?>
+<div class="alert alert-danger d-flex gap-2 align-items-start mb-3" style="border-radius:8px;border:none">
+    <i class="fa fa-circle-exclamation mt-1 flex-shrink-0"></i>
+    <ul class="mb-0 ps-2"><?php foreach($errors as $err) echo "<li>".e($err)."</li>"; ?></ul>
+</div>
+<?php endif; ?>
+
+<?php if ($fromQr): ?>
+<div class="d-flex gap-3 align-items-start p-3 mb-4 rounded-3" style="background:#fffbeb;border:1px solid #fde68a">
+    <span style="width:32px;height:32px;background:#d97706;color:#fff;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+        <i class="fa fa-bolt" style="font-size:13px"></i>
+    </span>
+    <div class="flex-fill">
+        <div class="fw-semibold mb-1" style="color:#92400e">
+            Pre-filling from Quote Request
+            <a href="<?= BASE_URL ?>/modules/parts_requests/view.php?id=<?= $fromQrId ?>"
+               class="fw-bold text-decoration-none ms-1" style="color:#d97706">
+                <?= e($fromQr['request_number']) ?>
+            </a>
+        </div>
+        <div class="small text-muted">
+            <?php $parts = array_filter([
+                $fromQr['client_name'] ?? '',
+                trim(($fromQr['car_make'] ?? '') . ' ' . ($fromQr['car_model'] ?? '')),
+                $fromQr['car_registration'] ? strtoupper($fromQr['car_registration']) : '',
+            ]); ?>
+            <?= e(implode(' — ', $parts)) ?>
+            &nbsp;·&nbsp; <?= count($preItems) ?> item<?= count($preItems) !== 1 ? 's' : '' ?> pre-filled
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <form method="POST">
 <div class="row g-4">
@@ -77,23 +164,34 @@ include __DIR__ . '/../../includes/header.php';
                     <table class="table table-sm mb-2">
                         <thead><tr><th>Description</th><th>Part (Stock)</th><th>Qty</th><th>Unit</th><th>Unit Price</th><th>Total</th><th></th></tr></thead>
                         <tbody class="line-items-body">
-                            <?php $lineItems = isset($_POST['item_desc']) ? array_keys($_POST['item_desc']) : [0]; ?>
-                            <?php foreach($lineItems as $i): ?>
+                            <?php
+                            $lineItems = isset($_POST['item_desc'])
+                                ? array_keys($_POST['item_desc'])
+                                : ($usePreFill ? array_keys($preItems) : [0]);
+                            ?>
+                            <?php foreach($lineItems as $i):
+                                $pre    = $usePreFill ? ($preItems[$i] ?? []) : [];
+                                $pDesc  = $_POST['item_desc'][$i]   ?? $pre['desc']   ?? '';
+                                $pInvId = $_POST['item_inv_id'][$i] ?? $pre['inv_id'] ?? '';
+                                $pQty   = $_POST['item_qty'][$i]    ?? $pre['qty']    ?? 1;
+                                $pUnit  = $_POST['item_unit'][$i]   ?? $pre['unit']   ?? 'piece';
+                                $pPrice = $_POST['item_price'][$i]  ?? $pre['price']  ?? 0;
+                            ?>
                             <tr class="line-item-row">
-                                <td><input type="text" name="item_desc[]" class="form-control form-control-sm item-desc" value="<?= e($_POST['item_desc'][$i]??'') ?>" placeholder="Item description..." required></td>
+                                <td><input type="text" name="item_desc[]" class="form-control form-control-sm item-desc" value="<?= e($pDesc) ?>" placeholder="Item description..." required></td>
                                 <td>
                                     <select name="item_inv_id[]" class="form-select form-select-sm select2 inventory-select" style="min-width:150px">
                                         <option value="">Not in stock</option>
                                         <?php foreach($inventory as $inv): ?>
-                                        <option value="<?= $inv['id'] ?>" data-price="<?= $inv['unit_price'] ?>" data-desc="<?= e($inv['part_name']) ?>" <?= ($_POST['item_inv_id'][$i]??'')==$inv['id']?'selected':'' ?>>
+                                        <option value="<?= $inv['id'] ?>" data-price="<?= $inv['unit_price'] ?>" data-desc="<?= e($inv['part_name']) ?>" <?= $pInvId==$inv['id']?'selected':'' ?>>
                                             <?= e(($inv['part_number']?$inv['part_number'].' — ':'').$inv['part_name']) ?>
                                         </option>
                                         <?php endforeach; ?>
                                     </select>
                                 </td>
-                                <td><input type="number" name="item_qty[]" class="form-control form-control-sm item-qty" style="width:70px" value="<?= e($_POST['item_qty'][$i]??1) ?>" min="0.01" step="0.01"></td>
-                                <td><input type="text" name="item_unit[]" class="form-control form-control-sm" style="width:80px" value="<?= e($_POST['item_unit'][$i]??'piece') ?>"></td>
-                                <td><input type="number" name="item_price[]" class="form-control form-control-sm item-price" style="width:90px" value="<?= e($_POST['item_price'][$i]??0) ?>" min="0" step="0.01"></td>
+                                <td><input type="number" name="item_qty[]" class="form-control form-control-sm item-qty" style="width:70px" value="<?= e($pQty) ?>" min="0.01" step="0.01"></td>
+                                <td><input type="text" name="item_unit[]" class="form-control form-control-sm" style="width:80px" value="<?= e($pUnit) ?>"></td>
+                                <td><input type="number" name="item_price[]" class="form-control form-control-sm item-price" style="width:90px" value="<?= e($pPrice) ?>" min="0" step="0.01"></td>
                                 <td><strong class="item-total">0.00</strong></td>
                                 <td><button type="button" class="btn btn-xs btn-outline-danger remove-line-item"><i class="fa fa-times"></i></button></td>
                             </tr>
@@ -107,7 +205,7 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card mt-3"><div class="card-body">
             <div class="row g-3">
                 <div class="col-md-6"><label class="form-label">Delivery Address</label><textarea name="delivery_address" class="form-control" rows="2" placeholder="Nairobi Workshop, ..."><?= e($_POST['delivery_address']??'') ?></textarea></div>
-                <div class="col-md-6"><label class="form-label">Notes / Special Instructions</label><textarea name="notes" class="form-control" rows="2"><?= e($_POST['notes']??'') ?></textarea></div>
+                <div class="col-md-6"><label class="form-label">Notes / Special Instructions</label><textarea name="notes" class="form-control" rows="2"><?= e($_POST['notes'] ?? ($fromQr['notes'] ?? '')) ?></textarea></div>
             </div>
         </div></div>
     </div>
