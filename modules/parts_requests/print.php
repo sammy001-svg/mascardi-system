@@ -14,7 +14,7 @@ $stmt = $db->prepare("
            u.name AS created_by_name
     FROM parts_requests pr
     LEFT JOIN quick_assessments qa ON qa.id = pr.quick_assessment_id
-    LEFT JOIN users u ON u.id = pr.created_by
+    LEFT JOIN users u ON u.id = pr.requested_by
     WHERE pr.id = ?
 ");
 $stmt->execute([$id]);
