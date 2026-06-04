@@ -359,5 +359,13 @@ $isReversed  = $p['status'] === 'reversed';
     </div>
 </div><!-- /receipt-wrapper -->
 
+<?php if (!empty($_GET['new'])): ?>
+<script>
+// Auto-open print dialog when redirected from a new payment
+window.addEventListener('load', function() {
+    setTimeout(function() { window.print(); }, 600);
+});
+</script>
+<?php endif; ?>
 </body>
 </html>

@@ -26,8 +26,22 @@ if ($preBookingId) {
 }
 
 $clients  = $db->query("SELECT id, name, phone, email FROM clients WHERE status='active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-$invoices = $db->query("SELECT i.id, i.invoice_number, i.customer_name, i.total FROM invoices i WHERE i.status IN ('unpaid','partial') ORDER BY i.id DESC")->fetchAll(PDO::FETCH_ASSOC);
-$bookings = $db->query("SELECT id, booking_number, client_name FROM service_bookings ORDER BY id DESC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
+$invoices = $db->query("
+    SELECT i.id, i.invoice_number, i.customer_name, i.total, i.client_id,
+           COALESCE(i.amount_paid, 0) AS amount_paid,
+           (i.total - COALESCE(i.amount_paid, 0)) AS balance
+    FROM invoices i
+    WHERE i.status IN ('unpaid','partial')
+    ORDER BY i.id DESC
+")->fetchAll(PDO::FETCH_ASSOC);
+$bookings = $db->query("
+    SELECT sb.id, sb.booking_number, sb.client_name, sb.client_id,
+           COALESCE(sb.client_phone, '') AS client_phone
+    FROM service_bookings sb
+    WHERE sb.status NOT IN ('completed','cancelled')
+    ORDER BY sb.id DESC
+    LIMIT 100
+")->fetchAll(PDO::FETCH_ASSOC);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $clientId      = (int)($_POST['client_id'] ?? 0) ?: null;
@@ -128,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 sendMail($clientEmail, $clientName, $subj, mailTemplate($subj, $body), 'payment', $newPayId);
             }
             setFlash('success', "Payment {$payNum} recorded successfully.");
-            redirect(BASE_URL . '/modules/payments/view.php?id=' . $newPayId);
+            redirect(BASE_URL . '/modules/payments/print.php?id=' . $newPayId . '&new=1');
         } catch (\Throwable $e) {
             $errors[] = $e->getMessage();
         }
@@ -193,23 +207,38 @@ include __DIR__ . '/../../includes/header.php';
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Invoice (optional)</label>
-                        <select name="invoice_id" class="form-select select2">
-                            <option value="">— None —</option>
-                            <?php foreach ($invoices as $inv): ?>
-                            <option value="<?= $inv['id'] ?>" <?= (($_POST['invoice_id'] ?? $preInvoiceId) == $inv['id']) ? 'selected' : '' ?>>
-                                <?= e($inv['invoice_number']) ?> — <?= e($inv['customer_name']) ?> (<?= money($inv['total']) ?>)
+                        <label class="form-label small fw-semibold">Invoice</label>
+                        <select name="invoice_id" id="invoiceSelect" class="form-select select2">
+                            <option value="">— Select invoice —</option>
+                            <?php foreach ($invoices as $inv):
+                                $invBal = (float)$inv['balance'];
+                            ?>
+                            <option value="<?= $inv['id'] ?>"
+                                    data-client-id="<?= (int)($inv['client_id'] ?? 0) ?>"
+                                    data-balance="<?= number_format($invBal, 2, '.', '') ?>"
+                                    data-total="<?= number_format((float)$inv['total'], 2, '.', '') ?>"
+                                    data-customer="<?= e($inv['customer_name']) ?>"
+                                    <?= (($_POST['invoice_id'] ?? $preInvoiceId) == $inv['id']) ? 'selected' : '' ?>>
+                                <?= e($inv['invoice_number']) ?> — <?= e($inv['customer_name']) ?>
+                                (Bal: <?= money($invBal) ?>)
                             </option>
                             <?php endforeach; ?>
                         </select>
+                        <div id="invoiceBalanceHint" class="mt-1 small fw-semibold d-none" style="color:#16a34a">
+                            <i class="fa fa-circle-info me-1"></i>Balance due: <span id="invoiceBalanceAmt"></span>
+                        </div>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Service Booking (optional)</label>
-                        <select name="service_booking_id" class="form-select select2">
-                            <option value="">— None —</option>
+                        <label class="form-label small fw-semibold">Service Booking</label>
+                        <select name="service_booking_id" id="bookingSelect" class="form-select select2">
+                            <option value="">— Select booking —</option>
                             <?php foreach ($bookings as $bk): ?>
-                            <option value="<?= $bk['id'] ?>" <?= (($_POST['service_booking_id'] ?? $preBookingId) == $bk['id']) ? 'selected' : '' ?>>
-                                <?= e($bk['booking_number']) ?> — <?= e($bk['client_name']) ?>
+                            <option value="<?= $bk['id'] ?>"
+                                    data-client-id="<?= (int)($bk['client_id'] ?? 0) ?>"
+                                    data-client-name="<?= e($bk['client_name'] ?? '') ?>"
+                                    data-client-phone="<?= e($bk['client_phone'] ?? '') ?>"
+                                    <?= (($_POST['service_booking_id'] ?? $preBookingId) == $bk['id']) ? 'selected' : '' ?>>
+                                <?= e($bk['booking_number']) ?> — <?= e($bk['client_name'] ?? '') ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
@@ -342,9 +371,9 @@ include __DIR__ . '/../../includes/header.php';
                     <label class="form-label small fw-semibold">Amount Paid (KES) <span class="text-danger">*</span></label>
                     <div class="input-group">
                         <span class="input-group-text fw-bold">KES</span>
-                        <input type="number" name="amount" class="form-control form-control-lg fw-bold"
+                        <input type="number" name="amount" id="amountInput" class="form-control form-control-lg fw-bold"
                                min="0.01" step="0.01" placeholder="0.00"
-                               value="<?= e($_POST['amount'] ?? ($preInvoice['total'] ?? '')) ?>" required>
+                               value="<?= e($_POST['amount'] ?? (isset($preInvoice['balance']) ? $preInvoice['balance'] : ($preInvoice['total'] ?? ''))) ?>" required>
                     </div>
                 </div>
                 <div>
@@ -395,41 +424,146 @@ include __DIR__ . '/../../includes/header.php';
 .method-card:hover { border-color: var(--bs-primary) !important; background: #f0f4ff; }
 .method-card:has(input:checked) { border-color: var(--bs-primary) !important; background: #eff6ff; }
 </style>
-
 <script>
-// Method radio toggle
-document.querySelectorAll('.method-radio').forEach(radio => {
-    radio.addEventListener('change', () => {
-        document.querySelectorAll('.method-fields').forEach(f => f.classList.add('d-none'));
-        document.querySelectorAll('.method-card').forEach(c => { c.classList.remove('border-primary','bg-primary','bg-opacity-10'); });
-        const sel = document.querySelector('.method-radio:checked');
+/* ── Static data from PHP ─────────────────────────────────────────────── */
+var _invoices = <?= json_encode(array_values($invoices)) ?>;
+var _bookings = <?= json_encode(array_values($bookings)) ?>;
+
+/* ── Utilities ───────────────────────────────────────────────────────── */
+function setField(id, val) {
+    var el = document.getElementById(id);
+    if (el) el.value = (val !== undefined && val !== null) ? val : '';
+}
+function fmtKES(n) {
+    return 'KES ' + parseFloat(n || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+/* ── Rebuild invoice dropdown ────────────────────────────────────────── */
+function rebuildInvoices(clientId, keepVal) {
+    var $sel = $('#invoiceSelect');
+    try { $sel.select2('destroy'); } catch(e){}
+    $sel.empty().append('<option value="">— Select invoice —</option>');
+    var list = clientId
+        ? _invoices.filter(function(i){ return String(i.client_id) === String(clientId); })
+        : _invoices;
+    list.forEach(function(inv) {
+        var bal = parseFloat(inv.balance || 0);
+        var opt = document.createElement('option');
+        opt.value            = inv.id;
+        opt.textContent      = inv.invoice_number + ' — ' + inv.customer_name + ' (Bal: ' + fmtKES(bal) + ')';
+        opt.dataset.balance  = bal.toFixed(2);
+        opt.dataset.total    = parseFloat(inv.total || 0).toFixed(2);
+        opt.dataset.clientId = inv.client_id || 0;
+        $sel[0].appendChild(opt);
+    });
+    $sel.select2({ theme: 'bootstrap-5', width: '100%', placeholder: '— Select invoice —' });
+    if (keepVal && list.find(function(i){ return String(i.id) === String(keepVal); })) {
+        $sel.val(keepVal).trigger('change');
+    } else if (list.length === 1) {
+        $sel.val(list[0].id).trigger('change');
+    }
+}
+
+/* ── Rebuild booking dropdown ────────────────────────────────────────── */
+function rebuildBookings(clientId, keepVal) {
+    var $sel = $('#bookingSelect');
+    try { $sel.select2('destroy'); } catch(e){}
+    $sel.empty().append('<option value="">— Select booking —</option>');
+    var list = clientId
+        ? _bookings.filter(function(b){ return String(b.client_id) === String(clientId); })
+        : _bookings;
+    list.forEach(function(bk) {
+        var opt = document.createElement('option');
+        opt.value               = bk.id;
+        opt.textContent         = bk.booking_number + ' — ' + (bk.client_name || '');
+        opt.dataset.clientName  = bk.client_name  || '';
+        opt.dataset.clientPhone = bk.client_phone || '';
+        opt.dataset.clientId    = bk.client_id    || 0;
+        $sel[0].appendChild(opt);
+    });
+    $sel.select2({ theme: 'bootstrap-5', width: '100%', placeholder: '— Select booking —' });
+    if (keepVal && list.find(function(b){ return String(b.id) === String(keepVal); })) {
+        $sel.val(keepVal).trigger('change');
+    }
+}
+
+/* ── Show balance hint + fill amount ─────────────────────────────────── */
+function applyBalance(balance) {
+    var hint = document.getElementById('invoiceBalanceHint');
+    var lbl  = document.getElementById('invoiceBalanceAmt');
+    var bal  = parseFloat(balance || 0);
+    if (hint && lbl) {
+        if (bal > 0) { lbl.textContent = fmtKES(bal); hint.classList.remove('d-none'); }
+        else { hint.classList.add('d-none'); }
+    }
+    if (bal > 0) setField('amountInput', bal.toFixed(2));
+}
+
+/* ── Client select: fill details + filter invoices & bookings ────────── */
+$('#clientSelect').on('select2:select select2:clear', function() {
+    var opt      = this.options[this.selectedIndex];
+    var clientId = opt ? opt.value : '';
+    setField('clientName',  opt ? (opt.dataset.name  || '') : '');
+    setField('clientPhone', opt ? (opt.dataset.phone || '') : '');
+    rebuildInvoices(clientId, $('#invoiceSelect').val());
+    rebuildBookings(clientId, $('#bookingSelect').val());
+});
+
+/* ── Invoice select: auto-fill amount with outstanding balance ───────── */
+$(document).on('change', '#invoiceSelect', function() {
+    var val = $(this).val();
+    if (!val) { var h = document.getElementById('invoiceBalanceHint'); if(h) h.classList.add('d-none'); return; }
+    var opt = document.getElementById('invoiceSelect').querySelector('option[value="' + val + '"]');
+    if (opt) applyBalance(parseFloat(opt.dataset.balance || 0));
+});
+
+/* ── Booking select: fill client if not already entered ─────────────── */
+$(document).on('change', '#bookingSelect', function() {
+    var opt = this.options[this.selectedIndex];
+    if (!opt || !opt.value) return;
+    if (!document.getElementById('clientName').value) {
+        setField('clientName',  opt.dataset.clientName  || '');
+        setField('clientPhone', opt.dataset.clientPhone || '');
+    }
+});
+
+/* ── Method radio toggle ─────────────────────────────────────────────── */
+document.querySelectorAll('.method-radio').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        document.querySelectorAll('.method-fields').forEach(function(f){ f.classList.add('d-none'); });
+        document.querySelectorAll('.method-card').forEach(function(c){ c.classList.remove('border-primary','bg-primary','bg-opacity-10'); });
+        var sel = document.querySelector('.method-radio:checked');
         if (sel) {
-            document.getElementById('fields-' + sel.value)?.classList.remove('d-none');
+            var el = document.getElementById('fields-' + sel.value);
+            if (el) el.classList.remove('d-none');
             sel.closest('.method-card').classList.add('border-primary','bg-primary','bg-opacity-10');
         }
     });
 });
 
-// Balance adjustment toggle
-document.getElementById('adjToggle')?.addEventListener('change', e => {
+/* ── Balance adjustment toggle ───────────────────────────────────────── */
+document.getElementById('adjToggle')?.addEventListener('change', function(e) {
     document.getElementById('adjBody').classList.toggle('d-none', !e.target.checked);
     if (!e.target.checked) document.querySelector('[name="balance_adjustment"]').value = '';
 });
 
-// Client select auto-fill
-document.getElementById('clientSelect')?.addEventListener('change', function () {
-    const opt = this.options[this.selectedIndex];
-    document.getElementById('clientName').value  = opt.dataset.name  || '';
-    document.getElementById('clientPhone').value = opt.dataset.phone || '';
+/* ── Disable hidden method inputs before submit (prevent duplicate names) */
+document.querySelector('form').addEventListener('submit', function() {
+    document.querySelectorAll('.method-fields.d-none input, .method-fields.d-none select').forEach(function(el){ el.disabled = true; });
 });
 
-// Disable all inputs inside hidden method sections before submit.
-// Without this, PHP receives duplicate field names (reference_number, bank_name)
-// from all four sections and only the last (cash) value survives.
-document.querySelector('form').addEventListener('submit', function () {
-    document.querySelectorAll('.method-fields.d-none input, .method-fields.d-none select').forEach(function (el) {
-        el.disabled = true;
-    });
+/* ── On load: apply balance if invoice pre-selected ─────────────────── */
+$(function() {
+    var selInv = document.getElementById('invoiceSelect');
+    if (selInv && selInv.value) {
+        var preOpt = selInv.querySelector('option[value="' + selInv.value + '"]');
+        if (preOpt) applyBalance(parseFloat(preOpt.dataset.balance || 0));
+    }
+    var selCl = document.getElementById('clientSelect');
+    if (selCl && selCl.value) {
+        rebuildInvoices(selCl.value, selInv ? selInv.value : '');
+        rebuildBookings(selCl.value, $('#bookingSelect').val());
+    }
 });
 </script>
 
