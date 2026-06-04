@@ -420,11 +420,17 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 </form>
 
+<?php include __DIR__ . '/../../includes/footer.php'; ?>
+<!-- NOTE: this script block is intentionally AFTER the footer so jQuery,
+     Select2 and main.js are already loaded when it executes. -->
 <style>
 .method-card:hover { border-color: var(--bs-primary) !important; background: #f0f4ff; }
 .method-card:has(input:checked) { border-color: var(--bs-primary) !important; background: #eff6ff; }
 </style>
 <script>
+(function($) {
+'use strict';
+
 /* ── Static data from PHP ─────────────────────────────────────────────── */
 var _invoices = <?= json_encode(array_values($invoices)) ?>;
 var _bookings = <?= json_encode(array_values($bookings)) ?>;
@@ -438,14 +444,16 @@ function fmtKES(n) {
     return 'KES ' + parseFloat(n || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
-/* ── Rebuild invoice dropdown ────────────────────────────────────────── */
+/* ── Rebuild invoice dropdown filtered by clientId ───────────────────── */
 function rebuildInvoices(clientId, keepVal) {
     var $sel = $('#invoiceSelect');
     try { $sel.select2('destroy'); } catch(e){}
     $sel.empty().append('<option value="">— Select invoice —</option>');
+
     var list = clientId
         ? _invoices.filter(function(i){ return String(i.client_id) === String(clientId); })
         : _invoices;
+
     list.forEach(function(inv) {
         var bal = parseFloat(inv.balance || 0);
         var opt = document.createElement('option');
@@ -456,22 +464,27 @@ function rebuildInvoices(clientId, keepVal) {
         opt.dataset.clientId = inv.client_id || 0;
         $sel[0].appendChild(opt);
     });
+
     $sel.select2({ theme: 'bootstrap-5', width: '100%', placeholder: '— Select invoice —' });
-    if (keepVal && list.find(function(i){ return String(i.id) === String(keepVal); })) {
+
+    var kept = keepVal && list.find(function(i){ return String(i.id) === String(keepVal); });
+    if (kept) {
         $sel.val(keepVal).trigger('change');
     } else if (list.length === 1) {
         $sel.val(list[0].id).trigger('change');
     }
 }
 
-/* ── Rebuild booking dropdown ────────────────────────────────────────── */
+/* ── Rebuild booking dropdown filtered by clientId ───────────────────── */
 function rebuildBookings(clientId, keepVal) {
     var $sel = $('#bookingSelect');
     try { $sel.select2('destroy'); } catch(e){}
     $sel.empty().append('<option value="">— Select booking —</option>');
+
     var list = clientId
         ? _bookings.filter(function(b){ return String(b.client_id) === String(clientId); })
         : _bookings;
+
     list.forEach(function(bk) {
         var opt = document.createElement('option');
         opt.value               = bk.id;
@@ -481,13 +494,15 @@ function rebuildBookings(clientId, keepVal) {
         opt.dataset.clientId    = bk.client_id    || 0;
         $sel[0].appendChild(opt);
     });
+
     $sel.select2({ theme: 'bootstrap-5', width: '100%', placeholder: '— Select booking —' });
+
     if (keepVal && list.find(function(b){ return String(b.id) === String(keepVal); })) {
         $sel.val(keepVal).trigger('change');
     }
 }
 
-/* ── Show balance hint + fill amount ─────────────────────────────────── */
+/* ── Show balance hint and fill amount field ─────────────────────────── */
 function applyBalance(balance) {
     var hint = document.getElementById('invoiceBalanceHint');
     var lbl  = document.getElementById('invoiceBalanceAmt');
@@ -499,25 +514,38 @@ function applyBalance(balance) {
     if (bal > 0) setField('amountInput', bal.toFixed(2));
 }
 
-/* ── Client select: fill details + filter invoices & bookings ────────── */
-$('#clientSelect').on('select2:select select2:clear', function() {
-    var opt      = this.options[this.selectedIndex];
-    var clientId = opt ? opt.value : '';
-    setField('clientName',  opt ? (opt.dataset.name  || '') : '');
-    setField('clientPhone', opt ? (opt.dataset.phone || '') : '');
-    rebuildInvoices(clientId, $('#invoiceSelect').val());
-    rebuildBookings(clientId, $('#bookingSelect').val());
-});
+/* ── Client select ────────────────────────────────────────────────────── */
+// Use e.params.data.element (the actual <option> node) — more reliable than
+// this.options[selectedIndex] which can lag behind Select2's internal state.
+$('#clientSelect')
+    .on('select2:select', function(e) {
+        var el  = e.params.data.element;
+        var cid = String(e.params.data.id || '');
+        setField('clientName',  el ? (el.dataset.name  || '') : '');
+        setField('clientPhone', el ? (el.dataset.phone || '') : '');
+        rebuildInvoices(cid, $('#invoiceSelect').val());
+        rebuildBookings(cid, $('#bookingSelect').val());
+    })
+    .on('select2:clear', function() {
+        setField('clientName',  '');
+        setField('clientPhone', '');
+        rebuildInvoices('', '');
+        rebuildBookings('', '');
+    });
 
-/* ── Invoice select: auto-fill amount with outstanding balance ───────── */
+/* ── Invoice select: fill amount with outstanding balance ────────────── */
 $(document).on('change', '#invoiceSelect', function() {
     var val = $(this).val();
-    if (!val) { var h = document.getElementById('invoiceBalanceHint'); if(h) h.classList.add('d-none'); return; }
+    if (!val) {
+        var h = document.getElementById('invoiceBalanceHint');
+        if (h) h.classList.add('d-none');
+        return;
+    }
     var opt = document.getElementById('invoiceSelect').querySelector('option[value="' + val + '"]');
     if (opt) applyBalance(parseFloat(opt.dataset.balance || 0));
 });
 
-/* ── Booking select: fill client if not already entered ─────────────── */
+/* ── Booking select: fill client details if not already entered ──────── */
 $(document).on('change', '#bookingSelect', function() {
     var opt = this.options[this.selectedIndex];
     if (!opt || !opt.value) return;
@@ -528,43 +556,43 @@ $(document).on('change', '#bookingSelect', function() {
 });
 
 /* ── Method radio toggle ─────────────────────────────────────────────── */
-document.querySelectorAll('.method-radio').forEach(function(radio) {
-    radio.addEventListener('change', function() {
-        document.querySelectorAll('.method-fields').forEach(function(f){ f.classList.add('d-none'); });
-        document.querySelectorAll('.method-card').forEach(function(c){ c.classList.remove('border-primary','bg-primary','bg-opacity-10'); });
-        var sel = document.querySelector('.method-radio:checked');
-        if (sel) {
-            var el = document.getElementById('fields-' + sel.value);
-            if (el) el.classList.remove('d-none');
-            sel.closest('.method-card').classList.add('border-primary','bg-primary','bg-opacity-10');
-        }
-    });
+$(document).on('change', '.method-radio', function() {
+    $('.method-fields').addClass('d-none');
+    $('.method-card').removeClass('border-primary bg-primary bg-opacity-10');
+    var sel = document.querySelector('.method-radio:checked');
+    if (sel) {
+        var el = document.getElementById('fields-' + sel.value);
+        if (el) el.classList.remove('d-none');
+        $(sel).closest('.method-card').addClass('border-primary bg-primary bg-opacity-10');
+    }
 });
 
 /* ── Balance adjustment toggle ───────────────────────────────────────── */
-document.getElementById('adjToggle')?.addEventListener('change', function(e) {
-    document.getElementById('adjBody').classList.toggle('d-none', !e.target.checked);
-    if (!e.target.checked) document.querySelector('[name="balance_adjustment"]').value = '';
+$(document).on('change', '#adjToggle', function() {
+    $('#adjBody').toggleClass('d-none', !this.checked);
+    if (!this.checked) $('[name="balance_adjustment"]').val('');
 });
 
-/* ── Disable hidden method inputs before submit (prevent duplicate names) */
-document.querySelector('form').addEventListener('submit', function() {
-    document.querySelectorAll('.method-fields.d-none input, .method-fields.d-none select').forEach(function(el){ el.disabled = true; });
+/* ── Disable hidden method inputs before submit ──────────────────────── */
+$('form').on('submit', function() {
+    $('.method-fields.d-none input, .method-fields.d-none select').prop('disabled', true);
 });
 
-/* ── On load: apply balance if invoice pre-selected ─────────────────── */
+/* ── On page load ────────────────────────────────────────────────────── */
 $(function() {
-    var selInv = document.getElementById('invoiceSelect');
-    if (selInv && selInv.value) {
-        var preOpt = selInv.querySelector('option[value="' + selInv.value + '"]');
+    // Show balance hint if invoice was pre-selected (e.g. from URL param)
+    var $invSel = $('#invoiceSelect');
+    if ($invSel.val()) {
+        var preOpt = $invSel[0].querySelector('option[value="' + $invSel.val() + '"]');
         if (preOpt) applyBalance(parseFloat(preOpt.dataset.balance || 0));
     }
-    var selCl = document.getElementById('clientSelect');
-    if (selCl && selCl.value) {
-        rebuildInvoices(selCl.value, selInv ? selInv.value : '');
-        rebuildBookings(selCl.value, $('#bookingSelect').val());
+    // Filter dropdowns if client was pre-selected
+    var $clSel = $('#clientSelect');
+    if ($clSel.val()) {
+        rebuildInvoices(String($clSel.val()), $invSel.val());
+        rebuildBookings(String($clSel.val()), $('#bookingSelect').val());
     }
 });
-</script>
 
-<?php include __DIR__ . '/../../includes/footer.php'; ?>
+}(jQuery));
+</script>
