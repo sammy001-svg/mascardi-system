@@ -51,14 +51,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $bookingId     = (int)($_POST['service_booking_id'] ?? 0) ?: null;
     $description   = trim($_POST['description'] ?? '');
     $amount        = (float)($_POST['amount'] ?? 0);
-    $method        = $_POST['payment_method'] ?? '';
-    $ref           = trim($_POST['reference_number'] ?? '');
-    $mpesaPhone    = trim($_POST['mpesa_phone'] ?? '');
-    $mpesaName     = trim($_POST['mpesa_name'] ?? '');
-    $bankName      = trim($_POST['bank_name'] ?? '');
-    $accountNumber = trim($_POST['account_number'] ?? '');
-    $chequeNumber  = trim($_POST['cheque_number'] ?? '');
-    $chequeDate    = $_POST['cheque_date'] ?? null ?: null;
+    $method = $_POST['payment_method'] ?? '';
+
+    // Each method uses unique field names — no JS required to pick the right value
+    switch ($method) {
+        case 'mpesa':
+            $ref           = strtoupper(trim($_POST['mpesa_code']    ?? ''));
+            $mpesaPhone    = trim($_POST['mpesa_phone']   ?? '');
+            $mpesaName     = trim($_POST['mpesa_name']    ?? '');
+            $bankName      = '';
+            $accountNumber = '';
+            $chequeNumber  = '';
+            $chequeDate    = null;
+            break;
+        case 'bank':
+            $ref           = trim($_POST['bank_ref']       ?? '');
+            $bankName      = trim($_POST['bank_name']      ?? '');
+            $accountNumber = trim($_POST['account_number'] ?? '');
+            $mpesaPhone    = '';
+            $mpesaName     = '';
+            $chequeNumber  = '';
+            $chequeDate    = null;
+            break;
+        case 'cheque':
+            $ref           = trim($_POST['cheque_ref']    ?? '');
+            $chequeNumber  = trim($_POST['cheque_number'] ?? '');
+            $bankName      = trim($_POST['cheque_bank']   ?? '');
+            $chequeDate    = $_POST['cheque_date'] ?: null;
+            $mpesaPhone    = '';
+            $mpesaName     = '';
+            $accountNumber = '';
+            break;
+        default: // cash
+            $ref           = trim($_POST['cash_ref'] ?? '');
+            $mpesaPhone    = '';
+            $mpesaName     = '';
+            $bankName      = '';
+            $accountNumber = '';
+            $chequeNumber  = '';
+            $chequeDate    = null;
+            break;
+    }
     $payDate       = $_POST['payment_date'] ?? date('Y-m-d');
     $notes         = trim($_POST['notes'] ?? '');
     $balAdj        = (float)($_POST['balance_adjustment'] ?? 0);
@@ -287,8 +320,8 @@ include __DIR__ . '/../../includes/header.php';
                 <div id="fields-mpesa" class="method-fields row g-3 <?= $method !== 'mpesa' ? 'd-none' : '' ?>">
                     <div class="col-md-5">
                         <label class="form-label small fw-semibold">Transaction Code <span class="text-danger">*</span></label>
-                        <input type="text" name="reference_number" class="form-control text-uppercase"
-                               placeholder="e.g. QFG2X6Y7ZK" value="<?= e($_POST['reference_number'] ?? '') ?>">
+                        <input type="text" name="mpesa_code" class="form-control text-uppercase"
+                               placeholder="e.g. QFG2X6Y7ZK" value="<?= e($_POST['mpesa_code'] ?? '') ?>" autocomplete="off">
                         <div class="form-text">M-Pesa confirmation code</div>
                     </div>
                     <div class="col-md-4">
@@ -307,8 +340,8 @@ include __DIR__ . '/../../includes/header.php';
                 <div id="fields-bank" class="method-fields row g-3 <?= $method !== 'bank' ? 'd-none' : '' ?>">
                     <div class="col-md-5">
                         <label class="form-label small fw-semibold">Transaction Reference <span class="text-danger">*</span></label>
-                        <input type="text" name="reference_number" class="form-control"
-                               placeholder="Bank reference number" value="<?= e($_POST['reference_number'] ?? '') ?>">
+                        <input type="text" name="bank_ref" class="form-control"
+                               placeholder="Bank reference number" value="<?= e($_POST['bank_ref'] ?? '') ?>">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small fw-semibold">Bank Name</label>
@@ -331,8 +364,8 @@ include __DIR__ . '/../../includes/header.php';
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small fw-semibold">Bank / Branch</label>
-                        <input type="text" name="bank_name" class="form-control" placeholder="Bank name"
-                               value="<?= e($_POST['bank_name'] ?? '') ?>">
+                        <input type="text" name="cheque_bank" class="form-control" placeholder="Bank name"
+                               value="<?= e($_POST['cheque_bank'] ?? '') ?>">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small fw-semibold">Cheque Date</label>
@@ -340,9 +373,9 @@ include __DIR__ . '/../../includes/header.php';
                                value="<?= e($_POST['cheque_date'] ?? '') ?>">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Reference Number</label>
-                        <input type="text" name="reference_number" class="form-control" placeholder="If any"
-                               value="<?= e($_POST['reference_number'] ?? '') ?>">
+                        <label class="form-label small fw-semibold">Reference Number <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" name="cheque_ref" class="form-control" placeholder="If any"
+                               value="<?= e($_POST['cheque_ref'] ?? '') ?>">
                     </div>
                 </div>
 
@@ -350,8 +383,8 @@ include __DIR__ . '/../../includes/header.php';
                 <div id="fields-cash" class="method-fields row g-3 <?= $method !== 'cash' ? 'd-none' : '' ?>">
                     <div class="col-md-5">
                         <label class="form-label small fw-semibold">Receipt / Reference Number <span class="text-muted fw-normal">(optional)</span></label>
-                        <input type="text" name="reference_number" class="form-control" placeholder="Internal receipt #"
-                               value="<?= e($_POST['reference_number'] ?? '') ?>">
+                        <input type="text" name="cash_ref" class="form-control" placeholder="Internal receipt #"
+                               value="<?= e($_POST['cash_ref'] ?? '') ?>">
                     </div>
                 </div>
 
@@ -588,10 +621,7 @@ $(document).on('change', '#adjToggle', function() {
     if (!this.checked) $('[name="balance_adjustment"]').val('');
 });
 
-/* ── Disable hidden method inputs before submit ──────────────────────── */
-$('form').on('submit', function() {
-    $('.method-fields.d-none input, .method-fields.d-none select').prop('disabled', true);
-});
+/* ── Form submit: no extra work needed — each method uses unique field names */
 
 /* ── On page load ────────────────────────────────────────────────────── */
 $(function() {
