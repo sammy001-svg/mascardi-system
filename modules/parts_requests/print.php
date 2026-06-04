@@ -190,28 +190,10 @@ $statusLabels = [
 
     <hr style="border-color:#e2e8f0;margin-bottom:24px">
 
-    <!-- ── Client & Vehicle ─────────────────────────────────────────────────── -->
+    <!-- ── Vehicle ──────────────────────────────────────────────────────────── -->
     <div class="row g-3 mb-4">
-        <div class="col-6">
-            <div class="info-box h-100">
-                <div class="info-label"><i class="fa fa-user me-1"></i>Requested By / Client</div>
-                <div class="info-value"><?= e($req['client_name'] ?: 'Walk-in') ?></div>
-                <?php if ($req['client_phone']): ?>
-                <div class="info-sub"><i class="fa fa-phone me-1" style="font-size:10px"></i><?= e($req['client_phone']) ?></div>
-                <?php endif; ?>
-                <?php if ($req['client_email']): ?>
-                <div class="info-sub"><i class="fa fa-envelope me-1" style="font-size:10px"></i><?= e($req['client_email']) ?></div>
-                <?php endif; ?>
-                <?php if ($req['created_by_name']): ?>
-                <div class="info-sub mt-1" style="border-top:1px solid #f1f5f9;padding-top:6px;margin-top:6px">
-                    <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#94a3b8">Prepared by</span><br>
-                    <?= e($req['created_by_name']) ?>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
-        <div class="col-6">
-            <div class="info-box h-100">
+        <div class="col-12">
+            <div class="info-box">
                 <div class="info-label"><i class="fa fa-car me-1"></i>Vehicle</div>
                 <?php $veh = trim(($req['car_make'] ?? '') . ' ' . ($req['car_model'] ?? '')); ?>
                 <?php if ($veh): ?>
@@ -308,8 +290,8 @@ $statusLabels = [
         <div class="col-4">
             <div style="height:44px"></div>
             <div class="sig-line">
-                <div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Requested By</div>
-                <div style="color:#64748b;font-size:11px;margin-top:2px"><?= e($req['client_name'] ?: 'Client') ?></div>
+                <div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Received By</div>
+                <div style="color:#64748b;font-size:11px;margin-top:2px">Signature &amp; Date</div>
             </div>
         </div>
         <div class="col-4">
