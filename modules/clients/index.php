@@ -70,6 +70,12 @@ include __DIR__ . '/../../includes/header.php';
                         <?php if (canWrite('clients')): ?>
                         <a href="edit.php?id=<?= $c['id'] ?>" class="btn btn-xs btn-outline-secondary"><i class="fa fa-pen"></i></a>
                         <?php endif; ?>
+                        <?php if (hasRole('admin')): ?>
+                        <a href="delete.php?id=<?= $c['id'] ?>" class="btn btn-xs btn-outline-danger"
+                           onclick="return confirm('Delete client &quot;<?= e($c['name']) ?>&quot;? This cannot be undone.')">
+                            <i class="fa fa-trash"></i>
+                        </a>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
