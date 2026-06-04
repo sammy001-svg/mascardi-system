@@ -17,6 +17,8 @@ if (!$q) {
 
 try {
     $db->beginTransaction();
+    // Detach any invoices that were converted from this quotation
+    $db->prepare("UPDATE invoices SET quotation_id = NULL WHERE quotation_id = ?")->execute([$id]);
     $db->prepare("DELETE FROM quotation_items WHERE quotation_id = ?")->execute([$id]);
     $db->prepare("DELETE FROM quotations WHERE id = ?")->execute([$id]);
     $db->commit();
