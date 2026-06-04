@@ -85,6 +85,12 @@ include __DIR__ . '/../../includes/header.php';
         <a href="download_pdf.php?id=<?= $id ?>" class="btn btn-sm btn-outline-danger" target="_blank"><i class="fa fa-file-pdf me-1"></i>Download PDF</a>
         <?php if($inv['status']!=='paid' && canWrite('invoices')): ?><a href="?id=<?= $id ?>&status=cancelled" class="btn btn-sm btn-outline-danger" onclick="return confirm('Cancel invoice?')">Cancel</a><?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
+        <?php if (hasRole('admin')): ?>
+        <a href="delete.php?id=<?= $id ?>" class="btn btn-sm btn-danger"
+           onclick="return confirm('Permanently delete invoice <?= e($inv['invoice_number']) ?>? This cannot be undone.')">
+            <i class="fa fa-trash me-1"></i>Delete
+        </a>
+        <?php endif; ?>
     </div>
 </div>
 

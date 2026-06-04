@@ -47,6 +47,12 @@ include __DIR__ . '/../../includes/header.php';
                     <td>
                         <a href="view.php?id=<?= $inv['id'] ?>" class="btn btn-xs btn-outline-primary"><i class="fa fa-eye"></i></a>
                         <a href="print.php?id=<?= $inv['id'] ?>" class="btn btn-xs btn-outline-dark" target="_blank"><i class="fa fa-print"></i></a>
+                        <?php if (hasRole('admin')): ?>
+                        <a href="delete.php?id=<?= $inv['id'] ?>" class="btn btn-xs btn-outline-danger"
+                           onclick="return confirm('Delete invoice <?= e($inv['invoice_number']) ?>? This cannot be undone.')">
+                            <i class="fa fa-trash"></i>
+                        </a>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
