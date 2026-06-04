@@ -444,14 +444,22 @@ function fmtKES(n) {
     return 'KES ' + parseFloat(n || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
-/* ── Rebuild invoice dropdown filtered by clientId ───────────────────── */
-function rebuildInvoices(clientId, keepVal) {
-    var $sel = $('#invoiceSelect');
+/* ── Rebuild invoice dropdown filtered by clientId or clientName ─────── */
+function rebuildInvoices(clientId, clientName, keepVal) {
+    var cid   = String(clientId  || '');
+    var cname = (clientName || '').toLowerCase().trim();
+    var $sel  = $('#invoiceSelect');
     try { $sel.select2('destroy'); } catch(e){}
     $sel.empty().append('<option value="">— Select invoice —</option>');
 
-    var list = clientId
-        ? _invoices.filter(function(i){ return String(i.client_id) === String(clientId); })
+    var list = (cid || cname)
+        ? _invoices.filter(function(i) {
+            // Match by client_id (records linked via clients table)
+            if (cid && i.client_id && String(i.client_id) === cid) return true;
+            // Fallback: match by customer_name (records with no client_id linkage)
+            if (cname && i.customer_name && i.customer_name.toLowerCase().trim() === cname) return true;
+            return false;
+          })
         : _invoices;
 
     list.forEach(function(inv) {
@@ -475,14 +483,20 @@ function rebuildInvoices(clientId, keepVal) {
     }
 }
 
-/* ── Rebuild booking dropdown filtered by clientId ───────────────────── */
-function rebuildBookings(clientId, keepVal) {
-    var $sel = $('#bookingSelect');
+/* ── Rebuild booking dropdown filtered by clientId or clientName ──────── */
+function rebuildBookings(clientId, clientName, keepVal) {
+    var cid   = String(clientId  || '');
+    var cname = (clientName || '').toLowerCase().trim();
+    var $sel  = $('#bookingSelect');
     try { $sel.select2('destroy'); } catch(e){}
     $sel.empty().append('<option value="">— Select booking —</option>');
 
-    var list = clientId
-        ? _bookings.filter(function(b){ return String(b.client_id) === String(clientId); })
+    var list = (cid || cname)
+        ? _bookings.filter(function(b) {
+            if (cid && b.client_id && String(b.client_id) === cid) return true;
+            if (cname && b.client_name && b.client_name.toLowerCase().trim() === cname) return true;
+            return false;
+          })
         : _bookings;
 
     list.forEach(function(bk) {
@@ -519,18 +533,19 @@ function applyBalance(balance) {
 // this.options[selectedIndex] which can lag behind Select2's internal state.
 $('#clientSelect')
     .on('select2:select', function(e) {
-        var el  = e.params.data.element;
-        var cid = String(e.params.data.id || '');
-        setField('clientName',  el ? (el.dataset.name  || '') : '');
+        var el    = e.params.data.element;
+        var cid   = String(e.params.data.id || '');
+        var cname = el ? (el.dataset.name || '') : '';
+        setField('clientName',  cname);
         setField('clientPhone', el ? (el.dataset.phone || '') : '');
-        rebuildInvoices(cid, $('#invoiceSelect').val());
-        rebuildBookings(cid, $('#bookingSelect').val());
+        rebuildInvoices(cid, cname, $('#invoiceSelect').val());
+        rebuildBookings(cid, cname, $('#bookingSelect').val());
     })
     .on('select2:clear', function() {
         setField('clientName',  '');
         setField('clientPhone', '');
-        rebuildInvoices('', '');
-        rebuildBookings('', '');
+        rebuildInvoices('', '', '');
+        rebuildBookings('', '', '');
     });
 
 /* ── Invoice select: fill amount with outstanding balance ────────────── */
@@ -589,8 +604,10 @@ $(function() {
     // Filter dropdowns if client was pre-selected
     var $clSel = $('#clientSelect');
     if ($clSel.val()) {
-        rebuildInvoices(String($clSel.val()), $invSel.val());
-        rebuildBookings(String($clSel.val()), $('#bookingSelect').val());
+        var clOpt  = $clSel[0].querySelector('option[value="' + $clSel.val() + '"]');
+        var clName = clOpt ? (clOpt.dataset.name || '') : '';
+        rebuildInvoices(String($clSel.val()), clName, $invSel.val());
+        rebuildBookings(String($clSel.val()), clName, $('#bookingSelect').val());
     }
 });
 
