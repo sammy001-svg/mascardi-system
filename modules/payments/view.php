@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $paid = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM payments WHERE invoice_id=? AND status='confirmed'");
             $paid->execute([$p['invoice_id']]); $totalPaid = (float)$paid->fetchColumn();
             $newStatus = $totalPaid >= (float)($inv['total'] ?? 0) ? 'paid' : 'partial';
-            $db->prepare("UPDATE invoices SET status=? WHERE id=?")->execute([$newStatus, $p['invoice_id']]);
+            $db->prepare("UPDATE invoices SET status=?, amount_paid=? WHERE id=?")->execute([$newStatus, $totalPaid, $p['invoice_id']]);
         }
         setFlash('success', 'Payment confirmed.');
     } elseif ($_POST['action'] === 'reverse' && canEditDelete()) {
@@ -91,6 +91,9 @@ include __DIR__ . '/../../includes/header.php';
             <i class="fa fa-rotate-left me-1"></i>Reverse
         </button>
         <?php endif; ?>
+        <a href="print.php?id=<?= $id ?>" class="btn btn-outline-dark btn-sm" target="_blank">
+            <i class="fa fa-print me-1"></i>Receipt
+        </a>
         <a href="index.php" class="btn btn-outline-secondary btn-sm"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
 </div>

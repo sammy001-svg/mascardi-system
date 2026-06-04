@@ -59,21 +59,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
+            // Cash is always received immediately — confirm on the spot.
+            // M-Pesa/bank/cheque stay pending until manually verified.
+            $initStatus      = ($method === 'cash') ? 'confirmed' : 'pending';
+            $initConfirmedBy = ($method === 'cash') ? $recordedBy : null;
+            $initConfirmedAt = ($method === 'cash') ? date('Y-m-d H:i:s') : null;
+
             $payNum = nextNumber('payments', 'payment_number', 'PAY');
             $db->prepare("
                 INSERT INTO payments
                 (payment_number, payment_date, client_id, client_name, client_phone,
                  invoice_id, service_booking_id, description, amount, payment_method,
                  reference_number, mpesa_phone, mpesa_name, bank_name, account_number,
-                 cheque_number, cheque_date, notes, balance_adjustment, recorded_by)
-                VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?)
+                 cheque_number, cheque_date, notes, balance_adjustment, recorded_by,
+                 status, confirmed_by, confirmed_at)
+                VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?)
             ")->execute([
                 $payNum, $payDate, $clientId, $clientName, $clientPhone,
                 $invoiceId, $bookingId, $description, $amount, $method,
                 $ref, $mpesaPhone, $mpesaName, $bankName, $accountNumber,
                 $chequeNumber, $chequeDate, $notes, $balAdj, $recordedBy,
+                $initStatus, $initConfirmedBy, $initConfirmedAt,
             ]);
             $newPayId = (int)$db->lastInsertId();
+
+            // If cash and linked to an invoice, update invoice balance immediately
+            if ($method === 'cash' && $invoiceId) {
+                $invRow = $db->prepare("SELECT total FROM invoices WHERE id=?");
+                $invRow->execute([$invoiceId]);
+                $invRow = $invRow->fetch();
+                if ($invRow) {
+                    $paidQ = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM payments WHERE invoice_id=? AND status='confirmed'");
+                    $paidQ->execute([$invoiceId]);
+                    $totalPaid = (float)$paidQ->fetchColumn();
+                    $invStatus = $totalPaid >= (float)$invRow['total'] ? 'paid' : 'partial';
+                    $db->prepare("UPDATE invoices SET status=?, amount_paid=? WHERE id=?")->execute([$invStatus, $totalPaid, $invoiceId]);
+                }
+            }
             logActivity('create', 'payments', $newPayId, "Recorded payment {$payNum} — KES {$amount} via {$method} for {$clientName}");
             notifyRoles(['admin','sales_officer'], 'payment',
                 "Payment Received: KES " . number_format($amount, 2),
@@ -399,6 +421,15 @@ document.getElementById('clientSelect')?.addEventListener('change', function () 
     const opt = this.options[this.selectedIndex];
     document.getElementById('clientName').value  = opt.dataset.name  || '';
     document.getElementById('clientPhone').value = opt.dataset.phone || '';
+});
+
+// Disable all inputs inside hidden method sections before submit.
+// Without this, PHP receives duplicate field names (reference_number, bank_name)
+// from all four sections and only the last (cash) value survives.
+document.querySelector('form').addEventListener('submit', function () {
+    document.querySelectorAll('.method-fields.d-none input, .method-fields.d-none select').forEach(function (el) {
+        el.disabled = true;
+    });
 });
 </script>
 
