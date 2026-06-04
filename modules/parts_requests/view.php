@@ -110,6 +110,9 @@ include __DIR__ . '/../../includes/header.php';
             <i class="fa fa-file-contract me-1"></i>Generate LPO
         </a>
         <?php endif; ?>
+        <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank">
+            <i class="fa fa-print me-1"></i>Print
+        </a>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
         <?php if (hasRole('admin')): ?>
         <a href="delete.php?id=<?= $id ?>" class="btn btn-sm btn-danger"
