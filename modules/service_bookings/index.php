@@ -73,7 +73,15 @@ include __DIR__ . '/../../includes/header.php';
                     <td class="text-muted small"><?= e($b['service_type'] ?? '—') ?></td>
                     <td class="text-muted small"><?= $b['preferred_date'] ? fmtDate($b['preferred_date']) : '—' ?></td>
                     <td><span class="badge bg-<?= $statusColors[$b['status']] ?? 'secondary' ?>"><?= ucwords(str_replace('_',' ',$b['status'])) ?></span></td>
-                    <td><a href="view.php?id=<?= $b['id'] ?>" class="btn btn-xs btn-outline-primary"><i class="fa fa-eye"></i></a></td>
+                    <td>
+                        <a href="view.php?id=<?= $b['id'] ?>" class="btn btn-xs btn-outline-primary"><i class="fa fa-eye"></i></a>
+                        <?php if (hasRole('admin')): ?>
+                        <a href="delete.php?id=<?= $b['id'] ?>" class="btn btn-xs btn-outline-danger"
+                           onclick="return confirm('Delete booking <?= e($b['booking_number']) ?>? This cannot be undone.')">
+                            <i class="fa fa-trash"></i>
+                        </a>
+                        <?php endif; ?>
+                    </td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>

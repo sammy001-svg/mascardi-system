@@ -62,6 +62,12 @@ include __DIR__ . '/../../includes/header.php';
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
+        <?php if (hasRole('admin')): ?>
+        <a href="delete.php?id=<?= $id ?>" class="btn btn-sm btn-danger"
+           onclick="return confirm('Permanently delete booking <?= e($booking['booking_number']) ?>? This cannot be undone.')">
+            <i class="fa fa-trash me-1"></i>Delete
+        </a>
+        <?php endif; ?>
     </div>
 </div>
 
