@@ -12,6 +12,28 @@ $client = $db->prepare("SELECT * FROM clients WHERE id=?");
 $client->execute([$id]); $client = $client->fetch();
 if (!$client) { setFlash('error','Not found.'); redirect(BASE_URL.'/modules/clients/index.php'); }
 
+// Portal access management
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['portal_action']) && canWrite('clients')) {
+    $portalAction = $_POST['portal_action'];
+    if ($portalAction === 'enable') {
+        $db->prepare("UPDATE clients SET portal_enabled=1 WHERE id=?")->execute([$id]);
+        setFlash('success', 'Client portal enabled. Set a password so the client can log in.');
+    } elseif ($portalAction === 'disable') {
+        $db->prepare("UPDATE clients SET portal_enabled=0 WHERE id=?")->execute([$id]);
+        setFlash('success', 'Client portal disabled.');
+    } elseif ($portalAction === 'set_password') {
+        $pw = trim($_POST['portal_password'] ?? '');
+        if (strlen($pw) < 6) {
+            setFlash('error', 'Password must be at least 6 characters.');
+        } else {
+            $hash = password_hash($pw, PASSWORD_DEFAULT);
+            $db->prepare("UPDATE clients SET portal_password=?, portal_enabled=1 WHERE id=?")->execute([$hash, $id]);
+            setFlash('success', 'Portal password set. The client can now log in with their email and the new password.');
+        }
+    }
+    redirect(BASE_URL . '/modules/clients/view.php?id=' . $id . '#portal-access');
+}
+
 // Send notice
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_notice'])) {
     $subject = trim($_POST['notice_subject'] ?? '');
@@ -177,6 +199,98 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+
+<!-- Portal Access Management -->
+<?php if (canWrite('clients')): ?>
+<div class="card mb-4" id="portal-access">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fa fa-globe me-2 text-primary"></i>Client Portal Access</span>
+        <?php if ($client['portal_enabled'] && $client['portal_password']): ?>
+        <span class="badge bg-success">Active</span>
+        <?php elseif ($client['portal_enabled']): ?>
+        <span class="badge bg-warning text-dark">Enabled — No Password</span>
+        <?php else: ?>
+        <span class="badge bg-secondary">Disabled</span>
+        <?php endif; ?>
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-md-5">
+                <div style="font-size:13.5px">
+                    <div class="mb-2">
+                        <span class="text-muted me-2">Portal Email:</span>
+                        <strong><?= $client['email'] ? e($client['email']) : '<span class="text-danger">No email set</span>' ?></strong>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-muted me-2">Login URL:</span>
+                        <a href="<?= BASE_URL ?>/client/login.php" target="_blank" class="small"><?= BASE_URL ?>/client/login.php</a>
+                    </div>
+                    <div class="mb-3">
+                        <span class="text-muted me-2">Status:</span>
+                        <?php if ($client['portal_enabled'] && $client['portal_password']): ?>
+                        <span class="badge bg-success"><i class="fa fa-circle-check me-1"></i>Active — Client can log in</span>
+                        <?php elseif ($client['portal_enabled']): ?>
+                        <span class="badge bg-warning text-dark"><i class="fa fa-triangle-exclamation me-1"></i>Enabled but no password set</span>
+                        <?php else: ?>
+                        <span class="badge bg-secondary"><i class="fa fa-circle-xmark me-1"></i>Portal disabled</span>
+                        <?php endif; ?>
+                    </div>
+                    <?php if (!$client['email']): ?>
+                    <div class="alert alert-warning py-2 small"><i class="fa fa-triangle-exclamation me-1"></i>Add an email address to the client record before enabling the portal.</div>
+                    <?php endif; ?>
+                    <div class="d-flex gap-2">
+                        <?php if (!$client['portal_enabled']): ?>
+                        <form method="POST">
+                            <input type="hidden" name="portal_action" value="enable">
+                            <button class="btn btn-sm btn-success" <?= !$client['email'] ? 'disabled' : '' ?>>
+                                <i class="fa fa-toggle-on me-1"></i>Enable Portal
+                            </button>
+                        </form>
+                        <?php else: ?>
+                        <form method="POST" onsubmit="return confirm('Disable portal access for this client?')">
+                            <input type="hidden" name="portal_action" value="disable">
+                            <button class="btn btn-sm btn-outline-danger"><i class="fa fa-toggle-off me-1"></i>Disable Portal</button>
+                        </form>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-7">
+                <div class="card border-0" style="background:#f8fafc">
+                    <div class="card-body">
+                        <h6 class="mb-3" style="font-size:13px"><i class="fa fa-key me-2 text-warning"></i>Set / Reset Portal Password</h6>
+                        <form method="POST" class="row g-2" onsubmit="return confirm('Set this password for client portal access?')">
+                            <input type="hidden" name="portal_action" value="set_password">
+                            <div class="col-8">
+                                <input type="text" name="portal_password" class="form-control form-control-sm"
+                                       placeholder="Enter new password (min 6 chars)"
+                                       required minlength="6" autocomplete="new-password"
+                                       <?= !$client['email'] ? 'disabled' : '' ?>>
+                            </div>
+                            <div class="col-4">
+                                <button class="btn btn-sm btn-warning w-100" <?= !$client['email'] ? 'disabled' : '' ?>>
+                                    <i class="fa fa-key me-1"></i>Set Password
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <div class="text-muted" style="font-size:11.5px">
+                                    <i class="fa fa-info-circle me-1"></i>
+                                    Share the client's email address and this password with them.
+                                    <?php if ($client['portal_password']): ?>
+                                    Password was last updated — use this form to reset it.
+                                    <?php else: ?>
+                                    No password has been set yet.
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Vehicles -->
 <div class="card mb-4">

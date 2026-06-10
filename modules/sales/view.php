@@ -45,10 +45,16 @@ include __DIR__ . '/../../includes/header.php';
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fa fa-tag me-2 text-success"></i>Sale: <strong><?= e($sale['sale_number']) ?></strong></h5>
     <div class="d-flex gap-2">
+        <a href="contract.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-outline-success">
+            <i class="fa fa-file-contract me-1"></i>Contract
+        </a>
+        <a href="handover.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-outline-info">
+            <i class="fa fa-clipboard-check me-1"></i>Handover Cert
+        </a>
         <?php if (canAccess('inspections')): ?>
         <a href="<?= BASE_URL ?>/modules/inspections/create.php?car_id=<?= $sale['car_id'] ?>&sale_id=<?= $id ?>"
-           class="btn btn-sm btn-outline-info">
-            <i class="fa fa-clipboard-check me-1"></i>Pre-Delivery Check
+           class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-clipboard-list me-1"></i>Pre-Delivery Check
         </a>
         <?php endif; ?>
         <?php if (canWrite('sales') && $sale['status'] === 'active'): ?>

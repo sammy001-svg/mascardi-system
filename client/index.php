@@ -73,6 +73,30 @@ include __DIR__ . '/includes/header.php';
         </div>
         </a>
     </div>
+    <div class="col-6 col-md-3">
+        <a href="<?= BASE_URL ?>/client/service_history.php" style="text-decoration:none">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#fff7ed;color:#ea580c"><i class="fa fa-wrench"></i></div>
+            <?php
+            $svcStmt = $db->prepare("SELECT COUNT(*) FROM service_bookings WHERE client_id=?");
+            $svcStmt->execute([$cid]); $svcCount = (int)$svcStmt->fetchColumn();
+            ?>
+            <div><div class="stat-label">Service Visits</div><div class="stat-value"><?= $svcCount ?></div></div>
+        </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="<?= BASE_URL ?>/client/documents.php" style="text-decoration:none">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#f0fdf4;color:#0891b2"><i class="fa fa-folder-open"></i></div>
+            <?php
+            $docStmt = $db->prepare("SELECT COUNT(*) FROM invoices WHERE client_id=? AND status != 'cancelled'");
+            $docStmt->execute([$cid]); $docCount = (int)$docStmt->fetchColumn();
+            ?>
+            <div><div class="stat-label">Documents</div><div class="stat-value"><?= $docCount ?></div></div>
+        </div>
+        </a>
+    </div>
 </div>
 
 <div class="row g-4">
@@ -85,13 +109,18 @@ include __DIR__ . '/includes/header.php';
             <div class="card-body p-0">
                 <?php if ($cars): ?>
                 <?php foreach ($cars as $car): ?>
-                <div class="px-4 py-3 border-bottom d-flex justify-content-between align-items-center">
+                <a href="<?= BASE_URL ?>/client/my_car.php?id=<?= $car['id'] ?>" style="text-decoration:none;color:inherit">
+                <div class="px-4 py-3 border-bottom d-flex justify-content-between align-items-center" style="transition:background .15s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
                     <div>
                         <div class="fw-semibold small"><?= e($car['make'] . ' ' . $car['model'] . ' ' . $car['year']) ?></div>
                         <div class="text-muted" style="font-size:12px"><?= e($car['chassis_number']) ?><?= $car['registration_number'] ? ' · ' . e($car['registration_number']) : '' ?></div>
                     </div>
-                    <?= statusBadge($car['status']) ?>
+                    <div class="d-flex align-items-center gap-2">
+                        <?= statusBadge($car['status']) ?>
+                        <i class="fa fa-chevron-right" style="font-size:10px;color:#94a3b8"></i>
+                    </div>
                 </div>
+                </a>
                 <?php endforeach; ?>
                 <?php else: ?>
                 <p class="text-muted p-4 mb-0 small">No vehicles linked to your account.</p>

@@ -20,6 +20,9 @@ $bookings->execute([$cl['id']]); $bookings = $bookings->fetchAll();
 $statusColors = ['pending'=>'warning','confirmed'=>'info','in_progress'=>'primary','completed'=>'success','cancelled'=>'danger'];
 $statusLabels = ['pending'=>'Pending','confirmed'=>'Confirmed','in_progress'=>'In Progress','completed'=>'Completed','cancelled'=>'Cancelled'];
 
+$statusSteps = ['pending', 'confirmed', 'in_progress', 'completed'];
+$stepLabels  = ['Pending', 'Confirmed', 'In Progress', 'Completed'];
+
 include __DIR__ . '/includes/header.php';
 ?>
 <h5 class="fw-700 mb-4"><i class="fa fa-calendar-check me-2 text-primary"></i>My Service Bookings</h5>
@@ -38,6 +41,27 @@ include __DIR__ . '/includes/header.php';
                     <?= $statusLabels[$b['status']] ?? ucfirst($b['status']) ?>
                 </span>
             </div>
+            <!-- Progress tracker (not for cancelled) -->
+            <?php if ($b['status'] !== 'cancelled'): ?>
+            <?php $currentStep = array_search($b['status'], $statusSteps); $currentStep = $currentStep === false ? 0 : $currentStep; ?>
+            <div class="d-flex align-items-center mb-3" style="gap:0">
+                <?php foreach ($statusSteps as $i => $step): ?>
+                <?php $done = $i <= $currentStep; $active = $i === $currentStep; ?>
+                <div class="d-flex align-items-center" style="flex:1;min-width:0">
+                    <div class="d-flex flex-column align-items-center" style="flex-shrink:0">
+                        <div style="width:28px;height:28px;border-radius:50%;background:<?= $done ? '#2563eb' : '#e2e8f0' ?>;color:<?= $done ? '#fff' : '#94a3b8' ?>;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid <?= $active ? '#2563eb' : ($done ? '#2563eb' : '#e2e8f0') ?>">
+                            <?= $done && !$active ? '<i class="fa fa-check" style="font-size:10px"></i>' : ($i + 1) ?>
+                        </div>
+                        <div style="font-size:9px;color:<?= $done ? '#2563eb' : '#94a3b8' ?>;margin-top:3px;font-weight:<?= $active ? '700' : '400' ?>;white-space:nowrap"><?= $stepLabels[$i] ?></div>
+                    </div>
+                    <?php if ($i < count($statusSteps) - 1): ?>
+                    <div style="flex:1;height:2px;background:<?= $i < $currentStep ? '#2563eb' : '#e2e8f0' ?>;margin:0 4px;margin-bottom:14px"></div>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+
             <div style="font-size:13px;line-height:1.8">
                 <?php if ($b['make']): ?>
                 <div><i class="fa fa-car me-2 text-muted"></i><?= e($b['make'].' '.$b['model'].' '.$b['year']) ?></div>
