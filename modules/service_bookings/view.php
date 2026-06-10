@@ -184,6 +184,29 @@ include __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
 
         <!-- Create Quotation -->
+        <?php if (canAccess('dispatch') && canWrite('dispatch') && !in_array($booking['status'],['cancelled'])): ?>
+        <div class="card mb-4">
+            <div class="card-header"><i class="fa fa-map-location-dot me-2 text-primary"></i>Dispatch</div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">Schedule a driver to collect or return this vehicle.</p>
+                <div class="d-flex gap-2 flex-wrap">
+                    <?php if (in_array($booking['status'],['pending','confirmed'])): ?>
+                    <a href="<?= BASE_URL ?>/modules/dispatch/add.php?type=client_pickup&booking_id=<?= $id ?><?= $booking['car_id'] ? '&car_id='.$booking['car_id'] : '' ?>"
+                       class="btn btn-sm btn-outline-info">
+                        <i class="fa fa-person-walking-arrow-right me-1"></i>Schedule Pickup
+                    </a>
+                    <?php endif; ?>
+                    <?php if ($booking['status'] === 'completed'): ?>
+                    <a href="<?= BASE_URL ?>/modules/dispatch/add.php?type=client_return&booking_id=<?= $id ?><?= $booking['car_id'] ? '&car_id='.$booking['car_id'] : '' ?>"
+                       class="btn btn-sm btn-outline-success">
+                        <i class="fa fa-person-walking-arrow-loop-left me-1"></i>Schedule Return
+                    </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <?php if (canAccess('quotations') && canWrite('quotations')): ?>
         <div class="card mb-4">
             <div class="card-header"><i class="fa fa-file-invoice-dollar me-2"></i>Quotation</div>

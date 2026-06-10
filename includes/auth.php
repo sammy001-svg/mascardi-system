@@ -118,26 +118,26 @@ function canAccess(string $module): bool {
             'cars','clients','service_bookings','quotations','invoices','payments',
             'quick_assessments','sales','crm','installments','car_costs','car_documents',
             'inspections','chat','reports','expenses','assessments','showroom',
-            'showroom_transfers','key_handovers',
+            'showroom_transfers','key_handovers','dispatch','team',
         ],
         'sales_officer'     => [
             'cars','clients','service_bookings','quotations','invoices','payments',
             'quick_assessments','sales','crm','installments','car_costs','car_documents',
-            'inspections','chat','showroom','showroom_transfers','key_handovers',
+            'inspections','chat','showroom','showroom_transfers','key_handovers','dispatch','team',
         ],
         'sales_person'      => [
             'cars','clients','service_bookings','quick_assessments','quotations','invoices',
             'payments','sales','crm','installments','car_documents','inspections','chat','showroom',
-            'showroom_transfers','key_handovers',
+            'showroom_transfers','key_handovers','dispatch','team',
         ],
         'customer_relations' => [
             'clients','service_bookings','crm','quick_assessments','cars','chat',
             'inspections','installments','quotations','invoices','showroom',
-            'showroom_transfers','key_handovers',
+            'showroom_transfers','key_handovers','dispatch','team',
         ],
         'receptionist'      => [
             'clients','service_bookings','quick_assessments','cars','chat','showroom',
-            'showroom_transfers','key_handovers',
+            'showroom_transfers','key_handovers','dispatch','team',
         ],
 
         // ── Workshop / Operational roles ───────────────────────────────────────
@@ -145,13 +145,13 @@ function canAccess(string $module): bool {
             'cars','mechanics','drivers','assessments','jobs','parts_requests','issues',
             'quick_assessments','lpo','inventory','suppliers','car_documents','car_costs',
             'inspections','attendance','payroll','chat','reports',
-            'showroom_transfers','key_handovers',
+            'showroom_transfers','key_handovers','dispatch','team',
         ],
         'mechanic'          => [
-            'jobs','assessments','parts_requests','issues','car_documents','inspections','chat',
+            'jobs','assessments','parts_requests','issues','car_documents','inspections','chat','team',
         ],
         'driver'            => [
-            'cars','assessments','key_handovers',
+            'cars','assessments','key_handovers','dispatch','team',
         ],
 
         // ── Inventory / Procurement roles ──────────────────────────────────────
@@ -166,7 +166,7 @@ function canAccess(string $module): bool {
 
         // ── HR roles ───────────────────────────────────────────────────────────
         'hr_manager'        => [
-            'attendance','payroll','mechanics','drivers','expenses','reports','chat',
+            'attendance','payroll','mechanics','drivers','expenses','reports','chat','team',
         ],
 
         // ── Legacy ─────────────────────────────────────────────────────────────
@@ -175,7 +175,7 @@ function canAccess(string $module): bool {
             'lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings',
             'issues','chat','car_documents','crm','car_costs','installments','expenses',
             'inspections','attendance','payroll','quick_assessments','sales',
-            'showroom_transfers','key_handovers',
+            'showroom_transfers','key_handovers','dispatch','team',
         ],
     ];
     return in_array($module, $map[$user['role']] ?? []);
@@ -193,14 +193,14 @@ function canWrite(string $module): bool {
         'finance_manager'   => ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo'],
         'accountant'        => ['payments','invoices','quotations','expenses','sales','installments'],
         'cashier'           => ['payments','installments'],
-        'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses'],
-        'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments'],
-        'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments'],
-        'customer_relations' => ['clients','service_bookings','crm','quick_assessments','installments'],
-        'receptionist'      => ['clients','service_bookings','quick_assessments'],
-        'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll'],
-        'mechanic'          => ['assessments','parts_requests'],
-        'driver'            => [],
+        'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team'],
+        'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','dispatch','team'],
+        'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team'],
+        'customer_relations' => ['clients','service_bookings','crm','quick_assessments','installments','team'],
+        'receptionist'      => ['clients','service_bookings','quick_assessments','team'],
+        'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','dispatch','team'],
+        'mechanic'          => ['assessments','parts_requests','team'],
+        'driver'            => ['team'],
         'inventory_manager' => ['inventory','suppliers','lpo','parts_requests'],
         'procurement_officer' => ['lpo','suppliers','inventory','parts_requests'],
         'hr_manager'        => ['attendance','payroll'],

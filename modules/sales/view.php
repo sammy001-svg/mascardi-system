@@ -45,6 +45,12 @@ include __DIR__ . '/../../includes/header.php';
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fa fa-tag me-2 text-success"></i>Sale: <strong><?= e($sale['sale_number']) ?></strong></h5>
     <div class="d-flex gap-2">
+        <?php if (canAccess('dispatch') && $sale['status'] === 'active' && !$sale['delivered_at']): ?>
+        <a href="<?= BASE_URL ?>/modules/dispatch/add.php?type=delivery&sale_id=<?= $id ?>&car_id=<?= $sale['car_id'] ?>"
+           class="btn btn-sm btn-outline-primary">
+            <i class="fa fa-truck me-1"></i>Schedule Delivery
+        </a>
+        <?php endif; ?>
         <a href="contract.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-outline-success">
             <i class="fa fa-file-contract me-1"></i>Contract
         </a>

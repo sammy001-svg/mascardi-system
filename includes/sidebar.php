@@ -73,6 +73,46 @@ function isActive(string $path): string {
         <?php endif; ?>
         <?php endif; ?>
 
+        <!-- ══ DISPATCH & TEAM ════════════════════════════════════ -->
+        <?php if (canAccess('dispatch') || canAccess('team')): ?>
+        <div class="nav-section">Dispatch &amp; Team</div>
+
+        <?php if (canAccess('dispatch')): ?>
+        <a href="<?= BASE_URL ?>/modules/dispatch/index.php"
+           class="nav-item <?= isActive('/modules/dispatch/') ?>"
+           data-label="Dispatch Board"
+           style="position:relative">
+            <i class="fa fa-map-location-dot"></i><span>Dispatch Board</span>
+            <?php
+            try {
+                $__djCount = (int)getDB()->query("SELECT COUNT(*) FROM dispatch_jobs WHERE scheduled_date=CURDATE() AND status IN ('scheduled','en_route')")->fetchColumn();
+                if ($__djCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__djCount > 99 ? '99+' : $__djCount ?>
+            </span>
+            <?php endif; } catch (Exception $e) {} ?>
+        </a>
+        <?php endif; ?>
+
+        <?php if (canAccess('team')): ?>
+        <a href="<?= BASE_URL ?>/modules/team/index.php"
+           class="nav-item <?= isActive('/modules/team/') ?>"
+           data-label="Team Board"
+           style="position:relative">
+            <i class="fa fa-people-group"></i><span>Team Board</span>
+            <?php
+            try {
+                $__pendLeave = (int)getDB()->query("SELECT COUNT(*) FROM leave_requests WHERE status='pending'")->fetchColumn();
+                if ($__pendLeave > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#d97706;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__pendLeave > 99 ? '99+' : $__pendLeave ?>
+            </span>
+            <?php endif; } catch (Exception $e) {} ?>
+        </a>
+        <?php endif; ?>
+
+        <?php endif; ?>
+
         <!-- ══ OPERATIONS ═════════════════════════════════════════ -->
         <?php if (canAccess('intake') || canAccess('assessments') || canAccess('quick_assessments') || canAccess('inspections') || canAccess('showroom_transfers') || canAccess('key_handovers')): ?>
         <div class="nav-section">Operations</div>
