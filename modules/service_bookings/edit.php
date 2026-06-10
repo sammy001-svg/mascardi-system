@@ -8,6 +8,8 @@ $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/service_bookings/index.php');
 $db = getDB();
 
+$locations = $db->query("SELECT id, name FROM locations WHERE status='active' ORDER BY name")->fetchAll();
+
 $booking = $db->prepare("SELECT * FROM service_bookings WHERE id=?");
 $booking->execute([$id]); $booking = $booking->fetch();
 if (!$booking) { setFlash('error', 'Booking not found.'); redirect(BASE_URL . '/modules/service_bookings/index.php'); }
@@ -43,8 +45,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['description']      = trim($_POST['description'] ?? '');
     $d['preferred_date']   = $_POST['preferred_date'] ?? '';
     $d['preferred_time']   = $_POST['preferred_time'] ?? '';
-    $d['admin_notes']      = trim($_POST['admin_notes'] ?? '');
-    $d['sales_person']     = trim($_POST['sales_person'] ?? '');
+    $d['admin_notes']        = trim($_POST['admin_notes'] ?? '');
+    $d['sales_person']       = trim($_POST['sales_person'] ?? '');
+    $d['intake_location_id'] = (int)($_POST['intake_location_id'] ?? 0) ?: null;
+    $d['return_location_id'] = (int)($_POST['return_location_id'] ?? 0) ?: null;
 
     if (!$d['client_name'])  $errors[] = 'Client name is required.';
     if (!$d['client_phone']) $errors[] = 'Phone number is required.';
@@ -60,6 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 service_type=?, description=?,
                 preferred_date=?, preferred_time=?,
                 admin_notes=?, sales_person=?,
+                intake_location_id=?, return_location_id=?,
                 updated_at=NOW()
                 WHERE id=?")
                ->execute([
@@ -69,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    $serviceStr, $d['description'],
                    $d['preferred_date'] ?: null, $d['preferred_time'] ?: null,
                    $d['admin_notes'], $d['sales_person'],
+                   $d['intake_location_id'], $d['return_location_id'],
                    $id,
                ]);
             logActivity('update', 'service_bookings', $id, "Updated booking {$booking['booking_number']} — {$d['client_name']}");
@@ -207,6 +213,31 @@ include __DIR__ . '/../../includes/header.php';
                         <option value="">— Any time —</option>
                         <?php foreach ($timeSlots as $ts): ?>
                         <option value="<?= $ts ?>" <?= ($d['preferred_time'] ?? '') === $ts ? 'selected' : '' ?>><?= $ts ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Locations -->
+        <div class="card mb-4">
+            <div class="card-header fw-semibold"><i class="fa fa-location-dot me-2 text-primary"></i>Locations</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Intake Location</label>
+                    <select name="intake_location_id" class="form-select select2">
+                        <option value="">— Walk-in / Not specified —</option>
+                        <?php foreach ($locations as $loc): ?>
+                        <option value="<?= $loc['id'] ?>" <?= ($d['intake_location_id'] == $loc['id']) ? 'selected' : '' ?>><?= e($loc['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Return Location</label>
+                    <select name="return_location_id" class="form-select select2">
+                        <option value="">— Same as intake —</option>
+                        <?php foreach ($locations as $loc): ?>
+                        <option value="<?= $loc['id'] ?>" <?= ($d['return_location_id'] == $loc['id']) ? 'selected' : '' ?>><?= e($loc['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>

@@ -11,10 +11,14 @@ if (!$id) redirect('index.php');
 $booking = $db->prepare("
     SELECT sb.*, cl.name AS client_link_name, cl.email AS client_link_email,
            ca.make, ca.model, ca.year, ca.chassis_number, ca.registration_number,
-           wj.id AS job_id
+           wj.id AS job_id,
+           il.name AS intake_location_name,
+           rl.name AS return_location_name
     FROM service_bookings sb
-    LEFT JOIN clients cl ON cl.id = sb.client_id
-    LEFT JOIN cars ca    ON ca.id = sb.car_id
+    LEFT JOIN clients cl   ON cl.id = sb.client_id
+    LEFT JOIN cars ca      ON ca.id = sb.car_id
+    LEFT JOIN locations il ON il.id = sb.intake_location_id
+    LEFT JOIN locations rl ON rl.id = sb.return_location_id
     LEFT JOIN quick_assessments qa ON qa.service_booking_id = sb.id
     LEFT JOIN workshop_jobs wj     ON wj.assessment_id = qa.id
     WHERE sb.id = ?
@@ -192,7 +196,7 @@ include __DIR__ . '/../../includes/header.php';
 
         <!-- Create Job Card -->
         <?php if (canAccess('jobs') && canWrite('jobs') && in_array($booking['status'], ['confirmed','in_progress'])): ?>
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header"><i class="fa fa-toolbox me-2"></i>Linked Job Card</div>
             <div class="card-body">
                 <?php if (!empty($booking['job_id'])): ?>
@@ -202,6 +206,49 @@ include __DIR__ . '/../../includes/header.php';
                 <a href="<?= BASE_URL ?>/modules/jobs/add.php?car_id=<?= $booking['car_id'] ?>&booking_id=<?= $id ?>" class="btn btn-outline-success"><i class="fa fa-plus me-1"></i>Create Job Card</a>
                 <?php else: ?>
                 <p class="text-muted small mb-0">Link a vehicle from the system first to create a job card.</p>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Locations + Return Transfer -->
+        <?php if ($booking['intake_location_name'] || $booking['return_location_name']): ?>
+        <div class="card <?= ($booking['status'] === 'completed' && $booking['return_location_id'] && $booking['return_location_id'] != $booking['intake_location_id'] && !$booking['return_transfer_id']) ? 'border-warning' : '' ?>">
+            <div class="card-header"><i class="fa fa-location-dot me-2"></i>Service Locations</div>
+            <div class="card-body">
+                <div class="d-flex gap-4 flex-wrap mb-3">
+                    <?php if ($booking['intake_location_name']): ?>
+                    <div>
+                        <div class="text-muted small">Dropped off at</div>
+                        <div class="fw-semibold"><i class="fa fa-location-dot me-1 text-danger"></i><?= e($booking['intake_location_name']) ?></div>
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($booking['return_location_name']): ?>
+                    <div>
+                        <div class="text-muted small">Client collects at</div>
+                        <div class="fw-semibold"><i class="fa fa-location-dot me-1 text-success"></i><?= e($booking['return_location_name']) ?></div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <?php
+                $needsReturn = $booking['status'] === 'completed'
+                    && $booking['return_location_id']
+                    && $booking['return_location_id'] != $booking['intake_location_id']
+                    && !$booking['return_transfer_id'];
+                ?>
+                <?php if ($needsReturn && canAccess('showroom_transfers')): ?>
+                <div class="alert alert-warning d-flex align-items-center gap-2 mb-2 py-2">
+                    <i class="fa fa-triangle-exclamation"></i>
+                    <span class="small">Service complete but car needs to be returned to <strong><?= e($booking['return_location_name']) ?></strong>.</span>
+                </div>
+                <a href="<?= BASE_URL ?>/modules/showroom_transfers/add.php?<?= $booking['car_id'] ? 'car_id='.$booking['car_id'].'&' : '' ?>type=service_return"
+                   class="btn btn-warning btn-sm">
+                    <i class="fa fa-right-left me-1"></i>Raise Return Transfer
+                </a>
+                <?php elseif ($booking['return_transfer_id']): ?>
+                <a href="<?= BASE_URL ?>/modules/showroom_transfers/view.php?id=<?= $booking['return_transfer_id'] ?>" class="btn btn-outline-primary btn-sm">
+                    <i class="fa fa-right-left me-1"></i>View Return Transfer
+                </a>
                 <?php endif; ?>
             </div>
         </div>

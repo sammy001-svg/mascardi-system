@@ -118,22 +118,26 @@ function canAccess(string $module): bool {
             'cars','clients','service_bookings','quotations','invoices','payments',
             'quick_assessments','sales','crm','installments','car_costs','car_documents',
             'inspections','chat','reports','expenses','assessments','showroom',
+            'showroom_transfers','key_handovers',
         ],
         'sales_officer'     => [
             'cars','clients','service_bookings','quotations','invoices','payments',
             'quick_assessments','sales','crm','installments','car_costs','car_documents',
-            'inspections','chat','showroom',
+            'inspections','chat','showroom','showroom_transfers','key_handovers',
         ],
         'sales_person'      => [
             'cars','clients','service_bookings','quick_assessments','quotations','invoices',
             'payments','sales','crm','installments','car_documents','inspections','chat','showroom',
+            'showroom_transfers','key_handovers',
         ],
         'customer_relations' => [
             'clients','service_bookings','crm','quick_assessments','cars','chat',
             'inspections','installments','quotations','invoices','showroom',
+            'showroom_transfers','key_handovers',
         ],
         'receptionist'      => [
             'clients','service_bookings','quick_assessments','cars','chat','showroom',
+            'showroom_transfers','key_handovers',
         ],
 
         // ── Workshop / Operational roles ───────────────────────────────────────
@@ -141,12 +145,13 @@ function canAccess(string $module): bool {
             'cars','mechanics','drivers','assessments','jobs','parts_requests','issues',
             'quick_assessments','lpo','inventory','suppliers','car_documents','car_costs',
             'inspections','attendance','payroll','chat','reports',
+            'showroom_transfers','key_handovers',
         ],
         'mechanic'          => [
             'jobs','assessments','parts_requests','issues','car_documents','inspections','chat',
         ],
         'driver'            => [
-            'cars','assessments',
+            'cars','assessments','key_handovers',
         ],
 
         // ── Inventory / Procurement roles ──────────────────────────────────────
@@ -170,6 +175,7 @@ function canAccess(string $module): bool {
             'lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings',
             'issues','chat','car_documents','crm','car_costs','installments','expenses',
             'inspections','attendance','payroll','quick_assessments','sales',
+            'showroom_transfers','key_handovers',
         ],
     ];
     return in_array($module, $map[$user['role']] ?? []);

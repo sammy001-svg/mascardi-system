@@ -122,6 +122,11 @@ include __DIR__ . '/../../includes/header.php';
                         <a href="view.php?id=<?= $r['id'] ?>" class="btn btn-xs btn-outline-primary" title="View">
                             <i class="fa fa-eye"></i>
                         </a>
+                        <?php if (canWrite('parts_requests') && $r['status'] === 'pending'): ?>
+                        <a href="edit.php?id=<?= $r['id'] ?>" class="btn btn-xs btn-outline-warning" title="Edit">
+                            <i class="fa fa-pen"></i>
+                        </a>
+                        <?php endif; ?>
                         <?php if (hasRole('admin')): ?>
                         <a href="delete.php?id=<?= $r['id'] ?>" class="btn btn-xs btn-outline-danger"
                            onclick="return confirm('Delete quote request <?= e($r['request_number']) ?>? This cannot be undone.')"

@@ -1018,4 +1018,52 @@ try {
 </div>
 <?php endif; ?>
 
+<!-- Stock Rotation Quick Link -->
+<div class="card mt-4">
+    <div class="card-header fw-semibold"><i class="fa fa-rotate me-2 text-success"></i>Logistics Reports</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <a href="stock_rotation.php" class="card text-decoration-none h-100" style="border:1.5px solid #22c55e">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <div style="width:44px;height:44px;background:#dcfce7;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="fa fa-rotate text-success fa-lg"></i>
+                        </div>
+                        <div>
+                            <div class="fw-semibold text-dark">Stock Rotation</div>
+                            <div class="text-muted small">Cars ranked by days at current showroom</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="<?= BASE_URL ?>/modules/showroom_transfers/index.php" class="card text-decoration-none h-100" style="border:1.5px solid #2563eb">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <div style="width:44px;height:44px;background:#dbeafe;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="fa fa-right-left text-primary fa-lg"></i>
+                        </div>
+                        <div>
+                            <div class="fw-semibold text-dark">Showroom Transfers</div>
+                            <div class="text-muted small">All inter-showroom transfer orders</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="<?= BASE_URL ?>/modules/key_handovers/index.php" class="card text-decoration-none h-100" style="border:1.5px solid #d97706">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <div style="width:44px;height:44px;background:#fef3c7;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="fa fa-key text-warning fa-lg"></i>
+                        </div>
+                        <div>
+                            <div class="fw-semibold text-dark">Key Runs</div>
+                            <div class="text-muted small">Morning / evening key handover log</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

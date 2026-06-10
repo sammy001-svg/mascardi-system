@@ -110,6 +110,11 @@ include __DIR__ . '/../../includes/header.php';
             <i class="fa fa-file-contract me-1"></i>Generate LPO
         </a>
         <?php endif; ?>
+        <?php if (canWrite('parts_requests') && $req['status'] === 'pending'): ?>
+        <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-warning">
+            <i class="fa fa-pen me-1"></i>Edit
+        </a>
+        <?php endif; ?>
         <a href="print.php?id=<?= $id ?>" class="btn btn-sm btn-outline-dark" target="_blank">
             <i class="fa fa-print me-1"></i>Print
         </a>

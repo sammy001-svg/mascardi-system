@@ -74,7 +74,7 @@ function isActive(string $path): string {
         <?php endif; ?>
 
         <!-- ══ OPERATIONS ═════════════════════════════════════════ -->
-        <?php if (canAccess('intake') || canAccess('assessments') || canAccess('quick_assessments') || canAccess('inspections')): ?>
+        <?php if (canAccess('intake') || canAccess('assessments') || canAccess('quick_assessments') || canAccess('inspections') || canAccess('showroom_transfers') || canAccess('key_handovers')): ?>
         <div class="nav-section">Operations</div>
 
         <?php if (canAccess('intake')): ?>
@@ -108,6 +108,40 @@ function isActive(string $path): string {
             <i class="fa fa-clipboard-list"></i><span>Inspections</span>
         </a>
         <?php endif; ?>
+
+        <?php if (canAccess('showroom_transfers')): ?>
+        <a href="<?= BASE_URL ?>/modules/showroom_transfers/index.php"
+           class="nav-item <?= isActive('/modules/showroom_transfers/') ?>"
+           data-label="Showroom Transfers">
+            <i class="fa fa-right-left"></i><span>Transfers</span>
+            <?php
+            try {
+                $__stCount = (int)getDB()->query("SELECT COUNT(*) FROM showroom_transfers WHERE status='pending'")->fetchColumn();
+                if ($__stCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__stCount > 99 ? '99+' : $__stCount ?>
+            </span>
+            <?php endif; } catch (Exception $e) {} ?>
+        </a>
+        <?php endif; ?>
+
+        <?php if (canAccess('key_handovers')): ?>
+        <a href="<?= BASE_URL ?>/modules/key_handovers/index.php"
+           class="nav-item <?= isActive('/modules/key_handovers/') ?>"
+           data-label="Key Handovers"
+           style="position:relative">
+            <i class="fa fa-key"></i><span>Key Runs</span>
+            <?php
+            try {
+                $__khCount = (int)getDB()->query("SELECT COUNT(*) FROM key_handovers WHERE status='pending'")->fetchColumn();
+                if ($__khCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#d97706;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__khCount > 99 ? '99+' : $__khCount ?>
+            </span>
+            <?php endif; } catch (Exception $e) {} ?>
+        </a>
+        <?php endif; ?>
+
         <?php endif; ?>
 
         <!-- ══ WORKSHOP ═══════════════════════════════════════════ -->

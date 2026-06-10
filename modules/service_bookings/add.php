@@ -7,6 +7,16 @@ $pageTitle = 'New Service Booking';
 $db   = getDB();
 $user = authUser();
 
+// Inline migration for location columns
+foreach ([
+    "ALTER TABLE service_bookings ADD COLUMN intake_location_id INT NULL AFTER sales_person",
+    "ALTER TABLE service_bookings ADD COLUMN return_location_id  INT NULL AFTER intake_location_id",
+    "ALTER TABLE service_bookings ADD COLUMN return_transfer_id  INT NULL AFTER return_location_id",
+    "ALTER TABLE service_bookings ADD COLUMN client_notified_at  DATETIME NULL AFTER return_transfer_id",
+] as $_mig) { try { $db->exec($_mig); } catch (\Throwable $_e) {} }
+
+$locations = $db->query("SELECT id, name FROM locations WHERE status='active' ORDER BY name")->fetchAll();
+
 $serviceTypes = [
     'Engine Service',
     'Major Service',
@@ -56,13 +66,15 @@ $d = [
     'car_make'         => '',
     'car_model'        => '',
     'car_registration' => '',
-    'service_type'     => [], // Now an array for multiple selection
-    'description'      => '',
-    'preferred_date'   => '',
-    'preferred_time'   => '',
-    'admin_notes'      => '',
-    'sales_person'     => '',
-    'booking_date'     => date('Y-m-d'),
+    'service_type'       => [],
+    'description'        => '',
+    'preferred_date'     => '',
+    'preferred_time'     => '',
+    'admin_notes'        => '',
+    'sales_person'       => '',
+    'booking_date'       => date('Y-m-d'),
+    'intake_location_id' => '',
+    'return_location_id' => '',
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -73,7 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $d[$k] = trim($_POST[$k] ?? '');
         }
     }
-    $d['booking_date'] = date('Y-m-d');
+    $d['booking_date']       = date('Y-m-d');
+    $d['intake_location_id'] = (int)($_POST['intake_location_id'] ?? 0) ?: null;
+    $d['return_location_id'] = (int)($_POST['return_location_id'] ?? 0) ?: null;
 
     if (!$d['client_name'])  $errors[] = 'Client name is required.';
     if (!$d['client_phone']) $errors[] = 'Phone number is required.';
@@ -90,10 +104,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      car_id, car_make, car_model, car_registration, car_description,
                      service_type, description,
                      booking_date, preferred_date, preferred_time,
-                     admin_notes, sales_person, created_by)
-                VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?,?)
+                     admin_notes, sales_person, created_by,
+                     intake_location_id, return_location_id)
+                VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?,?, ?,?)
             ")->execute([
-                $bNum, 
+                $bNum,
                 $d['client_id'] ?: null, $d['client_name'], $d['client_email'], $d['client_phone'],
                 $d['car_id'] ?: null, $d['car_make'], $d['car_model'], $d['car_registration'],
                 trim($d['car_make'].' '.$d['car_model'].' '.$d['car_registration']),
@@ -103,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $d['preferred_time'] ?: null,
                 $d['admin_notes'], $d['sales_person'],
                 $user['name'],
+                $d['intake_location_id'], $d['return_location_id'],
             ]);
             $newId = $db->lastInsertId();
             logActivity('create', 'service_bookings', $newId, "Created booking {$bNum} for {$d['client_name']}");
@@ -306,6 +322,32 @@ include __DIR__ . '/../../includes/header.php';
                         <option value="<?= $ts ?>" <?= $d['preferred_time']===$ts?'selected':'' ?>><?= $ts ?></option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Locations -->
+        <div class="card mb-4">
+            <div class="card-header fw-semibold"><i class="fa fa-location-dot me-2 text-primary"></i>Locations</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Intake Location <span class="text-muted small">(where car was dropped)</span></label>
+                    <select name="intake_location_id" class="form-select select2">
+                        <option value="">— Walk-in / Not specified —</option>
+                        <?php foreach ($locations as $loc): ?>
+                        <option value="<?= $loc['id'] ?>" <?= ($d['intake_location_id'] == $loc['id']) ? 'selected' : '' ?>><?= e($loc['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Return Location <span class="text-muted small">(where client collects)</span></label>
+                    <select name="return_location_id" class="form-select select2">
+                        <option value="">— Same as intake —</option>
+                        <?php foreach ($locations as $loc): ?>
+                        <option value="<?= $loc['id'] ?>" <?= ($d['return_location_id'] == $loc['id']) ? 'selected' : '' ?>><?= e($loc['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="form-text"><i class="fa fa-circle-info me-1 text-warning"></i>If different from intake, a return transfer will be needed on completion.</div>
                 </div>
             </div>
         </div>
