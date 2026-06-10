@@ -618,12 +618,12 @@ body { background: var(--c-bg) !important; color: var(--c-text) !important; }
 }
 .btn-ghost-white:hover { background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.28); text-decoration: none; }
 
-/* ── SCROLL REVEAL STATES ────────────────────────────────────── */
-.gs-fade   { opacity: 0; }
-.gs-up     { opacity: 0; transform: translateY(45px); }
-.gs-left   { opacity: 0; transform: translateX(-45px); }
-.gs-right  { opacity: 0; transform: translateX(45px); }
-.gs-scale  { opacity: 0; transform: scale(0.88); }
+/* ── SCROLL REVEAL STATES (only active when JS runs) ─────────── */
+.js-ready .gs-fade   { opacity: 0; }
+.js-ready .gs-up     { opacity: 0; transform: translateY(45px); }
+.js-ready .gs-left   { opacity: 0; transform: translateX(-45px); }
+.js-ready .gs-right  { opacity: 0; transform: translateX(45px); }
+.js-ready .gs-scale  { opacity: 0; transform: scale(0.88); }
 
 /* ── FOOTER OVERRIDE ─────────────────────────────────────────── */
 footer a { color: rgba(255,255,255,.5) !important; }
@@ -1167,6 +1167,9 @@ footer a:hover { color: #fff !important; }
 <script>
 (function() {
 'use strict';
+
+/* Mark JS as active — enables .gs-* CSS initial hidden states */
+document.documentElement.classList.add('js-ready');
 
 /* ── PARTICLE CANVAS ──────────────────────────────────────────── */
 const canvas = document.getElementById('heroCanvas');
