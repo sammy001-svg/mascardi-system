@@ -96,14 +96,14 @@ function canAccess(string $module): bool {
             'cars','mechanics','drivers','intake','assessments','jobs','parts_requests','issues',
             'quick_assessments','lpo','inventory','suppliers','car_documents','car_costs',
             'inspections','attendance','payroll','chat','reports','clients','service_bookings',
-            'crm','payments','invoices','quotations','sales','installments','expenses',
+            'crm','payments','invoices','quotations','sales','installments','expenses','imports',
         ],
 
         // ── Finance roles ─────────────────────────────────────────────────────
         'finance_manager'   => [
             'payments','invoices','quotations','expenses','reports','clients','sales',
             'installments','car_costs','cars','chat','lpo','payroll','attendance',
-            'inventory','suppliers','parts_requests',
+            'inventory','suppliers','parts_requests','imports',
         ],
         'accountant'        => [
             'payments','invoices','quotations','expenses','reports','clients','sales',
@@ -118,12 +118,12 @@ function canAccess(string $module): bool {
             'cars','clients','service_bookings','quotations','invoices','payments',
             'quick_assessments','sales','crm','installments','car_costs','car_documents',
             'inspections','chat','reports','expenses','assessments','showroom',
-            'showroom_transfers','key_handovers','dispatch','team',
+            'showroom_transfers','key_handovers','dispatch','team','imports',
         ],
         'sales_officer'     => [
             'cars','clients','service_bookings','quotations','invoices','payments',
             'quick_assessments','sales','crm','installments','car_costs','car_documents',
-            'inspections','chat','showroom','showroom_transfers','key_handovers','dispatch','team',
+            'inspections','chat','showroom','showroom_transfers','key_handovers','dispatch','team','imports',
         ],
         'sales_person'      => [
             'cars','clients','service_bookings','quick_assessments','quotations','invoices',
@@ -145,7 +145,7 @@ function canAccess(string $module): bool {
             'cars','mechanics','drivers','assessments','jobs','parts_requests','issues',
             'quick_assessments','lpo','inventory','suppliers','car_documents','car_costs',
             'inspections','attendance','payroll','chat','reports',
-            'showroom_transfers','key_handovers','dispatch','team',
+            'showroom_transfers','key_handovers','dispatch','team','imports',
         ],
         'mechanic'          => [
             'jobs','assessments','parts_requests','issues','car_documents','inspections','chat','team',
@@ -175,7 +175,7 @@ function canAccess(string $module): bool {
             'lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings',
             'issues','chat','car_documents','crm','car_costs','installments','expenses',
             'inspections','attendance','payroll','quick_assessments','sales',
-            'showroom_transfers','key_handovers','dispatch','team',
+            'showroom_transfers','key_handovers','dispatch','team','imports',
         ],
     ];
     return in_array($module, $map[$user['role']] ?? []);
@@ -189,22 +189,22 @@ function canWrite(string $module): bool {
         return (bool)$perms[$module][1];
     }
     $map = [
-        'general_manager'   => ['quotations','invoices','sales'],
-        'finance_manager'   => ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo'],
+        'general_manager'   => ['quotations','invoices','sales','imports'],
+        'finance_manager'   => ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo','imports'],
         'accountant'        => ['payments','invoices','quotations','expenses','sales','installments'],
         'cashier'           => ['payments','installments'],
-        'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team'],
+        'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team','imports'],
         'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','dispatch','team'],
         'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team'],
         'customer_relations' => ['clients','service_bookings','crm','quick_assessments','installments','team'],
         'receptionist'      => ['clients','service_bookings','quick_assessments','team'],
-        'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','dispatch','team'],
+        'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','dispatch','team','imports'],
         'mechanic'          => ['assessments','parts_requests','team'],
         'driver'            => ['team'],
         'inventory_manager' => ['inventory','suppliers','lpo','parts_requests'],
         'procurement_officer' => ['lpo','suppliers','inventory','parts_requests'],
         'hr_manager'        => ['attendance','payroll'],
-        'manager'           => ['cars','jobs','assessments','mechanics','drivers','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings','car_documents','car_costs','installments','expenses','inspections','attendance','payroll','quick_assessments','sales','crm'],
+        'manager'           => ['cars','jobs','assessments','mechanics','drivers','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings','car_documents','car_costs','installments','expenses','inspections','attendance','payroll','quick_assessments','sales','crm','imports'],
     ];
     $role = authRole();
     return in_array($module, $map[$role] ?? []);

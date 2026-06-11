@@ -113,6 +113,33 @@ function isActive(string $path): string {
 
         <?php endif; ?>
 
+        <!-- ══ IMPORTS ═══════════════════════════════════════════ -->
+        <?php if (canAccess('imports')): ?>
+        <div class="nav-section">Import Pipeline</div>
+
+        <a href="<?= BASE_URL ?>/modules/imports/index.php"
+           class="nav-item <?= isActive('/modules/imports/') ?>"
+           data-label="Import Pipeline"
+           style="position:relative">
+            <i class="fa fa-ship"></i><span>Pipeline</span>
+            <?php
+            try {
+                $__impBadge = (int)getDB()->query("SELECT COUNT(*) FROM car_imports WHERE stage NOT IN ('completed')")->fetchColumn();
+                if ($__impBadge > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__impBadge > 99 ? '99+' : $__impBadge ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+
+        <a href="<?= BASE_URL ?>/modules/imports/index.php?view=shipments"
+           class="nav-item <?= (isActive('/modules/imports/shipment')) ? 'active' : '' ?>"
+           data-label="Shipments">
+            <i class="fa fa-boxes-stacked"></i><span>Shipments</span>
+        </a>
+
+        <?php endif; ?>
+
         <!-- ══ OPERATIONS ═════════════════════════════════════════ -->
         <?php if (canAccess('intake') || canAccess('assessments') || canAccess('quick_assessments') || canAccess('inspections') || canAccess('showroom_transfers') || canAccess('key_handovers')): ?>
         <div class="nav-section">Operations</div>
