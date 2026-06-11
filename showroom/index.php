@@ -1229,6 +1229,11 @@ if (canvas) {
 }
 
 /* ── GSAP ANIMATIONS ──────────────────────────────────────────── */
+// If CDN failed to load, reveal everything and bail
+if (typeof gsap === 'undefined') {
+    document.documentElement.classList.remove('js-ready');
+    return;
+}
 gsap.registerPlugin(ScrollTrigger);
 
 // Hero entrance
@@ -1241,34 +1246,34 @@ tl.from('#heroLeft .hero-divider',  { scaleX: 0, transformOrigin: 'left', durati
   .from('#heroLeft .hero-stats > div',{ y: 16, opacity: 0, duration: 0.5, stagger: 0.12, ease: 'power2.out' }, '-=0.3')
   .from('#heroCard', { x: 60, opacity: 0, duration: 1.1, ease: 'power3.out' }, '-=0.9');
 
-// Scroll-driven reveals
+// Scroll-driven reveals — use gsap.to() because CSS .js-ready .gs-* already sets initial state
 gsap.utils.toArray('.gs-up').forEach(el => {
-    gsap.from(el, {
-        y: 50, opacity: 0, duration: 0.9, ease: 'power3.out',
+    gsap.to(el, {
+        y: 0, opacity: 1, duration: 0.9, ease: 'power3.out',
         scrollTrigger: { trigger: el, start: 'top 88%', once: true }
     });
 });
 gsap.utils.toArray('.gs-fade').forEach(el => {
-    gsap.from(el, {
-        opacity: 0, duration: 0.8, ease: 'power2.out',
+    gsap.to(el, {
+        opacity: 1, duration: 0.8, ease: 'power2.out',
         scrollTrigger: { trigger: el, start: 'top 88%', once: true }
     });
 });
 gsap.utils.toArray('.gs-left').forEach(el => {
-    gsap.from(el, {
-        x: -55, opacity: 0, duration: 1.0, ease: 'power3.out',
+    gsap.to(el, {
+        x: 0, opacity: 1, duration: 1.0, ease: 'power3.out',
         scrollTrigger: { trigger: el, start: 'top 85%', once: true }
     });
 });
 gsap.utils.toArray('.gs-right').forEach(el => {
-    gsap.from(el, {
-        x: 55, opacity: 0, duration: 1.0, ease: 'power3.out',
+    gsap.to(el, {
+        x: 0, opacity: 1, duration: 1.0, ease: 'power3.out',
         scrollTrigger: { trigger: el, start: 'top 85%', once: true }
     });
 });
 gsap.utils.toArray('.gs-scale').forEach((el, i) => {
-    gsap.from(el, {
-        scale: 0.85, opacity: 0, duration: 0.6, ease: 'back.out(1.4)',
+    gsap.to(el, {
+        scale: 1, opacity: 1, duration: 0.6, ease: 'back.out(1.4)',
         delay: (i % 6) * 0.06,
         scrollTrigger: { trigger: el, start: 'top 90%', once: true }
     });
