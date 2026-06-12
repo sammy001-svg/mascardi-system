@@ -719,8 +719,8 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
     <video class="call-rv" id="remoteVid" autoplay playsinline style="display:none"></video>
     <video class="call-lv" id="localVid"  autoplay muted playsinline style="display:none"></video>
     <div class="call-body">
-        <div class="call-avatar" id="callAv" style="background:#128c7e">â€“</div>
-        <div class="call-name"  id="callName">—</div>
+        <div class=”call-avatar” id=”callAv” style=”background:#128c7e”>?</div>
+        <div class=”call-name”  id=”callName”></div>
         <div class="call-stat"  id="callStat">Calling…</div>
         <div class="call-timer" id="callTimer"></div>
         <div class="call-btns">
@@ -1342,14 +1342,30 @@ const Chat = window.Chat = {
     },
 
     /* â”€â”€ Start direct conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    _chatErr(msgsBox, icon, title, sub) {
+        if (!msgsBox) return;
+        msgsBox.innerHTML = `<div style="text-align:center;padding:48px 24px">
+            <i class="fa ${esc(icon)} fa-2x mb-3 d-block" style="color:#dc2626;opacity:.7"></i>
+            <div style="font-weight:600;color:#111b21;margin-bottom:6px">${esc(title)}</div>
+            <div style="font-size:13px;color:#667781">${esc(sub)}</div>
+        </div>`;
+    },
     async startDirect(uid, uname, ucolor) {
+        // Show loading state right away — before the modal finishes closing
+        const msgsBox = el('chatMsgs');
+        hide(el('chatWelcome'));
+        const ca = el('chatActive');
+        if (ca) { ca.style.display = 'flex'; ca.style.flexDirection = 'column'; }
+        if (msgsBox) msgsBox.innerHTML = `<div style="text-align:center;color:#8696a0;padding:48px 0">
+            <i class="fa fa-spinner fa-spin fa-lg me-2"></i>Opening conversation…</div>`;
+
         const modalEl = el('newChatModal');
         const modal   = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
 
-        // Promise that resolves once the modal finishes closing (or after 600 ms fallback)
+        // Wait for the modal close animation before focusing the chat input
         const hidden = modalEl
             ? new Promise(res => {
-                const t = setTimeout(res, 600); // fallback in case event never fires
+                const t = setTimeout(res, 700);
                 modalEl.addEventListener('hidden.bs.modal', () => { clearTimeout(t); res(); }, { once: true });
               })
             : Promise.resolve();
@@ -1364,15 +1380,16 @@ const Chat = window.Chat = {
                 await this.loadConvs();
                 await this.openConv(d.conversation_id, uname, ucolor, uid);
             } else {
-                const msg = d.error
-                    ? 'Chat error: ' + d.error
-                    : 'Could not open conversation. Make sure chat tables exist — visit /modules/chat/setup.php';
-                alert(msg);
+                this._chatErr(msgsBox, 'fa-comment-slash',
+                    d.error || 'Could not open conversation',
+                    'Please try again. If the problem persists, contact your administrator.');
             }
         } catch(e) {
             console.error('startDirect', e);
             await hidden;
-            alert('Connection error. Please try again.');
+            this._chatErr(msgsBox, 'fa-wifi',
+                'Connection error',
+                'Check your network connection and try again.');
         }
     },
 
@@ -2209,58 +2226,8 @@ ob_start(); ?>
 </div>
 
 <script>
-(function () {
-    var _pendingUser = null; // {uid, uname, ucolor} set when user item is clicked
-
-    // Capture which user was clicked before the modal closes
-    document.getElementById('upList').addEventListener('click', function (e) {
-        var item = e.target.closest('.up-item');
-        if (!item) return;
-        _pendingUser = {
-            uid:    item.getAttribute('data-uid'),
-            uname:  item.getAttribute('data-uname'),
-            ucolor: item.getAttribute('data-ucolor')
-        };
-    });
-
-    // After modal fully closes, open the conversation
-    document.getElementById('newChatModal').addEventListener('hidden.bs.modal', function () {
-        if (!_pendingUser) return;
-        var p = _pendingUser;
-        _pendingUser = null;
-
-        // Show loading state in the chat panel immediately
-        var chatActive  = document.getElementById('chatActive');
-        var chatWelcome = document.getElementById('chatWelcome');
-        if (chatWelcome) chatWelcome.style.display = 'none';
-        if (chatActive)  { chatActive.style.display = 'flex'; chatActive.style.flexDirection = 'column'; }
-        var msgsBox = document.getElementById('chatMsgs');
-        if (msgsBox) msgsBox.innerHTML = '<div style="text-align:center;color:#8696a0;padding:40px 0"><i class="fa fa-spinner fa-spin me-2"></i>Opening chat…</div>';
-
-        // Call API  (BASE is the JS const defined earlier in this page's <script> block)
-        var apiBase = (typeof BASE !== 'undefined') ? BASE : '';
-        fetch(apiBase + '/modules/chat/api/conversations.php', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ user_id: parseInt(p.uid) })
-        })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-            if (d.conversation_id && window.Chat) {
-                window.Chat.loadConvs().then(function () {
-                    window.Chat.openConv(d.conversation_id, p.uname, p.ucolor, p.uid, 'direct');
-                });
-            } else {
-                var msg = d.error || 'Could not open chat. Please visit /modules/chat/setup.php first.';
-                if (msgsBox) msgsBox.innerHTML = '<div style="text-align:center;color:#dc2626;padding:40px 16px"><i class="fa fa-triangle-exclamation me-2"></i>' + msg + '</div>';
-            }
-        })
-        .catch(function (err) {
-            console.error('startDirect fetch error', err);
-            if (msgsBox) msgsBox.innerHTML = '<div style="text-align:center;color:#dc2626;padding:40px 16px"><i class="fa fa-triangle-exclamation me-2"></i>Connection error. Please refresh and try again.</div>';
-        });
-    });
-}());
+// Direct-chat opening is handled entirely by Chat.startDirect() which is wired
+// in Chat.init() via the upList click listener. No duplicate handler needed here.
 </script>
 <?php $extraModal = ob_get_clean(); ?>
 
