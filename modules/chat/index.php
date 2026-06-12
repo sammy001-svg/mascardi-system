@@ -1614,12 +1614,30 @@ const Chat = window.Chat = {
     },
 
     /* ── Group: create ─────────────────────────────────────────────────────── */
+    _grpErr(msg) {
+        const box = el('grpError');
+        if (!box) return;
+        if (msg) { box.textContent = msg; box.style.display = ''; }
+        else { box.style.display = 'none'; }
+    },
     async createGroup() {
+        this._grpErr('');
         const name = (el('grpName').value || '').trim();
-        if (!name) { el('grpName').focus(); return; }
+        if (!name) {
+            this._grpErr('Please enter a group name.');
+            el('grpName').focus();
+            return;
+        }
         const checked = Array.from(document.querySelectorAll('.grp-chk:checked'));
         const memberIds = checked.map(c => parseInt(c.value));
-        if (!memberIds.length) { alert('Please select at least one member.'); return; }
+        if (!memberIds.length) {
+            this._grpErr('Please select at least one member.');
+            return;
+        }
+
+        const btn = el('grpCreateBtn');
+        const origHtml = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Creating…'; }
 
         try {
             const d = await apiPost('conversations.php', { action:'create_group', name, member_ids: memberIds });
@@ -1628,13 +1646,19 @@ const Chat = window.Chat = {
                 el('grpName').value = '';
                 document.querySelectorAll('.grp-chk:checked').forEach(c => c.checked = false);
                 el('grpSelCount').textContent = '0 members selected';
+                this._grpErr('');
                 this.switchNewChatTab('direct');
                 await this.loadConvs();
                 await this.openConv(d.conversation_id, name, avatarColor(d.conversation_id), null, 'group');
             } else {
-                alert(d.error || 'Could not create group.');
+                this._grpErr(d.error || 'Could not create group. Please try again.');
             }
-        } catch(e) { console.error('createGroup', e); alert('Error creating group.'); }
+        } catch(e) {
+            console.error('createGroup', e);
+            this._grpErr('Connection error. Please check your network and try again.');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+        }
     },
 
     /* ── Group: info panel ──────────────────────────────────────────────────── */
@@ -1815,6 +1839,7 @@ const Chat = window.Chat = {
         el('tabGroup').classList.toggle('active', !isDirect);
         el('ncDirect').style.display = isDirect ? '' : 'none';
         el('ncGroup').style.display  = isDirect ? 'none' : '';
+        this._grpErr('');
     },
 
     async _checkIncoming() {
@@ -2111,8 +2136,9 @@ ob_start(); ?>
                         <?php endforeach; ?>
                         </div>
                     </div>
-                    <div id="grpSelCount" style="font-size:12px;color:#667781;margin-bottom:10px">0 members selected</div>
-                    <button class="btn btn-success btn-sm w-100" onclick="Chat.createGroup()">
+                    <div id="grpSelCount" style="font-size:12px;color:#667781;margin-bottom:6px">0 members selected</div>
+                    <div id="grpError" style="display:none;font-size:12px;color:#dc2626;margin-bottom:8px;padding:6px 10px;background:#fef2f2;border-radius:6px;border:1px solid #fecaca"></div>
+                    <button id="grpCreateBtn" class="btn btn-success btn-sm w-100" onclick="Chat.createGroup()">
                         <i class="fa fa-users me-1"></i>Create Group
                     </button>
                 </div>

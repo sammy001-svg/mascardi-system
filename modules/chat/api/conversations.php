@@ -110,8 +110,29 @@ if ($method === 'POST') {
             echo json_encode(['conversation_id' => $convId, 'existing' => false]);
         } catch (Exception $e) {
             if ($db->inTransaction()) $db->rollBack();
-            http_response_code(500);
-            echo json_encode(['error' => 'Could not create group. ' . $e->getMessage()]);
+            // Auto-create tables on first use, then retry once
+            try {
+                foreach ([
+                    "CREATE TABLE IF NOT EXISTS chat_conversations (id INT AUTO_INCREMENT PRIMARY KEY, type ENUM('direct','group') DEFAULT 'direct', name VARCHAR(150) NULL, created_by INT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+                    "CREATE TABLE IF NOT EXISTS chat_participants (conversation_id INT NOT NULL, user_id INT NOT NULL, last_read_msg_id INT NOT NULL DEFAULT 0, joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (conversation_id, user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+                    "CREATE TABLE IF NOT EXISTS chat_messages (id INT AUTO_INCREMENT PRIMARY KEY, conversation_id INT NOT NULL, sender_id INT NOT NULL, type ENUM('text','file','image','voice','call','system') DEFAULT 'text', content TEXT NULL, file_path VARCHAR(500) NULL, file_name VARCHAR(255) NULL, file_size BIGINT NULL, mime_type VARCHAR(100) NULL, duration SMALLINT NULL, reply_to_id INT NULL, is_deleted TINYINT(1) DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+                ] as $_sql) { $db->exec($_sql); }
+
+                $db->beginTransaction();
+                $db->prepare("INSERT INTO chat_conversations (type, name, created_by) VALUES ('group', ?, ?)")
+                   ->execute([$name, $me['id']]);
+                $convId = (int)$db->lastInsertId();
+                $ins = $db->prepare("INSERT INTO chat_participants (conversation_id, user_id) VALUES (?,?)");
+                foreach ($memberIds as $uid) { if ($uid > 0) $ins->execute([$convId, $uid]); }
+                $db->prepare("INSERT INTO chat_messages (conversation_id, sender_id, type, content) VALUES (?,?,'system',?)")
+                   ->execute([$convId, $me['id'], $me['name'] . ' created the group "' . $name . '"']);
+                $db->commit();
+                echo json_encode(['conversation_id' => $convId, 'existing' => false]);
+            } catch (Exception $e2) {
+                if ($db->inTransaction()) $db->rollBack();
+                http_response_code(500);
+                echo json_encode(['error' => 'Could not create group: ' . $e2->getMessage()]);
+            }
         }
         exit;
     }
