@@ -146,6 +146,7 @@ table.items tbody td { padding: 8px 10px; font-size: 11px; border-bottom: 1px so
         <div class="bill-name"><?= htmlspecialchars($inv['customer_name'] ?? '—') ?></div>
         <div class="bill-detail">
             <?php if ($inv['customer_phone'] ?? ''): ?><?= htmlspecialchars($inv['customer_phone']) ?><?php endif; ?>
+            <?php if ($inv['client_id_number'] ?? ''): ?><br>KRA PIN: <?= htmlspecialchars($inv['client_id_number']) ?><?php endif; ?>
         </div>
     </div>
     <div class="bill-box" style="text-align:right">

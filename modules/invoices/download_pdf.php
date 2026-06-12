@@ -8,8 +8,8 @@ $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/invoices/index.php');
 
 $db   = getDB();
-$stmt = $db->prepare("SELECT i.*, c.chassis_number, c.make, c.model, c.year, c.color, c.registration_number
-                      FROM invoices i JOIN cars c ON c.id = i.car_id WHERE i.id = ?");
+$stmt = $db->prepare("SELECT i.*, c.chassis_number, c.make, c.model, c.year, c.color, c.registration_number, cl.id_number AS client_id_number
+                      FROM invoices i JOIN cars c ON c.id = i.car_id LEFT JOIN clients cl ON cl.id = i.client_id WHERE i.id = ?");
 $stmt->execute([$id]);
 $inv = $stmt->fetch();
 if (!$inv) die('Invoice not found.');

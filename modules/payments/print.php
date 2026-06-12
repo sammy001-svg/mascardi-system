@@ -10,10 +10,12 @@ $db = getDB();
 $stmt = $db->prepare("
     SELECT p.*,
            i.invoice_number, i.id AS inv_id, i.total AS inv_total,
-           sb.booking_number, sb.id AS bk_id
+           sb.booking_number, sb.id AS bk_id,
+           cl.id_number AS client_id_number
     FROM payments p
     LEFT JOIN invoices i ON i.id = p.invoice_id
     LEFT JOIN service_bookings sb ON sb.id = p.service_booking_id
+    LEFT JOIN clients cl ON cl.id = p.client_id
     WHERE p.id = ?
 ");
 $stmt->execute([$id]);
@@ -223,6 +225,12 @@ $isReversed  = $p['status'] === 'reversed';
         <div class="info-row">
             <span class="label">Phone</span>
             <span class="value"><?= e($p['client_phone']) ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($p['client_id_number']): ?>
+        <div class="info-row">
+            <span class="label">KRA PIN</span>
+            <span class="value"><?= e($p['client_id_number']) ?></span>
         </div>
         <?php endif; ?>
 
