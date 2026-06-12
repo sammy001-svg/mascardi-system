@@ -26,6 +26,37 @@ if ($__wa): ?>
 </a>
 <?php endif; ?>
 
+<!-- ── Floating Chat Button ───────────────────────────────────────────── -->
+<?php if (canAccess('chat') && !str_contains($_SERVER['REQUEST_URI'], '/modules/chat/')): ?>
+<style>
+.fab-chat{position:fixed;bottom:90px;right:28px;width:52px;height:52px;background:#128c7e;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 18px rgba(18,140,126,.5);z-index:8900;text-decoration:none;transition:transform .2s,box-shadow .2s}
+.fab-chat:hover{transform:scale(1.1);box-shadow:0 8px 28px rgba(18,140,126,.7);color:#fff;text-decoration:none}
+.fab-chat-badge{position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;border-radius:50%;font-size:10px;font-weight:700;min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 3px;border:2px solid #fff;display:none}
+@media(max-width:576px){.fab-chat{bottom:140px;right:16px;width:46px;height:46px;font-size:20px}}
+</style>
+<a href="<?= BASE_URL ?>/modules/chat/index.php" class="fab-chat" id="fabChat" title="Team Chat">
+    <i class="fa fa-comments"></i>
+    <span class="fab-chat-badge" id="fabChatBadge"></span>
+</a>
+<script>
+(function(){
+    var badge = document.getElementById('fabChatBadge');
+    if (!badge) return;
+    function poll(){
+        fetch('<?= BASE_URL ?>/modules/chat/api/unread.php')
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                var n = d.count || 0;
+                if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
+                else { badge.style.display = 'none'; }
+            }).catch(function(){});
+    }
+    poll();
+    setInterval(poll, 20000);
+}());
+</script>
+<?php endif; ?>
+
 <!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <!-- Bootstrap 5 -->

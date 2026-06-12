@@ -697,8 +697,14 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
                         </div>
                     </div>
 
-                    <button class="bar-send" id="sendBtn" title="Record voice note">
+                    <!-- Voice note button — visible when input is empty, hidden when typing -->
+                    <button class="bar-ic" id="btnVoice" title="Voice note" style="flex-shrink:0">
                         <i class="fa fa-microphone" id="sendIco"></i>
+                    </button>
+
+                    <!-- Send button — always visible, paper-plane -->
+                    <button class="bar-send" id="sendBtn" title="Send message">
+                        <i class="fa fa-paper-plane"></i>
                     </button>
                 </div>
             </div>
@@ -1400,7 +1406,7 @@ const Chat = window.Chat = {
             this.isRecording = true;
             hide(el('msgIn')); el('recBar').style.display='flex';
             el('sendBtn').classList.add('rec-on');
-            el('sendIco').className='fa fa-stop';
+            this._syncBtn();
             this.recSecs=0; el('recTime').textContent='0:00';
             this.recTimerInt = setInterval(()=>{
                 this.recSecs++;
@@ -1445,17 +1451,21 @@ const Chat = window.Chat = {
 
     _syncBtn() {
         const text = (el('msgIn').innerText||'').trim();
+        const voiceBtn = el('btnVoice');
+        const sendIEl  = el('sendBtn') ? el('sendBtn').querySelector('i') : null;
         if (this.isRecording) {
-            el('sendIco').className='fa fa-stop'; el('sendBtn').title='Stop recording';
-        } else if (text) {
-            el('sendIco').className='fa fa-paper-plane'; el('sendBtn').title='Send message';
+            if (el('sendIco')) el('sendIco').className = 'fa fa-stop';
+            if (voiceBtn) voiceBtn.style.display = 'none';
+            if (sendIEl)  sendIEl.className = 'fa fa-stop';
         } else {
-            el('sendIco').className='fa fa-microphone'; el('sendBtn').title='Record voice note';
+            if (el('sendIco')) el('sendIco').className = 'fa fa-microphone';
+            if (voiceBtn) voiceBtn.style.display = text ? 'none' : '';
+            if (sendIEl)  sendIEl.className = 'fa fa-paper-plane';
         }
     },
     onSend() {
         if (this.isRecording) { this.stopRec(); return; }
-        if ((el('msgIn').innerText||'').trim()) this.sendText(); else this.startRec();
+        this.sendText();
     },
 
     /* â”€â”€ Voice playback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -1893,14 +1903,18 @@ const Chat = window.Chat = {
             ev.target.value='';
         });
 
-        // Send button
+        // Send button (paper-plane — always visible)
         el('sendBtn').addEventListener('click',()=>this.onSend());
+
+        // Voice button (mic — visible only when input is empty)
+        el('btnVoice').addEventListener('click',()=>this.startRec());
 
         // Text input
         el('msgIn').addEventListener('keydown', ev=>{
             if (ev.key==='Enter'&&!ev.shiftKey) { ev.preventDefault(); this.sendText(); }
         });
         el('msgIn').addEventListener('input',()=>{ this._syncBtn(); this.sendTyping(); });
+        el('msgIn').addEventListener('keyup',()=>this._syncBtn());
 
         // Close emoji if click outside
         document.addEventListener('click', e=>{
