@@ -61,14 +61,13 @@ $finStmt = $db->prepare("SELECT COALESCE(SUM(total),0) AS total_billed, COALESCE
 $finStmt->execute([$id]); $fin = $finStmt->fetch();
 $outstanding = (float)$fin['total_billed'] - (float)$fin['total_paid'];
 
-// Payments for this client (confirmed, via direct client_id, invoice, or booking)
+// All payment records for this client (all statuses)
 $paymentsStmt = $db->prepare("
     SELECT p.*, i.invoice_number, i.id AS inv_id, sb.booking_number
     FROM payments p
     LEFT JOIN invoices i ON i.id = p.invoice_id
     LEFT JOIN service_bookings sb ON sb.id = p.service_booking_id
     WHERE (p.client_id = ? OR i.client_id = ? OR sb.client_id = ?)
-      AND p.status = 'confirmed'
     ORDER BY p.payment_date DESC, p.id DESC
 ");
 $paymentsStmt->execute([$id, $id, $id]);
@@ -447,6 +446,7 @@ include __DIR__ . '/../../includes/header.php';
                         <th>For</th>
                         <th>Method</th>
                         <th>Reference</th>
+                        <th>Status</th>
                         <th class="text-end">Amount</th>
                         <th class="text-center pe-3">Actions</th>
                     </tr>
@@ -454,8 +454,16 @@ include __DIR__ . '/../../includes/header.php';
                 <tbody>
                 <?php
                 $methodLabel = ['mpesa'=>'M-Pesa','bank'=>'Bank','cheque'=>'Cheque','cash'=>'Cash'];
-                foreach ($clientPayments as $pay): ?>
-                <tr>
+                $payStatusStyle = [
+                    'confirmed' => ['bg-success',  'Confirmed'],
+                    'pending'   => ['bg-warning text-dark', 'Pending'],
+                    'reversed'  => ['bg-danger',   'Reversed'],
+                ];
+                foreach ($clientPayments as $pay):
+                    [$psBadge, $psLabel] = $payStatusStyle[$pay['status']] ?? ['bg-secondary', ucfirst($pay['status'])];
+                    $rowOpacity = $pay['status'] === 'reversed' ? 'opacity-50' : '';
+                ?>
+                <tr class="<?= $rowOpacity ?>">
                     <td class="ps-3 text-muted small"><?= fmtDate($pay['payment_date']) ?></td>
                     <td class="fw-bold"><?= e($pay['payment_number']) ?></td>
                     <td class="small">
@@ -469,9 +477,12 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                     <td><span class="badge bg-secondary"><?= e($methodLabel[$pay['payment_method']] ?? $pay['payment_method']) ?></span></td>
                     <td class="small"><code><?= e($pay['reference_number'] ?? '—') ?></code></td>
-                    <td class="text-end fw-semibold text-success"><?= money((float)$pay['amount']) ?></td>
+                    <td><span class="badge <?= $psBadge ?>"><?= $psLabel ?></span></td>
+                    <td class="text-end fw-semibold <?= $pay['status'] === 'confirmed' ? 'text-success' : 'text-muted' ?>"><?= money((float)$pay['amount']) ?></td>
                     <td class="text-center pe-3">
+                        <?php if ($pay['status'] !== 'reversed'): ?>
                         <a href="<?= BASE_URL ?>/modules/payments/print.php?id=<?= $pay['id'] ?>" target="_blank" class="btn btn-xs btn-outline-success" title="Print Receipt"><i class="fa fa-print me-1"></i>Receipt</a>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>

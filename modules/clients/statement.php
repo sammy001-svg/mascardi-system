@@ -51,21 +51,34 @@ $invStmt = $db->prepare($invSql);
 $invStmt->execute($invParams);
 $invoices = $invStmt->fetchAll();
 
-// Payments in range (confirmed, linked to this client via invoice or booking)
+// Payments in range (confirmed, linked to this client via client_id, invoice, or booking)
 $paySql = "
     SELECT p.*, i.invoice_number, i.id AS inv_id, sb.booking_number
     FROM payments p
     LEFT JOIN invoices i ON i.id = p.invoice_id
     LEFT JOIN service_bookings sb ON sb.id = p.service_booking_id
-    WHERE (i.client_id = ? OR sb.client_id = ?) AND p.status = 'confirmed'
+    WHERE (p.client_id = ? OR i.client_id = ? OR sb.client_id = ?) AND p.status = 'confirmed'
 ";
-$payParams = [$id, $id];
+$payParams = [$id, $id, $id];
 if ($fromDate) { $paySql .= " AND DATE(p.payment_date) >= ?"; $payParams[] = $fromDate; }
 if ($toDate)   { $paySql .= " AND DATE(p.payment_date) <= ?"; $payParams[] = $toDate; }
 $paySql .= " ORDER BY p.payment_date ASC, p.id ASC";
 $payStmt = $db->prepare($paySql);
 $payStmt->execute($payParams);
 $payments = $payStmt->fetchAll();
+
+// All outstanding invoices for this client (regardless of date filter)
+$outStmt = $db->prepare("
+    SELECT i.*, c.make, c.model, c.chassis_number,
+           (i.total - i.amount_paid) AS balance_due
+    FROM invoices i
+    JOIN cars c ON c.id = i.car_id
+    WHERE i.client_id = ?
+      AND i.status NOT IN ('paid', 'cancelled')
+    ORDER BY i.date ASC
+");
+$outStmt->execute([$id]);
+$outstandingInvoices = $outStmt->fetchAll();
 
 // Merge transactions chronologically
 $transactions = [];
@@ -231,6 +244,59 @@ $periodLabel = ($fromDate || $toDate)
         </div>
     </div>
 
+    <!-- Outstanding / Pending Invoices -->
+    <?php if ($outstandingInvoices): ?>
+    <div class="mb-4 p-3 border border-warning rounded-3" style="background:#fffbeb">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="fw-bold" style="color:#92400e;font-size:13px">
+                <i class="fa fa-triangle-exclamation me-2 text-warning"></i>Pending / Outstanding Invoices
+            </div>
+            <span class="badge bg-warning text-dark"><?= count($outstandingInvoices) ?> invoice<?= count($outstandingInvoices) !== 1 ? 's' : '' ?> outstanding</span>
+        </div>
+        <table class="table table-sm mb-0 bg-white rounded" style="font-size:12px">
+            <thead style="background:#fef3c7">
+                <tr>
+                    <th class="ps-2">Invoice #</th>
+                    <th>Invoice Date</th>
+                    <th>Due Date</th>
+                    <th>Vehicle</th>
+                    <th class="text-end">Invoice Total</th>
+                    <th class="text-end">Amount Paid</th>
+                    <th class="text-end">Balance Due</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php
+            $totalOutstanding = 0;
+            foreach ($outstandingInvoices as $oi):
+                $balDue = (float)$oi['balance_due'];
+                $totalOutstanding += $balDue;
+                $overdue = $oi['due_date'] && $oi['due_date'] < date('Y-m-d');
+            ?>
+            <tr <?= $overdue ? 'style="background:#fff5f5"' : '' ?>>
+                <td class="ps-2 fw-medium"><?= e($oi['invoice_number']) ?></td>
+                <td><?= fmtDate($oi['date']) ?></td>
+                <td class="<?= $overdue ? 'text-danger fw-semibold' : '' ?>"><?= $oi['due_date'] ? fmtDate($oi['due_date']) : '—' ?><?= $overdue ? ' <span class="badge bg-danger ms-1" style="font-size:9px">Overdue</span>' : '' ?></td>
+                <td><?= e($oi['make'] . ' ' . $oi['model']) ?><div class="text-muted" style="font-size:10px"><?= e($oi['chassis_number']) ?></div></td>
+                <td class="text-end"><?= number_format((float)$oi['total'], 2) ?></td>
+                <td class="text-end text-success"><?= number_format((float)$oi['amount_paid'], 2) ?></td>
+                <td class="text-end fw-bold text-danger"><?= number_format($balDue, 2) ?></td>
+                <td><?= statusBadge($oi['status']) ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+            <tfoot>
+                <tr style="background:#fee2e2">
+                    <td colspan="6" class="ps-2 fw-bold text-danger">Total Outstanding</td>
+                    <td class="text-end fw-bold text-danger" style="font-size:13px"><?= number_format($totalOutstanding, 2) ?></td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <?php endif; ?>
+
     <!-- Transactions Table -->
     <table class="table table-bordered" style="font-size:12.5px">
         <thead style="background:#1e293b;color:#fff">
@@ -258,8 +324,26 @@ $periodLabel = ($fromDate || $toDate)
             </tr>
             <?php endif; ?>
 
-            <?php foreach ($transactions as $tx): ?>
-            <tr class="<?= $tx['type'] === 'invoice' ? 'tx-invoice' : 'tx-payment' ?>">
+            <?php foreach ($transactions as $tx):
+                if ($tx['type'] === 'invoice') {
+                    $rowBg = match($tx['status'] ?? '') {
+                        'overdue'  => 'style="background:#fff5f5"',
+                        'partial'  => 'style="background:#fffbeb"',
+                        default    => '',
+                    };
+                    $statusStyle = match($tx['status'] ?? '') {
+                        'paid'    => 'background:#dcfce7;color:#166534',
+                        'partial' => 'background:#fef3c7;color:#92400e',
+                        'overdue' => 'background:#fee2e2;color:#dc2626',
+                        'sent'    => 'background:#dbeafe;color:#1d4ed8',
+                        default   => 'background:#f1f5f9;color:#475569',
+                    };
+                } else {
+                    $rowBg = '';
+                    $statusStyle = '';
+                }
+            ?>
+            <tr class="<?= $tx['type'] === 'invoice' ? 'tx-invoice' : 'tx-payment' ?>" <?= $rowBg ?>>
                 <td class="ps-2 text-muted"><?= fmtDate($tx['date']) ?></td>
                 <td class="fw-medium" style="font-size:12px">
                     <?= e($tx['ref']) ?>
@@ -270,7 +354,7 @@ $periodLabel = ($fromDate || $toDate)
                 <td>
                     <?= e($tx['description']) ?>
                     <?php if ($tx['type'] === 'invoice'): ?>
-                    <span class="badge bg-light text-dark border ms-1" style="font-size:10px"><?= ucwords(str_replace('_',' ',$tx['status'])) ?></span>
+                    <span class="badge ms-1" style="font-size:10px;<?= $statusStyle ?>"><?= ucwords(str_replace('_',' ',$tx['status'])) ?></span>
                     <?php elseif ($tx['type'] === 'payment'): ?>
                     <span class="badge ms-1" style="font-size:10px;background:#dcfce7;color:#166534">
                         <?= ucfirst($tx['method'] ?? '') ?>
@@ -324,6 +408,50 @@ $periodLabel = ($fromDate || $toDate)
             <?php endif; ?>
         </div>
     </div>
+
+    <!-- Payment Receipts Summary -->
+    <?php if ($payments): ?>
+    <div class="mt-4">
+        <div class="fw-bold mb-2" style="font-size:12px;text-transform:uppercase;color:#166534;letter-spacing:.05em">
+            <i class="fa fa-receipt me-1"></i>Payment Receipts
+        </div>
+        <table class="table table-bordered" style="font-size:12px">
+            <thead style="background:#166534;color:#fff">
+                <tr>
+                    <th class="ps-2" style="width:90px">Date</th>
+                    <th style="width:130px">Receipt #</th>
+                    <th>Description</th>
+                    <th style="width:100px">Method</th>
+                    <th class="text-end" style="width:130px">Amount (KES)</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php
+            $methodLabel = ['mpesa'=>'M-Pesa','bank'=>'Bank','cheque'=>'Cheque','cash'=>'Cash'];
+            foreach ($payments as $pay): ?>
+            <tr class="tx-payment">
+                <td class="ps-2 text-muted"><?= fmtDate($pay['payment_date']) ?></td>
+                <td class="fw-medium"><?= e($pay['payment_number']) ?></td>
+                <td>
+                    <?= e($pay['invoice_number'] ? 'Payment for ' . $pay['invoice_number'] : ($pay['booking_number'] ? 'Booking ' . $pay['booking_number'] : ($pay['description'] ?? 'Payment'))) ?>
+                    <?php if ($pay['reference_number']): ?>
+                    <span class="text-muted" style="font-size:10.5px"> — Ref: <?= e($pay['reference_number']) ?></span>
+                    <?php endif; ?>
+                </td>
+                <td><?= e($methodLabel[$pay['payment_method']] ?? $pay['payment_method']) ?></td>
+                <td class="text-end fw-semibold text-success"><?= number_format((float)$pay['amount'], 2) ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+            <tfoot>
+                <tr style="background:#dcfce7">
+                    <td colspan="4" class="ps-2 fw-bold text-success">Total Receipts</td>
+                    <td class="text-end fw-bold text-success" style="font-size:13px"><?= number_format($periodPaid, 2) ?></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <?php endif; ?>
 
     <!-- Signature area -->
     <div class="row mt-5 g-4" style="font-size:11px;color:#334155">
