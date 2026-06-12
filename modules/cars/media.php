@@ -82,7 +82,7 @@ include __DIR__ . '/../../includes/header.php';
                     <div class="mb-3">
                         <label class="form-label">Select Image</label>
                         <input type="file" name="photo" class="form-control" accept="image/*" required>
-                        <div class="form-text text-muted">Max 5MB. Allowed: JPG, PNG, WEBP.</div>
+                        <div class="form-text text-muted">Max 20MB. Allowed: JPG, PNG, WEBP.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Caption (optional)</label>

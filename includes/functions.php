@@ -174,7 +174,7 @@ function logActivity(string $action, string $module, ?int $recordId = null, ?str
 /**
  * Handle file upload with basic security checks
  */
-function handleUpload(array $file, string $targetDir, array $allowedTypes = ['jpg', 'jpeg', 'png', 'webp'], int $maxSize = 5242880): string {
+function handleUpload(array $file, string $targetDir, array $allowedTypes = ['jpg', 'jpeg', 'png', 'webp'], int $maxSize = 20971520): string {
     if ($file['error'] !== UPLOAD_ERR_OK) {
         $uploadErrors = [
             UPLOAD_ERR_INI_SIZE   => 'The file exceeds the server\'s maximum upload size (' . ini_get('upload_max_filesize') . '). Ask your administrator to increase upload_max_filesize in php.ini.',
