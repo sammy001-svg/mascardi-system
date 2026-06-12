@@ -6,19 +6,6 @@ canAccess('quick_assessments') || die('Access denied.');
 $id = (int)($_GET['id'] ?? 0);
 $db = getDB();
 
-// Handle Check In to Workshop
-if (isset($_GET['action']) && $_GET['action'] === 'check_in') {
-    $tmp = $db->prepare("SELECT car_id FROM quick_assessments WHERE id = ?");
-    $tmp->execute([$id]);
-    $carId = $tmp->fetchColumn();
-    if ($carId) {
-        $db->prepare("UPDATE cars SET status = 'in_workshop' WHERE id = ?")->execute([$carId]);
-        logActivity('update', 'cars', $carId, 'Checked in to workshop via quick assessment #' . $id);
-        setFlash('success', 'Vehicle checked in to Workshop.');
-    }
-    redirect(BASE_URL . '/modules/quick_assessments/view.php?id=' . $id);
-}
-
 $stmt = $db->prepare("
     SELECT qa.*,
            sb.booking_number,
@@ -37,6 +24,32 @@ $a = $stmt->fetch();
 if (!$a) {
     setFlash('danger', 'Assessment not found.');
     redirect('index.php');
+}
+
+// Resolve which car record to check in — direct link or match by registration
+$workshopCarId     = $a['car_id'] ?: null;
+$workshopCarStatus = $a['car_status'] ?? null;
+
+if (!$workshopCarId && !empty($a['car_registration'])) {
+    $lk = $db->prepare("SELECT id, status FROM cars WHERE registration_number = ? LIMIT 1");
+    $lk->execute([$a['car_registration']]);
+    $lkRow = $lk->fetch();
+    if ($lkRow) {
+        $workshopCarId     = (int)$lkRow['id'];
+        $workshopCarStatus = $lkRow['status'];
+    }
+}
+
+// Handle Check In to Workshop
+if (isset($_GET['action']) && $_GET['action'] === 'check_in') {
+    if ($workshopCarId) {
+        $db->prepare("UPDATE cars SET status = 'in_workshop' WHERE id = ?")->execute([$workshopCarId]);
+        logActivity('update', 'cars', $workshopCarId, 'Checked in to workshop via quick assessment #' . $id);
+        setFlash('success', 'Vehicle checked in to Workshop.');
+    } else {
+        setFlash('error', 'No matching vehicle record found. Please link this assessment to a car first.');
+    }
+    redirect(BASE_URL . '/modules/quick_assessments/view.php?id=' . $id);
 }
 
 $pageTitle = "QA — {$a['assessment_number']}";
@@ -71,18 +84,16 @@ $checkItems = [
         <div class="text-muted small">Recorded on <?= fmtDate($a['assessment_date']) ?></div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <?php if ($a['car_id']): ?>
-            <?php if ($a['car_status'] === 'in_workshop'): ?>
-            <span class="btn btn-sm btn-warning text-dark pe-none">
-                <i class="fa fa-screwdriver-wrench me-1"></i>In Workshop
-            </span>
-            <?php else: ?>
-            <a href="view.php?id=<?= $id ?>&action=check_in"
-               class="btn btn-sm btn-warning text-dark"
-               onclick="return confirm('Check this vehicle into the Workshop?')">
-                <i class="fa fa-screwdriver-wrench me-1"></i>Check In to Workshop
-            </a>
-            <?php endif; ?>
+        <?php if ($workshopCarStatus === 'in_workshop'): ?>
+        <span class="btn btn-sm btn-warning text-dark pe-none">
+            <i class="fa fa-screwdriver-wrench me-1"></i>In Workshop
+        </span>
+        <?php elseif ($workshopCarId): ?>
+        <a href="view.php?id=<?= $id ?>&action=check_in"
+           class="btn btn-sm btn-warning text-dark"
+           onclick="return confirm('Check this vehicle into the Workshop?')">
+            <i class="fa fa-screwdriver-wrench me-1"></i>Check In to Workshop
+        </a>
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
         <a href="print.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-primary"><i class="fa fa-print me-1"></i>Print</a>
