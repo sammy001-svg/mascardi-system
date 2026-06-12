@@ -6,10 +6,24 @@ canAccess('quick_assessments') || die('Access denied.');
 $id = (int)($_GET['id'] ?? 0);
 $db = getDB();
 
+// Handle Check In to Workshop
+if (isset($_GET['action']) && $_GET['action'] === 'check_in') {
+    $tmp = $db->prepare("SELECT car_id FROM quick_assessments WHERE id = ?");
+    $tmp->execute([$id]);
+    $carId = $tmp->fetchColumn();
+    if ($carId) {
+        $db->prepare("UPDATE cars SET status = 'in_workshop' WHERE id = ?")->execute([$carId]);
+        logActivity('update', 'cars', $carId, 'Checked in to workshop via quick assessment #' . $id);
+        setFlash('success', 'Vehicle checked in to Workshop.');
+    }
+    redirect(BASE_URL . '/modules/quick_assessments/view.php?id=' . $id);
+}
+
 $stmt = $db->prepare("
     SELECT qa.*,
            sb.booking_number,
            c.chassis_number,
+           c.status AS car_status,
            u.name AS creator_name
     FROM quick_assessments qa
     LEFT JOIN service_bookings sb ON sb.id = qa.service_booking_id
@@ -56,7 +70,20 @@ $checkItems = [
         <h5 class="mb-0">Quick Assessment: <?= e($a['assessment_number']) ?></h5>
         <div class="text-muted small">Recorded on <?= fmtDate($a['assessment_date']) ?></div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
+        <?php if ($a['car_id']): ?>
+            <?php if ($a['car_status'] === 'in_workshop'): ?>
+            <span class="btn btn-sm btn-warning text-dark pe-none">
+                <i class="fa fa-screwdriver-wrench me-1"></i>In Workshop
+            </span>
+            <?php else: ?>
+            <a href="view.php?id=<?= $id ?>&action=check_in"
+               class="btn btn-sm btn-warning text-dark"
+               onclick="return confirm('Check this vehicle into the Workshop?')">
+                <i class="fa fa-screwdriver-wrench me-1"></i>Check In to Workshop
+            </a>
+            <?php endif; ?>
+        <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
         <a href="print.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-primary"><i class="fa fa-print me-1"></i>Print</a>
         <?php if (canEditDelete()): ?>
