@@ -118,11 +118,27 @@
             <i class="fa fa-moon" id="themeIcon"></i>
         </button>
 
+        <?php
+        // Fetch profile image for topbar (add column silently if missing)
+        try { $__profileImg = $__user['profile_image'] ?? null; } catch (\Throwable $_) { $__profileImg = null; }
+        if (!isset($__profileImg)) {
+            try {
+                $__pRow = getDB()->prepare("SELECT profile_image FROM users WHERE id=?");
+                $__pRow->execute([$__user['id']]);
+                $__profileImg = $__pRow->fetchColumn() ?: null;
+            } catch (\Throwable $_) { $__profileImg = null; }
+        }
+        ?>
         <!-- User dropdown -->
         <div class="dropdown">
             <button type="button" class="topbar-user dropdown-toggle"
                     id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <?php if ($__profileImg): ?>
+                <img src="<?= BASE_URL ?>/uploads/profiles/<?= e($__profileImg) ?>"
+                     class="topbar-avatar rounded-circle" style="object-fit:cover;padding:0">
+                <?php else: ?>
                 <div class="topbar-avatar"><?= strtoupper(substr($__user['name'], 0, 1)) ?></div>
+                <?php endif; ?>
                 <div class="d-none d-md-block">
                     <div class="topbar-username"><?= e($__user['name']) ?></div>
                     <div class="topbar-userrole"><?= ucwords(str_replace('_',' ',e($__user['role']))) ?></div>
@@ -132,20 +148,21 @@
             <ul class="dropdown-menu dropdown-menu-end topbar-dropdown" aria-labelledby="userDropdown">
                 <li>
                     <div class="dd-user-info">
+                        <?php if ($__profileImg): ?>
+                        <img src="<?= BASE_URL ?>/uploads/profiles/<?= e($__profileImg) ?>"
+                             class="rounded-circle border mb-2"
+                             style="width:48px;height:48px;object-fit:cover;display:block;margin:0 auto 8px">
+                        <?php endif; ?>
                         <div class="dd-user-name"><?= e($__user['name']) ?></div>
                         <div class="dd-user-role"><?= ucwords(str_replace('_',' ',e($__user['role']))) ?></div>
                     </div>
                 </li>
-                <?php if (hasRole('admin')): ?>
-                <li><a class="dropdown-item" href="<?= BASE_URL ?>/modules/users/index.php">
+                <li><a class="dropdown-item" href="<?= BASE_URL ?>/profile.php">
                     <i class="fa fa-user-circle"></i>My Profile
                 </a></li>
+                <?php if (hasRole('admin')): ?>
                 <li><a class="dropdown-item" href="<?= BASE_URL ?>/modules/settings/index.php">
                     <i class="fa fa-gear"></i>System Settings
-                </a></li>
-                <?php else: ?>
-                <li><a class="dropdown-item" href="<?= BASE_URL ?>/modules/users/index.php">
-                    <i class="fa fa-user-circle"></i>My Profile
                 </a></li>
                 <?php endif; ?>
                 <li><hr class="dropdown-divider"></li>

@@ -21,13 +21,13 @@ include __DIR__ . '/../../includes/header.php';
 ?>
 <style>
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   CHAT MODULE â€” injected after header (header.php has no extraCss hook)
+   CHAT MODULE — injected after header (header.php has no extraCss hook)
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .page-body { padding: 0 !important; overflow: hidden !important; }
 
 /* Chat page: strip ALL stacking-context-creating properties from page-body
    so Bootstrap's backdrop (appended to <body>) cannot paint over the modal.
-   transform, filter, will-change:transform, opacity<1, isolation â€” any of
+   transform, filter, will-change:transform, opacity<1, isolation — any of
    these on an ancestor would trap the modal inside a nested context.        */
 .page-body {
     padding: 0 !important;
@@ -236,7 +236,7 @@ body > .modal-backdrop,
     background: #fff;
     border-radius: 2px 10px 10px 10px;
 }
-/* Grouped bubbles (not first in group) â€” no sharp corner change needed */
+/* Grouped bubbles (not first in group) — no sharp corner change needed */
 .msg-row.s.group-mid .bubble,
 .msg-row.s.group-end .bubble { border-radius: 10px 10px 2px 10px; }
 .msg-row.r.group-mid .bubble,
@@ -252,7 +252,7 @@ body > .modal-backdrop,
     font-size: 11px; color: #8696a0; white-space: nowrap;
 }
 .b-tick { color: #53bdeb; font-size: 11px; }
-/* Hide meta on non-last grouped messages â€” show only on last */
+/* Hide meta on non-last grouped messages — show only on last */
 .msg-row:not(.group-last):not(.group-solo) .b-meta { display: none; }
 .msg-row:not(.group-last):not(.group-solo) .bubble  { padding-bottom: 8px; }
 
@@ -591,7 +591,7 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
         <div class="cp-search">
             <div class="cp-si">
                 <i class="fa fa-magnifying-glass"></i>
-                <input type="text" id="convSearch" placeholder="Search conversationsâ€¦" autocomplete="off">
+                <input type="text" id="convSearch" placeholder="Search conversations…" autocomplete="off">
             </div>
         </div>
         <div class="conv-list" id="convList"></div>
@@ -621,7 +621,7 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
                 </button>
                 <div class="ch-av" id="chAv" style="background:#128c7e">â€“</div>
                 <div class="ch-info">
-                    <div class="ch-name" id="chName">â€”</div>
+                    <div class="ch-name" id="chName">—</div>
                     <div class="ch-sub"  id="chSub"></div>
                     <div class="ch-typing" id="chTyping"><span id="chTypingName"></span><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
                 </div>
@@ -685,7 +685,7 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
 
                     <div class="bar-center">
                         <div class="bar-input" id="msgIn"
-                             contenteditable="true" data-ph="Type a messageâ€¦"
+                             contenteditable="true" data-ph="Type a message…"
                              role="textbox" aria-multiline="true"></div>
                         <div class="rec-bar" id="recBar" style="display:none">
                             <div class="rec-dot"></div>
@@ -714,8 +714,8 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
     <video class="call-lv" id="localVid"  autoplay muted playsinline style="display:none"></video>
     <div class="call-body">
         <div class="call-avatar" id="callAv" style="background:#128c7e">â€“</div>
-        <div class="call-name"  id="callName">â€”</div>
-        <div class="call-stat"  id="callStat">Callingâ€¦</div>
+        <div class="call-name"  id="callName">—</div>
+        <div class="call-stat"  id="callStat">Calling…</div>
         <div class="call-timer" id="callTimer"></div>
         <div class="call-btns">
             <button class="call-btn cb-mute"   id="btnMute"  ><i class="fa fa-microphone"></i></button>
@@ -1033,7 +1033,7 @@ const Chat = window.Chat = {
         hide(el('scrollFab'));
 
         el('chatMsgs').innerHTML = `<div style="text-align:center;color:#8696a0;padding:40px 0;font-size:13px">
-            <i class="fa fa-spinner fa-spin me-1"></i> Loading messagesâ€¦</div>`;
+            <i class="fa fa-spinner fa-spin me-1"></i> Loading messages…</div>`;
 
         clearInterval(this.pollTimer);
         await this._fetchMsgs(true);
@@ -1211,7 +1211,7 @@ const Chat = window.Chat = {
         const tick    = sent ? `<span class="b-tick"><i class="fa fa-check-double"></i></span>` : '';
         const time    = fmtTime(m.created_at);
 
-        // Call / system â€” centered chip, no grouping
+        // Call / system — centered chip, no grouping
         if (m.type==='call'||m.type==='system') {
             this.prevSenderId = null; this.prevMsgTs = null;
             const ico = m.type==='call'?(m.content?.includes('video')?'fa-video':'fa-phone'):'fa-circle-info';
@@ -1488,7 +1488,7 @@ const Chat = window.Chat = {
         if (!this.convId||!this.calleeId) return;
         this.pendingIce=[];
         this._showCall(this.convName, this.convColor, type, false);
-        el('callStat').textContent='Callingâ€¦';
+        el('callStat').textContent='Calling…';
         try {
             this.localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:type==='video'});
             if (type==='video') { const lv=el('localVid'); lv.srcObject=this.localStream; show(lv); show(el('btnCam')); }
@@ -1824,7 +1824,7 @@ const Chat = window.Chat = {
             if (d.incoming&&d.call&&!this.activeCallId) {
                 const c=d.call; this.activeCallId=parseInt(c.id); this.pendingIce=[];
                 this._showCall(c.caller_name, avatarColor(c.caller_id), c.call_type, true);
-                el('callStat').textContent=`Incoming ${c.call_type} callâ€¦`;
+                el('callStat').textContent=`Incoming ${c.call_type} call…`;
                 pingSound();
             }
         } catch {}
@@ -2017,7 +2017,7 @@ document.addEventListener('DOMContentLoaded', () => Chat.init());
 </script>
 
 <?php
-// NEW CHAT MODAL â€” rendered as direct child of <body> (via footer.php $extraModal hook)
+// NEW CHAT MODAL — rendered as direct child of <body> (via footer.php $extraModal hook)
 // This places it OUTSIDE the .page-body stacking context, fixing the black-overlay bug.
 ob_start(); ?>
 <!-- â”€â”€ NEW CHAT MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
