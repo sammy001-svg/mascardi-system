@@ -2064,7 +2064,7 @@ ob_start(); ?>
                          data-uid="<?= (int)$u['id'] ?>"
                          data-uname="<?= e($u['name']) ?>"
                          data-ucolor="<?= e($color) ?>"
-                         onclick="var _i=this.closest('.up-item');Chat.startDirect(_i.dataset.uid,_i.dataset.uname,_i.dataset.ucolor)"
+                         data-bs-dismiss="modal"
                          style="cursor:pointer">
                         <div class="up-av" style="background:<?= $color ?>"><?= e($init) ?></div>
                         <div>
@@ -2168,6 +2168,60 @@ ob_start(); ?>
     </div>
 </div>
 
+<script>
+(function () {
+    var _pendingUser = null; // {uid, uname, ucolor} set when user item is clicked
+
+    // Capture which user was clicked before the modal closes
+    document.getElementById('upList').addEventListener('click', function (e) {
+        var item = e.target.closest('.up-item');
+        if (!item) return;
+        _pendingUser = {
+            uid:    item.getAttribute('data-uid'),
+            uname:  item.getAttribute('data-uname'),
+            ucolor: item.getAttribute('data-ucolor')
+        };
+    });
+
+    // After modal fully closes, open the conversation
+    document.getElementById('newChatModal').addEventListener('hidden.bs.modal', function () {
+        if (!_pendingUser) return;
+        var p = _pendingUser;
+        _pendingUser = null;
+
+        // Show loading state in the chat panel immediately
+        var chatActive  = document.getElementById('chatActive');
+        var chatWelcome = document.getElementById('chatWelcome');
+        if (chatWelcome) chatWelcome.style.display = 'none';
+        if (chatActive)  { chatActive.style.display = 'flex'; chatActive.style.flexDirection = 'column'; }
+        var msgsBox = document.getElementById('chatMsgs');
+        if (msgsBox) msgsBox.innerHTML = '<div style="text-align:center;color:#8696a0;padding:40px 0"><i class="fa fa-spinner fa-spin me-2"></i>Opening chat…</div>';
+
+        // Call API  (BASE is the JS const defined earlier in this page's <script> block)
+        var apiBase = (typeof BASE !== 'undefined') ? BASE : '';
+        fetch(apiBase + '/modules/chat/api/conversations.php', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ user_id: parseInt(p.uid) })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (d.conversation_id && window.Chat) {
+                window.Chat.loadConvs().then(function () {
+                    window.Chat.openConv(d.conversation_id, p.uname, p.ucolor, p.uid, 'direct');
+                });
+            } else {
+                var msg = d.error || 'Could not open chat. Please visit /modules/chat/setup.php first.';
+                if (msgsBox) msgsBox.innerHTML = '<div style="text-align:center;color:#dc2626;padding:40px 16px"><i class="fa fa-triangle-exclamation me-2"></i>' + msg + '</div>';
+            }
+        })
+        .catch(function (err) {
+            console.error('startDirect fetch error', err);
+            if (msgsBox) msgsBox.innerHTML = '<div style="text-align:center;color:#dc2626;padding:40px 16px"><i class="fa fa-triangle-exclamation me-2"></i>Connection error. Please refresh and try again.</div>';
+        });
+    });
+}());
+</script>
 <?php $extraModal = ob_get_clean(); ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
