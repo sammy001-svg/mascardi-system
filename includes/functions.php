@@ -176,7 +176,17 @@ function logActivity(string $action, string $module, ?int $recordId = null, ?str
  */
 function handleUpload(array $file, string $targetDir, array $allowedTypes = ['jpg', 'jpeg', 'png', 'webp'], int $maxSize = 5242880): string {
     if ($file['error'] !== UPLOAD_ERR_OK) {
-        throw new Exception("Upload error: " . $file['error']);
+        $uploadErrors = [
+            UPLOAD_ERR_INI_SIZE   => 'The file exceeds the server\'s maximum upload size (' . ini_get('upload_max_filesize') . '). Ask your administrator to increase upload_max_filesize in php.ini.',
+            UPLOAD_ERR_FORM_SIZE  => 'The file exceeds the form\'s maximum size limit.',
+            UPLOAD_ERR_PARTIAL    => 'The file was only partially uploaded. Please try again.',
+            UPLOAD_ERR_NO_FILE    => 'No file was selected for upload.',
+            UPLOAD_ERR_NO_TMP_DIR => 'The server temporary folder is missing. Contact your administrator.',
+            UPLOAD_ERR_CANT_WRITE => 'Failed to write the file to disk. Check server permissions.',
+            UPLOAD_ERR_EXTENSION  => 'A PHP extension stopped the upload.',
+        ];
+        $msg = $uploadErrors[$file['error']] ?? 'Unknown upload error (code ' . $file['error'] . ').';
+        throw new Exception($msg);
     }
 
     if ($file['size'] > $maxSize) {
