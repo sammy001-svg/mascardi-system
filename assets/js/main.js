@@ -122,6 +122,7 @@ $(function () {
         $('.datatable').each(function () {
             $(this).DataTable({
                 pageLength: 25,
+                order: [],
                 language: {
                     search: '',
                     searchPlaceholder: 'Search...',
