@@ -24,7 +24,7 @@ $sql = "SELECT s.*, (SELECT COUNT(*) FROM lpo WHERE supplier_id=s.id) AS lpo_cou
                (SELECT COUNT(*) FROM inventory WHERE supplier_id=s.id) AS parts_count
         FROM suppliers s"
     . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
-    . " ORDER BY s.name ASC";
+    . " ORDER BY s.created_at DESC";
 
 $stmt = $db->prepare($sql);
 $stmt->execute($params);

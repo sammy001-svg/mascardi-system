@@ -33,7 +33,7 @@ $sql = "SELECT i.*, s.name AS supplier_name
         FROM inventory i
         LEFT JOIN suppliers s ON s.id = i.supplier_id"
     . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
-    . " ORDER BY i.part_name ASC";
+    . " ORDER BY i.created_at DESC";
 
 $stmt = $db->prepare($sql);
 $stmt->execute($params);

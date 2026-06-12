@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../includes/functions.php';
 $pageTitle = 'Mechanics';
 $db = getDB();
-$mechanics = $db->query("SELECT m.*, COUNT(j.id) AS jobs FROM mechanics m LEFT JOIN workshop_jobs j ON j.mechanic_id=m.id GROUP BY m.id ORDER BY m.name")->fetchAll();
+$mechanics = $db->query("SELECT m.*, COUNT(j.id) AS jobs FROM mechanics m LEFT JOIN workshop_jobs j ON j.mechanic_id=m.id GROUP BY m.id ORDER BY m.created_at DESC")->fetchAll();
 include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">

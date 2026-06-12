@@ -14,7 +14,7 @@ if (isset($_GET['toggle'])) {
     redirect('index.php');
 }
 
-$locations = $db->query("SELECT l.*, (SELECT COUNT(*) FROM cars WHERE location_id = l.id) AS car_count FROM locations l ORDER BY l.name ASC")->fetchAll();
+$locations = $db->query("SELECT l.*, (SELECT COUNT(*) FROM cars WHERE location_id = l.id) AS car_count FROM locations l ORDER BY l.created_at DESC")->fetchAll();
 
 include __DIR__ . '/../../includes/header.php';
 ?>

@@ -15,7 +15,7 @@ $clients = $db->query("
     LEFT JOIN invoices i ON i.client_id = c.id
     LEFT JOIN service_bookings sb ON sb.client_id = c.id
     GROUP BY c.id
-    ORDER BY c.name
+    ORDER BY c.created_at DESC
 ")->fetchAll();
 
 include __DIR__ . '/../../includes/header.php';

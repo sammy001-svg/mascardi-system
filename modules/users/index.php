@@ -7,7 +7,7 @@ $users = $db->query("SELECT u.*,
     CASE u.linked_type WHEN 'mechanic' THEN m.name ELSE NULL END AS linked_name
     FROM users u
     LEFT JOIN mechanics m ON m.id = u.linked_id AND u.linked_type = 'mechanic'
-    ORDER BY u.role, u.name")->fetchAll();
+    ORDER BY u.created_at DESC")->fetchAll();
 
 include __DIR__ . '/../../includes/header.php';
 ?>

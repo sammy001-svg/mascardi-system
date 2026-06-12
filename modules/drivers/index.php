@@ -4,7 +4,7 @@ requireLogin();
 canAccess('drivers') || die('Access denied.');
 $pageTitle = 'Drivers';
 $db = getDB();
-$drivers = $db->query("SELECT * FROM drivers ORDER BY name")->fetchAll();
+$drivers = $db->query("SELECT * FROM drivers ORDER BY created_at DESC")->fetchAll();
 include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
