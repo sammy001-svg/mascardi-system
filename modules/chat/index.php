@@ -1337,19 +1337,22 @@ const Chat = {
 
     /* â”€â”€ Start direct conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async startDirect(uid, uname, ucolor) {
-        const modal   = bootstrap.Modal.getOrCreateInstance(el('newChatModal'));
         const modalEl = el('newChatModal');
+        const modal   = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
 
-        // Resolve once backdrop is fully gone so it doesn't cover the chat panel
-        const hidden = new Promise(res =>
-            modalEl.addEventListener('hidden.bs.modal', res, { once: true })
-        );
-        modal.hide();
+        // Promise that resolves once the modal finishes closing (or after 600 ms fallback)
+        const hidden = modalEl
+            ? new Promise(res => {
+                const t = setTimeout(res, 600); // fallback in case event never fires
+                modalEl.addEventListener('hidden.bs.modal', () => { clearTimeout(t); res(); }, { once: true });
+              })
+            : Promise.resolve();
+
+        if (modal) modal.hide();
 
         try {
-            // Fire API in parallel with the modal fade animation (~300 ms)
             const d = await apiPost('conversations.php', { user_id: parseInt(uid) });
-            await hidden; // ensure backdrop removed before opening chat
+            await hidden;
 
             if (d.conversation_id) {
                 await this.loadConvs();
@@ -2056,11 +2059,16 @@ ob_start(); ?>
                     $init  = mb_strtoupper(mb_substr($u['name'], 0, 1));
                     $color = $palette[$u['id'] % count($palette)];
                     $rl    = $roleLabels[$u['role']] ?? ucfirst($u['role']);
+                    $jsUid   = (int)$u['id'];
+                    $jsName  = json_encode($u['name']);
+                    $jsColor = json_encode($color);
                 ?>
                     <div class="up-item"
-                         data-uid="<?= (int)$u['id'] ?>"
+                         data-uid="<?= $jsUid ?>"
                          data-uname="<?= e($u['name']) ?>"
-                         data-ucolor="<?= e($color) ?>">
+                         data-ucolor="<?= e($color) ?>"
+                         onclick="Chat.startDirect(<?= $jsUid ?>,<?= $jsName ?>,<?= $jsColor ?>)"
+                         style="cursor:pointer">
                         <div class="up-av" style="background:<?= $color ?>"><?= e($init) ?></div>
                         <div>
                             <div class="up-name"><?= e($u['name']) ?></div>
