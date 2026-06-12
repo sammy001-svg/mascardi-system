@@ -40,31 +40,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['send_email'])){
     redirect(BASE_URL.'/modules/invoices/view.php?id='.$id);
 }
 
-// Record payment
-if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['payment_amount'])){
-    (canWrite('payments') || canWrite('invoices')) || die('Permission denied.');
-    $amount=(float)$_POST['payment_amount'];
-    $newPaid=$inv['amount_paid']+$amount;
-    $newStatus=$newPaid>=$inv['total']?'paid':($newPaid>0?'partial':'unpaid');
-    $db->prepare("UPDATE invoices SET amount_paid=?, status=? WHERE id=?")->execute([$newPaid,$newStatus,$id]);
-    // Receipt email
-    if ($inv['customer_email'] && filter_var($inv['customer_email'],FILTER_VALIDATE_EMAIL)) {
-        $subj = 'Payment Received — ' . $inv['invoice_number'];
-        $balDue = max(0, $inv['total'] - $newPaid);
-        $body = "<p>Dear " . e($inv['customer_name'] ?: 'Customer') . ",</p>
-                <p>We have received your payment of <strong>" . money($amount) . "</strong> against invoice <strong>" . e($inv['invoice_number']) . "</strong>.</p>
-                <table class='data'>
-                  <tr><th>Invoice No.</th><td>" . e($inv['invoice_number']) . "</td></tr>
-                  <tr><th>Invoice Total</th><td>" . money((float)$inv['total']) . "</td></tr>
-                  <tr><th>Amount Paid</th><td>" . money($newPaid) . "</td></tr>
-                  <tr><th>Balance Due</th><td>" . ($balDue > 0 ? money($balDue) : '<span style=\"color:#16a34a\">Fully Paid</span>') . "</td></tr>
-                </table>
-                <p>Thank you for your payment!</p>";
-        sendMail($inv['customer_email'], $inv['customer_name'] ?: 'Customer', $subj, mailTemplate($subj, $body), 'invoice', $id);
-    }
-    setFlash('success','Payment of '.money($amount).' recorded.');
-    redirect('view.php?id='.$id);
-}
+
 if(isset($_GET['status'])){
     canWrite('invoices') || die('Permission denied.');
     $db->prepare("UPDATE invoices SET status=? WHERE id=?")->execute([$_GET['status'],$id]);
@@ -120,27 +96,6 @@ include __DIR__ . '/../../includes/header.php';
             </table>
         </div></div>
 
-        <!-- Record payment -->
-        <?php if($inv['status']!=='paid' && $inv['status']!=='cancelled' && (canWrite('payments') || canWrite('invoices'))): ?>
-        <div class="card"><div class="card-header"><i class="fa fa-money-bill-wave me-2"></i>Record Payment</div><div class="card-body">
-            <form method="POST">
-                <div class="mb-2"><label class="form-label small">Amount</label><input type="number" name="payment_amount" class="form-control" min="0.01" step="0.01" max="<?= $inv['total']-$inv['amount_paid'] ?>" value="<?= $inv['total']-$inv['amount_paid'] ?>" required></div>
-                <button type="submit" class="btn btn-success w-100"><i class="fa fa-check me-1"></i>Record Manual Payment</button>
-            </form>
-            <?php if(getSetting('mpesa_consumer_key','')): ?>
-            <hr class="my-3">
-            <div class="mb-1"><small class="text-muted fw-semibold"><i class="fa fa-mobile-screen-button text-success me-1"></i>M-Pesa STK Push</small></div>
-            <div class="input-group mb-2">
-                <span class="input-group-text"><i class="fa fa-phone"></i></span>
-                <input type="tel" id="mpesa_phone" class="form-control" placeholder="2547XXXXXXXX" value="<?= e($inv['customer_phone']??'') ?>">
-            </div>
-            <button type="button" class="btn btn-outline-success w-100" id="mpesaPushBtn" onclick="sendMpesaPush(<?= $id ?>,<?= $inv['total']-$inv['amount_paid'] ?>)">
-                <i class="fa fa-paper-plane me-1"></i>Request M-Pesa Payment
-            </button>
-            <div id="mpesaStatus" class="mt-2 small"></div>
-            <?php endif; ?>
-        </div></div>
-        <?php endif; ?>
     </div>
 
     <div class="col-lg-8">
@@ -191,37 +146,4 @@ include __DIR__ . '/../../includes/header.php';
     </div>
   </div>
 </div>
-<?php if(getSetting('mpesa_consumer_key','')): ?>
-<script>
-function sendMpesaPush(invoiceId, amount) {
-    var phone = document.getElementById('mpesa_phone').value.trim();
-    var status = document.getElementById('mpesaStatus');
-    var btn = document.getElementById('mpesaPushBtn');
-    if (!phone) { status.innerHTML = '<span class="text-danger">Please enter a phone number.</span>'; return; }
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending...';
-    status.innerHTML = '';
-    fetch('<?= BASE_URL ?>/modules/payments/mpesa_push.php', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'invoice_id=' + invoiceId + '&phone=' + encodeURIComponent(phone) + '&amount=' + amount
-    })
-    .then(r => r.json())
-    .then(data => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa fa-paper-plane me-1"></i>Request M-Pesa Payment';
-        if (data.success) {
-            status.innerHTML = '<span class="text-success"><i class="fa fa-check-circle me-1"></i>' + data.message + '</span>';
-        } else {
-            status.innerHTML = '<span class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>' + data.error + '</span>';
-        }
-    })
-    .catch(() => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa fa-paper-plane me-1"></i>Request M-Pesa Payment';
-        status.innerHTML = '<span class="text-danger">Network error. Please try again.</span>';
-    });
-}
-</script>
-<?php endif; ?>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
