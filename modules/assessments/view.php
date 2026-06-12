@@ -5,8 +5,22 @@ $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/assessments/index.php');
 $db = getDB();
 
+// Handle Check In to Workshop
+if (isset($_GET['action']) && $_GET['action'] === 'check_in') {
+    canWrite('cars') || die('Permission denied.');
+    $tmp = $db->prepare("SELECT car_id FROM car_assessments WHERE id = ?");
+    $tmp->execute([$id]);
+    $carId = $tmp->fetchColumn();
+    if ($carId) {
+        $db->prepare("UPDATE cars SET status = 'in_workshop' WHERE id = ?")->execute([$carId]);
+        logActivity('update', 'cars', $carId, 'Checked in to workshop via assessment #' . $id);
+        setFlash('success', 'Vehicle checked in to Workshop.');
+    }
+    redirect(BASE_URL . '/modules/assessments/view.php?id=' . $id);
+}
+
 $stmt = $db->prepare("
-    SELECT ca.*, c.chassis_number, c.make, c.model, c.year, c.color,
+    SELECT ca.*, c.chassis_number, c.make, c.model, c.year, c.color, c.status AS car_status,
            m.name AS mechanic_name
     FROM car_assessments ca
     JOIN cars c ON c.id = ca.car_id
@@ -69,6 +83,19 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
     <div class="d-flex gap-2 flex-wrap no-print">
+        <?php if (canWrite('cars')): ?>
+            <?php if ($assessment['car_status'] === 'in_workshop'): ?>
+            <span class="btn btn-sm btn-warning text-dark pe-none">
+                <i class="fa fa-screwdriver-wrench me-1"></i>In Workshop
+            </span>
+            <?php else: ?>
+            <a href="view.php?id=<?= $id ?>&action=check_in"
+               class="btn btn-sm btn-warning text-dark"
+               onclick="return confirm('Check this vehicle into the Workshop?')">
+                <i class="fa fa-screwdriver-wrench me-1"></i>Check In to Workshop
+            </a>
+            <?php endif; ?>
+        <?php endif; ?>
         <?php if (canAccess('jobs') && canEditDelete()): ?>
         <a href="<?= BASE_URL ?>/modules/jobs/add.php?car_id=<?= $assessment['car_id'] ?>&assessment_id=<?= $id ?>"
            class="btn btn-sm btn-primary">
