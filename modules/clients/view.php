@@ -61,17 +61,17 @@ $finStmt = $db->prepare("SELECT COALESCE(SUM(total),0) AS total_billed, COALESCE
 $finStmt->execute([$id]); $fin = $finStmt->fetch();
 $outstanding = (float)$fin['total_billed'] - (float)$fin['total_paid'];
 
-// Payments for this client (confirmed, via invoice or booking)
+// Payments for this client (confirmed, via direct client_id, invoice, or booking)
 $paymentsStmt = $db->prepare("
-    SELECT p.*, i.invoice_number, sb.booking_number
+    SELECT p.*, i.invoice_number, i.id AS inv_id, sb.booking_number
     FROM payments p
     LEFT JOIN invoices i ON i.id = p.invoice_id
     LEFT JOIN service_bookings sb ON sb.id = p.service_booking_id
-    WHERE (i.client_id = ? OR sb.client_id = ?)
+    WHERE (p.client_id = ? OR i.client_id = ? OR sb.client_id = ?)
       AND p.status = 'confirmed'
     ORDER BY p.payment_date DESC, p.id DESC
 ");
-$paymentsStmt->execute([$id, $id]);
+$paymentsStmt->execute([$id, $id, $id]);
 $clientPayments = $paymentsStmt->fetchAll();
 
 $pageTitle = $client['name'];
@@ -317,101 +317,174 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<!-- Invoices + Quotations row -->
-<div class="row g-4 mb-4">
-    <div class="col-md-6">
-        <div class="card h-100">
-            <div class="card-header"><i class="fa fa-file-invoice-dollar me-2"></i>Invoices (<?= count($invoices) ?>)</div>
-            <div class="card-body p-0">
-                <?php if ($invoices): ?>
-                <table class="table table-sm mb-0">
-                    <thead><tr><th class="ps-3">Invoice #</th><th>Total</th><th>Status</th><th></th></tr></thead>
-                    <tbody>
-                    <?php foreach ($invoices as $inv): ?>
-                    <tr>
-                        <td class="ps-3 fw-bold"><?= e($inv['invoice_number']) ?></td>
-                        <td><?= money((float)$inv['total']) ?></td>
-                        <td><?= statusBadge($inv['status']) ?></td>
-                        <td><a href="<?= BASE_URL ?>/modules/invoices/view.php?id=<?= $inv['id'] ?>" class="btn btn-xs btn-outline-primary"><i class="fa fa-eye"></i></a></td>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <?php else: ?><p class="text-muted p-3 mb-0">No invoices.</p><?php endif; ?>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card h-100">
-            <div class="card-header"><i class="fa fa-file-lines me-2"></i>Quotations (<?= count($quotes) ?>)</div>
-            <div class="card-body p-0">
-                <?php if ($quotes): ?>
-                <table class="table table-sm mb-0">
-                    <thead><tr><th class="ps-3">Quote #</th><th>Total</th><th>Status</th><th></th></tr></thead>
-                    <tbody>
-                    <?php foreach ($quotes as $q): ?>
-                    <tr>
-                        <td class="ps-3 fw-bold"><?= e($q['quotation_number']) ?></td>
-                        <td><?= money((float)$q['total']) ?></td>
-                        <td><?= statusBadge($q['status']) ?></td>
-                        <td><a href="<?= BASE_URL ?>/modules/quotations/view.php?id=<?= $q['id'] ?>" class="btn btn-xs btn-outline-primary"><i class="fa fa-eye"></i></a></td>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <?php else: ?><p class="text-muted p-3 mb-0">No quotations.</p><?php endif; ?>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Payments -->
-<?php if ($clientPayments): ?>
+<!-- Financial Documents: Invoices · Quotations · Receipts -->
 <div class="card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="fa fa-money-bill-transfer me-2 text-success"></i>Payment History (<?= count($clientPayments) ?>)</span>
-        <a href="statement.php?id=<?= $id ?>" target="_blank" class="btn btn-xs btn-outline-primary">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <ul class="nav nav-tabs card-header-tabs mb-0" id="docTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tab-inv-btn" data-bs-toggle="tab" data-bs-target="#tab-invoices" type="button" role="tab">
+                    <i class="fa fa-file-invoice-dollar me-1 text-primary"></i>Invoices
+                    <span class="badge bg-primary ms-1"><?= count($invoices) ?></span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-qt-btn" data-bs-toggle="tab" data-bs-target="#tab-quotes" type="button" role="tab">
+                    <i class="fa fa-file-lines me-1 text-info"></i>Quotations
+                    <span class="badge bg-info ms-1"><?= count($quotes) ?></span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-rec-btn" data-bs-toggle="tab" data-bs-target="#tab-receipts" type="button" role="tab">
+                    <i class="fa fa-receipt me-1 text-success"></i>Receipts
+                    <span class="badge bg-success ms-1"><?= count($clientPayments) ?></span>
+                </button>
+            </li>
+        </ul>
+        <a href="statement.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-primary">
             <i class="fa fa-print me-1"></i>Print Statement
         </a>
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0" style="font-size:13.5px">
-            <thead>
+
+    <div class="tab-content">
+
+        <!-- ── Invoices Tab ── -->
+        <div class="tab-pane fade show active" id="tab-invoices" role="tabpanel">
+            <?php if ($invoices): ?>
+            <div class="table-responsive">
+            <table class="table table-hover mb-0" style="font-size:13px">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Date</th>
+                        <th>Invoice #</th>
+                        <th>Vehicle</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Balance</th>
+                        <th>Status</th>
+                        <th class="text-center pe-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($invoices as $inv):
+                    $bal = (float)$inv['total'] - (float)$inv['amount_paid'];
+                ?>
                 <tr>
-                    <th class="ps-3">Date</th>
-                    <th>Payment #</th>
-                    <th>For</th>
-                    <th>Method</th>
-                    <th>Ref / Receipt</th>
-                    <th class="text-end pe-3">Amount</th>
+                    <td class="ps-3 text-muted small"><?= fmtDate($inv['date']) ?></td>
+                    <td class="fw-bold"><?= e($inv['invoice_number']) ?></td>
+                    <td class="small text-muted"><?= e($inv['make'] . ' ' . $inv['model']) ?></td>
+                    <td class="text-end"><?= money((float)$inv['total']) ?></td>
+                    <td class="text-end text-success"><?= money((float)$inv['amount_paid']) ?></td>
+                    <td class="text-end fw-semibold <?= $bal > 0 ? 'text-danger' : 'text-success' ?>"><?= money($bal) ?></td>
+                    <td><?= statusBadge($inv['status']) ?></td>
+                    <td class="text-center pe-3">
+                        <div class="d-flex gap-1 justify-content-center">
+                            <a href="<?= BASE_URL ?>/modules/invoices/view.php?id=<?= $inv['id'] ?>" class="btn btn-xs btn-outline-primary" title="View Invoice"><i class="fa fa-eye"></i></a>
+                            <a href="<?= BASE_URL ?>/modules/invoices/print.php?id=<?= $inv['id'] ?>" target="_blank" class="btn btn-xs btn-outline-secondary" title="Print Invoice"><i class="fa fa-print"></i></a>
+                            <a href="<?= BASE_URL ?>/modules/invoices/download_pdf.php?id=<?= $inv['id'] ?>" target="_blank" class="btn btn-xs btn-outline-dark" title="Download PDF"><i class="fa fa-file-pdf"></i></a>
+                        </div>
+                    </td>
                 </tr>
-            </thead>
-            <tbody>
-            <?php
-            $methodLabel = ['mpesa'=>'M-Pesa','bank'=>'Bank','cheque'=>'Cheque','cash'=>'Cash'];
-            foreach ($clientPayments as $pay): ?>
-            <tr>
-                <td class="ps-3 text-muted small"><?= fmtDate($pay['payment_date']) ?></td>
-                <td class="fw-medium"><?= e($pay['payment_number']) ?></td>
-                <td class="small text-muted">
-                    <?php if ($pay['invoice_number']): ?>
-                        <a href="<?= BASE_URL ?>/modules/invoices/view.php?id=<?= $pay['invoice_id'] ?>"><?= e($pay['invoice_number']) ?></a>
-                    <?php elseif ($pay['booking_number']): ?>
-                        Booking <?= e($pay['booking_number']) ?>
-                    <?php else: ?>
-                        <?= e($pay['description'] ?? '—') ?>
-                    <?php endif; ?>
-                </td>
-                <td><span class="badge bg-secondary"><?= e($methodLabel[$pay['payment_method']] ?? $pay['payment_method']) ?></span></td>
-                <td class="small"><code><?= e($pay['reference_number'] ?? '—') ?></code></td>
-                <td class="text-end pe-3 fw-semibold text-success"><?= money((float)$pay['amount']) ?></td>
-            </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+            <?php else: ?>
+            <p class="text-muted p-4 mb-0 text-center"><i class="fa fa-inbox me-2"></i>No invoices found for this client.</p>
+            <?php endif; ?>
+        </div>
+
+        <!-- ── Quotations Tab ── -->
+        <div class="tab-pane fade" id="tab-quotes" role="tabpanel">
+            <?php if ($quotes): ?>
+            <div class="table-responsive">
+            <table class="table table-hover mb-0" style="font-size:13px">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Date</th>
+                        <th>Quote #</th>
+                        <th>Vehicle</th>
+                        <th class="text-end">Total</th>
+                        <th>Valid Until</th>
+                        <th>Status</th>
+                        <th class="text-center pe-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($quotes as $q): ?>
+                <tr>
+                    <td class="ps-3 text-muted small"><?= fmtDate($q['date']) ?></td>
+                    <td class="fw-bold"><?= e($q['quotation_number']) ?></td>
+                    <td class="small text-muted"><?= e($q['make'] . ' ' . $q['model']) ?></td>
+                    <td class="text-end"><?= money((float)$q['total']) ?></td>
+                    <td class="small text-muted"><?= $q['valid_until'] ? fmtDate($q['valid_until']) : '—' ?></td>
+                    <td><?= statusBadge($q['status']) ?></td>
+                    <td class="text-center pe-3">
+                        <div class="d-flex gap-1 justify-content-center">
+                            <a href="<?= BASE_URL ?>/modules/quotations/view.php?id=<?= $q['id'] ?>" class="btn btn-xs btn-outline-primary" title="View Quotation"><i class="fa fa-eye"></i></a>
+                            <a href="<?= BASE_URL ?>/modules/quotations/print.php?id=<?= $q['id'] ?>" target="_blank" class="btn btn-xs btn-outline-secondary" title="Print Quotation"><i class="fa fa-print"></i></a>
+                            <a href="<?= BASE_URL ?>/modules/quotations/download_pdf.php?id=<?= $q['id'] ?>" target="_blank" class="btn btn-xs btn-outline-dark" title="Download PDF"><i class="fa fa-file-pdf"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+            <?php else: ?>
+            <p class="text-muted p-4 mb-0 text-center"><i class="fa fa-inbox me-2"></i>No quotations found for this client.</p>
+            <?php endif; ?>
+        </div>
+
+        <!-- ── Receipts Tab ── -->
+        <div class="tab-pane fade" id="tab-receipts" role="tabpanel">
+            <?php if ($clientPayments): ?>
+            <div class="table-responsive">
+            <table class="table table-hover mb-0" style="font-size:13px">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Date</th>
+                        <th>Receipt #</th>
+                        <th>For</th>
+                        <th>Method</th>
+                        <th>Reference</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-center pe-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php
+                $methodLabel = ['mpesa'=>'M-Pesa','bank'=>'Bank','cheque'=>'Cheque','cash'=>'Cash'];
+                foreach ($clientPayments as $pay): ?>
+                <tr>
+                    <td class="ps-3 text-muted small"><?= fmtDate($pay['payment_date']) ?></td>
+                    <td class="fw-bold"><?= e($pay['payment_number']) ?></td>
+                    <td class="small">
+                        <?php if ($pay['invoice_number']): ?>
+                            <a href="<?= BASE_URL ?>/modules/invoices/view.php?id=<?= $pay['inv_id'] ?>"><?= e($pay['invoice_number']) ?></a>
+                        <?php elseif ($pay['booking_number']): ?>
+                            Booking <?= e($pay['booking_number']) ?>
+                        <?php else: ?>
+                            <span class="text-muted"><?= e($pay['description'] ?? '—') ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td><span class="badge bg-secondary"><?= e($methodLabel[$pay['payment_method']] ?? $pay['payment_method']) ?></span></td>
+                    <td class="small"><code><?= e($pay['reference_number'] ?? '—') ?></code></td>
+                    <td class="text-end fw-semibold text-success"><?= money((float)$pay['amount']) ?></td>
+                    <td class="text-center pe-3">
+                        <a href="<?= BASE_URL ?>/modules/payments/print.php?id=<?= $pay['id'] ?>" target="_blank" class="btn btn-xs btn-outline-success" title="Print Receipt"><i class="fa fa-print me-1"></i>Receipt</a>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+            <?php else: ?>
+            <p class="text-muted p-4 mb-0 text-center"><i class="fa fa-inbox me-2"></i>No confirmed receipts for this client.</p>
+            <?php endif; ?>
+        </div>
+
+    </div><!-- /tab-content -->
 </div>
-<?php endif; ?>
 
 <!-- Notices -->
 <?php if ($notices): ?>
