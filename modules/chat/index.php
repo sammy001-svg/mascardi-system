@@ -880,19 +880,19 @@ const Chat = {
 
     /* â”€â”€ Build emoji picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     buildEmojiPicker() {
-        const el = el('emojiPicker');
-        el.innerHTML = EMOJIS.map(e =>
+        const picker = el('emojiPicker');
+        picker.innerHTML = EMOJIS.map(e =>
             `<button title="${e}" data-emoji="${e}">${e}</button>`
         ).join('');
-        el.addEventListener('click', ev => {
+        picker.addEventListener('click', ev => {
             const btn = ev.target.closest('[data-emoji]');
             if (!btn) return;
             this.insertEmoji(btn.dataset.emoji);
         });
     },
     insertEmoji(emoji) {
-        const el = el('msgIn');
-        el.focus();
+        const input = el('msgIn');
+        input.focus();
         // Insert at cursor position
         const sel = window.getSelection();
         if (sel.rangeCount) {
@@ -902,14 +902,14 @@ const Chat = {
             range.collapse(false);
             sel.removeAllRanges(); sel.addRange(range);
         } else {
-            el.innerText += emoji;
+            input.innerText += emoji;
         }
         this._syncBtn();
     },
     toggleEmoji() {
         this.emojiOpen = !this.emojiOpen;
-        const el = el('emojiPicker');
-        this.emojiOpen ? show(el,'flex') : hide(el);
+        const picker = el('emojiPicker');
+        this.emojiOpen ? show(picker,'flex') : hide(picker);
         el('btnEmoji').classList.toggle('active-emoji', this.emojiOpen);
     },
 
@@ -1319,10 +1319,10 @@ const Chat = {
     /* â”€â”€ Send text â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     async sendText() {
         if (!this.convId) return;
-        const el   = el('msgIn');
-        const text = (el.innerText||'').trim();
+        const msgEl = el('msgIn');
+        const text  = (msgEl.innerText||'').trim();
         if (!text) return;
-        el.innerText = ''; this._syncBtn();
+        msgEl.innerText = ''; this._syncBtn();
         if (this.emojiOpen) this.toggleEmoji();
         const payload = { conversation_id: this.convId, content: text };
         if (this.replyTo) payload.reply_to_id = this.replyTo.id;
@@ -1565,7 +1565,7 @@ const Chat = {
     },
     _hideCall() {
         hide(el('callOv'));
-        ['remoteVid','localVid'].forEach(id=>{const v=$(id);v.srcObject=null;hide(v);});
+        ['remoteVid','localVid'].forEach(id=>{const v=el(id);if(v){v.srcObject=null;hide(v);}});
         hide(el('btnAccept')); hide(el('btnCam'));
     },
     _endCall() {
@@ -1575,8 +1575,8 @@ const Chat = {
         this.activeCallId=null; this.isMuted=false; this.isCamOff=false; this.pendingIce=[];
     },
     _startCallTimer() {
-        let s=0; const el=el('callTimer');
-        this.callTimerInt=setInterval(()=>{ el.textContent=fmtDur(++s); },1000);
+        let s=0; const timerEl=el('callTimer');
+        this.callTimerInt=setInterval(()=>{ timerEl.textContent=fmtDur(++s); },1000);
     },
     /* ── Reply ──────────────────────────────────────────────────────────────── */
     setReply(m) {
