@@ -2059,15 +2059,12 @@ ob_start(); ?>
                     $init  = mb_strtoupper(mb_substr($u['name'], 0, 1));
                     $color = $palette[$u['id'] % count($palette)];
                     $rl    = $roleLabels[$u['role']] ?? ucfirst($u['role']);
-                    $jsUid   = (int)$u['id'];
-                    $jsName  = json_encode($u['name']);
-                    $jsColor = json_encode($color);
                 ?>
                     <div class="up-item"
-                         data-uid="<?= $jsUid ?>"
+                         data-uid="<?= (int)$u['id'] ?>"
                          data-uname="<?= e($u['name']) ?>"
                          data-ucolor="<?= e($color) ?>"
-                         onclick="Chat.startDirect(<?= $jsUid ?>,<?= $jsName ?>,<?= $jsColor ?>)"
+                         onclick="var _i=this.closest('.up-item');Chat.startDirect(_i.dataset.uid,_i.dataset.uname,_i.dataset.ucolor)"
                          style="cursor:pointer">
                         <div class="up-av" style="background:<?= $color ?>"><?= e($init) ?></div>
                         <div>
