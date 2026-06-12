@@ -39,8 +39,8 @@ if ($method === 'GET') {
                 WHERE conversation_id = cc.id AND is_deleted = 0
             )
             LEFT JOIN users u_last ON u_last.id = cm_last.sender_id
-            LEFT JOIN chat_participants cp2 ON cp2.conversation_id = cc.id AND cp2.user_id <> ?
-            LEFT JOIN users u_other ON u_other.id = cp2.user_id AND cc.type = 'direct'
+            LEFT JOIN chat_participants cp2 ON cp2.conversation_id = cc.id AND cp2.user_id <> ? AND cc.type = 'direct'
+            LEFT JOIN users u_other ON u_other.id = cp2.user_id
             WHERE cp.user_id = ?
             ORDER BY COALESCE(cm_last.created_at, cc.created_at) DESC
         ");
