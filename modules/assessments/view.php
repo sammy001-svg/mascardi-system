@@ -7,7 +7,7 @@ $db = getDB();
 
 // Handle Check In to Workshop
 if (isset($_GET['action']) && $_GET['action'] === 'check_in') {
-    canWrite('cars') || die('Permission denied.');
+    canAccess('assessments') || die('Permission denied.');
     $tmp = $db->prepare("SELECT car_id FROM car_assessments WHERE id = ?");
     $tmp->execute([$id]);
     $carId = $tmp->fetchColumn();
@@ -83,7 +83,7 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
     <div class="d-flex gap-2 flex-wrap no-print">
-        <?php if (canWrite('cars')): ?>
+        <?php if (canAccess('assessments')): ?>
             <?php if ($assessment['car_status'] === 'in_workshop'): ?>
             <span class="btn btn-sm btn-warning text-dark pe-none">
                 <i class="fa fa-screwdriver-wrench me-1"></i>In Workshop
