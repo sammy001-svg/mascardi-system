@@ -162,6 +162,10 @@ $(function () {
         recalcTotals();
     });
 
+    $('#overall_discount, #tax_rate').on('input change', function () {
+        recalcTotals();
+    });
+
     function recalcTotals() {
         var subtotal = 0;
         $('.line-item-row').each(function () {
