@@ -62,16 +62,33 @@ if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
             } catch (\Throwable $e) {}
         }
 
-        // Match car by chassis then registration
+        // Match car: QA direct link → chassis → exact reg → normalised reg
         if (!$preCarId) {
-            if ($fromQr['car_chassis']) {
+            // Direct car_id from linked quick assessment (most reliable)
+            if (!empty($fromQr['quick_assessment_id'])) {
+                try {
+                    $s = $db->prepare("SELECT car_id FROM quick_assessments WHERE id = ? AND car_id IS NOT NULL LIMIT 1");
+                    $s->execute([$fromQr['quick_assessment_id']]);
+                    $preCarId = (int)($s->fetchColumn() ?: 0);
+                } catch (\Throwable $e) {}
+            }
+            // Chassis exact match
+            if (!$preCarId && $fromQr['car_chassis']) {
                 $s = $db->prepare("SELECT id FROM cars WHERE chassis_number = ? LIMIT 1");
                 $s->execute([$fromQr['car_chassis']]);
                 $preCarId = (int)($s->fetchColumn() ?: 0);
             }
+            // Registration exact match
             if (!$preCarId && $fromQr['car_registration']) {
                 $s = $db->prepare("SELECT id FROM cars WHERE registration_number = ? LIMIT 1");
                 $s->execute([$fromQr['car_registration']]);
+                $preCarId = (int)($s->fetchColumn() ?: 0);
+            }
+            // Registration normalised: ignore spaces + case ("KDW 171A" == "KDW171A")
+            if (!$preCarId && $fromQr['car_registration']) {
+                $normReg = str_replace(' ', '', strtoupper($fromQr['car_registration']));
+                $s = $db->prepare("SELECT id FROM cars WHERE REPLACE(UPPER(registration_number),' ','') = ? LIMIT 1");
+                $s->execute([$normReg]);
                 $preCarId = (int)($s->fetchColumn() ?: 0);
             }
         }
