@@ -61,6 +61,18 @@ body { background: #f1f5f9; }
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link <?= str_contains($__uri, '/portal/service_history') ? 'pactive' : '' ?>"
+                       href="<?= BASE_URL ?>/portal/service_history.php">
+                        <i class="fa fa-wrench me-1"></i>History
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?= str_contains($__uri, '/portal/quotation') ? 'pactive' : '' ?>"
+                       href="<?= BASE_URL ?>/portal/quotations.php">
+                        <i class="fa fa-file-lines me-1"></i>Quotations
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link <?= str_contains($__uri, '/portal/invoice') ? 'pactive' : '' ?>"
                        href="<?= BASE_URL ?>/portal/invoices.php">
                         <i class="fa fa-file-invoice-dollar me-1"></i>Invoices
@@ -76,6 +88,9 @@ body { background: #f1f5f9; }
                                 <div class="fw-semibold small"><?= e($__pc['name']) ?></div>
                                 <div class="text-muted" style="font-size:12px"><?= e($__pc['email']) ?></div>
                             </div></li>
+                            <li><a class="dropdown-item small" href="<?= BASE_URL ?>/portal/profile.php">
+                                <i class="fa fa-user-pen me-2 text-muted"></i>My Profile
+                            </a></li>
                             <li><a class="dropdown-item small" href="<?= BASE_URL ?>/portal/statement.php">
                                 <i class="fa fa-file-lines me-2 text-muted"></i>Account Statement
                             </a></li>
