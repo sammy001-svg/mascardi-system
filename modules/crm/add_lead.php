@@ -44,6 +44,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $newId = (int)$db->lastInsertId();
             logActivity('create','crm_leads',$newId,"New lead: $name");
+            require_once __DIR__ . '/../../includes/notifications.php';
+            if ($assignedTo) {
+                createNotification((int)$assignedTo, 'info',
+                    "Lead Assigned: {$name}",
+                    "New lead from " . ($sourceLabels[$source] ?? $source) . ($interestedIn ? " — {$interestedIn}" : ''),
+                    BASE_URL . '/modules/crm/view_lead.php?id=' . $newId
+                );
+            }
+            notifyRoles(['admin','sales_manager'], 'info',
+                "New Lead: {$name}",
+                ($sourceLabels[$source] ?? $source) . ($interestedIn ? " — {$interestedIn}" : ''),
+                BASE_URL . '/modules/crm/view_lead.php?id=' . $newId
+            );
             setFlash('success', "Lead '{$name}' added successfully.");
             redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $newId);
         } catch (\Throwable $e) {
