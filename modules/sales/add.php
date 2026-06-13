@@ -78,6 +78,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("UPDATE cars SET status='sold' WHERE id=?")->execute([$d['car_id']]);
             $db->commit();
             logActivity('create', 'sales', $saleId, "Recorded sale {$saleNum} — {$d['buyer_name']} — " . money((float)$d['sale_price']));
+            require_once __DIR__ . '/../../includes/notifications.php';
+            $soldCar = $db->prepare("SELECT make, model, year FROM cars WHERE id=?");
+            $soldCar->execute([$d['car_id']]); $soldCar = $soldCar->fetch();
+            notifyRoles(['admin','general_manager','finance_manager','finance_officer'], 'sale',
+                "Vehicle Sold: {$saleNum}",
+                ($soldCar ? "{$soldCar['make']} {$soldCar['model']} {$soldCar['year']}" : '') . " — " . money((float)$d['sale_price']) . " — " . $d['buyer_name'],
+                BASE_URL . '/modules/sales/view.php?id=' . $saleId
+            );
             setFlash('success', "Sale {$saleNum} recorded successfully.");
             redirect(BASE_URL . '/modules/sales/view.php?id=' . $saleId);
         } catch (\Throwable $e) {

@@ -240,6 +240,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $iStmt->execute([$qId,$type,$invId,$desc,$qty,$price,$disc,$tot]);
             }
             $db->commit();
+            require_once __DIR__ . '/../../includes/notifications.php';
+            notifyRoles(['admin','sales_manager','general_manager'], 'info',
+                "New Quotation: {$qNum}",
+                $custName . ($total ? ' — ' . money((float)$total) : ''),
+                BASE_URL . '/modules/quotations/view.php?id=' . $qId
+            );
             setFlash('success',"Quotation {$qNum} created.");
             $afterSave = $_POST['_after_save'] ?? 'view';
             if ($afterSave === 'print') {

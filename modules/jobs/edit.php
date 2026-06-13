@@ -13,6 +13,15 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $db->prepare("UPDATE workshop_jobs SET mechanic_id=?,start_date=?,end_date=?,status=?,priority=?,description=?,notes=? WHERE id=?")->execute([...array_values($data),$id]);
     if($data['status']==='completed') $db->prepare("UPDATE cars SET status='completed' WHERE id=?")->execute([$job['car_id']]);
     logActivity('update', 'jobs', $id, "Updated job {$job['job_number']} — status: {$data['status']}");
+    if (in_array($data['status'], ['completed','in_progress'])) {
+        require_once __DIR__ . '/../../includes/notifications.php';
+        $statusLabel = $data['status'] === 'completed' ? 'Job Completed' : 'Job In Progress';
+        notifyRoles(['admin','general_manager','sales_officer','sales_manager'], 'job',
+            "{$statusLabel}: {$job['job_number']}",
+            "{$job['make']} {$job['model']} {$job['year']} — " . ucwords(str_replace('_',' ',$data['status'])),
+            BASE_URL . '/modules/jobs/view.php?id=' . $id
+        );
+    }
     setFlash('success','Job updated.'); redirect(BASE_URL.'/modules/jobs/view.php?id='.$id);
 }
 $pageTitle='Edit Job';

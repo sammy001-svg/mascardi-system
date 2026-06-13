@@ -9,8 +9,18 @@ $cid    = $client['id'];
 // Accept a pending quotation
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['accept_id'])) {
     $acceptId = (int)$_POST['accept_id'];
+    $qRow = $db->prepare("SELECT quotation_number FROM quotations WHERE id=? AND client_id=? AND status='pending' LIMIT 1");
+    $qRow->execute([$acceptId, $cid]); $qRow = $qRow->fetch();
     $db->prepare("UPDATE quotations SET status='approved', updated_at=NOW() WHERE id=? AND client_id=? AND status='pending'")
        ->execute([$acceptId, $cid]);
+    if ($qRow) {
+        require_once __DIR__ . '/../includes/notifications.php';
+        notifyRoles(['admin','sales_officer','sales_manager','general_manager'], 'sale',
+            "Quotation Accepted: {$qRow['quotation_number']}",
+            $client['name'] . " has accepted quotation {$qRow['quotation_number']}",
+            BASE_URL . '/modules/quotations/view.php?id=' . $acceptId
+        );
+    }
     setFlash('success', 'Quotation accepted. Our team will be in touch to schedule the work.');
     redirect(BASE_URL . '/portal/quotations.php');
 }
