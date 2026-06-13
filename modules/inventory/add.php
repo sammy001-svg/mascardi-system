@@ -23,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'unit_price'    => (float)($_POST['unit_price'] ?? 0),
         'selling_price' => (float)($_POST['selling_price'] ?? 0),
         'reorder_level' => (float)($_POST['reorder_level'] ?? 5),
+        'reorder_qty'   => (float)($_POST['reorder_qty']   ?? 0),
         'supplier_id'   => (int)($_POST['supplier_id'] ?? 0) ?: null,
     ];
 
@@ -34,13 +35,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 INSERT INTO inventory
                     (part_number, part_name, description, category,
                      brand, make, model, code,
-                     quantity, unit, unit_price, selling_price, reorder_level, supplier_id)
-                VALUES (?,?,?,?, ?,?,?,?, ?,?,?,?,?,?)
+                     quantity, unit, unit_price, selling_price, reorder_level, reorder_qty, supplier_id)
+                VALUES (?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?)
             ")->execute([
                 $data['part_number'],  $data['part_name'],  $data['description'], $data['category'],
                 $data['brand'] ?: null, $data['make'] ?: null, $data['model'] ?: null, $data['code'] ?: null,
                 $data['quantity'], $data['unit'], $data['unit_price'], $data['selling_price'],
-                $data['reorder_level'], $data['supplier_id'],
+                $data['reorder_level'], $data['reorder_qty'], $data['supplier_id'],
             ]);
             $newId = $db->lastInsertId();
 
@@ -179,6 +180,12 @@ include __DIR__ . '/../../includes/header.php';
                         <input type="number" name="reorder_level" class="form-control"
                                min="0" step="0.01" value="<?= e($p['reorder_level'] ?? '5') ?>">
                         <div class="form-text">Alert when stock reaches this level</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Reorder Quantity</label>
+                        <input type="number" name="reorder_qty" class="form-control"
+                               min="0" step="0.01" value="<?= e($p['reorder_qty'] ?? '0') ?>">
+                        <div class="form-text">How many to order when restocking</div>
                     </div>
                 </div>
             </div>
