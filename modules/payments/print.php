@@ -7,11 +7,12 @@ $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/payments/index.php');
 
 $db = getDB();
+try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL AFTER id_number"); } catch (\Throwable $_) {}
 $stmt = $db->prepare("
     SELECT p.*,
            i.invoice_number, i.id AS inv_id, i.total AS inv_total,
            sb.booking_number, sb.id AS bk_id,
-           cl.id_number AS client_id_number
+           cl.id_number AS client_id_number, cl.kra_pin AS client_kra_pin
     FROM payments p
     LEFT JOIN invoices i ON i.id = p.invoice_id
     LEFT JOIN service_bookings sb ON sb.id = p.service_booking_id
@@ -227,9 +228,15 @@ $isReversed  = $p['status'] === 'reversed';
             <span class="value"><?= e($p['client_phone']) ?></span>
         </div>
         <?php endif; ?>
-        <?php if ($p['client_id_number']): ?>
+        <?php if ($p['client_kra_pin']): ?>
         <div class="info-row">
             <span class="label">KRA PIN</span>
+            <span class="value" style="font-weight:700"><?= e($p['client_kra_pin']) ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($p['client_id_number']): ?>
+        <div class="info-row">
+            <span class="label">ID / Passport</span>
             <span class="value"><?= e($p['client_id_number']) ?></span>
         </div>
         <?php endif; ?>

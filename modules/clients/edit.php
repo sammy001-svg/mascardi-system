@@ -5,6 +5,9 @@ $db = getDB();
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/clients/index.php');
 
+// Auto-add kra_pin column if this is a fresh install
+try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL AFTER id_number"); } catch (\Throwable $_) {}
+
 $client = $db->prepare("SELECT * FROM clients WHERE id=?");
 $client->execute([$id]); $client = $client->fetch();
 if (!$client) { setFlash('error','Client not found.'); redirect(BASE_URL.'/modules/clients/index.php'); }
@@ -17,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['email']          = trim($_POST['email'] ?? '');
     $d['phone']          = trim($_POST['phone'] ?? '');
     $d['id_number']      = trim($_POST['id_number'] ?? '');
+    $d['kra_pin']        = strtoupper(trim($_POST['kra_pin'] ?? ''));
     $d['portal_enabled'] = isset($_POST['portal_enabled']) ? 1 : 0;
     $d['status']         = $_POST['status'] ?? 'active';
     $d['notes']          = trim($_POST['notes'] ?? '');
@@ -31,8 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? password_hash($portalPass, PASSWORD_DEFAULT)
             : $client['portal_password'];
         try {
-            $db->prepare("UPDATE clients SET name=?,email=?,phone=?,id_number=?,portal_password=?,portal_enabled=?,status=?,notes=? WHERE id=?")
-               ->execute([$d['name'],$d['email'],$d['phone'],$d['id_number'],$hashedPass,$d['portal_enabled'],$d['status'],$d['notes'],$id]);
+            $db->prepare("UPDATE clients SET name=?,email=?,phone=?,id_number=?,kra_pin=?,portal_password=?,portal_enabled=?,status=?,notes=? WHERE id=?")
+               ->execute([$d['name'],$d['email'],$d['phone'],$d['id_number'],$d['kra_pin'],$hashedPass,$d['portal_enabled'],$d['status'],$d['notes'],$id]);
             logActivity('update', 'clients', $id, "Updated client: {$d['name']}");
             setFlash('success', 'Client updated.');
             redirect(BASE_URL . '/modules/clients/view.php?id=' . $id);
@@ -74,8 +78,13 @@ include __DIR__ . '/../../includes/header.php';
                         <input type="text" name="phone" class="form-control" value="<?= e($d['phone'] ?? '') ?>">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">ID / KRA PIN</label>
-                        <input type="text" name="id_number" class="form-control" value="<?= e($d['id_number'] ?? '') ?>">
+                        <label class="form-label">National ID / Passport</label>
+                        <input type="text" name="id_number" class="form-control" value="<?= e($d['id_number'] ?? '') ?>" placeholder="e.g. 12345678">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">KRA PIN</label>
+                        <input type="text" name="kra_pin" class="form-control text-uppercase" value="<?= e($d['kra_pin'] ?? '') ?>"
+                               placeholder="e.g. A001234567B" maxlength="20" oninput="this.value=this.value.toUpperCase()">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Status</label>

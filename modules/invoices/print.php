@@ -2,7 +2,8 @@
 require_once __DIR__ . '/../../includes/functions.php';
 $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/invoices/index.php');
 $db=getDB();
-$stmt=$db->prepare("SELECT i.*,c.chassis_number,c.make,c.model,c.year,c.color,c.registration_number,cl.id_number AS client_id_number FROM invoices i JOIN cars c ON c.id=i.car_id LEFT JOIN clients cl ON cl.id=i.client_id WHERE i.id=?");
+try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL AFTER id_number"); } catch (\Throwable $_) {}
+$stmt=$db->prepare("SELECT i.*,c.chassis_number,c.make,c.model,c.year,c.color,c.registration_number,cl.id_number AS client_id_number,cl.kra_pin AS client_kra_pin FROM invoices i JOIN cars c ON c.id=i.car_id LEFT JOIN clients cl ON cl.id=i.client_id WHERE i.id=?");
 $stmt->execute([$id]); $inv=$stmt->fetch();
 if(!$inv) die('Not found');
 $items=$db->prepare("SELECT * FROM invoice_items WHERE invoice_id=? ORDER BY id"); $items->execute([$id]); $items=$items->fetchAll();
@@ -54,7 +55,8 @@ if ($isClient && $inv['client_id'] !== $_SESSION['_client']['id']) {
             <div class="text-muted small fw-bold text-uppercase mb-1">Bill To</div>
             <div class="fw-semibold"><?= e($inv['customer_name']??'—') ?></div>
             <?php if($inv['customer_phone']): ?><div class="small"><?= e($inv['customer_phone']) ?></div><?php endif; ?>
-            <?php if($inv['client_id_number']): ?><div class="small">KRA PIN: <?= e($inv['client_id_number']) ?></div><?php endif; ?>
+            <?php if($inv['client_kra_pin']): ?><div class="small">KRA PIN: <strong><?= e($inv['client_kra_pin']) ?></strong></div><?php endif; ?>
+            <?php if($inv['client_id_number']): ?><div class="small text-muted">ID No: <?= e($inv['client_id_number']) ?></div><?php endif; ?>
         </div>
         <div class="col-6">
             <div class="text-muted small fw-bold text-uppercase mb-1">Vehicle</div>
