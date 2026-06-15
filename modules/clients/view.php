@@ -8,6 +8,7 @@ $user = authUser();
 $id   = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/clients/index.php');
 
+try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL AFTER id_number"); } catch (\Throwable $_) {}
 $client = $db->prepare("SELECT * FROM clients WHERE id=?");
 $client->execute([$id]); $client = $client->fetch();
 if (!$client) { setFlash('error','Not found.'); redirect(BASE_URL.'/modules/clients/index.php'); }
@@ -105,7 +106,8 @@ include __DIR__ . '/../../includes/header.php';
             <div class="card-header">Client Info</div>
             <div class="card-body">
                 <dl class="row mb-0" style="font-size:13.5px">
-                    <dt class="col-5 text-muted">ID / KRA PIN</dt><dd class="col-7"><?= e($client['id_number'] ?? '—') ?></dd>
+                    <dt class="col-5 text-muted">National ID</dt><dd class="col-7"><?= e($client['id_number'] ?? '—') ?></dd>
+                    <dt class="col-5 text-muted">KRA PIN</dt><dd class="col-7"><?= e($client['kra_pin'] ?? '—') ?></dd>
                     <dt class="col-5 text-muted">Status</dt><dd class="col-7"><?= statusBadge($client['status']) ?></dd>
                     <dt class="col-5 text-muted">Portal</dt>
                     <dd class="col-7">

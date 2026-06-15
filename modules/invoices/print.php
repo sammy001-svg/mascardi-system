@@ -5,14 +5,16 @@ $db=getDB();
 try { $db->exec("ALTER TABLE invoices ADD COLUMN customer_kra_pin VARCHAR(20) NULL AFTER customer_email"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL AFTER id_number"); } catch (\Throwable $_) {}
 // Join the client even when client_id is NULL by falling back to a name-match.
-// COALESCE priority: (1) client.kra_pin (always current)  (2) client.id_number (legacy)  (3) customer_kra_pin on invoice (walk-ins only)
+// COALESCE priority: (1) client.kra_pin (current dedicated field)
+//                   (2) customer_kra_pin on invoice (typed at invoice time / walk-ins)
+//                   (3) client.id_number (legacy — may be national ID, not KRA PIN)
 $stmt=$db->prepare("
     SELECT i.*, c.chassis_number, c.make, c.model, c.year, c.color, c.registration_number,
            cl.id_number AS client_id_number,
            COALESCE(
                NULLIF(TRIM(cl.kra_pin), ''),
-               NULLIF(TRIM(cl.id_number), ''),
-               NULLIF(TRIM(i.customer_kra_pin), '')
+               NULLIF(TRIM(i.customer_kra_pin), ''),
+               NULLIF(TRIM(cl.id_number), '')
            ) AS display_kra_pin
     FROM invoices i
     JOIN cars c ON c.id = i.car_id

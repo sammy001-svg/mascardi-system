@@ -10,6 +10,7 @@ $to     = trim($_GET['to'] ?? '');
 
 if (!$id) redirect(BASE_URL . '/modules/clients/index.php');
 
+try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL AFTER id_number"); } catch (\Throwable $_) {}
 $client = $db->prepare("SELECT * FROM clients WHERE id=?");
 $client->execute([$id]); $client = $client->fetch();
 if (!$client) { setFlash('error','Client not found.'); redirect(BASE_URL.'/modules/clients/index.php'); }
@@ -208,8 +209,9 @@ $periodLabel = ($fromDate || $toDate)
                 <?php if ($client['phone']): ?>
                 <div class="text-muted small"><i class="fa fa-phone me-1"></i><?= e($client['phone']) ?></div>
                 <?php endif; ?>
-                <?php if ($client['id_number']): ?>
-                <div class="text-muted small"><i class="fa fa-id-card me-1"></i>ID/PIN: <?= e($client['id_number']) ?></div>
+                <?php $stmtKraPin = !empty($client['kra_pin']) ? $client['kra_pin'] : ($client['id_number'] ?? ''); ?>
+                <?php if ($stmtKraPin): ?>
+                <div class="text-muted small"><i class="fa fa-fingerprint me-1"></i>KRA PIN: <strong><?= e(strtoupper($stmtKraPin)) ?></strong></div>
                 <?php endif; ?>
             </div>
         </div>
