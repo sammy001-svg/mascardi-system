@@ -21,13 +21,12 @@ if (!$lead) { setFlash('error','Lead not found.'); redirect(BASE_URL.'/modules/c
 $pageTitle = $lead['name'];
 
 $stages = [
-    'new'         => ['New Lead',    'secondary', 'fa-user-plus'],
-    'contacted'   => ['Contacted',   'primary',   'fa-phone'],
-    'interested'  => ['Interested',  'info',      'fa-heart'],
-    'test_drive'  => ['Test Drive',  'purple',    'fa-car-side'],
-    'negotiation' => ['Negotiation', 'warning',   'fa-handshake'],
-    'closed_won'  => ['Closed Won',  'success',   'fa-circle-check'],
-    'closed_lost' => ['Lost',        'danger',    'fa-circle-xmark'],
+    'hot'       => ['Hot',       'danger',    'fa-fire'],
+    'lukewarm'  => ['Lukewarm',  'warning',   'fa-temperature-half'],
+    'cold'      => ['Cold',      'info',      'fa-snowflake'],
+    'lost'      => ['Lost',      'secondary', 'fa-circle-xmark'],
+    'reserved'  => ['Reserved',  'purple',    'fa-bookmark'],
+    'delivered' => ['Delivered', 'success',   'fa-truck'],
 ];
 
 $activityTypes = [
@@ -59,18 +58,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (array_key_exists($newStage, $stages)) {
             $db->prepare("UPDATE crm_leads SET stage=?, lost_reason=COALESCE(?,lost_reason), updated_at=NOW() WHERE id=?")
                ->execute([$newStage, $lostReason, $id]);
-            if ($newStage === 'closed_won') {
+            if ($newStage === 'delivered') {
                 $db->prepare("UPDATE crm_leads SET converted_at=NOW() WHERE id=? AND converted_at IS NULL")->execute([$id]);
             }
             logActivity('update','crm_leads',$id,"Stage changed to: $newStage");
             require_once __DIR__ . '/../../includes/notifications.php';
-            if ($newStage === 'closed_won') {
+            if ($newStage === 'delivered') {
                 notifyRoles(['admin','sales_manager','general_manager'], 'sale',
-                    "Lead Won: {$lead['name']}",
+                    "Lead Delivered: {$lead['name']}",
                     $lead['interested_in'] ? "Interested in: {$lead['interested_in']}" : '',
                     BASE_URL . '/modules/crm/view_lead.php?id=' . $id
                 );
-            } elseif ($newStage === 'closed_lost') {
+            } elseif ($newStage === 'lost') {
                 notifyRoles(['admin','sales_manager'], 'info',
                     "Lead Lost: {$lead['name']}",
                     $lostReason ?: 'No reason recorded',
@@ -134,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("INSERT INTO clients (name,phone,email,status) VALUES (?,?,?,'active')")
                ->execute([$lead['name'], $lead['phone'], $lead['email']]);
             $clientId = (int)$db->lastInsertId();
-            $db->prepare("UPDATE crm_leads SET client_id=?,stage='closed_won',converted_at=NOW(),updated_at=NOW() WHERE id=?")
+            $db->prepare("UPDATE crm_leads SET client_id=?,stage='delivered',converted_at=NOW(),updated_at=NOW() WHERE id=?")
                ->execute([$clientId, $id]);
             logActivity('create','clients',$clientId,"Converted from CRM lead #{$id}");
             setFlash('success','Lead converted to client. You can now record a sale.');
@@ -156,7 +155,7 @@ $activities->execute([$id]); $activities = $activities->fetchAll();
 
 [$stageLabel, $stageColor, $stageIcon] = $stages[$lead['stage']] ?? ['Unknown','secondary','fa-circle'];
 $isOverdue = $lead['follow_up_date'] && $lead['follow_up_date'] < date('Y-m-d')
-             && !in_array($lead['stage'],['closed_won','closed_lost']);
+             && !in_array($lead['stage'],['lost','delivered']);
 
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -179,7 +178,7 @@ include __DIR__ . '/../../includes/header.php';
            class="btn btn-sm btn-outline-info">
             <i class="fa fa-file-lines me-1"></i>New Quotation
         </a>
-        <?php elseif (canWrite('crm') && $lead['stage'] !== 'closed_lost'): ?>
+        <?php elseif (canWrite('crm') && $lead['stage'] !== 'lost'): ?>
         <form method="POST" class="d-inline"
               onsubmit="return confirm('Convert this lead to a client?')">
             <input type="hidden" name="action" value="convert">
@@ -219,7 +218,7 @@ include __DIR__ . '/../../includes/header.php';
                     <input type="hidden" name="lost_reason" id="lostReasonInput" value="">
                     <div class="d-flex flex-wrap gap-1">
                     <?php foreach ($stages as $sk => [$sl,$sc,$si]): ?>
-                        <?php if ($sk === 'closed_lost'): ?>
+                        <?php if ($sk === 'lost'): ?>
                         <button type="button"
                                 class="btn btn-sm <?= $lead['stage'] === $sk ? 'btn-'.$sc : 'btn-outline-'.$sc ?>"
                                 data-bs-toggle="modal" data-bs-target="#lostModal">
@@ -325,7 +324,7 @@ include __DIR__ . '/../../includes/header.php';
                         <label class="form-label small fw-semibold">Notes</label>
                         <textarea name="notes" class="form-control form-control-sm" rows="2"><?= e($lead['notes'] ?? '') ?></textarea>
                     </div>
-                    <?php if (in_array($lead['stage'],['closed_lost'])): ?>
+                    <?php if (in_array($lead['stage'],['lost'])): ?>
                     <div class="mb-2">
                         <label class="form-label small fw-semibold">Lost Reason</label>
                         <input type="text" name="lost_reason" class="form-control form-control-sm" value="<?= e($lead['lost_reason'] ?? '') ?>" placeholder="e.g. Price too high, bought elsewhere…">
@@ -459,7 +458,7 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 <script>
 document.getElementById('confirmLost') && document.getElementById('confirmLost').addEventListener('click', function () {
-    document.getElementById('stageInput').value    = 'closed_lost';
+    document.getElementById('stageInput').value    = 'lost';
     document.getElementById('lostReasonInput').value = document.getElementById('lostReasonField').value;
     document.getElementById('stageForm').submit();
 });

@@ -39,13 +39,12 @@ try {
 }
 
 $stages = [
-    'new'         => ['New Lead',    'secondary'],
-    'contacted'   => ['Contacted',   'primary'],
-    'interested'  => ['Interested',  'info'],
-    'test_drive'  => ['Test Drive',  'purple'],
-    'negotiation' => ['Negotiation', 'warning'],
-    'closed_won'  => ['Closed Won',  'success'],
-    'closed_lost' => ['Lost',        'danger'],
+    'hot'       => ['Hot',       'danger'],
+    'lukewarm'  => ['Lukewarm',  'warning'],
+    'cold'      => ['Cold',      'info'],
+    'lost'      => ['Lost',      'secondary'],
+    'reserved'  => ['Reserved',  'purple'],
+    'delivered' => ['Delivered', 'success'],
 ];
 
 $sources = [
@@ -131,7 +130,7 @@ include __DIR__ . '/../../includes/header.php';
             <?php foreach ($leads as $l):
                 [$stageLabel, $stageColor] = $stages[$l['stage']] ?? ['Unknown','secondary'];
                 $isOverdue = $l['follow_up_date'] && $l['follow_up_date'] < date('Y-m-d')
-                             && !in_array($l['stage'], ['closed_won','closed_lost']);
+                             && !in_array($l['stage'], ['lost','delivered']);
             ?>
             <tr class="<?= $isOverdue ? 'table-danger' : '' ?>">
                 <td class="ps-3">

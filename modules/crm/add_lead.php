@@ -7,7 +7,7 @@ $pageTitle = 'New Lead';
 $db     = getDB();
 $errors = [];
 
-$stages  = ['new','contacted','interested','test_drive','negotiation'];
+$stages  = ['hot','lukewarm','cold','lost','reserved','delivered'];
 $sources = ['walk_in','referral','facebook','instagram','website','phone_call','whatsapp','other'];
 $sourceLabels = [
     'walk_in'    => 'Walk-in',    'referral'   => 'Referral',
@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $interestedIn = trim($_POST['interested_in'] ?? '') ?: null;
     $budget     = $_POST['budget']             ?? '';
     $budget     = $budget !== '' ? (float)$budget : null;
-    $stage      = in_array($_POST['stage'] ?? '', $stages) ? $_POST['stage'] : 'new';
+    $stage      = in_array($_POST['stage'] ?? '', $stages) ? $_POST['stage'] : 'hot';
     $assignedTo = (int)($_POST['assigned_to'] ?? 0) ?: null;
     $notes      = trim($_POST['notes']         ?? '') ?: null;
     $followUp   = trim($_POST['follow_up_date'] ?? '') ?: null;
@@ -112,9 +112,12 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Initial Stage</label>
                     <select name="stage" class="form-select">
-                        <option value="new"       <?= (($_POST['stage'] ?? 'new') === 'new')       ? 'selected' : '' ?>>New Lead</option>
-                        <option value="contacted" <?= (($_POST['stage'] ?? '') === 'contacted')    ? 'selected' : '' ?>>Contacted</option>
-                        <option value="interested"<?= (($_POST['stage'] ?? '') === 'interested')   ? 'selected' : '' ?>>Interested</option>
+                        <option value="hot"       <?= (($_POST['stage'] ?? 'hot') === 'hot')       ? 'selected' : '' ?>>Hot</option>
+                        <option value="lukewarm"  <?= (($_POST['stage'] ?? '') === 'lukewarm')     ? 'selected' : '' ?>>Lukewarm</option>
+                        <option value="cold"      <?= (($_POST['stage'] ?? '') === 'cold')         ? 'selected' : '' ?>>Cold</option>
+                        <option value="lost"      <?= (($_POST['stage'] ?? '') === 'lost')         ? 'selected' : '' ?>>Lost</option>
+                        <option value="reserved"  <?= (($_POST['stage'] ?? '') === 'reserved')     ? 'selected' : '' ?>>Reserved</option>
+                        <option value="delivered" <?= (($_POST['stage'] ?? '') === 'delivered')    ? 'selected' : '' ?>>Delivered</option>
                     </select>
                 </div>
 

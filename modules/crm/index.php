@@ -9,25 +9,24 @@ $me   = authUser();
 
 // ── Stage config ──────────────────────────────────────────────────────────────
 $stages = [
-    'new'          => ['label' => 'New Lead',    'color' => '#64748b', 'bg' => '#f8fafc', 'icon' => 'fa-user-plus'],
-    'contacted'    => ['label' => 'Contacted',   'color' => '#2563eb', 'bg' => '#eff6ff', 'icon' => 'fa-phone'],
-    'interested'   => ['label' => 'Interested',  'color' => '#0891b2', 'bg' => '#ecfeff', 'icon' => 'fa-heart'],
-    'test_drive'   => ['label' => 'Test Drive',  'color' => '#7c3aed', 'bg' => '#f5f3ff', 'icon' => 'fa-car-side'],
-    'negotiation'  => ['label' => 'Negotiation', 'color' => '#d97706', 'bg' => '#fffbeb', 'icon' => 'fa-handshake'],
-    'closed_won'   => ['label' => 'Closed Won',  'color' => '#16a34a', 'bg' => '#f0fdf4', 'icon' => 'fa-circle-check'],
-    'closed_lost'  => ['label' => 'Lost',        'color' => '#dc2626', 'bg' => '#fef2f2', 'icon' => 'fa-circle-xmark'],
+    'hot'       => ['label' => 'Hot',       'color' => '#dc2626', 'bg' => '#fef2f2', 'icon' => 'fa-fire'],
+    'lukewarm'  => ['label' => 'Lukewarm',  'color' => '#d97706', 'bg' => '#fffbeb', 'icon' => 'fa-temperature-half'],
+    'cold'      => ['label' => 'Cold',      'color' => '#0891b2', 'bg' => '#ecfeff', 'icon' => 'fa-snowflake'],
+    'lost'      => ['label' => 'Lost',      'color' => '#64748b', 'bg' => '#f8fafc', 'icon' => 'fa-circle-xmark'],
+    'reserved'  => ['label' => 'Reserved',  'color' => '#7c3aed', 'bg' => '#f5f3ff', 'icon' => 'fa-bookmark'],
+    'delivered' => ['label' => 'Delivered', 'color' => '#16a34a', 'bg' => '#f0fdf4', 'icon' => 'fa-truck'],
 ];
 
 try {
     // Summary stats
     $stats = $db->query("
         SELECT
-            COUNT(*)                                                          AS total,
-            SUM(stage NOT IN ('closed_won','closed_lost'))                   AS active,
-            SUM(stage = 'closed_won')                                        AS won,
-            SUM(stage = 'closed_lost')                                       AS lost,
-            COALESCE(SUM(CASE WHEN stage='closed_won' THEN budget END), 0)  AS won_value,
-            SUM(follow_up_date IS NOT NULL AND follow_up_date < CURDATE() AND stage NOT IN ('closed_won','closed_lost')) AS overdue_followups
+            COUNT(*)                                                           AS total,
+            SUM(stage NOT IN ('lost','delivered'))                             AS active,
+            SUM(stage = 'delivered')                                           AS won,
+            SUM(stage = 'lost')                                                AS lost,
+            COALESCE(SUM(CASE WHEN stage='delivered' THEN budget END), 0)     AS won_value,
+            SUM(follow_up_date IS NOT NULL AND follow_up_date < CURDATE() AND stage NOT IN ('lost','delivered')) AS overdue_followups
         FROM crm_leads
     ")->fetch();
 
@@ -35,7 +34,7 @@ try {
     $stageCounts = $db->query("
         SELECT stage, COUNT(*) AS cnt, COALESCE(SUM(budget),0) AS total_budget
         FROM crm_leads
-        WHERE stage NOT IN ('closed_won','closed_lost')
+        WHERE stage NOT IN ('lost','delivered')
         GROUP BY stage
     ")->fetchAll(PDO::FETCH_ASSOC);
     $stageMap = [];
@@ -46,7 +45,7 @@ try {
         SELECT l.*, u.name AS assigned_name
         FROM crm_leads l
         LEFT JOIN users u ON u.id = l.assigned_to
-        WHERE l.stage NOT IN ('closed_won','closed_lost')
+        WHERE l.stage NOT IN ('lost','delivered')
         ORDER BY l.updated_at DESC
     ")->fetchAll();
 
@@ -57,7 +56,7 @@ try {
         LEFT JOIN users u ON u.id = l.assigned_to
         WHERE l.follow_up_date IS NOT NULL
           AND l.follow_up_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)
-          AND l.stage NOT IN ('closed_won','closed_lost')
+          AND l.stage NOT IN ('lost','delivered')
         ORDER BY l.follow_up_date ASC
         LIMIT 10
     ")->fetchAll();
@@ -135,7 +134,7 @@ include __DIR__ . '/../../includes/header.php';
         <div class="stat-card" style="border-left:4px solid #16a34a">
             <div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="fa fa-circle-check"></i></div>
             <div class="stat-info">
-                <div class="stat-label">Closed Won</div>
+                <div class="stat-label">Delivered</div>
                 <div class="stat-value"><?= (int)$stats['won'] ?></div>
             </div>
         </div>
@@ -169,7 +168,7 @@ include __DIR__ . '/../../includes/header.php';
     <div class="card-body" style="overflow-x:auto">
         <div class="kanban-board">
         <?php
-        $activeStages = array_filter($stages, fn($k) => !in_array($k, ['closed_won','closed_lost']), ARRAY_FILTER_USE_KEY);
+        $activeStages = array_filter($stages, fn($k) => !in_array($k, ['lost','delivered']), ARRAY_FILTER_USE_KEY);
         foreach ($activeStages as $stageKey => $stageCfg):
             $colLeads = $kanban[$stageKey] ?? [];
             $colCount = count($colLeads);
@@ -236,7 +235,7 @@ include __DIR__ . '/../../includes/header.php';
                 <?php foreach ($followUps as $f):
                     $isOverdue = $f['follow_up_date'] < date('Y-m-d');
                     $isToday   = $f['follow_up_date'] === date('Y-m-d');
-                    $stg = $stages[$f['stage']] ?? $stages['new'];
+                    $stg = $stages[$f['stage']] ?? $stages['hot'];
                 ?>
                 <a href="view_lead.php?id=<?= $f['id'] ?>"
                    class="list-group-item list-group-item-action px-3 py-2 d-flex align-items-center gap-3">
