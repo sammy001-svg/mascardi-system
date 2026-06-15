@@ -5,8 +5,8 @@ $db = getDB();
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/clients/index.php');
 
-// Auto-add kra_pin column if this is a fresh install
 try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL AFTER id_number"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE invoices ADD COLUMN customer_kra_pin VARCHAR(20) NULL AFTER customer_email"); } catch (\Throwable $_) {}
 
 $client = $db->prepare("SELECT * FROM clients WHERE id=?");
 $client->execute([$id]); $client = $client->fetch();
@@ -37,6 +37,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $db->prepare("UPDATE clients SET name=?,email=?,phone=?,id_number=?,kra_pin=?,portal_password=?,portal_enabled=?,status=?,notes=? WHERE id=?")
                ->execute([$d['name'],$d['email'],$d['phone'],$d['id_number'],$d['kra_pin'],$hashedPass,$d['portal_enabled'],$d['status'],$d['notes'],$id]);
+
+            // Immediately push the new KRA PIN to every invoice belonging to this client.
+            // This covers old invoices (customer_kra_pin was empty) and any where the JOIN
+            // might not match, so the print always reflects the current value.
+            if ($d['kra_pin'] !== '') {
+                $db->prepare("UPDATE invoices SET customer_kra_pin = ? WHERE client_id = ?")
+                   ->execute([$d['kra_pin'], $id]);
+                // Also patch invoices that were created without a client_id but have a matching name
+                $db->prepare("UPDATE invoices SET customer_kra_pin = ? WHERE client_id IS NULL AND LOWER(TRIM(customer_name)) = LOWER(TRIM(?))")
+                   ->execute([$d['kra_pin'], $d['name']]);
+            }
+
             logActivity('update', 'clients', $id, "Updated client: {$d['name']}");
             setFlash('success', 'Client updated.');
             redirect(BASE_URL . '/modules/clients/view.php?id=' . $id);
