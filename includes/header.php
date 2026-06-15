@@ -74,7 +74,7 @@
         $__notifCount = getUnreadNotificationCount((int)$__user['id']);
         try { $__ls = getDashboardStats()['low_stock']; } catch (Exception $e) { $__ls = 0; }
         if ($__ls > 0): ?>
-        <a href="<?= BASE_URL ?>/modules/inventory/index.php?filter=low_stock"
+        <a href="<?= BASE_URL ?>/modules/inventory/reorder.php"
            class="topbar-alert d-none d-md-flex">
             <i class="fa fa-triangle-exclamation"></i> <?= $__ls ?> low stock
         </a>

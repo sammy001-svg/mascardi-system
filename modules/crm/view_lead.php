@@ -54,13 +54,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'update_stage' && canWrite('crm')) {
-        $newStage = $_POST['stage'] ?? '';
+        $newStage   = $_POST['stage']       ?? '';
+        $lostReason = trim($_POST['lost_reason'] ?? '') ?: null;
         if (array_key_exists($newStage, $stages)) {
-            $db->prepare("UPDATE crm_leads SET stage=?, updated_at=NOW() WHERE id=?")->execute([$newStage, $id]);
+            $db->prepare("UPDATE crm_leads SET stage=?, lost_reason=COALESCE(?,lost_reason), updated_at=NOW() WHERE id=?")
+               ->execute([$newStage, $lostReason, $id]);
             if ($newStage === 'closed_won') {
                 $db->prepare("UPDATE crm_leads SET converted_at=NOW() WHERE id=? AND converted_at IS NULL")->execute([$id]);
             }
             logActivity('update','crm_leads',$id,"Stage changed to: $newStage");
+            require_once __DIR__ . '/../../includes/notifications.php';
+            if ($newStage === 'closed_won') {
+                notifyRoles(['admin','sales_manager','general_manager'], 'sale',
+                    "Lead Won: {$lead['name']}",
+                    $lead['interested_in'] ? "Interested in: {$lead['interested_in']}" : '',
+                    BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+                );
+            } elseif ($newStage === 'closed_lost') {
+                notifyRoles(['admin','sales_manager'], 'info',
+                    "Lead Lost: {$lead['name']}",
+                    $lostReason ?: 'No reason recorded',
+                    BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+                );
+            }
             setFlash('success','Stage updated.');
         }
         redirect(BASE_URL.'/modules/crm/view_lead.php?id='.$id);
@@ -96,8 +112,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $lostReason  = trim($_POST['lost_reason']    ?? '') ?: null;
 
         if ($name) {
+            $prevAssigned = (int)$lead['assigned_to'];
             $db->prepare("UPDATE crm_leads SET name=?,phone=?,email=?,interested_in=?,budget=?,assigned_to=?,notes=?,follow_up_date=?,lost_reason=?,updated_at=NOW() WHERE id=?")
                ->execute([$name,$phone,$email,$interestedIn,$budget,$assignedTo,$notes,$followUp,$lostReason,$id]);
+            if ($assignedTo && $assignedTo !== $prevAssigned) {
+                require_once __DIR__ . '/../../includes/notifications.php';
+                createNotification((int)$assignedTo, 'info',
+                    "Lead Assigned: {$name}",
+                    $interestedIn ? "Interested in: {$interestedIn}" : 'You have been assigned a CRM lead.',
+                    BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+                );
+            }
             setFlash('success','Lead updated.');
         }
         redirect(BASE_URL.'/modules/crm/view_lead.php?id='.$id);
@@ -150,6 +175,10 @@ include __DIR__ . '/../../includes/header.php';
            class="btn btn-sm btn-success">
             <i class="fa fa-user-check me-1"></i>View Client
         </a>
+        <a href="<?= BASE_URL ?>/modules/quotations/add.php?client_id=<?= $lead['client_id'] ?>"
+           class="btn btn-sm btn-outline-info">
+            <i class="fa fa-file-lines me-1"></i>New Quotation
+        </a>
         <?php elseif (canWrite('crm') && $lead['stage'] !== 'closed_lost'): ?>
         <form method="POST" class="d-inline"
               onsubmit="return confirm('Convert this lead to a client?')">
@@ -158,6 +187,16 @@ include __DIR__ . '/../../includes/header.php';
                 <i class="fa fa-user-plus me-1"></i>Convert to Client
             </button>
         </form>
+        <?php endif; ?>
+        <!-- Quick contact actions -->
+        <?php if ($lead['phone']): ?>
+        <a href="tel:<?= e($lead['phone']) ?>" class="btn btn-sm btn-outline-success" title="Call">
+            <i class="fa fa-phone me-1"></i><?= e($lead['phone']) ?>
+        </a>
+        <a href="https://wa.me/<?= preg_replace('/[^0-9]/','',$lead['phone']) ?>"
+           target="_blank" class="btn btn-sm btn-outline-success" title="WhatsApp">
+            <i class="fab fa-whatsapp me-1"></i>WhatsApp
+        </a>
         <?php endif; ?>
         <a href="leads.php" class="btn btn-sm btn-outline-secondary">
             <i class="fa fa-arrow-left me-1"></i>Back
@@ -174,14 +213,24 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card mb-3">
             <div class="card-header fw-semibold"><i class="fa fa-arrow-right me-2"></i>Move Stage</div>
             <div class="card-body p-2">
-                <form method="POST">
+                <form method="POST" id="stageForm">
                     <input type="hidden" name="action" value="update_stage">
+                    <input type="hidden" name="stage" id="stageInput" value="">
+                    <input type="hidden" name="lost_reason" id="lostReasonInput" value="">
                     <div class="d-flex flex-wrap gap-1">
                     <?php foreach ($stages as $sk => [$sl,$sc,$si]): ?>
+                        <?php if ($sk === 'closed_lost'): ?>
+                        <button type="button"
+                                class="btn btn-sm <?= $lead['stage'] === $sk ? 'btn-'.$sc : 'btn-outline-'.$sc ?>"
+                                data-bs-toggle="modal" data-bs-target="#lostModal">
+                            <i class="fa <?= $si ?> me-1"></i><?= $sl ?>
+                        </button>
+                        <?php else: ?>
                         <button type="submit" name="stage" value="<?= $sk ?>"
                                 class="btn btn-sm <?= $lead['stage'] === $sk ? 'btn-'.$sc : 'btn-outline-'.$sc ?>">
                             <i class="fa <?= $si ?> me-1"></i><?= $sl ?>
                         </button>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                     </div>
                 </form>
@@ -383,5 +432,37 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+
+<!-- Lost Reason Modal -->
+<div class="modal fade" id="lostModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header py-2 border-0">
+                <h6 class="modal-title fw-bold"><i class="fa fa-circle-xmark me-2 text-danger"></i>Mark as Lost</h6>
+                <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-2">
+                <label class="form-label small fw-semibold">Reason (optional)</label>
+                <input type="text" id="lostReasonField" class="form-control form-control-sm"
+                       placeholder="e.g. Price too high, bought elsewhere…"
+                       value="<?= e($lead['lost_reason'] ?? '') ?>">
+                <div class="form-text">This will be recorded on the lead for analysis.</div>
+            </div>
+            <div class="modal-footer py-2 border-0">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-danger" id="confirmLost">
+                    <i class="fa fa-circle-xmark me-1"></i>Mark Lost
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('confirmLost') && document.getElementById('confirmLost').addEventListener('click', function () {
+    document.getElementById('stageInput').value    = 'closed_lost';
+    document.getElementById('lostReasonInput').value = document.getElementById('lostReasonField').value;
+    document.getElementById('stageForm').submit();
+});
+</script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

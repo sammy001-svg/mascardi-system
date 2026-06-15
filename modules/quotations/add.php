@@ -62,16 +62,33 @@ if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
             } catch (\Throwable $e) {}
         }
 
-        // Match car by chassis then registration
+        // Match car: QA direct link → chassis → exact reg → normalised reg
         if (!$preCarId) {
-            if ($fromQr['car_chassis']) {
+            // Direct car_id from linked quick assessment (most reliable)
+            if (!empty($fromQr['quick_assessment_id'])) {
+                try {
+                    $s = $db->prepare("SELECT car_id FROM quick_assessments WHERE id = ? AND car_id IS NOT NULL LIMIT 1");
+                    $s->execute([$fromQr['quick_assessment_id']]);
+                    $preCarId = (int)($s->fetchColumn() ?: 0);
+                } catch (\Throwable $e) {}
+            }
+            // Chassis exact match
+            if (!$preCarId && $fromQr['car_chassis']) {
                 $s = $db->prepare("SELECT id FROM cars WHERE chassis_number = ? LIMIT 1");
                 $s->execute([$fromQr['car_chassis']]);
                 $preCarId = (int)($s->fetchColumn() ?: 0);
             }
+            // Registration exact match
             if (!$preCarId && $fromQr['car_registration']) {
                 $s = $db->prepare("SELECT id FROM cars WHERE registration_number = ? LIMIT 1");
                 $s->execute([$fromQr['car_registration']]);
+                $preCarId = (int)($s->fetchColumn() ?: 0);
+            }
+            // Registration normalised: ignore spaces + case ("KDW 171A" == "KDW171A")
+            if (!$preCarId && $fromQr['car_registration']) {
+                $normReg = str_replace(' ', '', strtoupper($fromQr['car_registration']));
+                $s = $db->prepare("SELECT id FROM cars WHERE REPLACE(UPPER(registration_number),' ','') = ? LIMIT 1");
+                $s->execute([$normReg]);
                 $preCarId = (int)($s->fetchColumn() ?: 0);
             }
         }
@@ -223,6 +240,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $iStmt->execute([$qId,$type,$invId,$desc,$qty,$price,$disc,$tot]);
             }
             $db->commit();
+            require_once __DIR__ . '/../../includes/notifications.php';
+            notifyRoles(['admin','sales_manager','general_manager'], 'info',
+                "New Quotation: {$qNum}",
+                $custName . ($total ? ' — ' . money((float)$total) : ''),
+                BASE_URL . '/modules/quotations/view.php?id=' . $qId
+            );
             setFlash('success',"Quotation {$qNum} created.");
             $afterSave = $_POST['_after_save'] ?? 'view';
             if ($afterSave === 'print') {

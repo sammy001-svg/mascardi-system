@@ -40,6 +40,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && canWrite('parts_requests')) {
     if ($action === 'approved' || $action === 'rejected') {
         $db->prepare("UPDATE parts_requests SET status=?, admin_notes=?, approved_by=?, updated_at=NOW() WHERE id=?")
            ->execute([$action, $adminNotes, $user['name'], $id]);
+        require_once __DIR__ . '/../../includes/notifications.php';
+        $actionLabel = ucfirst($action);
+        if ($req['mechanic_id']) {
+            $mechUsr = $db->prepare("SELECT id FROM users WHERE linked_type='mechanic' AND linked_id=? AND status='active' LIMIT 1");
+            $mechUsr->execute([$req['mechanic_id']]);
+            $mechUsrId = (int)$mechUsr->fetchColumn();
+            if ($mechUsrId) {
+                createNotification($mechUsrId, 'info',
+                    "Parts Request {$actionLabel}: {$req['request_number']}",
+                    $adminNotes ?: "Your parts request has been {$action}.",
+                    BASE_URL . '/modules/parts_requests/view.php?id=' . $id
+                );
+            }
+        }
         setFlash('success', 'Request ' . $action . '.');
         redirect(BASE_URL . '/modules/parts_requests/view.php?id=' . $id);
     }
@@ -63,6 +77,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && canWrite('parts_requests')) {
             $db->prepare("UPDATE parts_requests SET status='issued', admin_notes=?, approved_by=?, updated_at=NOW() WHERE id=?")
                ->execute([$adminNotes ?: $req['admin_notes'], $user['name'], $id]);
             $db->commit();
+            require_once __DIR__ . '/../../includes/notifications.php';
+            if ($req['mechanic_id']) {
+                $mechUsr = $db->prepare("SELECT id FROM users WHERE linked_type='mechanic' AND linked_id=? AND status='active' LIMIT 1");
+                $mechUsr->execute([$req['mechanic_id']]);
+                $mechUsrId = (int)$mechUsr->fetchColumn();
+                if ($mechUsrId) {
+                    createNotification($mechUsrId, 'info',
+                        "Parts Issued: {$req['request_number']}",
+                        "Your requested parts have been issued from stock.",
+                        BASE_URL . '/modules/parts_requests/view.php?id=' . $id
+                    );
+                }
+            }
             setFlash('success', 'Parts issued and stock updated.');
             redirect(BASE_URL . '/modules/parts_requests/view.php?id=' . $id);
         } catch (\Throwable $e) {

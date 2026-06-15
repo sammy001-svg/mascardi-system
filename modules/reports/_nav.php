@@ -41,10 +41,12 @@ function reportUrl(string $page, string $qs): string {
 <ul class="nav nav-tabs mb-4" style="border-bottom:2px solid #e2e8f0;gap:2px">
     <?php
     $tabs = [
-        'index.php'            => ['fa-gauge-high',  'Overview'],
-        'financial.php'        => ['fa-scale-balanced','Financial'],
+        'index.php'            => ['fa-gauge-high',        'Overview'],
+        'financial.php'        => ['fa-scale-balanced',    'Financial'],
         'workshop.php'         => ['fa-screwdriver-wrench','Workshop'],
-        'sales_performance.php'=> ['fa-trophy',      'Sales'],
+        'sales_performance.php'=> ['fa-trophy',            'Sales'],
+        'vehicle_profit.php'   => ['fa-car-side',          'Vehicle P&L'],
+        'crm.php'              => ['fa-funnel-dollar',     'CRM'],
     ];
     foreach ($tabs as $file => [$icon, $label2]):
         $active = $__reportPage === $file ? 'active' : '';

@@ -18,6 +18,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_
     $db->prepare("UPDATE workshop_jobs SET status='completed', end_date=COALESCE(end_date,CURDATE()) WHERE id=?")->execute([$id]);
     $db->prepare("UPDATE cars SET status='completed' WHERE id=?")->execute([$job['car_id']]);
     logActivity('update', 'jobs', $id, "Marked job {$job['job_number']} as completed");
+    require_once __DIR__ . '/../../includes/notifications.php';
+    notifyRoles(['admin','general_manager','finance_manager','sales_manager','sales_officer'], 'job',
+        "Job Completed: {$job['job_number']}",
+        "{$job['make']} {$job['model']} {$job['year']} is ready",
+        BASE_URL . '/modules/jobs/view.php?id=' . $id
+    );
     setFlash('success', "Job {$job['job_number']} marked as completed.");
     redirect(BASE_URL . '/modules/jobs/view.php?id=' . $id);
 }

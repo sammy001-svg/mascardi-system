@@ -30,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'unit_price'    => (float)($_POST['unit_price'] ?? 0),
         'selling_price' => (float)($_POST['selling_price'] ?? 0),
         'reorder_level' => (float)($_POST['reorder_level'] ?? 5),
+        'reorder_qty'   => (float)($_POST['reorder_qty']   ?? 0),
         'supplier_id'   => (int)($_POST['supplier_id'] ?? 0) ?: null,
     ];
 
@@ -41,12 +42,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 UPDATE inventory SET
                     part_number=?, part_name=?, description=?, category=?,
                     brand=?, make=?, model=?, code=?,
-                    unit=?, unit_price=?, selling_price=?, reorder_level=?, supplier_id=?
+                    unit=?, unit_price=?, selling_price=?, reorder_level=?, reorder_qty=?, supplier_id=?
                 WHERE id=?
             ")->execute([
                 $d['part_number'], $d['part_name'], $d['description'], $d['category'],
                 $d['brand'], $d['make'], $d['model'], $d['code'],
-                $d['unit'], $d['unit_price'], $d['selling_price'], $d['reorder_level'], $d['supplier_id'],
+                $d['unit'], $d['unit_price'], $d['selling_price'], $d['reorder_level'], $d['reorder_qty'], $d['supplier_id'],
                 $id,
             ]);
             setFlash('success', 'Part updated successfully.');
@@ -183,6 +184,12 @@ include __DIR__ . '/../../includes/header.php';
                         <input type="number" name="reorder_level" class="form-control"
                                min="0" step="0.01" value="<?= e($f['reorder_level']) ?>">
                         <div class="form-text">Alert when stock reaches this level</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Reorder Quantity</label>
+                        <input type="number" name="reorder_qty" class="form-control"
+                               min="0" step="0.01" value="<?= e($f['reorder_qty'] ?? '0') ?>">
+                        <div class="form-text">How many to order when restocking</div>
                     </div>
                 </div>
             </div>
