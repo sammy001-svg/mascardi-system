@@ -19,20 +19,25 @@ if ($preJobId) {
     $pj->execute([$preJobId]); $prefillJob = $pj->fetch();
 }
 
+// Auto-add customer_kra_pin column if not present
+try { $db->exec("ALTER TABLE invoices ADD COLUMN customer_kra_pin VARCHAR(20) NULL AFTER customer_email"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL AFTER id_number"); } catch (\Throwable $_) {}
+
 $cars    = $db->query("SELECT id, make, model, chassis_number, registration_number FROM cars ORDER BY make, model")->fetchAll();
 $jobs    = $db->query("SELECT id, job_number FROM workshop_jobs WHERE status NOT IN ('cancelled') ORDER BY job_number DESC")->fetchAll();
-$clients = $db->query("SELECT id, name, phone, email FROM clients WHERE status='active' ORDER BY name")->fetchAll();
+$clients = $db->query("SELECT id, name, phone, email, kra_pin FROM clients WHERE status='active' ORDER BY name")->fetchAll();
 
 $errors = [];
 $d = [
     'car_id'         => $prefillJob['car_id'] ?? '',
     'job_id'         => $prefillJob ? $prefillJob['id'] : '',
-    'client_id'      => '',
-    'date'           => date('Y-m-d'),
-    'due_date'       => date('Y-m-d', strtotime('+30 days')),
-    'customer_name'  => $prefillJob['owner_name']  ?? '',
-    'customer_phone' => $prefillJob['owner_phone'] ?? '',
-    'customer_email' => $prefillJob['owner_email'] ?? '',
+    'client_id'         => '',
+    'date'              => date('Y-m-d'),
+    'due_date'          => date('Y-m-d', strtotime('+30 days')),
+    'customer_name'     => $prefillJob['owner_name']  ?? '',
+    'customer_phone'    => $prefillJob['owner_phone'] ?? '',
+    'customer_email'    => $prefillJob['owner_email'] ?? '',
+    'customer_kra_pin'  => '',
     'discount'       => 0,
     'tax_rate'       => getSetting('vat_rate', '16'),
     'notes'          => '',
@@ -45,10 +50,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['client_id']     = $_POST['client_id'] ? (int)$_POST['client_id'] : null;
     $d['date']          = $_POST['date'] ?? date('Y-m-d');
     $d['due_date']      = $_POST['due_date'] ?: null;
-    $d['customer_name'] = trim($_POST['customer_name'] ?? '');
-    $d['customer_phone']= trim($_POST['customer_phone'] ?? '');
-    $d['customer_email']= trim($_POST['customer_email'] ?? '');
-    $d['discount']      = max(0, (float)($_POST['discount'] ?? 0));
+    $d['customer_name']    = trim($_POST['customer_name'] ?? '');
+    $d['customer_phone']   = trim($_POST['customer_phone'] ?? '');
+    $d['customer_email']   = trim($_POST['customer_email'] ?? '');
+    $d['customer_kra_pin'] = strtoupper(trim($_POST['customer_kra_pin'] ?? ''));
+    $d['discount']         = max(0, (float)($_POST['discount'] ?? 0));
     $d['tax_rate']      = (float)($_POST['tax_rate'] ?? 16);
     $d['notes']         = trim($_POST['notes'] ?? '');
 
@@ -77,13 +83,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("
                 INSERT INTO invoices
                     (invoice_number, car_id, job_id, client_id, date, due_date,
-                     customer_name, customer_phone, customer_email,
+                     customer_name, customer_phone, customer_email, customer_kra_pin,
                      subtotal, discount, tax_rate, tax_amount, total, notes)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ")->execute([
                 $invNum, $d['car_id'], $d['job_id'], $d['client_id'],
                 $d['date'], $d['due_date'],
-                $d['customer_name'], $d['customer_phone'], $d['customer_email'],
+                $d['customer_name'], $d['customer_phone'], $d['customer_email'], $d['customer_kra_pin'],
                 $subtotal, $discountAmt, $d['tax_rate'], $taxAmt, $total,
                 $d['notes'],
             ]);
@@ -134,12 +140,14 @@ $(function () {
     // Client auto-fill
     $('#client_select').on('change', function () {
         var opt = $(this).find(':selected');
-        var n = opt.data('name')  || '';
-        var p = opt.data('phone') || '';
-        var e = opt.data('email') || '';
+        var n = opt.data('name')   || '';
+        var p = opt.data('phone')  || '';
+        var e = opt.data('email')  || '';
+        var k = opt.data('krapin') || '';
         if (n) $('#customer_name').val(n);
         if (p) $('#customer_phone').val(p);
         if (e) $('#customer_email').val(e);
+        $('#customer_kra_pin').val(k ? k.toUpperCase() : '');
     });
 
     // KES discount recalc — runs after main.js recalcTotals (which uses overall_discount=0)
@@ -320,6 +328,7 @@ include __DIR__ . '/../../includes/header.php';
                                     data-name="<?= e($cl['name']) ?>"
                                     data-phone="<?= e($cl['phone'] ?? '') ?>"
                                     data-email="<?= e($cl['email'] ?? '') ?>"
+                                    data-krapin="<?= e($cl['kra_pin'] ?? '') ?>"
                                     <?= $d['client_id']==$cl['id']?'selected':'' ?>>
                                 <?= e($cl['name']) ?>
                             </option>
@@ -341,6 +350,14 @@ include __DIR__ . '/../../includes/header.php';
                         <input type="email" name="customer_email" id="customer_email"
                                class="form-control" value="<?= e($d['customer_email']??'') ?>"
                                placeholder="for emailing invoice">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">KRA PIN</label>
+                        <input type="text" name="customer_kra_pin" id="customer_kra_pin"
+                               class="form-control text-uppercase"
+                               value="<?= e($d['customer_kra_pin']??'') ?>"
+                               placeholder="e.g. A001234567B" maxlength="20"
+                               oninput="this.value=this.value.toUpperCase()">
                     </div>
                 </div>
             </div>
