@@ -4,7 +4,27 @@ $id=(int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/invoices/index.p
 $db=getDB();
 try { $db->exec("ALTER TABLE invoices ADD COLUMN customer_kra_pin VARCHAR(20) NULL AFTER customer_email"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL AFTER id_number"); } catch (\Throwable $_) {}
-$stmt=$db->prepare("SELECT i.*,c.chassis_number,c.make,c.model,c.year,c.color,c.registration_number,cl.id_number AS client_id_number,COALESCE(i.customer_kra_pin,cl.kra_pin) AS display_kra_pin FROM invoices i JOIN cars c ON c.id=i.car_id LEFT JOIN clients cl ON cl.id=i.client_id WHERE i.id=?");
+// Join the client even when client_id is NULL by falling back to a name-match.
+// COALESCE priority: (1) KRA PIN typed directly on invoice  (2) client.kra_pin  (3) client.id_number (legacy field)
+$stmt=$db->prepare("
+    SELECT i.*, c.chassis_number, c.make, c.model, c.year, c.color, c.registration_number,
+           cl.id_number AS client_id_number,
+           COALESCE(
+               NULLIF(TRIM(i.customer_kra_pin), ''),
+               NULLIF(TRIM(cl.kra_pin), ''),
+               NULLIF(TRIM(cl.id_number), '')
+           ) AS display_kra_pin
+    FROM invoices i
+    JOIN cars c ON c.id = i.car_id
+    LEFT JOIN clients cl ON cl.id = COALESCE(
+        i.client_id,
+        (SELECT id FROM clients
+         WHERE LOWER(TRIM(name)) = LOWER(TRIM(i.customer_name))
+           AND status = 'active'
+         LIMIT 1)
+    )
+    WHERE i.id = ?
+");
 $stmt->execute([$id]); $inv=$stmt->fetch();
 if(!$inv) die('Not found');
 $items=$db->prepare("SELECT * FROM invoice_items WHERE invoice_id=? ORDER BY id"); $items->execute([$id]); $items=$items->fetchAll();
@@ -55,9 +75,9 @@ if ($isClient && $inv['client_id'] !== $_SESSION['_client']['id']) {
         <div class="col-6">
             <div class="text-muted small fw-bold text-uppercase mb-1">Bill To</div>
             <div class="fw-semibold"><?= e($inv['customer_name']??'—') ?></div>
-            <?php if($inv['customer_phone']): ?><div class="small"><?= e($inv['customer_phone']) ?></div><?php endif; ?>
-            <?php if($inv['display_kra_pin']): ?><div class="small">KRA PIN: <strong><?= e($inv['display_kra_pin']) ?></strong></div><?php endif; ?>
-            <?php if($inv['client_id_number']): ?><div class="small text-muted">ID No: <?= e($inv['client_id_number']) ?></div><?php endif; ?>
+            <?php if($inv['customer_phone']): ?><div class="small">Tel: <?= e($inv['customer_phone']) ?></div><?php endif; ?>
+            <?php if($inv['customer_email'] ?? ''): ?><div class="small"><?= e($inv['customer_email']) ?></div><?php endif; ?>
+            <?php if($inv['display_kra_pin']): ?><div class="small" style="margin-top:3px">KRA PIN: <strong><?= e(strtoupper($inv['display_kra_pin'])) ?></strong></div><?php endif; ?>
         </div>
         <div class="col-6">
             <div class="text-muted small fw-bold text-uppercase mb-1">Vehicle</div>
