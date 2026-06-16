@@ -102,7 +102,7 @@ if (hasRole('customer_relations')) {
 
         <?php if (canAccess('team')): ?>
         <a href="<?= BASE_URL ?>/modules/team/index.php"
-           class="nav-item <?= isActive('/modules/team/') ?>"
+           class="nav-item <?= isActive('/modules/team/index') ?>"
            data-label="Team Board"
            style="position:relative">
             <i class="fa fa-people-group"></i><span>Team Board</span>
@@ -114,6 +114,11 @@ if (hasRole('customer_relations')) {
                 <?= $__pendLeave > 99 ? '99+' : $__pendLeave ?>
             </span>
             <?php endif; } catch (Exception $e) {} ?>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/team/leave_calendar.php"
+           class="nav-item <?= isActive('/modules/team/leave_calendar') ?>"
+           data-label="Leave Calendar">
+            <i class="fa fa-calendar-week"></i><span>Leave Calendar</span>
         </a>
         <?php endif; ?>
 
@@ -403,8 +408,13 @@ if (hasRole('customer_relations')) {
         <div class="nav-section">Human Resources</div>
 
         <?php if (canAccess('attendance')): ?>
+        <a href="<?= BASE_URL ?>/modules/attendance/hr_dashboard.php"
+           class="nav-item <?= isActive('/modules/attendance/hr_dashboard') ?>"
+           data-label="HR Dashboard">
+            <i class="fa fa-gauge-high"></i><span>HR Dashboard</span>
+        </a>
         <a href="<?= BASE_URL ?>/modules/attendance/index.php"
-           class="nav-item <?= isActive('/modules/attendance/') ?>"
+           class="nav-item <?= isActive('/modules/attendance/index') ?>"
            data-label="Attendance">
             <i class="fa fa-calendar-days"></i><span>Attendance</span>
         </a>

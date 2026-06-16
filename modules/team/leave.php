@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/notifications.php';
 requireLogin();
 canAccess('team') || die('Access denied.');
 $db   = getDB();
@@ -62,7 +63,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $leaveNum = nextNumber('leave_requests','leave_number','LR');
         $db->prepare("INSERT INTO leave_requests (leave_number,user_id,user_name,leave_type,start_date,end_date,days_count,reason,status,raised_by) VALUES (?,?,?,?,?,?,?,?,'pending',?)")
            ->execute([$leaveNum, $user['id'], $user['name'], $leaveType, $startDate, $endDate, $days, $reason, $user['name']]);
-        logActivity('create','team',$db->lastInsertId(),"Leave request $leaveNum submitted by {$user['name']}");
+        $newId = $db->lastInsertId();
+        logActivity('create','team',$newId,"Leave request $leaveNum submitted by {$user['name']}");
+        notifyRoles(
+            ['admin','hr_manager','general_manager','workshop_manager'],
+            'leave_request',
+            "Leave Request: {$user['name']}",
+            "{$user['name']} has submitted a {$leaveType} leave request ({$days} day" . ($days != 1 ? 's' : '') . ") from $startDate to $endDate.",
+            BASE_URL . '/modules/team/leave.php?tab=pending'
+        );
         setFlash('success', "Leave request $leaveNum submitted — awaiting approval.");
         redirect('leave.php');
     }
@@ -95,11 +104,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            ->execute([$req['user_id']]);
                     } catch (\Throwable $e) {}
                 }
+                createNotification(
+                    (int)$req['user_id'],
+                    'leave_approved',
+                    "Leave Approved",
+                    "Your {$req['leave_type']} leave request ({$req['leave_number']}) from {$req['start_date']} to {$req['end_date']} has been approved by {$user['name']}.",
+                    BASE_URL . '/modules/team/leave.php'
+                );
                 setFlash('success', "Leave request {$req['leave_number']} approved.");
             } else {
                 if (!$reason) { setFlash('error','Please provide a rejection reason.'); redirect('leave.php'); }
                 $db->prepare("UPDATE leave_requests SET status='rejected',approved_by=?,rejection_reason=?,updated_at=NOW() WHERE id=?")
                    ->execute([$user['name'], $reason, $lid]);
+                createNotification(
+                    (int)$req['user_id'],
+                    'leave_rejected',
+                    "Leave Request Declined",
+                    "Your {$req['leave_type']} leave request ({$req['leave_number']}) from {$req['start_date']} to {$req['end_date']} was not approved. Reason: {$reason}",
+                    BASE_URL . '/modules/team/leave.php'
+                );
                 setFlash('success', "Leave request {$req['leave_number']} rejected.");
             }
             logActivity('update','team',$lid,"Leave request {$req['leave_number']} {$action}d by {$user['name']}");
