@@ -316,6 +316,11 @@ if (authRole() === 'customer_relations') {
            data-label="Team Performance">
             <i class="fa fa-chart-bar"></i><span>Team Performance</span>
         </a>
+        <a href="<?= BASE_URL ?>/modules/crm/targets.php"
+           class="nav-item <?= isActive('/modules/crm/targets') ?>"
+           data-label="CRM Targets">
+            <i class="fa fa-bullseye"></i><span>CRM Targets</span>
+        </a>
         <?php endif; ?>
         <?php endif; ?>
 

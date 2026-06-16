@@ -104,12 +104,45 @@ try {
         $trendCounts[] = (int)$db->query("SELECT COUNT(*) FROM crm_leads WHERE DATE_FORMAT(created_at,'%Y-%m')='{$ym}' {$ownerWhere}")->fetchColumn();
     }
 
+    // Stale leads (no activity in 7+ days)
+    $staleCount = (int)$db->query("
+        SELECT COUNT(*) FROM crm_leads l
+        WHERE l.stage NOT IN ('lost','delivered')
+          AND l.created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+          {$ownerWhere}
+          AND NOT EXISTS (
+              SELECT 1 FROM crm_activities a
+              WHERE a.lead_id = l.id AND a.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          )
+    ")->fetchColumn();
+
+    // Monthly targets for current user
+    $thisMonth = date('Y-m');
+    $myTarget  = null;
+    try {
+        $ts = $db->prepare("SELECT * FROM crm_targets WHERE user_id = ? AND month = ?");
+        $ts->execute([$uid, $thisMonth]);
+        $myTarget = $ts->fetch() ?: null;
+    } catch (\Throwable $_) {}
+
+    // Actuals for this month
+    $actDeliveries = (int)$db->query("SELECT COUNT(*) FROM crm_leads WHERE assigned_to={$uid} AND stage='delivered' AND DATE_FORMAT(converted_at,'%Y-%m')='{$thisMonth}'")->fetchColumn();
+    $actActivities = (int)$db->query("SELECT COUNT(*) FROM crm_activities WHERE created_by={$uid} AND DATE_FORMAT(created_at,'%Y-%m')='{$thisMonth}'")->fetchColumn();
+    $actCalls      = (int)$db->query("SELECT COUNT(*) FROM crm_activities WHERE created_by={$uid} AND type IN ('call','whatsapp') AND DATE_FORMAT(created_at,'%Y-%m')='{$thisMonth}'")->fetchColumn();
+
+    // Today's test drives
+    $todayTd = 0;
+    try {
+        $todayTd = (int)$db->query("SELECT COUNT(*) FROM crm_test_drives td JOIN crm_leads l ON l.id=td.lead_id WHERE td.scheduled_date=CURDATE() AND td.status='scheduled' AND l.assigned_to={$uid}")->fetchColumn();
+    } catch (\Throwable $_) {}
+
 } catch (\Throwable $e) {
     $kpiActive = $kpiDueNow = $kpiOverdue = $kpiWon = $kpiValue = 0;
     $stageMap = $kanban = $followUps = $myActivities = [];
     $totalLeads = $wonTotal = $lostTotal = $lostMonth = 0;
     $convRate = 0;
     $trendLabels = $trendCounts = [];
+    $staleCount = 0; $myTarget = null; $actDeliveries = $actActivities = $actCalls = $todayTd = 0;
 }
 
 // Chart data
@@ -368,7 +401,64 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good
             <div class="crm-kpi-sub">active budgets</div>
         </div>
     </div>
+    <?php if ($todayTd > 0): ?>
+    <a href="<?= BASE_URL ?>/modules/crm/test_drives.php" class="crm-kpi" style="border-top:3px solid #0891b2">
+        <div class="crm-kpi-icon" style="background:#ecfeff;color:#0891b2"><i class="fa fa-car-side"></i></div>
+        <div class="crm-kpi-body">
+            <div class="crm-kpi-label">Test Drives</div>
+            <div class="crm-kpi-value"><?= $todayTd ?></div>
+            <div class="crm-kpi-sub">scheduled today</div>
+        </div>
+    </a>
+    <?php endif; ?>
 </div>
+
+<?php if ($staleCount > 0): ?>
+<div class="alert d-flex align-items-center gap-3 mb-4" style="background:#fff7ed;border:1px solid #fed7aa;border-left:4px solid #f59e0b;border-radius:8px">
+    <i class="fa fa-hourglass-half fa-xl" style="color:#f59e0b"></i>
+    <div class="flex-grow-1">
+        <div class="fw-semibold" style="color:#92400e"><?= $staleCount ?> lead<?= $staleCount > 1 ? 's' : '' ?> going cold</div>
+        <div class="small text-muted">No activity logged in 7+ days. Reach out before you lose them.</div>
+    </div>
+    <a href="my_tasks.php?tab=stale" class="btn btn-sm btn-warning">Review <i class="fa fa-arrow-right ms-1"></i></a>
+</div>
+<?php endif; ?>
+
+<?php if ($myTarget): ?>
+<div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between">
+        <span><i class="fa fa-bullseye me-2 text-primary"></i>My <?= date('F') ?> Targets</span>
+        <span class="text-muted small"><?= $actActivities + $actDeliveries ?> actions logged</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <?php
+            $metrics = [
+                ['label'=>'Deliveries',    'actual'=>$actDeliveries, 'target'=>(int)$myTarget['target_deliveries'],  'icon'=>'fa-truck',      'color'=>'success'],
+                ['label'=>'Activities',    'actual'=>$actActivities, 'target'=>(int)$myTarget['target_activities'],  'icon'=>'fa-list-check', 'color'=>'primary'],
+                ['label'=>'Calls/WhatsApp','actual'=>$actCalls,      'target'=>(int)$myTarget['target_calls'],       'icon'=>'fa-phone',      'color'=>'info'],
+            ];
+            foreach ($metrics as $m):
+                if ($m['target'] <= 0) continue;
+                $pct = min(100, round($m['actual'] / $m['target'] * 100));
+                $barColor = $pct >= 100 ? 'success' : ($pct >= 60 ? 'primary' : ($pct >= 30 ? 'warning' : 'danger'));
+            ?>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="fa <?= $m['icon'] ?> text-<?= $m['color'] ?>"></i>
+                    <span class="fw-semibold small"><?= $m['label'] ?></span>
+                    <span class="ms-auto small text-muted"><?= $m['actual'] ?>/<?= $m['target'] ?></span>
+                </div>
+                <div class="progress" style="height:8px">
+                    <div class="progress-bar bg-<?= $barColor ?>" style="width:<?= $pct ?>%"></div>
+                </div>
+                <div class="text-end mt-1" style="font-size:11px;color:#64748b"><?= $pct ?>%</div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- MAIN LAYOUT: Pipeline + Follow-ups -->
 <div class="row g-4 mb-4">

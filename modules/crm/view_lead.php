@@ -162,6 +162,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         setFlash('success', $carId ? 'Vehicle linked to lead.' : 'Vehicle link removed.');
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
     }
+
+    if ($action === 'schedule_test_drive' && canWrite('crm')) {
+        $tdDate  = trim($_POST['td_date'] ?? '');
+        $tdTime  = trim($_POST['td_time'] ?? '');
+        $tdCarId = (int)($_POST['td_car_id'] ?? 0) ?: null;
+        $tdNotes = trim($_POST['td_notes'] ?? '') ?: null;
+        $tdDur   = (int)($_POST['td_duration'] ?? 60);
+
+        if ($tdDate && $tdTime) {
+            try {
+                $db->prepare("CREATE TABLE IF NOT EXISTS crm_test_drives (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    lead_id INT NOT NULL, car_id INT NULL,
+                    scheduled_date DATE NOT NULL, scheduled_time TIME NOT NULL,
+                    duration_minutes INT DEFAULT 60,
+                    status ENUM('scheduled','completed','no_show','cancelled') DEFAULT 'scheduled',
+                    notes TEXT NULL, outcome TEXT NULL,
+                    created_by INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )")->execute([]);
+            } catch (\Throwable $_) {}
+
+            try {
+                $db->prepare("INSERT INTO crm_test_drives (lead_id, car_id, scheduled_date, scheduled_time, duration_minutes, notes, created_by) VALUES (?,?,?,?,?,?,?)")
+                   ->execute([$id, $tdCarId, $tdDate, $tdTime, $tdDur, $tdNotes, $uid]);
+                $db->prepare("INSERT INTO crm_activities (lead_id, type, summary, created_by) VALUES (?,?,?,?)")
+                   ->execute([$id, 'test_drive', "Test drive scheduled for {$tdDate} at {$tdTime}", $uid]);
+                setFlash('success', 'Test drive scheduled.');
+            } catch (\Throwable $e) {
+                setFlash('error', 'Could not schedule: ' . $e->getMessage());
+            }
+        }
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
 }
 
 // Load activities
@@ -173,6 +207,21 @@ $activities = $db->prepare("
     ORDER BY a.created_at DESC
 ");
 $activities->execute([$id]); $activities = $activities->fetchAll();
+
+// Upcoming test drives for this lead
+$testDrives = [];
+try {
+    $tdStmt = $db->prepare("
+        SELECT td.*, c.make, c.model, c.registration_number
+        FROM crm_test_drives td
+        LEFT JOIN cars c ON c.id = td.car_id
+        WHERE td.lead_id = ?
+        ORDER BY td.scheduled_date DESC, td.scheduled_time DESC
+        LIMIT 5
+    ");
+    $tdStmt->execute([$id]);
+    $testDrives = $tdStmt->fetchAll();
+} catch (\Throwable $_) {}
 
 // Load pinned car + all images
 $pinnedCar       = null;
@@ -236,6 +285,18 @@ include __DIR__ . '/../../includes/header.php';
         </a>
         <?php endif; ?>
         <!-- Quick contact actions -->
+        <?php if (canWrite('crm') && !in_array($lead['stage'], ['lost','delivered'])): ?>
+        <button type="button" class="btn btn-sm btn-outline-primary"
+                data-bs-toggle="modal" data-bs-target="#scheduleTdModal">
+            <i class="fa fa-car-side me-1"></i>Test Drive
+        </button>
+        <?php endif; ?>
+        <?php if ($lead['pinned_car_id'] || $lead['interested_in']): ?>
+        <a href="<?= BASE_URL ?>/modules/crm/proforma.php?lead_id=<?= $id ?>"
+           target="_blank" class="btn btn-sm btn-outline-success">
+            <i class="fa fa-file-invoice me-1"></i>Proforma
+        </a>
+        <?php endif; ?>
         <?php if ($lead['phone']): ?>
         <a href="tel:<?= e($lead['phone']) ?>" class="btn btn-sm btn-outline-success" title="Call">
             <i class="fa fa-phone me-1"></i><?= e($lead['phone']) ?>
@@ -249,9 +310,13 @@ include __DIR__ . '/../../includes/header.php';
         $waMsg = "Hello {$lead['name']}! I'm {$agentName} from {$company}." . ($interested ? " Following up on your interest in the {$interested}." : '') . " When would be a good time to connect or visit our showroom?";
         ?>
         <a href="https://wa.me/<?= $waNum ?>?text=<?= rawurlencode($waMsg) ?>"
-           target="_blank" class="btn btn-sm btn-success" title="WhatsApp <?= e($lead['phone']) ?>">
-            <i class="fab fa-whatsapp me-1"></i>WhatsApp
+           target="_blank" class="btn btn-sm btn-outline-success" title="WhatsApp <?= e($lead['phone']) ?>">
+            <i class="fab fa-whatsapp me-1"></i><i class="fa fa-phone"></i>
         </a>
+        <button type="button" class="btn btn-sm btn-success"
+                data-bs-toggle="modal" data-bs-target="#waTemplateModal">
+            <i class="fab fa-whatsapp me-1"></i>WhatsApp
+        </button>
         <?php endif; ?>
         <a href="leads.php" class="btn btn-sm btn-outline-secondary">
             <i class="fa fa-arrow-left me-1"></i>Back
@@ -610,6 +675,46 @@ include __DIR__ . '/../../includes/header.php';
             <?php endif; ?>
         </div>
 
+        <!-- Test Drives -->
+        <?php if (!empty($testDrives) || (canWrite('crm') && !in_array($lead['stage'],['lost','delivered']))): ?>
+        <div class="card mb-3">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center py-2">
+                <span><i class="fa fa-car-side me-2 text-primary"></i>Test Drives</span>
+                <?php if (canWrite('crm') && !in_array($lead['stage'],['lost','delivered'])): ?>
+                <button class="btn btn-xs btn-primary" style="font-size:11px;padding:2px 8px"
+                        data-bs-toggle="modal" data-bs-target="#scheduleTdModal">
+                    <i class="fa fa-plus me-1"></i>Schedule
+                </button>
+                <?php endif; ?>
+            </div>
+            <?php if ($testDrives): ?>
+            <ul class="list-group list-group-flush" style="font-size:12.5px">
+                <?php foreach ($testDrives as $td):
+                    $tdColors = ['scheduled'=>'primary','completed'=>'success','no_show'=>'danger','cancelled'=>'secondary'];
+                    $tdColor = $tdColors[$td['status']] ?? 'secondary';
+                ?>
+                <li class="list-group-item py-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="fw-semibold"><?= date('d M Y', strtotime($td['scheduled_date'])) ?> at <?= date('H:i', strtotime($td['scheduled_time'])) ?></div>
+                            <?php if ($td['make']): ?>
+                            <div class="text-muted small"><?= e($td['make'].' '.$td['model']) ?><?= $td['registration_number'] ? ' ('.$td['registration_number'].')' : '' ?></div>
+                            <?php endif; ?>
+                            <?php if ($td['outcome']): ?>
+                            <div class="text-muted small fst-italic mt-1"><?= e($td['outcome']) ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <span class="badge bg-<?= $tdColor ?>"><?= ucfirst(str_replace('_',' ',$td['status'])) ?></span>
+                    </div>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+            <?php else: ?>
+            <div class="card-body text-muted small">No test drives scheduled yet.</div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
         <!-- Edit details -->
         <?php if (canWrite('crm')): ?>
         <div class="card">
@@ -795,5 +900,173 @@ document.getElementById('confirmLost') && document.getElementById('confirmLost')
     document.getElementById('stageForm').submit();
 });
 </script>
+
+<!-- Schedule Test Drive Modal -->
+<div class="modal fade" id="scheduleTdModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="fa fa-car-side me-2"></i>Schedule Test Drive — <?= e($lead['name']) ?></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST">
+        <input type="hidden" name="action" value="schedule_test_drive">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold">Vehicle</label>
+              <select name="td_car_id" class="form-select form-select-sm">
+                <option value="">— Select from inventory (optional) —</option>
+                <?php
+                try {
+                    $availCars = $db->query("SELECT id, make, model, registration_number FROM cars WHERE car_type='inventory' ORDER BY make, model LIMIT 100")->fetchAll();
+                    foreach ($availCars as $ac):
+                        $sel = ($lead['pinned_car_id'] == $ac['id']) ? 'selected' : '';
+                ?>
+                <option value="<?= $ac['id'] ?>" <?= $sel ?>><?= e($ac['make'].' '.$ac['model'].' '.($ac['registration_number']?'('.$ac['registration_number'].')':'')) ?></option>
+                <?php endforeach; } catch (\Throwable $_) {} ?>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
+              <input type="date" name="td_date" class="form-control form-control-sm" min="<?= date('Y-m-d') ?>" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Time <span class="text-danger">*</span></label>
+              <input type="time" name="td_time" class="form-control form-control-sm" required value="10:00">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Duration</label>
+              <select name="td_duration" class="form-select form-select-sm">
+                <option value="30">30 minutes</option>
+                <option value="60" selected>1 hour</option>
+                <option value="90">1.5 hours</option>
+                <option value="120">2 hours</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Notes</label>
+              <textarea name="td_notes" class="form-control form-control-sm" rows="2" placeholder="Any special notes for the test drive…"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm"><i class="fa fa-calendar-check me-1"></i>Schedule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- WhatsApp Templates Modal -->
+<?php if ($lead['phone']): ?>
+<?php
+// Load templates
+$waTemplates = [];
+try {
+    $waTemplates = $db->query("SELECT * FROM crm_wa_templates WHERE is_active=1 ORDER BY sort_order, category, name")->fetchAll();
+} catch (\Throwable $_) {}
+$waNum = preg_replace('/[^0-9]/', '', $lead['phone']);
+if (str_starts_with($lead['phone'], '0')) $waNum = '254' . substr($waNum, 1);
+$agentNameWa = $me['name'] ?? '';
+$companyWa = getSetting('company_name', 'us');
+?>
+<div class="modal fade" id="waTemplateModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h6 class="modal-title"><i class="fab fa-whatsapp me-2"></i>WhatsApp — <?= e($lead['name']) ?></h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <?php if ($waTemplates): ?>
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">Select Template:</label>
+          <div class="row g-2">
+            <?php foreach ($waTemplates as $tpl): ?>
+            <div class="col-md-6">
+              <button type="button" class="btn btn-outline-secondary btn-sm w-100 text-start wa-tpl-btn"
+                      style="white-space:normal;font-size:12px"
+                      data-body="<?= e($tpl['body']) ?>">
+                <span class="badge bg-secondary me-1" style="font-size:9px"><?= e(str_replace('_',' ',ucfirst($tpl['category']))) ?></span>
+                <?= e($tpl['name']) ?>
+              </button>
+            </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <?php endif; ?>
+        <div class="mb-2">
+          <label class="form-label fw-semibold small">Message:</label>
+          <textarea id="waMessageBox" class="form-control" rows="5"
+                    placeholder="Type your message or select a template above…"><?php
+            // Default pre-filled message
+            $defMsg = "Hello {$lead['name']}!";
+            if ($lead['interested_in']) $defMsg .= " Following up on your interest in the {$lead['interested_in']}.";
+            $defMsg .= " — {$agentNameWa}";
+            echo e($defMsg);
+          ?></textarea>
+          <div class="d-flex justify-content-between mt-1">
+            <span class="text-muted" style="font-size:11px">Placeholders are auto-filled with lead details</span>
+            <span id="waCharCount" class="text-muted" style="font-size:11px">0 chars</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <a id="waOpenBtn" href="#" target="_blank" class="btn btn-success btn-sm">
+          <i class="fab fa-whatsapp me-1"></i>Open in WhatsApp
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var box   = document.getElementById('waMessageBox');
+  var btn   = document.getElementById('waOpenBtn');
+  var count = document.getElementById('waCharCount');
+  var waNum = '<?= $waNum ?>';
+  var replacements = {
+    '{name}'   : '<?= addslashes($lead['name']) ?>',
+    '{agent}'  : '<?= addslashes($agentNameWa) ?>',
+    '{company}': '<?= addslashes($companyWa) ?>',
+    '{car}'    : '<?= addslashes($lead['interested_in'] ?? '') ?>',
+    '{price}'  : '<?= $lead['budget'] ? 'KES ' . number_format((float)$lead['budget']) : '' ?>',
+    '{date}'   : '<?= date('d M Y') ?>',
+  };
+
+  function fillPlaceholders(text) {
+    Object.keys(replacements).forEach(function(k){ text = text.split(k).join(replacements[k]); });
+    return text;
+  }
+
+  function updateBtn() {
+    var msg = fillPlaceholders(box.value);
+    btn.href = 'https://wa.me/' + waNum + '?text=' + encodeURIComponent(msg);
+    count.textContent = msg.length + ' chars';
+  }
+
+  box.addEventListener('input', updateBtn);
+
+  document.querySelectorAll('.wa-tpl-btn').forEach(function(b){
+    b.addEventListener('click', function(){
+      box.value = b.getAttribute('data-body');
+      document.querySelectorAll('.wa-tpl-btn').forEach(function(x){ x.classList.remove('btn-success','text-white'); x.classList.add('btn-outline-secondary'); });
+      b.classList.remove('btn-outline-secondary'); b.classList.add('btn-success','text-white');
+      updateBtn();
+    });
+  });
+
+  updateBtn();
+
+  document.getElementById('waTemplateModal').addEventListener('show.bs.modal', function(){
+    document.querySelectorAll('.wa-tpl-btn').forEach(function(x){ x.classList.remove('btn-success','text-white'); x.classList.add('btn-outline-secondary'); });
+    updateBtn();
+  });
+}());
+</script>
+<?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

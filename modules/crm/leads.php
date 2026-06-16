@@ -178,6 +178,26 @@ try {
     $leads = []; $salesUsers = [];
 }
 
+// ── Stale lead detection ──────────────────────────────────────────────────────
+$staleLeadIds = [];
+if ($leads) {
+    $ids = implode(',', array_map(fn($l) => (int)$l['id'], $leads));
+    try {
+        $staleRows = $db->query("
+            SELECT l.id FROM crm_leads l
+            WHERE l.id IN ({$ids})
+              AND l.stage NOT IN ('lost','delivered')
+              AND l.created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+              AND NOT EXISTS (
+                  SELECT 1 FROM crm_activities a
+                  WHERE a.lead_id = l.id
+                    AND a.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+              )
+        ")->fetchAll(PDO::FETCH_COLUMN);
+        $staleLeadIds = array_flip($staleRows);
+    } catch (\Throwable $_) {}
+}
+
 $stages = [
     'hot'       => ['Hot',       'danger'],
     'lukewarm'  => ['Lukewarm',  'warning'],
@@ -208,6 +228,11 @@ include __DIR__ . '/../../includes/header.php';
         <a href="my_dashboard.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-gauge-high me-1"></i>Dashboard</a>
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-columns me-1"></i>Pipeline</a>
+        <?php if (!empty($staleLeadIds)): ?>
+        <a href="my_tasks.php?tab=stale" class="btn btn-sm btn-outline-warning">
+            <i class="fa fa-hourglass-half me-1"></i>Going Cold <span class="badge bg-warning text-dark"><?= count($staleLeadIds) ?></span>
+        </a>
+        <?php endif; ?>
         <?php if (canWrite('crm')): ?>
         <a href="import_leads.php" class="btn btn-sm btn-outline-success"><i class="fa fa-file-import me-1"></i>Import</a>
         <a href="add_lead.php" class="btn btn-sm btn-primary"><i class="fa fa-plus me-1"></i>New Lead</a>
@@ -372,6 +397,11 @@ include __DIR__ . '/../../includes/header.php';
                     </a>
                     <?php if ($l['client_id']): ?>
                     <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" style="font-size:10px">Client</span>
+                    <?php endif; ?>
+                    <?php if (isset($staleLeadIds[$l['id']])): ?>
+                    <span class="badge ms-1" style="background:#f59e0b;color:#fff;font-size:9px;padding:2px 5px" title="No activity in 7+ days">
+                        <i class="fa fa-hourglass-half"></i> Cold
+                    </span>
                     <?php endif; ?>
                 </td>
                 <td>

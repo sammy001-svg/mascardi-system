@@ -138,9 +138,37 @@ $countTomorrow = count($groups['tomorrow']);
 $countWeek     = count($groups['this_week']);
 $countUpcoming = count($groups['upcoming']);
 
+// ── Stale leads (no activity in 7+ days, not closed) ─────────────────────────
+try {
+    $staleLeads = $db->query("
+        SELECT l.*, u.name AS assigned_name
+        FROM crm_leads l
+        LEFT JOIN users u ON u.id = l.assigned_to
+        WHERE l.stage NOT IN ('lost','delivered')
+          AND l.created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+          {$ownerWhere}
+          AND NOT EXISTS (
+              SELECT 1 FROM crm_activities a
+              WHERE a.lead_id = l.id
+                AND a.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          )
+        ORDER BY l.updated_at ASC
+    ")->fetchAll();
+} catch (\Throwable $_) { $staleLeads = []; }
+
+$countStale = count($staleLeads);
+
+// For stale tab: fetch last activity date per lead
+$lastActivityDates = [];
+if ($staleLeads) {
+    $ids  = implode(',', array_column($staleLeads, 'id'));
+    $rows = $db->query("SELECT lead_id, MAX(created_at) AS last_at FROM crm_activities WHERE lead_id IN ({$ids}) GROUP BY lead_id")->fetchAll();
+    foreach ($rows as $r) $lastActivityDates[$r['lead_id']] = $r['last_at'];
+}
+
 // ── Active tab ────────────────────────────────────────────────────────────────
 $activeTab    = $_GET['tab'] ?? 'all';
-$allowedTabs  = ['all', 'overdue', 'today', 'tomorrow', 'this_week', 'upcoming'];
+$allowedTabs  = ['all', 'overdue', 'today', 'tomorrow', 'this_week', 'upcoming', 'stale'];
 if (!in_array($activeTab, $allowedTabs)) $activeTab = 'all';
 
 $displayLeads = match ($activeTab) {
@@ -149,6 +177,7 @@ $displayLeads = match ($activeTab) {
     'tomorrow'  => $groups['tomorrow'],
     'this_week' => $groups['this_week'],
     'upcoming'  => $groups['upcoming'],
+    'stale'     => $staleLeads,
     default     => $leads,
 };
 
@@ -291,6 +320,20 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </a>
     </div>
+    <?php if ($countStale > 0): ?>
+    <div class="col-6 col-md-3">
+        <a href="?tab=stale" class="tasks-stat-card <?= $activeTab === 'stale' ? 'active-stat' : '' ?>"
+           style="--stat-color:#f59e0b;border-top:3px solid #f59e0b">
+            <div class="tasks-stat-icon" style="background:#fef3c7;color:#f59e0b">
+                <i class="fa fa-hourglass-half"></i>
+            </div>
+            <div>
+                <div class="tasks-stat-label">Going Cold</div>
+                <div class="tasks-stat-value" style="color:#f59e0b"><?= $countStale ?></div>
+            </div>
+        </a>
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- Filter tabs + table card -->
@@ -345,10 +388,122 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endif; ?>
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $activeTab === 'stale' ? 'active' : '' ?>" href="?tab=stale">
+                    <i class="fa fa-hourglass-half me-1 text-danger"></i>Going Cold
+                    <?php if ($countStale): ?>
+                    <span class="badge bg-danger ms-1"><?= $countStale ?></span>
+                    <?php endif; ?>
+                </a>
+            </li>
         </ul>
     </div>
 
     <div class="card-body p-0">
+
+        <?php if ($activeTab === 'stale'): ?>
+        <?php if (empty($staleLeads)): ?>
+        <!-- Empty state — stale -->
+        <div class="text-center py-5 text-muted">
+            <i class="fa fa-hourglass-half fa-3x mb-3 d-block opacity-50" style="color:#f59e0b"></i>
+            <h6 class="fw-semibold mb-1">No cold leads!</h6>
+            <p class="small mb-3">All your leads have recent activity — great work.</p>
+            <a href="?tab=all" class="btn btn-sm btn-outline-secondary">View all tasks</a>
+        </div>
+        <?php else: ?>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size:13.5px">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Lead Name</th>
+                        <th>Stage</th>
+                        <th>Phone</th>
+                        <th>Last Activity</th>
+                        <th style="min-width:140px">Days Since Activity</th>
+                        <th class="text-end pe-3" style="min-width:140px">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($staleLeads as $lead):
+                    [$stageLabel, $stageColor] = $stages[$lead['stage']] ?? ['—', 'secondary'];
+                    $lastAt   = $lastActivityDates[$lead['id']] ?? null;
+                    $daysSince = $lastAt
+                        ? (int)floor((time() - strtotime($lastAt)) / 86400)
+                        : null;
+                    $wNum = $wMsg = '';
+                    if (!empty($lead['phone'])) {
+                        $wNum = preg_replace('/[^0-9]/', '', $lead['phone']);
+                        if (str_starts_with($lead['phone'], '0')) $wNum = '254' . substr($wNum, 1);
+                        $wMsg = rawurlencode("Hello {$lead['name']}! Following up on your" . ($lead['interested_in'] ? " interest in the {$lead['interested_in']}" : ' enquiry') . ". Are you still looking?");
+                    }
+                ?>
+                <tr>
+                    <td class="ps-3">
+                        <a href="view_lead.php?id=<?= $lead['id'] ?>"
+                           class="fw-semibold text-decoration-none text-dark">
+                            <?= e($lead['name']) ?>
+                        </a>
+                        <?php if (!$isCrmAgent && $lead['assigned_name']): ?>
+                        <div class="text-muted" style="font-size:11px">
+                            <i class="fa fa-user me-1"></i><?= e($lead['assigned_name']) ?>
+                        </div>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <span class="badge bg-<?= $stageColor ?>"><?= e($stageLabel) ?></span>
+                    </td>
+                    <td>
+                        <?php if ($lead['phone']): ?>
+                        <a href="tel:<?= e($lead['phone']) ?>" class="text-decoration-none text-dark small">
+                            <?= e($lead['phone']) ?>
+                        </a>
+                        <?php if ($wNum): ?>
+                        <a href="https://wa.me/<?= $wNum ?>?text=<?= $wMsg ?>" target="_blank"
+                           class="btn btn-xs btn-success ms-1" title="WhatsApp" style="padding:2px 6px">
+                            <i class="fab fa-whatsapp"></i>
+                        </a>
+                        <?php endif; ?>
+                        <?php else: ?>
+                        <span class="text-muted">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="small text-muted">
+                        <?= $lastAt ? fmtDate($lastAt, 'd M Y') : '<span class="text-muted fst-italic">None logged</span>' ?>
+                    </td>
+                    <td>
+                        <?php if ($daysSince === null): ?>
+                        <span class="badge" style="background:#f59e0b;color:#fff;font-size:11px;padding:4px 8px">
+                            No activity logged
+                        </span>
+                        <?php else: ?>
+                        <span class="badge" style="background:<?= $daysSince >= 14 ? '#dc2626' : '#f59e0b' ?>;color:#fff;font-size:11px;padding:4px 8px">
+                            <i class="fa fa-hourglass-half me-1"></i><?= $daysSince ?>d no activity
+                        </span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="text-end pe-3">
+                        <div class="d-flex justify-content-end gap-1 flex-wrap">
+                            <a href="view_lead.php?id=<?= $lead['id'] ?>"
+                               class="btn btn-xs btn-outline-primary">
+                                <i class="fa fa-eye me-1"></i>View
+                            </a>
+                            <?php if (canWrite('crm')): ?>
+                            <button type="button" class="btn btn-xs btn-outline-success"
+                                    onclick="openLogModal(<?= $lead['id'] ?>, <?= json_encode($lead['name']) ?>)">
+                                <i class="fa fa-pen-to-square me-1"></i>Log
+                            </button>
+                            <?php endif; ?>
+                        </div>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
+
+        <?php else: /* regular follow-up tabs */ ?>
+
         <?php if (empty($displayLeads)): ?>
         <!-- Empty state -->
         <div class="text-center py-5 text-muted">
@@ -491,6 +646,8 @@ include __DIR__ . '/../../includes/header.php';
             </table>
         </div>
         <?php endif; ?>
+
+        <?php endif; /* end stale/regular branch */ ?>
     </div>
 </div>
 
