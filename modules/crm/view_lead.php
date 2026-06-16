@@ -407,12 +407,11 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="row g-1 mb-2" style="font-size:12px">
                     <?php
                     $specFields = [
-                        'body_type'        => 'Body',
-                        'transmission'     => 'Gearbox',
-                        'fuel_type'        => 'Fuel',
-                        'engine_capacity'  => 'Engine',
-                        'drive_type'       => 'Drive',
-                        'mileage'          => 'Mileage',
+                        'body_type'    => 'Body',
+                        'transmission' => 'Gearbox',
+                        'fuel_type'    => 'Fuel',
+                        'engine_cc'    => 'Engine CC',
+                        'mileage'      => 'Mileage',
                     ];
                     foreach ($specFields as $col => $label):
                         $val = $pinnedCar[$col] ?? null;
@@ -427,7 +426,7 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
 
                 <?php
-                $salePrice = (float)($pinnedCar['selling_price'] ?? $pinnedCar['price'] ?? 0);
+                $salePrice = (float)($pinnedCar['asking_price'] ?? $pinnedCar['selling_price'] ?? 0);
                 ?>
                 <?php if ($salePrice > 0): ?>
                 <div class="d-flex align-items-center justify-content-between mb-2 py-2 border-top border-bottom">
