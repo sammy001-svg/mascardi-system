@@ -174,13 +174,20 @@ $activities = $db->prepare("
 ");
 $activities->execute([$id]); $activities = $activities->fetchAll();
 
-// Load pinned car
-$pinnedCar = null;
+// Load pinned car + all images
+$pinnedCar       = null;
+$pinnedCarImages = [];
 if ($lead['pinned_car_id']) {
     try {
-        $s = $db->prepare("SELECT id, registration_number, make, model, year, selling_price, color FROM cars WHERE id = ?");
+        $s = $db->prepare("SELECT * FROM cars WHERE id = ?");
         $s->execute([$lead['pinned_car_id']]);
         $pinnedCar = $s->fetch() ?: null;
+
+        if ($pinnedCar) {
+            $imgQ = $db->prepare("SELECT file_path, is_primary FROM car_images WHERE car_id = ? ORDER BY is_primary DESC, id ASC");
+            $imgQ->execute([$lead['pinned_car_id']]);
+            $pinnedCarImages = $imgQ->fetchAll();
+        }
     } catch (\Throwable $_) {}
 }
 
@@ -328,104 +335,276 @@ include __DIR__ . '/../../includes/header.php';
         </div>
 
         <!-- Linked Vehicle -->
-        <div class="card mb-3">
-            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <?php
+        $_primaryImg = null;
+        foreach ($pinnedCarImages as $_img) { if ($_img['is_primary']) { $_primaryImg = $_img; break; } }
+        if (!$_primaryImg && !empty($pinnedCarImages)) $_primaryImg = $pinnedCarImages[0];
+        ?>
+        <div class="card mb-3 overflow-hidden">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center py-2">
                 <span><i class="fa fa-car me-2 text-primary"></i>Linked Vehicle</span>
                 <?php if ($pinnedCar && canWrite('crm')): ?>
-                <form method="POST" class="d-inline">
+                <form method="POST" id="unpinForm" class="d-inline">
                     <input type="hidden" name="action" value="pin_car">
                     <input type="hidden" name="car_id" value="">
-                    <button class="btn btn-xs btn-outline-danger" style="font-size:11px;padding:1px 6px"
+                    <button type="submit" class="btn btn-xs btn-outline-danger"
+                            style="font-size:11px;padding:2px 8px"
                             onclick="return confirm('Remove linked vehicle?')">
-                        <i class="fa fa-unlink"></i> Unpin
+                        <i class="fa fa-unlink me-1"></i>Unlink
                     </button>
                 </form>
                 <?php endif; ?>
             </div>
-            <div class="card-body" style="font-size:13px">
-                <?php if ($pinnedCar): ?>
-                <div class="d-flex align-items-start gap-2">
-                    <i class="fa fa-car-side fa-lg text-primary mt-1"></i>
-                    <div>
-                        <div class="fw-semibold"><?= e($pinnedCar['year'] . ' ' . $pinnedCar['make'] . ' ' . $pinnedCar['model']) ?></div>
-                        <div class="text-muted small"><?= e($pinnedCar['registration_number'] ?? '') ?><?= !empty($pinnedCar['color']) ? ' · ' . e($pinnedCar['color']) : '' ?></div>
-                        <?php if (!empty($pinnedCar['selling_price'])): ?>
-                        <div class="text-success fw-semibold"><?= money((float)$pinnedCar['selling_price']) ?></div>
-                        <?php endif; ?>
-                    </div>
+
+            <?php if ($pinnedCar): ?>
+            <!-- ── Rich vehicle display ──────────────────────────────── -->
+
+            <?php if ($_primaryImg): ?>
+            <!-- Main image + thumbnails -->
+            <div style="background:#111;line-height:0">
+                <img id="crmMainImg"
+                     src="<?= BASE_URL ?>/uploads/cars/<?= e($_primaryImg['file_path']) ?>"
+                     alt="<?= e(($pinnedCar['make'] ?? '') . ' ' . ($pinnedCar['model'] ?? '')) ?>"
+                     style="width:100%;height:210px;object-fit:cover;display:block;cursor:zoom-in"
+                     onclick="window.open(this.src,'_blank')">
+            </div>
+            <?php if (count($pinnedCarImages) > 1): ?>
+            <div class="d-flex gap-1 p-2" style="overflow-x:auto;background:#f0f0f0;line-height:0">
+                <?php foreach ($pinnedCarImages as $_thumb): ?>
+                <img src="<?= BASE_URL ?>/uploads/cars/<?= e($_thumb['file_path']) ?>"
+                     alt=""
+                     onclick="document.getElementById('crmMainImg').src=this.src;
+                              document.querySelectorAll('.crm-thumb').forEach(function(t){t.style.borderColor='#ccc'});
+                              this.style.borderColor='#2563eb'"
+                     class="crm-thumb rounded"
+                     style="width:58px;height:44px;object-fit:cover;cursor:pointer;flex-shrink:0;
+                            border:2px solid <?= $_thumb['is_primary'] ? '#2563eb' : '#ccc' ?>;
+                            transition:border-color .15s">
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+            <?php else: ?>
+            <div class="d-flex align-items-center justify-content-center bg-light"
+                 style="height:120px;border-bottom:1px solid #dee2e6">
+                <i class="fa fa-car text-muted" style="font-size:40px;opacity:.35"></i>
+            </div>
+            <?php endif; ?>
+
+            <!-- Vehicle specs -->
+            <div class="p-3" style="font-size:13px">
+                <div class="fw-bold mb-1" style="font-size:15px">
+                    <?= e(trim(($pinnedCar['year'] ?? '') . ' ' . ($pinnedCar['make'] ?? '') . ' ' . ($pinnedCar['model'] ?? ''))) ?>
                 </div>
-                <?php else: ?>
-                <div class="text-muted small mb-2">No vehicle linked yet.</div>
+                <div class="text-muted small mb-2">
+                    <?php if (!empty($pinnedCar['registration_number'])): ?>
+                    <span class="badge bg-light text-dark border me-1"><?= e($pinnedCar['registration_number']) ?></span>
+                    <?php endif; ?>
+                    <?php if (!empty($pinnedCar['color'])): ?>
+                    <span><?= e($pinnedCar['color']) ?></span>
+                    <?php endif; ?>
+                </div>
+
+                <div class="row g-1 mb-2" style="font-size:12px">
+                    <?php
+                    $specFields = [
+                        'body_type'        => 'Body',
+                        'transmission'     => 'Gearbox',
+                        'fuel_type'        => 'Fuel',
+                        'engine_capacity'  => 'Engine',
+                        'drive_type'       => 'Drive',
+                        'mileage'          => 'Mileage',
+                    ];
+                    foreach ($specFields as $col => $label):
+                        $val = $pinnedCar[$col] ?? null;
+                        if (empty($val)) continue;
+                        if ($col === 'mileage') $val = number_format((int)$val) . ' km';
+                    ?>
+                    <div class="col-6">
+                        <span class="text-muted"><?= $label ?>:</span>
+                        <span class="fw-semibold ms-1"><?= e($val) ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <?php
+                $salePrice = (float)($pinnedCar['selling_price'] ?? $pinnedCar['price'] ?? 0);
+                ?>
+                <?php if ($salePrice > 0): ?>
+                <div class="d-flex align-items-center justify-content-between mb-2 py-2 border-top border-bottom">
+                    <span class="text-muted small">Asking Price</span>
+                    <span class="fw-bold text-success" style="font-size:17px"><?= money($salePrice) ?></span>
+                </div>
                 <?php endif; ?>
 
+                <a href="<?= BASE_URL ?>/modules/cars/view.php?id=<?= (int)$pinnedCar['id'] ?>"
+                   target="_blank"
+                   class="btn btn-sm btn-outline-primary w-100 mt-1">
+                    <i class="fa fa-arrow-up-right-from-square me-1"></i>View Full Vehicle Record
+                </a>
+            </div>
+
+            <?php if (canWrite('crm')): ?>
+            <!-- Change vehicle search -->
+            <div class="px-3 pb-3 border-top pt-2">
+                <div class="small text-muted mb-1 fw-semibold">Change linked vehicle:</div>
+                <input type="text" id="carSearchInput" class="form-control form-control-sm"
+                       placeholder="Search make, model or registration…" autocomplete="off">
+                <div id="carResults" style="display:none;position:absolute;z-index:200;width:calc(100% - 2rem);background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:260px;overflow-y:auto"></div>
+            </div>
+            <?php endif; ?>
+
+            <?php else: ?>
+            <!-- ── No vehicle linked: search-first UI ─────────────────── -->
+            <div class="p-3">
+                <p class="text-muted small mb-2">
+                    <i class="fa fa-search me-1"></i>Search your inventory to link a vehicle to this lead.
+                </p>
                 <?php if (canWrite('crm')): ?>
-                <div class="mt-2">
-                    <input type="text" id="carSearchInput" class="form-control form-control-sm"
-                           placeholder="Search by make, model or reg…">
-                    <div id="carResults" class="list-group mt-1" style="display:none;max-height:180px;overflow-y:auto"></div>
+                <input type="text" id="carSearchInput" class="form-control form-control-sm"
+                       placeholder="Type make, model or registration…" autocomplete="off">
+                <div id="carResults" style="display:none;position:absolute;z-index:200;width:calc(100% - 2rem);background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:260px;overflow-y:auto"></div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+
+            <!-- ── Car preview panel (shown on selection) ──────────────── -->
+            <?php if (canWrite('crm')): ?>
+            <div id="carPreviewPanel" style="display:none;border-top:2px solid #2563eb">
+                <div class="px-3 py-2 bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold text-primary small"><i class="fa fa-eye me-1"></i>Selected Vehicle — confirm to link</span>
+                    <button type="button" onclick="clearCarPreview()" class="btn-close" style="font-size:10px"></button>
+                </div>
+                <div class="d-flex" style="min-height:90px">
+                    <div id="previewImgBox" style="width:120px;flex-shrink:0;background:#eee;display:flex;align-items:center;justify-content:center;overflow:hidden">
+                        <i class="fa fa-car text-muted fa-2x" id="previewImgIcon"></i>
+                        <img id="previewImg" src="" alt="" style="display:none;width:120px;height:100%;object-fit:cover;min-height:90px">
+                    </div>
+                    <div class="p-2 flex-grow-1" style="font-size:12.5px">
+                        <div class="fw-bold" id="previewTitle"></div>
+                        <div class="text-muted" id="previewSub"></div>
+                        <div class="text-success fw-bold mt-1" id="previewPrice" style="font-size:14px"></div>
+                        <div class="text-muted small mt-1" id="previewSpecs"></div>
+                    </div>
+                </div>
+                <div class="px-3 pb-3 pt-2">
                     <form method="POST" id="pinCarForm">
                         <input type="hidden" name="action" value="pin_car">
                         <input type="hidden" name="car_id" id="pinCarId">
-                        <div id="pinCarSelected" style="display:none" class="alert alert-info py-1 px-2 mt-1 d-flex justify-content-between align-items-center" style="font-size:12px">
-                            <span id="pinCarLabel"></span>
-                            <button type="submit" class="btn btn-xs btn-primary ms-2" style="font-size:11px">
-                                <i class="fa fa-link me-1"></i>Link
-                            </button>
-                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm w-100">
+                            <i class="fa fa-link me-1"></i>Link This Vehicle to Lead
+                        </button>
                     </form>
                 </div>
-                <script>
-                (function() {
-                    var inp = document.getElementById('carSearchInput');
-                    var res = document.getElementById('carResults');
-                    var sel = document.getElementById('pinCarSelected');
-                    var lbl = document.getElementById('pinCarLabel');
-                    var idField = document.getElementById('pinCarId');
-                    var timer;
-                    inp.addEventListener('input', function() {
-                        clearTimeout(timer);
-                        var q = inp.value.trim();
-                        if (q.length < 2) { res.style.display = 'none'; return; }
-                        timer = setTimeout(function() {
-                            fetch('<?= BASE_URL ?>/modules/crm/api/search_cars.php?q=' + encodeURIComponent(q))
-                                .then(function(r) { return r.json(); })
-                                .then(function(d) {
-                                    res.innerHTML = '';
-                                    if (!d.cars || !d.cars.length) {
-                                        res.innerHTML = '<div class="list-group-item text-muted small">No vehicles found</div>';
-                                        res.style.display = '';
-                                        return;
-                                    }
-                                    d.cars.forEach(function(c) {
-                                        var a = document.createElement('button');
-                                        a.type = 'button';
-                                        a.className = 'list-group-item list-group-item-action py-1 px-2';
-                                        a.style.fontSize = '12px';
-                                        var year = c.year || '';
-                                        var make = c.make || '';
-                                        var model = c.model || '';
-                                        var reg = c.reg || c.registration_number || '';
-                                        a.textContent = [year, make, model].filter(Boolean).join(' ') + (reg ? ' — ' + reg : '');
-                                        a.addEventListener('click', function() {
-                                            idField.value = c.id;
-                                            lbl.textContent = a.textContent;
-                                            sel.style.display = '';
-                                            res.style.display = 'none';
-                                            inp.value = '';
-                                        });
-                                        res.appendChild(a);
-                                    });
-                                    res.style.display = '';
-                                }).catch(function() {});
-                        }, 300);
-                    });
-                    document.addEventListener('click', function(e) {
-                        if (!res.contains(e.target) && e.target !== inp) res.style.display = 'none';
-                    });
-                }());
-                </script>
-                <?php endif; ?>
             </div>
+
+            <script>
+            (function () {
+                var inp     = document.getElementById('carSearchInput');
+                var res     = document.getElementById('carResults');
+                var panel   = document.getElementById('carPreviewPanel');
+                var pImg    = document.getElementById('previewImg');
+                var pIcon   = document.getElementById('previewImgIcon');
+                var pTitle  = document.getElementById('previewTitle');
+                var pSub    = document.getElementById('previewSub');
+                var pPrice  = document.getElementById('previewPrice');
+                var pSpecs  = document.getElementById('previewSpecs');
+                var idField = document.getElementById('pinCarId');
+                var base    = '<?= BASE_URL ?>';
+                var timer;
+
+                if (!inp) return;
+
+                inp.addEventListener('input', function () {
+                    clearTimeout(timer);
+                    var q = inp.value.trim();
+                    if (q.length < 2) { res.style.display = 'none'; return; }
+                    timer = setTimeout(function () {
+                        fetch(base + '/modules/crm/api/search_cars.php?q=' + encodeURIComponent(q))
+                            .then(function (r) { return r.json(); })
+                            .then(function (d) {
+                                res.innerHTML = '';
+                                if (!d.cars || !d.cars.length) {
+                                    res.innerHTML = '<div style="padding:10px 12px;font-size:12.5px;color:#6c757d">No vehicles found in inventory</div>';
+                                    res.style.display = '';
+                                    return;
+                                }
+                                d.cars.forEach(function (c) {
+                                    var row = document.createElement('div');
+                                    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:12.5px';
+                                    row.onmouseover = function () { row.style.background = '#f0f6ff'; };
+                                    row.onmouseout  = function () { row.style.background = ''; };
+
+                                    // Thumbnail
+                                    var thumb = document.createElement('div');
+                                    thumb.style.cssText = 'width:54px;height:40px;flex-shrink:0;border-radius:5px;overflow:hidden;background:#e9ecef;display:flex;align-items:center;justify-content:center';
+                                    if (c.primary_image) {
+                                        var img = document.createElement('img');
+                                        img.src = base + '/uploads/cars/' + c.primary_image;
+                                        img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+                                        img.onerror = function () { thumb.innerHTML = '<i class="fa fa-car" style="color:#adb5bd;font-size:15px"></i>'; };
+                                        thumb.appendChild(img);
+                                    } else {
+                                        thumb.innerHTML = '<i class="fa fa-car" style="color:#adb5bd;font-size:15px"></i>';
+                                    }
+                                    row.appendChild(thumb);
+
+                                    // Text
+                                    var info = document.createElement('div');
+                                    info.style.flex = '1';
+                                    var title = [c.year, c.make, c.model].filter(Boolean).join(' ');
+                                    var sub   = c.reg || '';
+                                    var specs = [c.transmission, c.fuel_type].filter(Boolean).join(' · ');
+                                    var priceStr = c.price ? '<span style="color:#198754;font-weight:600">KES ' + Number(c.price).toLocaleString() + '</span>' : '';
+                                    info.innerHTML =
+                                        '<div style="font-weight:600">' + title + '</div>' +
+                                        '<div style="color:#6c757d;font-size:11.5px">' + sub + (specs ? ' &nbsp;·&nbsp; ' + specs : '') + (priceStr ? ' &nbsp;·&nbsp; ' + priceStr : '') + '</div>';
+                                    row.appendChild(info);
+
+                                    row.addEventListener('click', function () {
+                                        showPreview(c);
+                                        res.style.display = 'none';
+                                        inp.value = '';
+                                    });
+                                    res.appendChild(row);
+                                });
+                                res.style.display = '';
+                            }).catch(function () {});
+                    }, 280);
+                });
+
+                function showPreview(c) {
+                    idField.value = c.id;
+                    pTitle.textContent = [c.year, c.make, c.model].filter(Boolean).join(' ');
+                    pSub.textContent   = [c.reg, c.color].filter(Boolean).join(' · ');
+                    pPrice.textContent = c.price ? 'KES ' + Number(c.price).toLocaleString() : '';
+                    pSpecs.textContent = [c.body_type, c.transmission, c.fuel_type, c.mileage ? Number(c.mileage).toLocaleString() + ' km' : ''].filter(Boolean).join(' · ');
+
+                    if (c.primary_image) {
+                        pImg.src          = base + '/uploads/cars/' + c.primary_image;
+                        pImg.style.display = '';
+                        pIcon.style.display = 'none';
+                    } else {
+                        pImg.style.display  = 'none';
+                        pIcon.style.display = '';
+                    }
+                    panel.style.display = '';
+                    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+
+                window.clearCarPreview = function () {
+                    panel.style.display = 'none';
+                    idField.value = '';
+                    pImg.src = '';
+                };
+
+                document.addEventListener('click', function (e) {
+                    if (res && !res.contains(e.target) && e.target !== inp) {
+                        res.style.display = 'none';
+                    }
+                });
+            }());
+            </script>
+            <?php endif; ?>
         </div>
 
         <!-- Edit details -->
