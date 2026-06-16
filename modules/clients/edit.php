@@ -34,26 +34,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hashedPass = $portalPass
             ? password_hash($portalPass, PASSWORD_DEFAULT)
             : $client['portal_password'];
+
+        // ── 1. Save the client record ──────────────────────────────────────────
         try {
             $db->prepare("UPDATE clients SET name=?,email=?,phone=?,id_number=?,kra_pin=?,portal_password=?,portal_enabled=?,status=?,notes=? WHERE id=?")
                ->execute([$d['name'],$d['email'],$d['phone'],$d['id_number'],$d['kra_pin'],$hashedPass,$d['portal_enabled'],$d['status'],$d['notes'],$id]);
-
-            // Immediately push the new KRA PIN to every invoice belonging to this client.
-            // This covers old invoices (customer_kra_pin was empty) and any where the JOIN
-            // might not match, so the print always reflects the current value.
-            if ($d['kra_pin'] !== '') {
-                $db->prepare("UPDATE invoices SET customer_kra_pin = ? WHERE client_id = ?")
-                   ->execute([$d['kra_pin'], $id]);
-                // Also patch invoices that were created without a client_id but have a matching name
-                $db->prepare("UPDATE invoices SET customer_kra_pin = ? WHERE client_id IS NULL AND LOWER(TRIM(customer_name)) = LOWER(TRIM(?))")
-                   ->execute([$d['kra_pin'], $d['name']]);
-            }
-
             logActivity('update', 'clients', $id, "Updated client: {$d['name']}");
             setFlash('success', 'Client updated.');
-            redirect(BASE_URL . '/modules/clients/view.php?id=' . $id);
         } catch (\Throwable $e) {
             $errors[] = 'Save failed: ' . $e->getMessage();
+        }
+
+        // ── 2. Propagate KRA PIN to all linked invoices ────────────────────────
+        // Runs in its own try-catch so any failure here never blocks the redirect
+        // or shows a false "Save failed" to the user.
+        if (empty($errors) && $d['kra_pin'] !== '') {
+            // Invoices linked by client_id
+            try {
+                $db->prepare("UPDATE invoices SET customer_kra_pin=? WHERE client_id=?")
+                   ->execute([$d['kra_pin'], $id]);
+            } catch (\Throwable $_) {}
+            // Invoices created without a client_id but with a matching customer name
+            try {
+                $db->prepare("UPDATE invoices SET customer_kra_pin=? WHERE client_id IS NULL AND LOWER(TRIM(customer_name))=LOWER(TRIM(?))")
+                   ->execute([$d['kra_pin'], $d['name']]);
+            } catch (\Throwable $_) {}
+        }
+
+        if (empty($errors)) {
+            redirect(BASE_URL . '/modules/clients/view.php?id=' . $id);
         }
     }
 }
