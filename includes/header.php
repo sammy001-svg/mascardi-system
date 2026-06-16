@@ -47,6 +47,15 @@
 <!-- Custom — cache-busted so changes always load -->
 <link href="<?= BASE_URL ?>/assets/css/style.css?v=<?= @filemtime(BASE_PATH . '/assets/css/style.css') ?: time() ?>" rel="stylesheet">
 <meta name="csrf-token" content="<?= csrfToken() ?>">
+
+<!-- PWA — capture install prompt BEFORE any other scripts load -->
+<script>
+window.__pwaBeforeInstall = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    window.__pwaBeforeInstall = e;
+});
+</script>
 </head>
 <body>
 <?php requireLogin(); $__user = authUser(); ?>

@@ -8,7 +8,7 @@ function isActive(string $path): string {
 }
 
 // Customer Relations Managers get a lean, focused sidebar
-if (hasRole('customer_relations')) {
+if (authRole() === 'customer_relations') {
     include __DIR__ . '/sidebar_crm.php';
     return;
 }
@@ -311,10 +311,22 @@ if (hasRole('customer_relations')) {
             <i class="fa fa-filter"></i><span>Sales Pipeline</span>
         </a>
         <a href="<?= BASE_URL ?>/modules/crm/leads.php"
-           class="nav-item <?= (isActive('/modules/crm/leads') || isActive('/modules/crm/view_lead') || isActive('/modules/crm/add_lead')) ? 'active' : '' ?>"
+           class="nav-item <?= (isActive('/modules/crm/leads') || isActive('/modules/crm/view_lead') || isActive('/modules/crm/add_lead') || isActive('/modules/crm/import_leads') || isActive('/modules/crm/convert_lead')) ? 'active' : '' ?>"
            data-label="Leads">
             <i class="fa fa-user-plus"></i><span>Leads</span>
         </a>
+        <?php if (hasRole(['admin','general_manager','sales_manager'])): ?>
+        <a href="<?= BASE_URL ?>/modules/crm/team_performance.php"
+           class="nav-item <?= isActive('/modules/crm/team_performance') ?>"
+           data-label="Team Performance">
+            <i class="fa fa-chart-bar"></i><span>Team Performance</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/crm/targets.php"
+           class="nav-item <?= isActive('/modules/crm/targets') ?>"
+           data-label="CRM Targets">
+            <i class="fa fa-bullseye"></i><span>CRM Targets</span>
+        </a>
+        <?php endif; ?>
         <?php endif; ?>
 
         <?php if (hasRole(['admin','general_manager','sales_manager','sales_officer','sales_person','customer_relations','receptionist'])): ?>

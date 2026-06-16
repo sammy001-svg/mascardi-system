@@ -228,17 +228,35 @@ if ($__wa): ?>
         setTimeout(showPopup, 2500);
     }
 
-    // Chrome / Edge / Android: intercept the native prompt
-    window.addEventListener('beforeinstallprompt', function (e) {
+    // Chrome / Edge / Android: use the event captured early in <head>,
+    // or listen for it if it hasn't fired yet.
+    // beforeinstallprompt can fire BEFORE footer scripts run (especially on
+    // cached/fast pages), so we always capture it in the <head> first.
+    function onInstallPrompt(e) {
         e.preventDefault();
         deferredPrompt = e;
         setTimeout(showPopup, 2000);
-    });
+    }
+    if (window.__pwaBeforeInstall) {
+        // Already captured early — use it immediately
+        deferredPrompt = window.__pwaBeforeInstall;
+        window.__pwaBeforeInstall = null;
+        setTimeout(showPopup, 2000);
+    }
+    // Also keep listening in case the event fires after this script runs
+    window.addEventListener('beforeinstallprompt', onInstallPrompt);
 
     // Install button
     var installBtn = document.getElementById('pwaPopupInstallBtn');
     installBtn && installBtn.addEventListener('click', function () {
-        if (!deferredPrompt) return;
+        if (!deferredPrompt) {
+            // Fallback: show iOS-style instructions if no native prompt
+            var chromActions = document.getElementById('pwaChromActions');
+            var iosInstr     = document.getElementById('pwaIosInstructions');
+            if (chromActions) chromActions.style.display = 'none';
+            if (iosInstr)     iosInstr.style.display     = '';
+            return;
+        }
         hidePopup(false);
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then(function (result) {

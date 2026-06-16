@@ -7,9 +7,9 @@
  *   - POST / API requests:         Network-only (never cache)
  */
 
-const CACHE_SHELL   = 'mascardi-shell-v2';
-const CACHE_PAGES   = 'mascardi-pages-v2';
-const CACHE_IMAGES  = 'mascardi-images-v2';
+const CACHE_SHELL   = 'mascardi-shell-v3';
+const CACHE_PAGES   = 'mascardi-pages-v3';
+const CACHE_IMAGES  = 'mascardi-images-v3';
 const ALL_CACHES    = [CACHE_SHELL, CACHE_PAGES, CACHE_IMAGES];
 
 // Detect the base path from where this SW is hosted
