@@ -46,6 +46,20 @@ $manifest = [
     'categories'       => ['business', 'productivity'],
 
     'icons' => [
+        // PNG icons are required by Chrome/Android for the beforeinstallprompt to fire
+        [
+            'src'     => $base . '/pwa-icon.php?s=192',
+            'sizes'   => '192x192',
+            'type'    => 'image/png',
+            'purpose' => 'any',
+        ],
+        [
+            'src'     => $base . '/pwa-icon.php?s=512',
+            'sizes'   => '512x512',
+            'type'    => 'image/png',
+            'purpose' => 'any',
+        ],
+        // SVG fallbacks for browsers that support them
         [
             'src'     => $base . '/assets/images/icons/icon.svg',
             'sizes'   => 'any',
