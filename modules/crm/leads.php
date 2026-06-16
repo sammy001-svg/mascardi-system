@@ -11,6 +11,130 @@ $uid = (int)$me['id'];
 $isCrmAgent = ($me['role'] === 'customer_relations');
 $pageTitle  = $isCrmAgent ? 'My Leads' : 'All Leads';
 
+// ─── BULK ACTION POST HANDLER ────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_action'])) {
+    $bulkAction = $_POST['bulk_action'];
+    $leadIds    = isset($_POST['lead_ids']) && is_array($_POST['lead_ids'])
+                    ? array_map('intval', $_POST['lead_ids'])
+                    : [];
+
+    if (empty($leadIds)) {
+        setFlash('warning', 'No leads selected.');
+        redirect($_SERVER['HTTP_REFERER'] ?? 'leads.php');
+    }
+
+    // Build per-ID placeholders
+    $placeholders = implode(',', array_fill(0, count($leadIds), '?'));
+
+    // For CRM agents, restrict updates to their own leads only
+    $ownerClause = $isCrmAgent ? " AND assigned_to = $uid" : '';
+
+    if ($bulkAction === 'bulk_reassign') {
+        if ($isCrmAgent) {
+            setFlash('danger', 'You do not have permission to reassign leads.');
+            redirect('leads.php');
+        }
+        $reassignTo = (int)($_POST['reassign_to'] ?? 0);
+        if (!$reassignTo) {
+            setFlash('warning', 'Please select a staff member to assign to.');
+            redirect('leads.php');
+        }
+        try {
+            $stmt = $db->prepare("UPDATE crm_leads SET assigned_to = ?, updated_at = NOW() WHERE id IN ($placeholders)");
+            $stmt->execute(array_merge([$reassignTo], $leadIds));
+            setFlash('success', count($leadIds) . ' lead(s) reassigned successfully.');
+        } catch (\Throwable $e) {
+            setFlash('danger', 'Reassign failed: ' . $e->getMessage());
+        }
+        redirect('leads.php');
+    }
+
+    if ($bulkAction === 'bulk_stage') {
+        $validStages = ['hot','lukewarm','cold','lost','reserved','delivered'];
+        $newStage    = $_POST['bulk_stage'] ?? '';
+        if (!in_array($newStage, $validStages, true)) {
+            setFlash('warning', 'Please select a valid stage.');
+            redirect('leads.php');
+        }
+        try {
+            $stmt = $db->prepare("UPDATE crm_leads SET stage = ?, updated_at = NOW() WHERE id IN ($placeholders)$ownerClause");
+            $stmt->execute(array_merge([$newStage], $leadIds));
+            setFlash('success', count($leadIds) . ' lead(s) updated to stage "' . htmlspecialchars($newStage) . '".');
+        } catch (\Throwable $e) {
+            setFlash('danger', 'Stage update failed: ' . $e->getMessage());
+        }
+        redirect('leads.php');
+    }
+
+    if ($bulkAction === 'bulk_followup') {
+        $newDate = $_POST['bulk_followup_date'] ?? '';
+        if (!$newDate || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $newDate)) {
+            setFlash('warning', 'Please select a valid follow-up date.');
+            redirect('leads.php');
+        }
+        try {
+            $stmt = $db->prepare("UPDATE crm_leads SET follow_up_date = ?, updated_at = NOW() WHERE id IN ($placeholders)$ownerClause");
+            $stmt->execute(array_merge([$newDate], $leadIds));
+            setFlash('success', count($leadIds) . ' lead(s) follow-up date set to ' . htmlspecialchars($newDate) . '.');
+        } catch (\Throwable $e) {
+            setFlash('danger', 'Follow-up update failed: ' . $e->getMessage());
+        }
+        redirect('leads.php');
+    }
+
+    if ($bulkAction === 'bulk_export') {
+        // Source labels needed for export output
+        $exportSources = [
+            'walk_in'    => 'Walk-in',    'referral'  => 'Referral',
+            'facebook'   => 'Facebook',   'instagram' => 'Instagram',
+            'website'    => 'Website',    'phone_call'=> 'Phone Call',
+            'whatsapp'   => 'WhatsApp',   'other'     => 'Other',
+        ];
+        try {
+            $extraOwner = $isCrmAgent ? " AND l.assigned_to = $uid" : '';
+            $stmt = $db->prepare("
+                SELECT l.name, l.phone, l.email, l.source, l.stage,
+                       l.interested_in, l.budget, l.follow_up_date, l.created_at,
+                       u.name AS assigned_name
+                FROM crm_leads l
+                LEFT JOIN users u ON u.id = l.assigned_to
+                WHERE l.id IN ($placeholders)$extraOwner
+                ORDER BY l.created_at DESC
+            ");
+            $stmt->execute($leadIds);
+            $exportLeads = $stmt->fetchAll();
+        } catch (\Throwable $e) {
+            $exportLeads = [];
+        }
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="leads_export_' . date('Ymd_His') . '.csv"');
+        header('Pragma: no-cache');
+        $out = fopen('php://output', 'w');
+        fputcsv($out, ['Name','Phone','Email','Source','Stage','Interested In','Budget','Follow-up Date','Assigned To','Added Date']);
+        foreach ($exportLeads as $row) {
+            fputcsv($out, [
+                $row['name'],
+                $row['phone'],
+                $row['email'],
+                $exportSources[$row['source']] ?? $row['source'],
+                $row['stage'],
+                $row['interested_in'],
+                $row['budget'],
+                $row['follow_up_date'],
+                $row['assigned_name'],
+                $row['created_at'],
+            ]);
+        }
+        fclose($out);
+        exit;
+    }
+
+    // Unknown bulk action — redirect cleanly
+    redirect('leads.php');
+}
+// ─── END BULK ACTION HANDLER ─────────────────────────────────────────────────
+
 $filterStage  = $_GET['stage']  ?? '';
 $filterSource = $_GET['source'] ?? '';
 $filterUser   = $isCrmAgent ? $uid : (int)($_GET['assigned'] ?? 0);
@@ -25,8 +149,8 @@ if ($isCrmAgent) {
     $params[] = $uid;
 }
 
-if ($filterStage)            { $where[] = 'l.stage = ?';       $params[] = $filterStage; }
-if ($filterSource)           { $where[] = 'l.source = ?';      $params[] = $filterSource; }
+if ($filterStage)                { $where[] = 'l.stage = ?';       $params[] = $filterStage; }
+if ($filterSource)               { $where[] = 'l.source = ?';      $params[] = $filterSource; }
 if (!$isCrmAgent && $filterUser) { $where[] = 'l.assigned_to = ?'; $params[] = $filterUser; }
 if ($search) {
     $where[]  = '(l.name LIKE ? OR l.phone LIKE ? OR l.email LIKE ? OR l.interested_in LIKE ?)';
@@ -85,6 +209,7 @@ include __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-columns me-1"></i>Pipeline</a>
         <?php if (canWrite('crm')): ?>
+        <a href="import_leads.php" class="btn btn-sm btn-outline-success"><i class="fa fa-file-import me-1"></i>Import</a>
         <a href="add_lead.php" class="btn btn-sm btn-primary"><i class="fa fa-plus me-1"></i>New Lead</a>
         <?php endif; ?>
     </div>
@@ -132,17 +257,69 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<!-- Bulk Action Bar (hidden until at least one lead is checked) -->
+<div id="bulkBar" style="display:none" class="card mb-2 border-primary">
+    <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+        <span id="bulkCount" class="fw-semibold text-primary"></span>
+        <form method="POST" id="bulkForm">
+            <input type="hidden" name="bulk_action" id="bulkActionInput">
+            <!-- hidden lead_ids[] inputs are appended by JS at submit time -->
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <!-- Reassign (managers only) -->
+                <?php if (!$isCrmAgent): ?>
+                <select name="reassign_to" id="reassignTo" class="form-select form-select-sm" style="width:150px">
+                    <option value="">— Assign to —</option>
+                    <?php foreach ($salesUsers as $u): ?>
+                    <option value="<?= $u['id'] ?>"><?= e($u['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="submitBulk('bulk_reassign')">
+                    <i class="fa fa-user-tag me-1"></i>Reassign
+                </button>
+                <?php endif; ?>
+                <!-- Set Stage -->
+                <select name="bulk_stage" id="bulkStage" class="form-select form-select-sm" style="width:140px">
+                    <option value="">— Set Stage —</option>
+                    <?php foreach ($stages as $k => [$lbl, $c]): ?>
+                    <option value="<?= $k ?>"><?= $lbl ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-warning" onclick="submitBulk('bulk_stage')">
+                    <i class="fa fa-tags me-1"></i>Set Stage
+                </button>
+                <!-- Set Follow-up -->
+                <input type="date" name="bulk_followup_date" id="bulkFollowup"
+                       class="form-control form-control-sm" style="width:150px"
+                       min="<?= date('Y-m-d') ?>">
+                <button type="button" class="btn btn-sm btn-outline-info" onclick="submitBulk('bulk_followup')">
+                    <i class="fa fa-calendar me-1"></i>Set Follow-up
+                </button>
+                <!-- Export CSV -->
+                <button type="button" class="btn btn-sm btn-outline-success" onclick="submitBulk('bulk_export')">
+                    <i class="fa fa-file-csv me-1"></i>Export CSV
+                </button>
+                <!-- Clear selection -->
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearBulk()">Clear</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-body p-0">
         <table class="table table-hover datatable mb-0" style="font-size:13.5px">
             <thead>
                 <tr>
-                    <th class="ps-3">Name</th>
+                    <th style="width:36px" class="ps-3">
+                        <input type="checkbox" id="selectAll">
+                    </th>
+                    <th>Name</th>
                     <th>Contact</th>
                     <th>Interested In</th>
                     <th>Budget</th>
                     <th>Source</th>
                     <th>Stage</th>
+                    <th>Score</th>
                     <th>Follow-up</th>
                     <?php if (!$isCrmAgent): ?><th>Assigned</th><?php endif; ?>
                     <th>Added</th>
@@ -154,9 +331,42 @@ include __DIR__ . '/../../includes/header.php';
                 [$stageLabel, $stageColor] = $stages[$l['stage']] ?? ['Unknown','secondary'];
                 $isOverdue = $l['follow_up_date'] && $l['follow_up_date'] < date('Y-m-d')
                              && !in_array($l['stage'], ['lost','delivered']);
+
+                // ── Lead Score (max 60 without per-row activity queries) ────
+                $score = 0;
+                $stageScores = ['hot'=>25,'lukewarm'=>20,'cold'=>10,'reserved'=>25,'lost'=>0,'delivered'=>0];
+                $score += $stageScores[$l['stage']] ?? 0;
+                $b = (float)($l['budget'] ?? 0);
+                if ($b >= 5000000)       $score += 20;
+                elseif ($b >= 2000000)   $score += 15;
+                elseif ($b >= 1000000)   $score += 10;
+                elseif ($b >= 500000)    $score += 5;
+                elseif ($b > 0)          $score += 2;
+                if (!empty($l['phone']))          $score += 5;
+                if (!empty($l['email']))          $score += 5;
+                if (!empty($l['interested_in']))  $score += 5;
+                $scoreColor = $score >= 50 ? 'success' : ($score >= 35 ? 'warning' : ($score >= 20 ? 'info' : 'secondary'));
+
+                // ── WhatsApp link ─────────────────────────────────────────
+                $waNum = '';
+                $waMsg = '';
+                if (!empty($l['phone'])) {
+                    $waNum = preg_replace('/[^0-9]/', '', $l['phone']);
+                    if (str_starts_with($l['phone'], '0')) {
+                        $waNum = '254' . substr($waNum, 1);
+                    }
+                    $waMsg = rawurlencode(
+                        "Hello {$l['name']}! Following up on your interest"
+                        . ($l['interested_in'] ? " in the {$l['interested_in']}" : '')
+                        . ". When is a good time to connect?"
+                    );
+                }
             ?>
             <tr class="<?= $isOverdue ? 'table-danger' : '' ?>">
                 <td class="ps-3">
+                    <input type="checkbox" class="lead-check" value="<?= $l['id'] ?>">
+                </td>
+                <td>
                     <a href="view_lead.php?id=<?= $l['id'] ?>" class="fw-semibold text-decoration-none">
                         <?= e($l['name']) ?>
                     </a>
@@ -167,6 +377,11 @@ include __DIR__ . '/../../includes/header.php';
                 <td>
                     <?php if ($l['phone']): ?>
                     <div class="small"><i class="fa fa-phone me-1 text-muted"></i><?= e($l['phone']) ?></div>
+                    <a href="https://wa.me/<?= $waNum ?>?text=<?= $waMsg ?>" target="_blank"
+                       class="btn btn-xs btn-success mt-1" style="font-size:10px;padding:1px 6px"
+                       title="WhatsApp <?= e($l['phone']) ?>">
+                        <i class="fab fa-whatsapp"></i>
+                    </a>
                     <?php endif; ?>
                     <?php if ($l['email']): ?>
                     <div class="small text-muted"><?= e($l['email']) ?></div>
@@ -178,6 +393,14 @@ include __DIR__ . '/../../includes/header.php';
                 <td class="small"><?= $l['budget'] ? money((float)$l['budget']) : '—' ?></td>
                 <td><span class="badge bg-light text-dark border" style="font-size:11px"><?= e($sources[$l['source']] ?? $l['source']) ?></span></td>
                 <td><span class="badge bg-<?= $stageColor ?>" style="font-size:11px"><?= $stageLabel ?></span></td>
+                <td>
+                    <div style="display:flex;align-items:center;gap:4px;min-width:60px">
+                        <div class="progress flex-grow-1" style="height:6px">
+                            <div class="progress-bar bg-<?= $scoreColor ?>" style="width:<?= round($score / 60 * 100) ?>%"></div>
+                        </div>
+                        <small class="text-muted"><?= $score ?></small>
+                    </div>
+                </td>
                 <td>
                     <?php if ($l['follow_up_date']): ?>
                     <span class="badge <?= $isOverdue ? 'bg-danger' : ($l['follow_up_date'] === date('Y-m-d') ? 'bg-warning text-dark' : 'bg-light text-dark border') ?>" style="font-size:11px">
@@ -198,5 +421,58 @@ include __DIR__ . '/../../includes/header.php';
         </table>
     </div>
 </div>
+
+<script>
+(function () {
+    var checks    = document.querySelectorAll('.lead-check');
+    var bar       = document.getElementById('bulkBar');
+    var countEl   = document.getElementById('bulkCount');
+    var selectAll = document.getElementById('selectAll');
+
+    function updateBar() {
+        var checked = document.querySelectorAll('.lead-check:checked');
+        if (checked.length > 0) {
+            bar.style.display = '';
+            countEl.textContent = checked.length + ' lead' + (checked.length > 1 ? 's' : '') + ' selected';
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    checks.forEach(function (c) { c.addEventListener('change', updateBar); });
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            checks.forEach(function (c) { c.checked = selectAll.checked; });
+            updateBar();
+        });
+    }
+
+    window.submitBulk = function (action) {
+        var checked = document.querySelectorAll('.lead-check:checked');
+        if (!checked.length) return;
+        var form = document.getElementById('bulkForm');
+        document.getElementById('bulkActionInput').value = action;
+        // Remove previously appended hidden inputs
+        form.querySelectorAll('.bulk-id').forEach(function (el) { el.remove(); });
+        checked.forEach(function (c) {
+            var inp       = document.createElement('input');
+            inp.type      = 'hidden';
+            inp.name      = 'lead_ids[]';
+            inp.value     = c.value;
+            inp.className = 'bulk-id';
+            form.appendChild(inp);
+        });
+        form.method = 'POST';
+        form.submit();
+    };
+
+    window.clearBulk = function () {
+        checks.forEach(function (c) { c.checked = false; });
+        if (selectAll) selectAll.checked = false;
+        updateBar();
+    };
+}());
+</script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

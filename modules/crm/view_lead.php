@@ -5,6 +5,9 @@ canAccess('crm') || redirect(BASE_URL . '/index.php');
 
 $pageTitle = 'Lead';
 $db  = getDB();
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN pinned_car_id INT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN lead_score TINYINT UNSIGNED DEFAULT 0"); } catch (\Throwable $_) {}
+require_once __DIR__ . '/crm_helpers.php';
 $id  = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/crm/leads.php');
 
@@ -151,6 +154,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         redirect(BASE_URL.'/modules/crm/view_lead.php?id='.$id);
     }
+
+    if ($action === 'pin_car' && canWrite('crm')) {
+        $carId = (int)($_POST['car_id'] ?? 0) ?: null;
+        $db->prepare("UPDATE crm_leads SET pinned_car_id = ?, updated_at = NOW() WHERE id = ?")
+           ->execute([$carId, $id]);
+        setFlash('success', $carId ? 'Vehicle linked to lead.' : 'Vehicle link removed.');
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
 }
 
 // Load activities
@@ -162,6 +173,22 @@ $activities = $db->prepare("
     ORDER BY a.created_at DESC
 ");
 $activities->execute([$id]); $activities = $activities->fetchAll();
+
+// Load pinned car
+$pinnedCar = null;
+if ($lead['pinned_car_id']) {
+    try {
+        $s = $db->prepare("SELECT id, registration_number, make, model, year, selling_price, color FROM cars WHERE id = ?");
+        $s->execute([$lead['pinned_car_id']]);
+        $pinnedCar = $s->fetch() ?: null;
+    } catch (\Throwable $_) {}
+}
+
+// Calculate and persist lead score
+$score = calculateLeadScore($lead, $db);
+try {
+    $db->prepare("UPDATE crm_leads SET lead_score = ? WHERE id = ?")->execute([$score, $id]);
+} catch (\Throwable $_) {}
 
 [$stageLabel, $stageColor, $stageIcon] = $stages[$lead['stage']] ?? ['Unknown','secondary','fa-circle'];
 $isOverdue = $lead['follow_up_date'] && $lead['follow_up_date'] < date('Y-m-d')
@@ -177,6 +204,9 @@ include __DIR__ . '/../../includes/header.php';
         <?php if ($isOverdue): ?>
         <span class="badge bg-danger">Follow-up overdue</span>
         <?php endif; ?>
+        <span class="badge bg-<?= scoreColor($score) ?> ms-1" title="Lead Score">
+            <i class="fa fa-star me-1"></i>Score: <?= $score ?>/100
+        </span>
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <?php if ($lead['client_id']): ?>
@@ -203,8 +233,16 @@ include __DIR__ . '/../../includes/header.php';
         <a href="tel:<?= e($lead['phone']) ?>" class="btn btn-sm btn-outline-success" title="Call">
             <i class="fa fa-phone me-1"></i><?= e($lead['phone']) ?>
         </a>
-        <a href="https://wa.me/<?= preg_replace('/[^0-9]/','',$lead['phone']) ?>"
-           target="_blank" class="btn btn-sm btn-outline-success" title="WhatsApp">
+        <?php
+        $waNum = preg_replace('/[^0-9]/', '', $lead['phone']);
+        if (str_starts_with($lead['phone'], '0')) $waNum = '254' . substr($waNum, 1);
+        $agentName = $me['name'] ?? '';
+        $company = getSetting('company_name', 'us');
+        $interested = $lead['interested_in'] ?? '';
+        $waMsg = "Hello {$lead['name']}! I'm {$agentName} from {$company}." . ($interested ? " Following up on your interest in the {$interested}." : '') . " When would be a good time to connect or visit our showroom?";
+        ?>
+        <a href="https://wa.me/<?= $waNum ?>?text=<?= rawurlencode($waMsg) ?>"
+           target="_blank" class="btn btn-sm btn-success" title="WhatsApp <?= e($lead['phone']) ?>">
             <i class="fab fa-whatsapp me-1"></i>WhatsApp
         </a>
         <?php endif; ?>
@@ -286,6 +324,107 @@ include __DIR__ . '/../../includes/header.php';
                     <dd class="col-7 small text-danger"><?= e($lead['lost_reason']) ?></dd>
                     <?php endif; ?>
                 </dl>
+            </div>
+        </div>
+
+        <!-- Linked Vehicle -->
+        <div class="card mb-3">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="fa fa-car me-2 text-primary"></i>Linked Vehicle</span>
+                <?php if ($pinnedCar && canWrite('crm')): ?>
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="action" value="pin_car">
+                    <input type="hidden" name="car_id" value="">
+                    <button class="btn btn-xs btn-outline-danger" style="font-size:11px;padding:1px 6px"
+                            onclick="return confirm('Remove linked vehicle?')">
+                        <i class="fa fa-unlink"></i> Unpin
+                    </button>
+                </form>
+                <?php endif; ?>
+            </div>
+            <div class="card-body" style="font-size:13px">
+                <?php if ($pinnedCar): ?>
+                <div class="d-flex align-items-start gap-2">
+                    <i class="fa fa-car-side fa-lg text-primary mt-1"></i>
+                    <div>
+                        <div class="fw-semibold"><?= e($pinnedCar['year'] . ' ' . $pinnedCar['make'] . ' ' . $pinnedCar['model']) ?></div>
+                        <div class="text-muted small"><?= e($pinnedCar['registration_number'] ?? '') ?><?= !empty($pinnedCar['color']) ? ' · ' . e($pinnedCar['color']) : '' ?></div>
+                        <?php if (!empty($pinnedCar['selling_price'])): ?>
+                        <div class="text-success fw-semibold"><?= money((float)$pinnedCar['selling_price']) ?></div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php else: ?>
+                <div class="text-muted small mb-2">No vehicle linked yet.</div>
+                <?php endif; ?>
+
+                <?php if (canWrite('crm')): ?>
+                <div class="mt-2">
+                    <input type="text" id="carSearchInput" class="form-control form-control-sm"
+                           placeholder="Search by make, model or reg…">
+                    <div id="carResults" class="list-group mt-1" style="display:none;max-height:180px;overflow-y:auto"></div>
+                    <form method="POST" id="pinCarForm">
+                        <input type="hidden" name="action" value="pin_car">
+                        <input type="hidden" name="car_id" id="pinCarId">
+                        <div id="pinCarSelected" style="display:none" class="alert alert-info py-1 px-2 mt-1 d-flex justify-content-between align-items-center" style="font-size:12px">
+                            <span id="pinCarLabel"></span>
+                            <button type="submit" class="btn btn-xs btn-primary ms-2" style="font-size:11px">
+                                <i class="fa fa-link me-1"></i>Link
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <script>
+                (function() {
+                    var inp = document.getElementById('carSearchInput');
+                    var res = document.getElementById('carResults');
+                    var sel = document.getElementById('pinCarSelected');
+                    var lbl = document.getElementById('pinCarLabel');
+                    var idField = document.getElementById('pinCarId');
+                    var timer;
+                    inp.addEventListener('input', function() {
+                        clearTimeout(timer);
+                        var q = inp.value.trim();
+                        if (q.length < 2) { res.style.display = 'none'; return; }
+                        timer = setTimeout(function() {
+                            fetch('<?= BASE_URL ?>/modules/crm/api/search_cars.php?q=' + encodeURIComponent(q))
+                                .then(function(r) { return r.json(); })
+                                .then(function(d) {
+                                    res.innerHTML = '';
+                                    if (!d.cars || !d.cars.length) {
+                                        res.innerHTML = '<div class="list-group-item text-muted small">No vehicles found</div>';
+                                        res.style.display = '';
+                                        return;
+                                    }
+                                    d.cars.forEach(function(c) {
+                                        var a = document.createElement('button');
+                                        a.type = 'button';
+                                        a.className = 'list-group-item list-group-item-action py-1 px-2';
+                                        a.style.fontSize = '12px';
+                                        var year = c.year || '';
+                                        var make = c.make || '';
+                                        var model = c.model || '';
+                                        var reg = c.reg || c.registration_number || '';
+                                        a.textContent = [year, make, model].filter(Boolean).join(' ') + (reg ? ' — ' + reg : '');
+                                        a.addEventListener('click', function() {
+                                            idField.value = c.id;
+                                            lbl.textContent = a.textContent;
+                                            sel.style.display = '';
+                                            res.style.display = 'none';
+                                            inp.value = '';
+                                        });
+                                        res.appendChild(a);
+                                    });
+                                    res.style.display = '';
+                                }).catch(function() {});
+                        }, 300);
+                    });
+                    document.addEventListener('click', function(e) {
+                        if (!res.contains(e.target) && e.target !== inp) res.style.display = 'none';
+                    });
+                }());
+                </script>
+                <?php endif; ?>
             </div>
         </div>
 

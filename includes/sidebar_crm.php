@@ -79,6 +79,14 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
 
+        <?php if (canWrite('crm')): ?>
+        <a href="<?= BASE_URL ?>/modules/crm/import_leads.php"
+           class="nav-item <?= str_contains($__uri, '/modules/crm/import_leads') ? 'active' : '' ?>"
+           data-label="Import Leads">
+            <i class="fa fa-file-import"></i><span>Import Leads</span>
+        </a>
+        <?php endif; ?>
+
         <a href="<?= BASE_URL ?>/modules/crm/my_tasks.php"
            class="nav-item <?= str_contains($__uri, '/modules/crm/my_tasks') ? 'active' : '' ?>"
            data-label="My Tasks"
