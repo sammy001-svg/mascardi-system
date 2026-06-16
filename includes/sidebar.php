@@ -6,6 +6,12 @@ function isActive(string $path): string {
     global $__uri;
     return str_contains($__uri, $path) ? 'active' : '';
 }
+
+// Customer Relations Managers get a lean, focused sidebar
+if (hasRole('customer_relations')) {
+    include __DIR__ . '/sidebar_crm.php';
+    return;
+}
 ?>
 <div class="app-sidebar" id="sidebar">
 
