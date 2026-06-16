@@ -340,7 +340,7 @@ include __DIR__ . '/../../includes/header.php';
         foreach ($pinnedCarImages as $_img) { if ($_img['is_primary']) { $_primaryImg = $_img; break; } }
         if (!$_primaryImg && !empty($pinnedCarImages)) $_primaryImg = $pinnedCarImages[0];
         ?>
-        <div class="card mb-3 overflow-hidden">
+        <div class="card mb-3">
             <div class="card-header fw-semibold d-flex justify-content-between align-items-center py-2">
                 <span><i class="fa fa-car me-2 text-primary"></i>Linked Vehicle</span>
                 <?php if ($pinnedCar && canWrite('crm')): ?>
@@ -447,9 +447,11 @@ include __DIR__ . '/../../includes/header.php';
             <!-- Change vehicle search -->
             <div class="px-3 pb-3 border-top pt-2">
                 <div class="small text-muted mb-1 fw-semibold">Change linked vehicle:</div>
-                <input type="text" id="carSearchInput" class="form-control form-control-sm"
-                       placeholder="Search make, model or registration…" autocomplete="off">
-                <div id="carResults" style="display:none;position:absolute;z-index:200;width:calc(100% - 2rem);background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:260px;overflow-y:auto"></div>
+                <div style="position:relative">
+                    <input type="text" id="carSearchInput" class="form-control form-control-sm"
+                           placeholder="Search make, model or registration…" autocomplete="off">
+                    <div id="carResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:1050;background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;margin-top:2px"></div>
+                </div>
             </div>
             <?php endif; ?>
 
@@ -460,9 +462,11 @@ include __DIR__ . '/../../includes/header.php';
                     <i class="fa fa-search me-1"></i>Search your inventory to link a vehicle to this lead.
                 </p>
                 <?php if (canWrite('crm')): ?>
-                <input type="text" id="carSearchInput" class="form-control form-control-sm"
-                       placeholder="Type make, model or registration…" autocomplete="off">
-                <div id="carResults" style="display:none;position:absolute;z-index:200;width:calc(100% - 2rem);background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:260px;overflow-y:auto"></div>
+                <div style="position:relative">
+                    <input type="text" id="carSearchInput" class="form-control form-control-sm"
+                           placeholder="Type make, model or registration…" autocomplete="off">
+                    <div id="carResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:1050;background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;margin-top:2px"></div>
+                </div>
                 <?php endif; ?>
             </div>
             <?php endif; ?>
