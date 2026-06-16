@@ -13,6 +13,12 @@ $db   = getDB();
 $user = authUser();
 $role = $user['role'] ?? 'mechanic';
 
+// Customer Relations Managers get their own pipeline-focused dashboard
+if ($role === 'customer_relations') {
+    header('Location: ' . BASE_URL . '/modules/crm/my_dashboard.php');
+    exit;
+}
+
 // ── Role-specific stats ───────────────────────────────────────────────────
 $stats = [];
 if ($role === 'mechanic') {

@@ -8,6 +8,10 @@ $db  = getDB();
 $id  = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/crm/leads.php');
 
+$me  = authUser();
+$uid = (int)$me['id'];
+$isCrmAgent = ($me['role'] === 'customer_relations');
+
 $lead = $db->prepare("
     SELECT l.*, u.name AS assigned_name, c.name AS client_name
     FROM crm_leads l
@@ -17,6 +21,12 @@ $lead = $db->prepare("
 ");
 $lead->execute([$id]); $lead = $lead->fetch();
 if (!$lead) { setFlash('error','Lead not found.'); redirect(BASE_URL.'/modules/crm/leads.php'); }
+
+// Data isolation: CRM agents can only view leads assigned to themselves
+if ($isCrmAgent && (int)$lead['assigned_to'] !== $uid) {
+    setFlash('error', 'You can only view leads assigned to you.');
+    redirect(BASE_URL . '/modules/crm/my_dashboard.php');
+}
 
 $pageTitle = $lead['name'];
 

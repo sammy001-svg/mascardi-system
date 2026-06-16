@@ -131,9 +131,7 @@ function canAccess(string $module): bool {
             'showroom_transfers','key_handovers','dispatch','team',
         ],
         'customer_relations' => [
-            'clients','service_bookings','crm','quick_assessments','cars','chat',
-            'inspections','installments','quotations','invoices','showroom',
-            'showroom_transfers','key_handovers','dispatch','team',
+            'clients','crm','chat',
         ],
         'receptionist'      => [
             'clients','service_bookings','quick_assessments','cars','chat','showroom',
@@ -196,7 +194,7 @@ function canWrite(string $module): bool {
         'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team','imports'],
         'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','dispatch','team'],
         'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team'],
-        'customer_relations' => ['clients','service_bookings','crm','quick_assessments','installments','team'],
+        'customer_relations' => ['clients','crm'],
         'receptionist'      => ['clients','service_bookings','quick_assessments','team'],
         'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','dispatch','team','imports'],
         'mechanic'          => ['assessments','parts_requests','team'],

@@ -6,6 +6,12 @@ canAccess('crm') || redirect(BASE_URL . '/index.php');
 $pageTitle = 'CRM — Sales Pipeline';
 $db   = getDB();
 $me   = authUser();
+$uid  = (int)$me['id'];
+
+// Data isolation: customer_relations agents see only their own leads
+$isCrmAgent = ($me['role'] === 'customer_relations');
+$scopeWhere = $isCrmAgent ? "AND assigned_to = {$uid}"   : '';
+$scopeJoin  = $isCrmAgent ? "AND l.assigned_to = {$uid}" : '';
 
 // ── Stage config ──────────────────────────────────────────────────────────────
 $stages = [
@@ -18,7 +24,7 @@ $stages = [
 ];
 
 try {
-    // Summary stats
+    // Summary stats (scoped to me if CRM agent)
     $stats = $db->query("
         SELECT
             COUNT(*)                                                           AS total,
@@ -28,45 +34,48 @@ try {
             COALESCE(SUM(CASE WHEN stage='delivered' THEN budget END), 0)     AS won_value,
             SUM(follow_up_date IS NOT NULL AND follow_up_date < CURDATE() AND stage NOT IN ('lost','delivered')) AS overdue_followups
         FROM crm_leads
+        WHERE 1 {$scopeWhere}
     ")->fetch();
 
     // Pipeline counts per stage
     $stageCounts = $db->query("
         SELECT stage, COUNT(*) AS cnt, COALESCE(SUM(budget),0) AS total_budget
         FROM crm_leads
-        WHERE stage NOT IN ('lost','delivered')
+        WHERE stage NOT IN ('lost','delivered') {$scopeWhere}
         GROUP BY stage
     ")->fetchAll(PDO::FETCH_ASSOC);
     $stageMap = [];
     foreach ($stageCounts as $r) $stageMap[$r['stage']] = $r;
 
-    // All active leads for Kanban (exclude closed)
+    // All active leads for Kanban (exclude closed, scoped)
     $leads = $db->query("
         SELECT l.*, u.name AS assigned_name
         FROM crm_leads l
         LEFT JOIN users u ON u.id = l.assigned_to
-        WHERE l.stage NOT IN ('lost','delivered')
+        WHERE l.stage NOT IN ('lost','delivered') {$scopeJoin}
         ORDER BY l.updated_at DESC
     ")->fetchAll();
 
-    // Upcoming follow-ups (next 7 days, not closed)
+    // Upcoming follow-ups (next 7 days, not closed, scoped)
     $followUps = $db->query("
         SELECT l.*, u.name AS assigned_name
         FROM crm_leads l
         LEFT JOIN users u ON u.id = l.assigned_to
         WHERE l.follow_up_date IS NOT NULL
           AND l.follow_up_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)
-          AND l.stage NOT IN ('lost','delivered')
+          AND l.stage NOT IN ('lost','delivered') {$scopeJoin}
         ORDER BY l.follow_up_date ASC
         LIMIT 10
     ")->fetchAll();
 
-    // Recent activities
+    // Recent activities (scoped: CRM agents see only their own)
+    $actScopeWhere = $isCrmAgent ? "AND a.created_by = {$uid}" : '';
     $recentActivities = $db->query("
         SELECT a.*, l.name AS lead_name, u.name AS by_name
         FROM crm_activities a
         LEFT JOIN crm_leads l ON l.id = a.lead_id
         LEFT JOIN users u ON u.id = a.created_by
+        WHERE 1 {$actScopeWhere}
         ORDER BY a.created_at DESC
         LIMIT 8
     ")->fetchAll();
@@ -110,9 +119,15 @@ include __DIR__ . '/../../includes/header.php';
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0"><i class="fa fa-funnel-dollar me-2 text-primary"></i>Sales Pipeline</h5>
+    <h5 class="mb-0">
+        <i class="fa fa-funnel-dollar me-2 text-primary"></i>
+        <?= $isCrmAgent ? 'My Sales Pipeline' : 'Sales Pipeline' ?>
+    </h5>
     <div class="d-flex gap-2">
-        <a href="leads.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list me-1"></i>All Leads</a>
+        <?php if ($isCrmAgent): ?>
+        <a href="my_dashboard.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-gauge-high me-1"></i>Dashboard</a>
+        <?php endif; ?>
+        <a href="leads.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list me-1"></i><?= $isCrmAgent ? 'My Leads' : 'All Leads' ?></a>
         <?php if (canWrite('crm')): ?>
         <a href="add_lead.php" class="btn btn-sm btn-primary"><i class="fa fa-plus me-1"></i>New Lead</a>
         <?php endif; ?>
