@@ -618,6 +618,11 @@ a:hover { text-decoration: underline; }
     letter-spacing: .15px;
 }
 
+/* Purple — used for CRM "Reserved" stage (not a native Bootstrap colour) */
+.bg-purple  { background-color: #7c3aed !important; color: #fff !important; }
+.text-purple { color: #7c3aed !important; }
+[data-theme="dark"] .bg-purple { background-color: #6d28d9 !important; }
+
 /* ─────────────────────────────────────────────────────────
    ALERTS
    ───────────────────────────────────────────────────────── */
