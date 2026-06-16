@@ -8,7 +8,7 @@ function isActive(string $path): string {
 }
 
 // Customer Relations Managers get a lean, focused sidebar
-if (hasRole('customer_relations')) {
+if (authRole() === 'customer_relations') {
     include __DIR__ . '/sidebar_crm.php';
     return;
 }
