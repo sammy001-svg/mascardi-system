@@ -184,18 +184,19 @@ include __DIR__ . '/../../includes/header.php';
            class="btn btn-sm btn-success">
             <i class="fa fa-user-check me-1"></i>View Client
         </a>
+        <a href="<?= BASE_URL ?>/modules/crm/client_history.php?client_id=<?= $lead['client_id'] ?>"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-clock-rotate-left me-1"></i>Comm. History
+        </a>
         <a href="<?= BASE_URL ?>/modules/quotations/add.php?client_id=<?= $lead['client_id'] ?>"
            class="btn btn-sm btn-outline-info">
             <i class="fa fa-file-lines me-1"></i>New Quotation
         </a>
         <?php elseif (canWrite('crm') && $lead['stage'] !== 'lost'): ?>
-        <form method="POST" class="d-inline"
-              onsubmit="return confirm('Convert this lead to a client?')">
-            <input type="hidden" name="action" value="convert">
-            <button class="btn btn-sm btn-success">
-                <i class="fa fa-user-plus me-1"></i>Convert to Client
-            </button>
-        </form>
+        <a href="<?= BASE_URL ?>/modules/crm/convert_lead.php?id=<?= $id ?>"
+           class="btn btn-sm btn-success">
+            <i class="fa fa-user-plus me-1"></i>Convert to Client
+        </a>
         <?php endif; ?>
         <!-- Quick contact actions -->
         <?php if ($lead['phone']): ?>

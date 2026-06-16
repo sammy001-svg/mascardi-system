@@ -79,6 +79,44 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
 
+        <a href="<?= BASE_URL ?>/modules/crm/my_tasks.php"
+           class="nav-item <?= str_contains($__uri, '/modules/crm/my_tasks') ? 'active' : '' ?>"
+           data-label="My Tasks"
+           style="position:relative">
+            <i class="fa fa-list-check"></i><span>My Tasks</span>
+            <span id="tasksNavBadge" style="display:none;position:absolute;top:6px;right:8px;
+                  border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;
+                  min-width:16px;text-align:center;line-height:16px;color:#fff"></span>
+        </a>
+
+        <a href="<?= BASE_URL ?>/modules/crm/reports.php"
+           class="nav-item <?= str_contains($__uri, '/modules/crm/reports') ? 'active' : '' ?>"
+           data-label="My Reports">
+            <i class="fa fa-chart-line"></i><span>My Reports</span>
+        </a>
+        <script>
+        (function(){
+            var badge = document.getElementById('tasksNavBadge');
+            if (!badge) return;
+            function poll(){
+                fetch('<?= BASE_URL ?>/modules/crm/api/check_followups.php')
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        var n = d.count || 0;
+                        if (n > 0) {
+                            badge.textContent = n > 99 ? '99+' : n;
+                            badge.style.background = d.overdue > 0 ? '#dc2626' : '#f59e0b';
+                            badge.style.display = '';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    }).catch(function(){});
+            }
+            poll();
+            setInterval(poll, 120000); // every 2 minutes
+        }());
+        </script>
+
         <!-- ══ COMMUNICATION ══════════════════════════════════════ -->
         <div class="nav-section">Communication</div>
 
