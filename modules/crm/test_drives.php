@@ -595,12 +595,19 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <script>
+// Move modals to <body> to escape the page-body animation stacking context
+document.addEventListener('DOMContentLoaded', function () {
+    ['scheduleTdModal', 'outcomeModal'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && el.parentNode !== document.body) document.body.appendChild(el);
+    });
+});
+
 // Open outcome modal and pre-fill the test drive ID
 function openOutcomeModal(tdId) {
     document.getElementById('outcomeTdId').value = tdId;
     document.getElementById('outcomeText').value  = '';
-    var modal = new bootstrap.Modal(document.getElementById('outcomeModal'));
-    modal.show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('outcomeModal')).show();
 }
 
 // Init Select2 inside schedule modal when it opens

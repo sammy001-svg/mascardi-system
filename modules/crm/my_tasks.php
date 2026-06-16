@@ -760,6 +760,14 @@ function openRescheduleModal(leadId, leadName, currentDate) {
     new bootstrap.Modal(document.getElementById('rescheduleModal')).show();
 }
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    ['logModal', 'rescheduleModal'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && el.parentNode !== document.body) document.body.appendChild(el);
+    });
+});
+</script>
 
 <?php endif; ?>
 

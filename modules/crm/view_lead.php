@@ -1069,4 +1069,14 @@ $companyWa = getSetting('company_name', 'us');
 </script>
 <?php endif; ?>
 
+<script>
+// Move modals to <body> so they escape the page-body animation compositing layer
+document.addEventListener('DOMContentLoaded', function () {
+    ['scheduleTdModal', 'waTemplateModal', 'lostModal'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && el.parentNode !== document.body) document.body.appendChild(el);
+    });
+});
+</script>
+
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

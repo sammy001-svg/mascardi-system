@@ -536,5 +536,11 @@ function toggleBodyExpand(id, btn) {
     ref.addEventListener('hidden.bs.collapse', function () { chv.style.transform = 'rotate(0deg)'; });
 }());
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var el = document.getElementById('editModal');
+    if (el && el.parentNode !== document.body) document.body.appendChild(el);
+});
+</script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
