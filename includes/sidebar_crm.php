@@ -197,7 +197,7 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
 <?php if (canWrite('crm')): ?>
 <button type="button" id="walkInFab"
         title="Walk-in Quick Capture"
-        style="position:fixed;bottom:24px;right:24px;z-index:1040;
+        style="position:fixed;bottom:152px;right:24px;z-index:8800;
                width:52px;height:52px;border-radius:50%;border:none;
                background:#16a34a;color:#fff;font-size:20px;
                box-shadow:0 4px 16px rgba(0,0,0,.25);cursor:pointer;
@@ -208,7 +208,7 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
         data-bs-toggle="modal" data-bs-target="#walkInModal">
     <i class="fa fa-user-plus"></i>
 </button>
-<div style="position:fixed;bottom:80px;right:20px;z-index:1039;background:#1e293b;color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;pointer-events:none;opacity:0;transition:opacity .2s" id="walkInLabel">
+<div style="position:fixed;bottom:162px;right:82px;z-index:8799;background:#1e293b;color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;pointer-events:none;opacity:0;transition:opacity .2s;white-space:nowrap" id="walkInLabel">
     Walk-in
 </div>
 <script>
