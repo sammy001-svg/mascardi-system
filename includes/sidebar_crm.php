@@ -109,6 +109,15 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
         }());
         </script>
 
+        <!-- ══ SETTINGS ═════════════════════════════════════════ -->
+        <div class="nav-section">Account</div>
+
+        <a href="<?= BASE_URL ?>/modules/crm/settings.php"
+           class="nav-item <?= str_contains($__uri, '/modules/crm/settings') ? 'active' : '' ?>"
+           data-label="My Settings">
+            <i class="fa fa-user-gear"></i><span>My Settings</span>
+        </a>
+
     </nav>
 
     <div class="sidebar-footer">
