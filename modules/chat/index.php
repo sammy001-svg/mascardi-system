@@ -2120,7 +2120,6 @@ ob_start(); ?>
                          data-uid="<?= (int)$u['id'] ?>"
                          data-uname="<?= e($u['name']) ?>"
                          data-ucolor="<?= e($color) ?>"
-                         data-bs-dismiss="modal"
                          style="cursor:pointer">
                         <div class="up-av" style="background:<?= $color ?>"><?= e($init) ?></div>
                         <div>
