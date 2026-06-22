@@ -137,7 +137,8 @@ include __DIR__ . '/../../includes/header.php';
                         <div class="d-flex align-items-center gap-2">
                             <?php if ($car['primary_image']): ?>
                             <img src="<?= BASE_URL ?>/uploads/cars/<?= e($car['primary_image']) ?>"
-                                 class="rounded border shadow-sm" style="width:50px;height:40px;object-fit:cover">
+                                 class="rounded border shadow-sm" style="width:50px;height:40px;object-fit:cover"
+                                 loading="lazy" decoding="async" width="50" height="40">
                             <?php else: ?>
                             <div class="bg-light rounded border d-flex align-items-center justify-content-center text-muted"
                                  style="width:50px;height:40px;font-size:10px">NO IMG</div>

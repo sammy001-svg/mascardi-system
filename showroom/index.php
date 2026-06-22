@@ -172,7 +172,7 @@ include __DIR__ . '/header.php';
                     <div style="background:rgba(255,255,255,.06);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:24px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.4)">
                         <?php if ($fcImg): ?>
                         <img src="<?= htmlspecialchars($fcImg) ?>" alt="<?= htmlspecialchars($fc['make'].' '.$fc['model']) ?>"
-                             style="width:100%;height:280px;object-fit:cover">
+                             style="width:100%;height:280px;object-fit:cover" fetchpriority="high" decoding="async">
                         <?php else: ?>
                         <div style="width:100%;height:280px;background:linear-gradient(135deg,rgba(37,99,235,.2),rgba(29,78,216,.1));display:flex;align-items:center;justify-content:center">
                             <i class="fa fa-car-side" style="font-size:80px;color:rgba(255,255,255,.1)"></i>
@@ -335,7 +335,7 @@ include __DIR__ . '/header.php';
                 <!-- Image -->
                 <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fc['id'] ?>" class="featured-img-wrap">
                     <?php if ($fcImg): ?>
-                    <img src="<?= htmlspecialchars($fcImg) ?>" alt="<?= htmlspecialchars($fc['make'].' '.$fc['model']) ?>">
+                    <img src="<?= htmlspecialchars($fcImg) ?>" alt="<?= htmlspecialchars($fc['make'].' '.$fc['model']) ?>" loading="lazy" decoding="async">
                     <?php else: ?>
                     <div class="featured-no-img"><i class="fa fa-car-side"></i></div>
                     <?php endif; ?>
@@ -533,7 +533,7 @@ include __DIR__ . '/header.php';
                             <span class="inv-badge-photos"><i class="fa fa-images me-1"></i><?= $car['image_count'] ?></span>
                             <?php endif; ?>
                             <?php if ($img): ?>
-                            <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($car['make'].' '.$car['model']) ?>">
+                            <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($car['make'].' '.$car['model']) ?>" loading="lazy" decoding="async">
                             <?php else: ?>
                             <div class="inv-no-img"><i class="fa fa-car-side"></i></div>
                             <?php endif; ?>

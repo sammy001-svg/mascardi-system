@@ -78,6 +78,8 @@ $__pageTitle = isset($pageTitle)
 /* ── Base ─────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
+img { max-width: 100%; height: auto; content-visibility: auto; }
+img[width][height] { height: auto; }
 body {
     font-family: 'Inter', -apple-system, sans-serif;
     font-size: 15px;

@@ -165,7 +165,8 @@ $flash = getFlash();
                     <img src="<?= BASE_URL ?>/uploads/profiles/<?= e($user['profile_image']) ?>"
                          id="avatarPreviewImg"
                          class="rounded-circle border shadow"
-                         style="width:110px;height:110px;object-fit:cover">
+                         style="width:110px;height:110px;object-fit:cover"
+                         decoding="async" fetchpriority="high" width="110" height="110">
                     <?php else: ?>
                     <div id="avatarInitials"
                          class="rounded-circle d-inline-flex align-items-center justify-content-center border shadow"

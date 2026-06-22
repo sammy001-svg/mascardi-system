@@ -431,13 +431,14 @@ include __DIR__ . '/../../includes/header.php';
                      src="<?= BASE_URL ?>/uploads/cars/<?= e($_primaryImg['file_path']) ?>"
                      alt="<?= e(($pinnedCar['make'] ?? '') . ' ' . ($pinnedCar['model'] ?? '')) ?>"
                      style="width:100%;height:210px;object-fit:cover;display:block;cursor:zoom-in"
+                     loading="lazy" decoding="async"
                      onclick="window.open(this.src,'_blank')">
             </div>
             <?php if (count($pinnedCarImages) > 1): ?>
             <div class="d-flex gap-1 p-2" style="overflow-x:auto;background:#f0f0f0;line-height:0">
                 <?php foreach ($pinnedCarImages as $_thumb): ?>
                 <img src="<?= BASE_URL ?>/uploads/cars/<?= e($_thumb['file_path']) ?>"
-                     alt=""
+                     alt="" loading="lazy" decoding="async"
                      onclick="document.getElementById('crmMainImg').src=this.src;
                               document.querySelectorAll('.crm-thumb').forEach(function(t){t.style.borderColor='#ccc'});
                               this.style.borderColor='#2563eb'"

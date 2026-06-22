@@ -149,7 +149,8 @@ include __DIR__ . '/header.php';
                 <div class="vg-main" id="vgMain" onclick="openLightbox(currentIdx)">
                     <img id="vgMainImg"
                          src="<?= htmlspecialchars($primaryImg) ?>"
-                         alt="<?= htmlspecialchars($carTitle) ?>">
+                         alt="<?= htmlspecialchars($carTitle) ?>"
+                         fetchpriority="high" decoding="async">
                     <?php if ($car['featured']): ?>
                     <div class="vg-featured-badge"><i class="fa fa-star me-1"></i>Featured</div>
                     <?php endif; ?>
@@ -170,7 +171,7 @@ include __DIR__ . '/header.php';
                     <button class="vg-thumb <?= $i === 0 ? 'active' : '' ?>"
                             onclick="selectPhoto(<?= $i ?>)"
                             data-src="<?= BASE_URL . '/uploads/cars/' . htmlspecialchars($img['file_path']) ?>">
-                        <img src="<?= BASE_URL . '/uploads/cars/' . htmlspecialchars($img['file_path']) ?>" alt="Photo <?= $i+1 ?>">
+                        <img src="<?= BASE_URL . '/uploads/cars/' . htmlspecialchars($img['file_path']) ?>" alt="Photo <?= $i+1 ?>" loading="lazy" decoding="async">
                     </button>
                     <?php endforeach; ?>
                 </div>
@@ -396,7 +397,7 @@ include __DIR__ . '/header.php';
             <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $sv['id'] ?>" class="vsim-card">
                 <div class="vsim-img">
                     <?php if ($svImg): ?>
-                    <img src="<?= htmlspecialchars($svImg) ?>" alt="<?= htmlspecialchars($sv['make'].' '.$sv['model']) ?>">
+                    <img src="<?= htmlspecialchars($svImg) ?>" alt="<?= htmlspecialchars($sv['make'].' '.$sv['model']) ?>" loading="lazy" decoding="async">
                     <?php else: ?>
                     <div style="height:100%;display:flex;align-items:center;justify-content:center;color:#cbd5e1;font-size:40px"><i class="fa fa-car-side"></i></div>
                     <?php endif; ?>

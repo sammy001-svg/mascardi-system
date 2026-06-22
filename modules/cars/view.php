@@ -70,7 +70,7 @@ include __DIR__ . '/../../includes/header.php';
 <div class="card mb-4 overflow-hidden">
     <div class="row g-0">
         <div class="col-md-7">
-            <img src="<?= BASE_URL ?>/uploads/cars/<?= e($primaryImage['file_path']) ?>" class="img-fluid w-100 h-100" style="object-fit:cover; max-height:400px;">
+            <img src="<?= BASE_URL ?>/uploads/cars/<?= e($primaryImage['file_path']) ?>" class="img-fluid w-100 h-100" style="object-fit:cover; max-height:400px;" fetchpriority="high" decoding="async">
         </div>
         <div class="col-md-5 d-flex flex-column">
             <div class="card-body bg-light flex-grow-1">
@@ -83,7 +83,7 @@ include __DIR__ . '/../../includes/header.php';
                         if($thumbCount >= 6) break;
                     ?>
                     <div class="col-4">
-                        <img src="<?= BASE_URL ?>/uploads/cars/<?= e($img['file_path']) ?>" class="img-fluid rounded border shadow-sm" style="height:80px; width:100%; object-fit:cover;">
+                        <img src="<?= BASE_URL ?>/uploads/cars/<?= e($img['file_path']) ?>" class="img-fluid rounded border shadow-sm" style="height:80px; width:100%; object-fit:cover;" loading="lazy" decoding="async" width="120" height="80">
                     </div>
                     <?php $thumbCount++; endforeach; ?>
                     <?php if (count($images) > 7): ?>
