@@ -353,6 +353,30 @@ if (authRole() === 'customer_relations') {
         <?php endif; ?>
         <?php endif; ?>
 
+        <!-- ══ WHATSAPP ═══════════════════════════════════════════ -->
+        <div class="nav-section">WhatsApp</div>
+        <a href="<?= BASE_URL ?>/modules/whatsapp/index.php"
+           class="nav-item <?= isActive('/modules/whatsapp/') ?>"
+           data-label="WhatsApp Inbox"
+           style="position:relative">
+            <i class="fab fa-whatsapp" style="color:#25d366"></i><span>Inbox</span>
+            <?php
+            try {
+                $__waUnread = (int)getDB()->query("SELECT COALESCE(SUM(unread_count),0) FROM wa_conversations")->fetchColumn();
+                if ($__waUnread > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#25d366;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__waUnread > 99 ? '99+' : $__waUnread ?>
+            </span>
+            <?php endif; } catch (\Throwable $_) {} ?>
+        </a>
+        <?php if (hasRole(['admin','general_manager'])): ?>
+        <a href="<?= BASE_URL ?>/modules/whatsapp/admin.php"
+           class="nav-item <?= isActive('/modules/whatsapp/admin') ?>"
+           data-label="WA Setup">
+            <i class="fa fa-qrcode"></i><span>WA Setup</span>
+        </a>
+        <?php endif; ?>
+
         <!-- ══ FINANCE ════════════════════════════════════════════ -->
         <?php if (canAccess('sales') || canAccess('payments') || canAccess('quotations') || canAccess('invoices')
                || canAccess('installments') || canAccess('car_costs') || canAccess('expenses')): ?>
