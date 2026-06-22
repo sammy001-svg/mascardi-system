@@ -476,8 +476,8 @@ if (authRole() === 'customer_relations') {
         <?php endif; ?>
 
         <!-- ══ COMMUNICATION ══════════════════════════════════════ -->
-        <?php if (canAccess('chat')): ?>
         <div class="nav-section">Communication</div>
+        <?php if (canAccess('chat')): ?>
         <a href="<?= BASE_URL ?>/modules/chat/index.php"
            class="nav-item <?= isActive('/modules/chat/') ?>"
            data-label="Team Chat"
@@ -505,6 +505,32 @@ if (authRole() === 'customer_relations') {
         }());
         </script>
         <?php endif; ?>
+        <a href="<?= BASE_URL ?>/modules/whatsapp/index.php"
+           class="nav-item <?= isActive('/modules/whatsapp/') ?>"
+           data-label="WA Inbox"
+           style="position:relative">
+            <i class="fab fa-whatsapp"></i><span>WA Inbox</span>
+            <span id="waNavBadge" style="display:none;position:absolute;top:6px;right:8px;
+                  background:#00a884;color:#fff;border-radius:10px;font-size:10px;
+                  font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
+        </a>
+        <script>
+        (function(){
+            var badge = document.getElementById('waNavBadge');
+            if (!badge) return;
+            function poll(){
+                fetch('<?= BASE_URL ?>/modules/whatsapp/api/unread.php')
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        var n = d.count || 0;
+                        if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
+                        else { badge.style.display = 'none'; }
+                    }).catch(function(){});
+            }
+            poll();
+            setInterval(poll, 20000);
+        }());
+        </script>
 
         <!-- ══ ADMIN ══════════════════════════════════════════════ -->
         <?php if (hasRole('admin')): ?>
