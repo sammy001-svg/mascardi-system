@@ -26,7 +26,7 @@ function ensureUsersTable(): void {
 
 function hasAdminUser(): bool {
     try {
-        return (int) getDB()->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn() > 0;
+        return (int) getDB()->query("SELECT COUNT(*) FROM users WHERE role IN ('admin','super_admin')")->fetchColumn() > 0;
     } catch (PDOException $e) {
         return false;
     }
