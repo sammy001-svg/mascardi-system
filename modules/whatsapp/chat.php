@@ -2,10 +2,10 @@
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
 
-$db = getDB();
-$me = authUser();
+// Redirect to the SPA inbox (chat.php is kept for backwards compatibility)
 $id = (int)($_GET['id'] ?? 0);
-if (!$id) redirect(BASE_URL . '/modules/whatsapp/index.php');
+redirect(BASE_URL . '/modules/whatsapp/index.php' . ($id ? '?id=' . $id : ''));
+exit;
 
 // ── POST handlers ─────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
