@@ -57,35 +57,103 @@ try {
                 $sender   = $nb['senderData']  ?? [];
                 $msgData  = $nb['messageData'] ?? [];
                 $chatId   = $sender['chatId']   ?? ($nb['chatId'] ?? '');
-                $sName    = $sender['senderName'] ?? ($sender['pushName'] ?? '');
-                $msgType  = $msgData['typeMessage'] ?? 'textMessage';
+                // Try all known name fields — Green API version varies
+                $sName    = $sender['senderName']
+                         ?? $sender['pushName']
+                         ?? $sender['chatName']
+                         ?? $nb['senderName']
+                         ?? '';
+                // Trim whitespace — some API versions include trailing \r\n
+                $msgType  = trim($msgData['typeMessage'] ?? '');
+                if ($msgType === '') $msgType = 'textMessage'; // safe default
                 $msgBody  = '';
                 $mediaUrl = null;
 
                 switch ($msgType) {
                     case 'textMessage':
+                        // Standard nested format (most Green API versions)
                         $msgBody = $msgData['textMessageData']['textMessage'] ?? '';
+                        // Flat format fallback (some Green API versions / self-hosted)
+                        if ($msgBody === '') $msgBody = $msgData['textMessage'] ?? '';
                         break;
+
                     case 'extendedTextMessage':
-                        $msgBody = $msgData['extendedTextMessageData']['text'] ?? '';
+                        // Extended text = plain text + URL preview
+                        $ext     = $msgData['extendedTextMessageData'] ?? [];
+                        $msgBody = $ext['text'] ?? $ext['description'] ?? '';
+                        if ($msgBody === '') $msgBody = $msgData['textMessage'] ?? '';
                         break;
+
                     case 'imageMessage':
-                    case 'documentMessage':
-                    case 'audioMessage':
-                    case 'videoMessage':
-                        $fmd      = $msgData['fileMessageData'] ?? [];
-                        $msgBody  = $fmd['caption'] ?? ($fmd['fileName'] ?? "[{$msgType}]");
+                        $fmd      = $msgData['fileMessageData'] ?? $msgData['imageMessageData'] ?? [];
+                        $msgBody  = $fmd['caption'] ?? '';
+                        if ($msgBody === '') $msgBody = '🖼 Image';
                         $mediaUrl = $fmd['downloadUrl'] ?? null;
                         break;
+
+                    case 'videoMessage':
+                        $fmd      = $msgData['fileMessageData'] ?? $msgData['videoMessageData'] ?? [];
+                        $msgBody  = $fmd['caption'] ?? '';
+                        if ($msgBody === '') $msgBody = '🎥 Video';
+                        $mediaUrl = $fmd['downloadUrl'] ?? null;
+                        break;
+
+                    case 'audioMessage':
+                    case 'pttMessage':
+                        $fmd      = $msgData['fileMessageData'] ?? $msgData['audioMessageData'] ?? [];
+                        $msgBody  = '🎵 Voice message';
+                        $mediaUrl = $fmd['downloadUrl'] ?? null;
+                        break;
+
+                    case 'documentMessage':
+                        $fmd      = $msgData['fileMessageData'] ?? $msgData['documentMessageData'] ?? [];
+                        $fileName = $fmd['fileName'] ?? 'Document';
+                        $msgBody  = $fmd['caption'] ?? "📄 {$fileName}";
+                        $mediaUrl = $fmd['downloadUrl'] ?? null;
+                        break;
+
+                    case 'stickerMessage':
+                        $msgBody = '🏷 Sticker';
+                        break;
+
                     case 'locationMessage':
                         $loc     = $msgData['locationMessageData'] ?? [];
-                        $msgBody = '📍 ' . ($loc['nameLocation'] ?? ($loc['address'] ?? 'Location'));
+                        $msgBody = '📍 ' . ($loc['nameLocation'] ?? $loc['address'] ?? 'Location');
                         break;
+
                     case 'contactMessage':
                         $msgBody = '👤 ' . ($msgData['contactMessageData']['displayName'] ?? 'Contact');
                         break;
+
+                    case 'templateMessage':
+                        $tpl     = $msgData['templateMessage'] ?? $msgData['templateButtonReplyMessage'] ?? [];
+                        $msgBody = $tpl['contentText'] ?? $tpl['selectedId'] ?? 'Template message';
+                        break;
+
+                    case 'buttonsResponseMessage':
+                        $msgBody = $msgData['buttonsResponseMessage']['selectedDisplayText'] ?? 'Button response';
+                        break;
+
+                    case 'listResponseMessage':
+                        $msgBody = $msgData['listResponseMessage']['title'] ?? 'List response';
+                        break;
+
+                    case 'reactionMessage':
+                        $msgBody = '👍 Reaction';
+                        break;
+
                     default:
-                        $msgBody = "[{$msgType}]";
+                        // Universal fallback: scan common text fields before giving up
+                        $msgBody = $msgData['textMessageData']['textMessage']
+                                ?? $msgData['extendedTextMessageData']['text']
+                                ?? $msgData['textMessage']
+                                ?? $msgData['caption']
+                                ?? '';
+                        if ($msgBody === '') {
+                            // Unknown type — log for debugging, store readable placeholder
+                            error_log("WA receive.php — unhandled typeMessage: {$msgType} | data: " . json_encode($msgData));
+                            $msgBody = "📎 Message ({$msgType})";
+                        }
                 }
 
                 if ($chatId) {

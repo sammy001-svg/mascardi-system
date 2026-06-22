@@ -44,22 +44,31 @@ $imported = 0;
 foreach ($msgs as $m) {
     $msgId    = $m['idMessage'] ?? null;
     $ts       = $m['timestamp'] ?? time();
-    $mtype    = $m['typeMessage'] ?? 'textMessage';
+    $mtype    = trim($m['typeMessage'] ?? 'textMessage');
     $dir      = (($m['type'] ?? 'incoming') === 'outgoing') ? 'out' : 'in';
-    $body     = $m['textMessage'] ?? ($m['caption'] ?? null);
     $mediaUrl = $m['downloadUrl'] ?? null;
 
-    if (!$body) {
-        if (str_contains($mtype, 'image'))       $body = '[Image]';
-        elseif (str_contains($mtype, 'audio'))   $body = '[Voice]';
-        elseif (str_contains($mtype, 'video'))   $body = '[Video]';
-        elseif (str_contains($mtype, 'doc'))     $body = '[Document]';
-        else                                     $body = "[{$mtype}]";
+    // getChatHistory puts text directly on the message root — try all known fields
+    $body = $m['textMessage']
+         ?? $m['text']
+         ?? $m['caption']
+         ?? null;
+
+    // For media and unknown types, show a friendly placeholder
+    if (!$body || $body === '') {
+        if (str_contains($mtype, 'image'))       $body = '🖼 Image';
+        elseif (str_contains($mtype, 'audio') || $mtype === 'pttMessage') $body = '🎵 Voice message';
+        elseif (str_contains($mtype, 'video'))   $body = '🎥 Video';
+        elseif (str_contains($mtype, 'doc'))     $body = '📄 Document';
+        elseif (str_contains($mtype, 'sticker')) $body = '🏷 Sticker';
+        elseif (str_contains($mtype, 'location'))$body = '📍 Location';
+        elseif (str_contains($mtype, 'contact')) $body = '👤 Contact';
+        else                                     $body = "📎 Message ({$mtype})";
     }
 
     $waType = 'text';
     if (str_contains($mtype, 'image'))       $waType = 'image';
-    elseif (str_contains($mtype, 'audio'))   $waType = 'audio';
+    elseif (str_contains($mtype, 'audio') || $mtype === 'pttMessage') $waType = 'audio';
     elseif (str_contains($mtype, 'video'))   $waType = 'video';
     elseif (str_contains($mtype, 'doc'))     $waType = 'document';
 

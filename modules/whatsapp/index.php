@@ -5,6 +5,11 @@ requireLogin();
 $db  = getDB();
 $me  = authUser();
 
+// One-shot repair: fix messages stored as "[textMessage]" by old parser
+try {
+    $db->exec("UPDATE wa_messages SET body = '📎 Message' WHERE body = '[textMessage]' OR body REGEXP '^\\\\[text'");
+} catch (\Throwable $_) {}
+
 // Ensure tables exist silently
 foreach ([
     "CREATE TABLE IF NOT EXISTS wa_config (id INT AUTO_INCREMENT PRIMARY KEY, instance_id VARCHAR(50) NOT NULL DEFAULT '', api_token VARCHAR(100) NOT NULL DEFAULT '', is_connected TINYINT(1) DEFAULT 0, phone_number VARCHAR(30) NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
