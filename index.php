@@ -13,7 +13,7 @@ $db   = getDB();
 $user = authUser();
 $role = $user['role'] ?? 'mechanic';
 
-// Super Admin goes to the dedicated admin portal
+// Admin role → simple focused portal (Workshop + Sales dashboards)
 if ($role === 'admin') {
     header('Location: ' . BASE_URL . '/modules/admin/workshop_dashboard.php');
     exit;
@@ -47,7 +47,7 @@ if ($role === 'mechanic') {
     $myAssessments = $db->prepare("SELECT ca.*, c.make, c.model FROM car_assessments ca JOIN cars c ON c.id=ca.car_id WHERE ca.mechanic_id=? ORDER BY ca.created_at DESC LIMIT 5");
     $myAssessments->execute([$mechId]); $myAssessments = $myAssessments->fetchAll();
 
-} elseif ($role === 'workshop_manager' || $role === 'admin') {
+} elseif (in_array($role, ['super_admin', 'workshop_manager', 'admin'])) {
     $stats['total_cars']       = (int)$db->query("SELECT COUNT(*) FROM cars")->fetchColumn();
     $stats['in_workshop']      = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status='in_workshop'")->fetchColumn();
     $stats['open_jobs']        = (int)$db->query("SELECT COUNT(*) FROM workshop_jobs WHERE status NOT IN ('completed','cancelled')")->fetchColumn();
@@ -86,7 +86,7 @@ if ($role !== 'mechanic') {
     $chartCounts    = json_encode(array_column($carStatusData, 'cnt'));
 
     // Revenue trend — last 6 months
-    if (in_array($role, ['admin','workshop_manager','sales_officer'])) {
+    if (in_array($role, ['super_admin','admin','workshop_manager','sales_officer'])) {
         $revM = []; $revV = [];
         for ($i = 5; $i >= 0; $i--) {
             $ym = date('Y-m', strtotime("-{$i} months"));
@@ -98,7 +98,7 @@ if ($role !== 'mechanic') {
     }
 
     // Upcoming service bookings
-    if (in_array($role, ['admin','workshop_manager','sales_person','sales_officer'])) {
+    if (in_array($role, ['super_admin','admin','workshop_manager','sales_person','sales_officer'])) {
         $upcomingBookings = $db->query("
             SELECT booking_number, client_name, client_phone, preferred_date, service_type, status
             FROM service_bookings
@@ -109,7 +109,7 @@ if ($role !== 'mechanic') {
     }
 
     // Recent confirmed payments
-    if (in_array($role, ['admin','workshop_manager','sales_officer'])) {
+    if (in_array($role, ['super_admin','admin','workshop_manager','sales_officer'])) {
         $recentPayments = $db->query("
             SELECT id, amount, payment_method, reference_number, created_at, client_name
             FROM payments
@@ -120,7 +120,7 @@ if ($role !== 'mechanic') {
     }
 
     // Alerts: overdue jobs + critical/high issues
-    if (in_array($role, ['admin','workshop_manager'])) {
+    if (in_array($role, ['super_admin','admin','workshop_manager'])) {
         $overdueJobsList = $db->query("
             SELECT j.id, j.job_number, j.end_date, j.priority, c.make, c.model
             FROM workshop_jobs j JOIN cars c ON c.id=j.car_id
@@ -232,7 +232,7 @@ include __DIR__ . '/includes/header.php';
             <div class="text-center"><div class="welcome-stat-val"><?= $stats['assigned_jobs'] ?></div><div class="welcome-stat-lbl">Active Jobs</div></div>
             <div class="vr welcome-divider"></div>
             <div class="text-center"><div class="welcome-stat-val text-success"><?= $stats['completed_today'] ?></div><div class="welcome-stat-lbl">Done Today</div></div>
-        <?php elseif ($role === 'workshop_manager' || $role === 'admin'): ?>
+        <?php elseif (in_array($role, ['super_admin','admin','workshop_manager'])): ?>
             <div class="text-center"><div class="welcome-stat-val"><?= $stats['total_cars'] ?></div><div class="welcome-stat-lbl">Total Fleet</div></div>
             <div class="vr welcome-divider"></div>
             <div class="text-center"><div class="welcome-stat-val"><?= $stats['open_jobs'] ?></div><div class="welcome-stat-lbl">Open Jobs</div></div>
@@ -274,7 +274,7 @@ include __DIR__ . '/includes/header.php';
         </a>
     </div>
 
-<?php elseif ($role === 'workshop_manager' || $role === 'admin'): ?>
+<?php elseif (in_array($role, ['super_admin','admin','workshop_manager'])): ?>
     <div class="col-sm-6 col-xl-3">
         <a href="<?= BASE_URL ?>/modules/cars/index.php" class="stat-card stat-card-link" style="border-left:4px solid #2563eb">
             <div class="stat-icon" style="background:#dbeafe;color:#2563eb"><i class="fa fa-car"></i></div>
@@ -355,7 +355,7 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <!-- ── Stat Cards Row 2 — Admin/Manager only ──────────────────────────────── -->
-<?php if ($role === 'workshop_manager' || $role === 'admin'): ?>
+<?php if (in_array($role, ['super_admin','admin','workshop_manager'])): ?>
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl-3">
         <a href="<?= BASE_URL ?>/modules/invoices/index.php?status=paid" class="stat-card stat-card-link" style="border-left:4px solid #16a34a">
@@ -545,7 +545,7 @@ include __DIR__ . '/includes/header.php';
 <?php else: /* ── Non-mechanic layout ─────────────────────────────────────── */ ?>
 
 <!-- Charts Row -->
-<?php if (in_array($role, ['admin','workshop_manager','sales_officer'])): ?>
+<?php if (in_array($role, ['super_admin','admin','workshop_manager','sales_officer'])): ?>
 <div class="row g-4 mb-4">
     <div class="col-lg-8">
         <div class="card h-100">
@@ -572,7 +572,7 @@ include __DIR__ . '/includes/header.php';
 <!-- Tables Row -->
 <div class="row g-4 mb-4">
     <!-- Recent Cars -->
-    <div class="col-lg-<?= in_array($role, ['admin','workshop_manager']) ? '5' : '7' ?>">
+    <div class="col-lg-<?= in_array($role, ['super_admin','admin','workshop_manager']) ? '5' : '7' ?>">
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="fa fa-car me-2"></i>Recent Cars</span>
@@ -600,8 +600,8 @@ include __DIR__ . '/includes/header.php';
     </div>
 
     <!-- Upcoming Bookings -->
-    <?php if (!empty($upcomingBookings) || in_array($role, ['admin','workshop_manager','sales_person','sales_officer'])): ?>
-    <div class="col-lg-<?= in_array($role, ['admin','workshop_manager']) ? '4' : '5' ?>">
+    <?php if (!empty($upcomingBookings) || in_array($role, ['super_admin','admin','workshop_manager','sales_person','sales_officer'])): ?>
+    <div class="col-lg-<?= in_array($role, ['super_admin','admin','workshop_manager']) ? '4' : '5' ?>">
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="fa fa-calendar-check me-2"></i>Upcoming Bookings</span>
@@ -631,7 +631,7 @@ include __DIR__ . '/includes/header.php';
     <?php endif; ?>
 
     <!-- Alerts Panel — admin/manager only -->
-    <?php if (in_array($role, ['admin','workshop_manager'])): ?>
+    <?php if (in_array($role, ['super_admin','admin','workshop_manager'])): ?>
     <div class="col-lg-3">
         <div class="card h-100" style="border-top:3px solid #dc2626">
             <div class="card-header text-danger fw-semibold"><i class="fa fa-bell me-2"></i>Alerts</div>
@@ -675,7 +675,7 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <!-- Recent Payments Row -->
-<?php if (in_array($role, ['admin','workshop_manager','sales_officer']) && !empty($recentPayments)): ?>
+<?php if (in_array($role, ['super_admin','admin','workshop_manager','sales_officer']) && !empty($recentPayments)): ?>
 <div class="row g-4 mb-4">
     <div class="col-12">
         <div class="card">
@@ -713,7 +713,7 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <!-- Recent Activity — only if no revenue chart shown (sales_person) -->
-<?php if (!in_array($role, ['admin','workshop_manager','sales_officer'])): ?>
+<?php if (!in_array($role, ['super_admin','admin','workshop_manager','sales_officer'])): ?>
 <div class="row g-4">
     <div class="col-12">
         <div class="card">

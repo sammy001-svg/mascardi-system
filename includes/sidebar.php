@@ -7,7 +7,8 @@ function isActive(string $path): string {
     return str_contains($__uri, $path) ? 'active' : '';
 }
 
-// Super Admin gets the dedicated admin portal sidebar
+// Super Admin gets the full comprehensive sidebar (no early-exit; falls through below)
+// Admin gets the simple focused portal sidebar
 if (authRole() === 'admin') {
     include __DIR__ . '/sidebar_admin.php';
     return;
@@ -34,7 +35,11 @@ if (authRole() === 'customer_relations') {
         </div>
         <div class="brand-text">
             <span class="brand-name"><?= e(getSetting('company_name', 'Mascardi')) ?></span>
+            <?php if (authRole() === 'super_admin'): ?>
+            <span class="brand-sub" style="color:#f59e0b;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase">Super Admin</span>
+            <?php else: ?>
             <span class="brand-sub">Car Yard System</span>
+            <?php endif; ?>
         </div>
     </div>
 

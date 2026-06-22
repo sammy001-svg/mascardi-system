@@ -26,7 +26,7 @@ function requireLogin(): void {
 function hasRole(string|array $roles): bool {
     $user = authUser();
     if (!$user) return false;
-    if ($user['role'] === 'admin') return true;
+    if ($user['role'] === 'admin' || $user['role'] === 'super_admin') return true;
     $roles = is_array($roles) ? $roles : [$roles];
     return in_array($user['role'], $roles);
 }
@@ -65,7 +65,7 @@ function getUserPermissions(): array {
     static $cache = null;
     if ($cache !== null) return $cache;
     $user = authUser();
-    if (!$user || $user['role'] === 'admin') return $cache = [];
+    if (!$user || $user['role'] === 'admin' || $user['role'] === 'super_admin') return $cache = [];
     try {
         $db   = getDB();
         $stmt = $db->prepare("SELECT module, can_access, can_write FROM user_permissions WHERE user_id=?");
@@ -84,7 +84,7 @@ function getUserPermissions(): array {
 function canAccess(string $module): bool {
     $user = authUser();
     if (!$user) return false;
-    if ($user['role'] === 'admin') return true;
+    if ($user['role'] === 'admin' || $user['role'] === 'super_admin') return true;
     // Custom per-user permissions override role defaults for that specific module only
     $perms = getUserPermissions();
     if (isset($perms[$module])) {

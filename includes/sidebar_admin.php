@@ -21,7 +21,7 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
         </div>
         <div class="brand-text">
             <span class="brand-name"><?= e(getSetting('company_name', 'Mascardi')) ?></span>
-            <span class="brand-sub" style="color:#f59e0b;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase">Super Admin</span>
+            <span class="brand-sub" style="color:#60a5fa;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase">Admin Portal</span>
         </div>
     </div>
 
