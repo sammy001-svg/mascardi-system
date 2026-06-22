@@ -439,6 +439,35 @@ include __DIR__ . '/../../includes/header.php';
     .wa-back-btn { display: flex; }
 }
 
+/* Toast notifications */
+@keyframes waToastIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.wa-toast {
+    background: #202c33;
+    border-left: 3px solid #00a884;
+    border-radius: 8px;
+    padding: 10px 14px;
+    max-width: 320px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.45);
+    cursor: pointer;
+    pointer-events: all;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    animation: waToastIn .2s ease;
+    transition: opacity .3s;
+}
+.wa-toast-av {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 14px; flex-shrink: 0;
+}
+.wa-toast-name  { color: #e9edef; font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.wa-toast-prev  { color: #8696a0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px; }
+
 /* Disconnected banner */
 .wa-disc-banner {
     background: #2a3942;
@@ -622,6 +651,12 @@ include __DIR__ . '/../../includes/header.php';
 
     </div><!-- /wa-right -->
 </div><!-- /wa-root -->
+
+<!-- Toast notification container (fixed, bottom-left of chat area) -->
+<div id="waToastContainer"
+     style="position:fixed;bottom:20px;left:380px;z-index:9999;
+            display:flex;flex-direction:column;gap:8px;pointer-events:none;
+            max-width:340px"></div>
 
 <script>
 var BASE     = <?= json_encode(rtrim(BASE_URL, '/')) ?>;
@@ -850,21 +885,89 @@ var WA = {
         if (!this.convId) return;
         try {
             const d = await fetch(BASE + '/modules/whatsapp/api/poll.php?conversation_id=' + this.convId + '&since_id=' + this.lastMsgId).then(r => r.json());
+
+            // Append any new messages that arrived for the open conversation
             if (d.messages && d.messages.length > 0) {
-                d.messages.forEach(m => { this.appendMessage(m); });
-                // Refresh conv list to show updated last message
+                var hadIncoming = false;
+                d.messages.forEach(m => {
+                    this.appendMessage(m);
+                    if (m.direction === 'in') hadIncoming = true;
+                });
+                if (hadIncoming) this.playPing();
+            }
+
+            // If ANY new message arrived (for ANY conversation) refresh the list
+            if (d.new > 0) {
                 this.loadConvs();
+                // Show toast for messages that arrived in OTHER conversations
+                if (d.notifications) {
+                    d.notifications.forEach(n => {
+                        if (n.conv_id != this.convId) this.showToast(n.name, n.preview, n.conv_id);
+                    });
+                }
             }
         } catch(e) {}
     },
 
     /* ── Global poll (when no chat open) ─────────────────── */
     async globalPoll() {
-        if (this.convId) return; // chatPoll handles it
+        if (this.convId) return; // chatPoll handles it when a conv is open
         try {
-            await fetch(BASE + '/modules/whatsapp/api/poll.php?conversation_id=0&since_id=0');
-            this.loadConvs(); // Refresh conv list in case new messages arrived
+            const d = await fetch(BASE + '/modules/whatsapp/api/poll.php?conversation_id=0&since_id=0').then(r => r.json());
+            if (d.new > 0) {
+                this.loadConvs();
+                this.playPing();
+                if (d.notifications) {
+                    d.notifications.forEach(n => this.showToast(n.name, n.preview, n.conv_id));
+                }
+            }
         } catch(e) {}
+    },
+
+    /* ── Soft notification sound (Web Audio API) ─────────── */
+    playPing() {
+        try {
+            var ctx  = new (window.AudioContext || window.webkitAudioContext)();
+            var osc  = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.12);
+            gain.gain.setValueAtTime(0.35, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.4);
+            setTimeout(() => { try { ctx.close(); } catch(_) {} }, 600);
+        } catch(_) {}
+    },
+
+    /* ── Toast notification for background conversations ──── */
+    showToast(name, preview, convId) {
+        var container = document.getElementById('waToastContainer');
+        if (!container) return;
+        var color = this.avatarColor(name || '');
+        var initial = (name || '?').charAt(0).toUpperCase();
+
+        var toast = document.createElement('div');
+        toast.className = 'wa-toast';
+        toast.innerHTML = '<div class="wa-toast-av" style="background:' + color + '">' + initial + '</div>'
+            + '<div style="min-width:0;flex:1">'
+            + '<div class="wa-toast-name">' + this.esc(name) + '</div>'
+            + '<div class="wa-toast-prev">' + this.esc((preview || '').substring(0, 55)) + '</div>'
+            + '</div>'
+            + '<button onclick="event.stopPropagation();this.closest(\'.wa-toast\').remove()" '
+            + 'style="background:none;border:none;color:#8696a0;cursor:pointer;padding:0 0 0 6px;font-size:14px;line-height:1">✕</button>';
+
+        toast.addEventListener('click', () => { this.openChat(parseInt(convId)); toast.remove(); });
+        container.appendChild(toast);
+
+        // Auto-dismiss after 6 s
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => { try { toast.remove(); } catch(_) {} }, 320);
+        }, 6000);
     },
 
     /* ── Send message ─────────────────────────────────────── */

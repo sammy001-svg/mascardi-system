@@ -19,6 +19,8 @@ try {
     $config = $db->query("SELECT * FROM wa_config LIMIT 1")->fetch();
     $new    = 0;
 
+    $notifications = [];
+
     if ($config && $config['is_connected'] && $config['instance_id']) {
         $iid   = $config['instance_id'];
         $token = $config['api_token'];
@@ -89,6 +91,11 @@ try {
                              VALUES (?, ?, 'in', ?, ?, ?, FROM_UNIXTIME(?))"
                         )->execute([$cid, $extMsgId, $waType, $msgBody, $mediaUrl, $ts]);
                         $new++;
+                        $notifications[] = [
+                            'conv_id' => $cid,
+                            'name'    => $sName ?: $phone,
+                            'preview' => mb_substr($msgBody, 0, 60),
+                        ];
                     } catch (\Throwable $_) {}
                 }
             }
@@ -115,7 +122,7 @@ try {
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    echo json_encode(['new' => $new, 'messages' => $messages]);
+    echo json_encode(['new' => $new, 'messages' => $messages, 'notifications' => $notifications]);
 
 } catch (\Throwable $e) {
     echo json_encode(['new' => 0, 'messages' => [], 'error' => $e->getMessage()]);
