@@ -5,9 +5,15 @@ requireLogin();
 $db  = getDB();
 $me  = authUser();
 
-// One-shot repair: fix messages stored as "[textMessage]" by old parser
+// One-shot repair: clean up bad bodies left by previous parser versions
 try {
-    $db->exec("UPDATE wa_messages SET body = '📎 Message' WHERE body = '[textMessage]' OR body REGEXP '^\\\\[text'");
+    // "[textMessage]" and "📎 Message" → blank placeholder (message content is lost;
+    // user can reload history via the History button to re-fetch from WhatsApp)
+    $db->exec("UPDATE wa_messages
+               SET body = '(Message not loaded — tap History to reload)'
+               WHERE body IN ('[textMessage]','📎 Message')
+                  OR body LIKE '[text%'
+                  OR body LIKE '📎 Message%'");
 } catch (\Throwable $_) {}
 
 // Ensure tables exist silently

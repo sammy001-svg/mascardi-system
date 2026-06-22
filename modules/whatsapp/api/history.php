@@ -48,22 +48,28 @@ foreach ($msgs as $m) {
     $dir      = (($m['type'] ?? 'incoming') === 'outgoing') ? 'out' : 'in';
     $mediaUrl = $m['downloadUrl'] ?? null;
 
-    // getChatHistory puts text directly on the message root — try all known fields
-    $body = $m['textMessage']
-         ?? $m['text']
-         ?? $m['caption']
-         ?? null;
+    // getChatHistory: text fields live at the root of each message object.
+    // Waterfall — same strategy as receive.php.
+    $body = null;
+    $textCandidates = [
+        $m['textMessage']  ?? null,
+        $m['text']         ?? null,
+        $m['caption']      ?? null,
+        $m['description']  ?? null,
+    ];
+    foreach ($textCandidates as $c) {
+        if (is_string($c) && $c !== '') { $body = $c; break; }
+    }
 
-    // For media and unknown types, show a friendly placeholder
-    if (!$body || $body === '') {
-        if (str_contains($mtype, 'image'))       $body = '🖼 Image';
-        elseif (str_contains($mtype, 'audio') || $mtype === 'pttMessage') $body = '🎵 Voice message';
-        elseif (str_contains($mtype, 'video'))   $body = '🎥 Video';
-        elseif (str_contains($mtype, 'doc'))     $body = '📄 Document';
-        elseif (str_contains($mtype, 'sticker')) $body = '🏷 Sticker';
-        elseif (str_contains($mtype, 'location'))$body = '📍 Location';
-        elseif (str_contains($mtype, 'contact')) $body = '👤 Contact';
-        else                                     $body = "📎 Message ({$mtype})";
+    if (!$body) {
+        if (str_contains($mtype, 'image'))          $body = 'Image';
+        elseif (str_contains($mtype, 'audio') || $mtype === 'pttMessage') $body = 'Voice message';
+        elseif (str_contains($mtype, 'video'))      $body = 'Video';
+        elseif (str_contains($mtype, 'doc'))        $body = 'Document';
+        elseif (str_contains($mtype, 'sticker'))    $body = 'Sticker';
+        elseif (str_contains($mtype, 'location'))   $body = 'Location';
+        elseif (str_contains($mtype, 'contact'))    $body = 'Contact';
+        else                                        $body = 'Message';
     }
 
     $waType = 'text';

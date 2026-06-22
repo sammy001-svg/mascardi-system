@@ -69,15 +69,17 @@ foreach ($chats as $chat) {
     $lm = $chat['lastMessage'] ?? null;
     if ($lm && isset($lm['timestamp'])) {
         $lastMsgAt = date('Y-m-d H:i:s', $lm['timestamp']);
-        $lastMsg   = $lm['textMessage'] ?? $lm['text'] ?? $lm['caption'] ?? null;
+        foreach ([$lm['textMessage'] ?? null, $lm['text'] ?? null, $lm['caption'] ?? null] as $c) {
+            if (is_string($c) && $c !== '') { $lastMsg = $c; break; }
+        }
         if (!$lastMsg && isset($lm['typeMessage'])) {
             $t = trim($lm['typeMessage']);
-            if (str_contains($t, 'image'))       $lastMsg = '🖼 Image';
-            elseif (str_contains($t, 'audio') || $t === 'pttMessage') $lastMsg = '🎵 Voice message';
-            elseif (str_contains($t, 'video'))   $lastMsg = '🎥 Video';
-            elseif (str_contains($t, 'doc'))     $lastMsg = '📄 Document';
-            elseif (str_contains($t, 'sticker')) $lastMsg = '🏷 Sticker';
-            elseif (str_contains($t, 'location'))$lastMsg = '📍 Location';
+            if (str_contains($t, 'image'))          $lastMsg = 'Image';
+            elseif (str_contains($t, 'audio') || $t === 'pttMessage') $lastMsg = 'Voice message';
+            elseif (str_contains($t, 'video'))      $lastMsg = 'Video';
+            elseif (str_contains($t, 'doc'))        $lastMsg = 'Document';
+            elseif (str_contains($t, 'sticker'))    $lastMsg = 'Sticker';
+            elseif (str_contains($t, 'location'))   $lastMsg = 'Location';
         }
     }
 
@@ -122,18 +124,21 @@ if ($withHistory && !empty($chatDbIds)) {
             $ts       = $m['timestamp'] ?? time();
             $mtype    = trim($m['typeMessage'] ?? 'textMessage');
             $dir      = (($m['type'] ?? 'incoming') === 'outgoing') ? 'out' : 'in';
-            $body     = $m['textMessage'] ?? $m['text'] ?? $m['caption'] ?? null;
             $mediaUrl = $m['downloadUrl'] ?? null;
 
-            if (!$body || $body === '') {
-                if (str_contains($mtype, 'image'))       $body = '🖼 Image';
-                elseif (str_contains($mtype, 'audio') || $mtype === 'pttMessage') $body = '🎵 Voice message';
-                elseif (str_contains($mtype, 'video'))   $body = '🎥 Video';
-                elseif (str_contains($mtype, 'doc'))     $body = '📄 Document';
-                elseif (str_contains($mtype, 'sticker')) $body = '🏷 Sticker';
-                elseif (str_contains($mtype, 'location'))$body = '📍 Location';
-                elseif (str_contains($mtype, 'contact')) $body = '👤 Contact';
-                else                                     $body = "📎 Message ({$mtype})";
+            $body = null;
+            foreach ([$m['textMessage'] ?? null, $m['text'] ?? null, $m['caption'] ?? null, $m['description'] ?? null] as $c) {
+                if (is_string($c) && $c !== '') { $body = $c; break; }
+            }
+            if (!$body) {
+                if (str_contains($mtype, 'image'))          $body = 'Image';
+                elseif (str_contains($mtype, 'audio') || $mtype === 'pttMessage') $body = 'Voice message';
+                elseif (str_contains($mtype, 'video'))      $body = 'Video';
+                elseif (str_contains($mtype, 'doc'))        $body = 'Document';
+                elseif (str_contains($mtype, 'sticker'))    $body = 'Sticker';
+                elseif (str_contains($mtype, 'location'))   $body = 'Location';
+                elseif (str_contains($mtype, 'contact'))    $body = 'Contact';
+                else                                        $body = 'Message';
             }
 
             $waType = 'text';

@@ -3,7 +3,7 @@
  * Drains the Green API notification queue and saves incoming messages to DB.
  * Uses a MySQL advisory lock so only ONE process drains at a time — multiple
  * browser tabs / users all call this endpoint, but only the first one through
- * actually hits Green API; the rest return {new:0, locked:true} immediately.
+ * actually hits Green API; the rest return {new:0,locked:true} immediately.
  */
 require_once __DIR__ . '/../../../includes/functions.php';
 header('Content-Type: application/json');
@@ -30,7 +30,6 @@ try {
     $token = $config['api_token'];
 
     try {
-        // Drain up to 10 queued notifications per call
         for ($i = 0; $i < 10; $i++) {
             $ch = curl_init("https://api.greenapi.com/waInstance{$iid}/receiveNotification/{$token}");
             curl_setopt_array($ch, [
@@ -39,14 +38,13 @@ try {
                 CURLOPT_CONNECTTIMEOUT => 4,
                 CURLOPT_SSL_VERIFYPEER => false,
             ]);
-            $body = curl_exec($ch);
-            $cerr = curl_errno($ch);
+            $rawBody = curl_exec($ch);
+            $cerr    = curl_errno($ch);
             curl_close($ch);
 
-            // Empty queue or network error
-            if ($cerr || !$body || trim($body) === 'null') break;
+            if ($cerr || !$rawBody || trim($rawBody) === 'null') break;
 
-            $notif = json_decode($body, true);
+            $notif = json_decode($rawBody, true);
             if (!is_array($notif) || !isset($notif['receiptId'])) break;
 
             $rid   = (int)$notif['receiptId'];
@@ -54,113 +52,102 @@ try {
             $wtype = $nb['typeWebhook'] ?? '';
 
             if ($wtype === 'incomingMessageReceived') {
-                $sender   = $nb['senderData']  ?? [];
-                $msgData  = $nb['messageData'] ?? [];
-                $chatId   = $sender['chatId']   ?? ($nb['chatId'] ?? '');
-                // Try all known name fields — Green API version varies
-                $sName    = $sender['senderName']
-                         ?? $sender['pushName']
-                         ?? $sender['chatName']
-                         ?? $nb['senderName']
-                         ?? '';
-                // Trim whitespace — some API versions include trailing \r\n
-                $msgType  = trim($msgData['typeMessage'] ?? '');
-                if ($msgType === '') $msgType = 'textMessage'; // safe default
+                $sender  = $nb['senderData']  ?? [];
+                $msgData = $nb['messageData'] ?? [];
+                $chatId  = $sender['chatId']   ?? $nb['chatId'] ?? '';
+                $sName   = $sender['senderName']
+                        ?? $sender['pushName']
+                        ?? $sender['chatName']
+                        ?? $nb['senderName']
+                        ?? '';
+                $msgType = trim($msgData['typeMessage'] ?? 'textMessage');
+
+                // ── Extract message body ─────────────────────────────────────
+                // STRATEGY: try every known text field path FIRST (waterfall),
+                // regardless of typeMessage. Only fall back to media labels when
+                // no text is found at all.
+                //
+                // This is intentional — Green API returns the text in different
+                // locations depending on version, WhatsApp client, and message
+                // origin (Business, personal, group, etc.).
                 $msgBody  = '';
                 $mediaUrl = null;
 
-                switch ($msgType) {
-                    case 'textMessage':
-                        // Standard nested format (most Green API versions)
-                        $msgBody = $msgData['textMessageData']['textMessage'] ?? '';
-                        // Flat format fallback (some Green API versions / self-hosted)
-                        if ($msgBody === '') $msgBody = $msgData['textMessage'] ?? '';
-                        break;
+                // Waterfall: ordered by how commonly text appears in each field
+                $textCandidates = [
+                    // Standard format (most common)
+                    $msgData['textMessageData']['textMessage'] ?? null,
+                    // extendedTextMessage (links, rich text)
+                    $msgData['extendedTextMessageData']['text'] ?? null,
+                    // Some Green API instances return text at the root of messageData
+                    $msgData['textMessage'] ?? null,
+                    $msgData['text']        ?? null,
+                    // Template / interactive messages
+                    $msgData['templateMessage']['contentText']                 ?? null,
+                    $msgData['buttonsResponseMessage']['selectedDisplayText']  ?? null,
+                    $msgData['listResponseMessage']['title']                   ?? null,
+                    $msgData['interactiveResponseMessage']['body']             ?? null,
+                    // Caption on media (user typed text alongside a photo/video)
+                    $msgData['fileMessageData']['caption']                     ?? null,
+                    // Extended text fallback fields
+                    $msgData['extendedTextMessageData']['description']         ?? null,
+                    $msgData['extendedTextMessageData']['title']               ?? null,
+                    // Contact / location / reaction
+                    $msgData['contactMessageData']['displayName']              ?? null,
+                ];
 
-                    case 'extendedTextMessage':
-                        // Extended text = plain text + URL preview
-                        $ext     = $msgData['extendedTextMessageData'] ?? [];
-                        $msgBody = $ext['text'] ?? $ext['description'] ?? '';
-                        if ($msgBody === '') $msgBody = $msgData['textMessage'] ?? '';
-                        break;
+                foreach ($textCandidates as $c) {
+                    if (is_string($c) && $c !== '') { $msgBody = $c; break; }
+                }
 
-                    case 'imageMessage':
-                        $fmd      = $msgData['fileMessageData'] ?? $msgData['imageMessageData'] ?? [];
-                        $msgBody  = $fmd['caption'] ?? '';
-                        if ($msgBody === '') $msgBody = '🖼 Image';
-                        $mediaUrl = $fmd['downloadUrl'] ?? null;
-                        break;
+                // Determine DB media type
+                $waType = 'text';
+                if (str_contains($msgType, 'image'))    $waType = 'image';
+                elseif (str_contains($msgType, 'video'))    $waType = 'video';
+                elseif (str_contains($msgType, 'audio') || $msgType === 'pttMessage') $waType = 'audio';
+                elseif (str_contains($msgType, 'doc'))      $waType = 'document';
 
-                    case 'videoMessage':
-                        $fmd      = $msgData['fileMessageData'] ?? $msgData['videoMessageData'] ?? [];
-                        $msgBody  = $fmd['caption'] ?? '';
-                        if ($msgBody === '') $msgBody = '🎥 Video';
-                        $mediaUrl = $fmd['downloadUrl'] ?? null;
-                        break;
-
-                    case 'audioMessage':
-                    case 'pttMessage':
-                        $fmd      = $msgData['fileMessageData'] ?? $msgData['audioMessageData'] ?? [];
-                        $msgBody  = '🎵 Voice message';
-                        $mediaUrl = $fmd['downloadUrl'] ?? null;
-                        break;
-
-                    case 'documentMessage':
-                        $fmd      = $msgData['fileMessageData'] ?? $msgData['documentMessageData'] ?? [];
-                        $fileName = $fmd['fileName'] ?? 'Document';
-                        $msgBody  = $fmd['caption'] ?? "📄 {$fileName}";
-                        $mediaUrl = $fmd['downloadUrl'] ?? null;
-                        break;
-
-                    case 'stickerMessage':
-                        $msgBody = '🏷 Sticker';
-                        break;
-
-                    case 'locationMessage':
-                        $loc     = $msgData['locationMessageData'] ?? [];
-                        $msgBody = '📍 ' . ($loc['nameLocation'] ?? $loc['address'] ?? 'Location');
-                        break;
-
-                    case 'contactMessage':
-                        $msgBody = '👤 ' . ($msgData['contactMessageData']['displayName'] ?? 'Contact');
-                        break;
-
-                    case 'templateMessage':
-                        $tpl     = $msgData['templateMessage'] ?? $msgData['templateButtonReplyMessage'] ?? [];
-                        $msgBody = $tpl['contentText'] ?? $tpl['selectedId'] ?? 'Template message';
-                        break;
-
-                    case 'buttonsResponseMessage':
-                        $msgBody = $msgData['buttonsResponseMessage']['selectedDisplayText'] ?? 'Button response';
-                        break;
-
-                    case 'listResponseMessage':
-                        $msgBody = $msgData['listResponseMessage']['title'] ?? 'List response';
-                        break;
-
-                    case 'reactionMessage':
-                        $msgBody = '👍 Reaction';
-                        break;
-
-                    default:
-                        // Universal fallback: scan common text fields before giving up
-                        $msgBody = $msgData['textMessageData']['textMessage']
-                                ?? $msgData['extendedTextMessageData']['text']
-                                ?? $msgData['textMessage']
-                                ?? $msgData['caption']
-                                ?? '';
-                        if ($msgBody === '') {
-                            // Unknown type — log for debugging, store readable placeholder
-                            error_log("WA receive.php — unhandled typeMessage: {$msgType} | data: " . json_encode($msgData));
-                            $msgBody = "📎 Message ({$msgType})";
-                        }
+                // Media fallback labels (only when text waterfall found nothing)
+                if ($msgBody === '') {
+                    switch ($msgType) {
+                        case 'imageMessage':
+                            $msgBody  = 'Image';
+                            $mediaUrl = $msgData['fileMessageData']['downloadUrl'] ?? null;
+                            break;
+                        case 'videoMessage':
+                            $msgBody  = 'Video';
+                            $mediaUrl = $msgData['fileMessageData']['downloadUrl'] ?? null;
+                            break;
+                        case 'audioMessage':
+                        case 'pttMessage':
+                            $msgBody  = 'Voice message';
+                            $mediaUrl = $msgData['fileMessageData']['downloadUrl'] ?? null;
+                            break;
+                        case 'documentMessage':
+                            $fn       = $msgData['fileMessageData']['fileName'] ?? 'Document';
+                            $msgBody  = "Document: {$fn}";
+                            $mediaUrl = $msgData['fileMessageData']['downloadUrl'] ?? null;
+                            break;
+                        case 'stickerMessage':    $msgBody = 'Sticker'; break;
+                        case 'locationMessage':
+                            $loc     = $msgData['locationMessageData'] ?? [];
+                            $msgBody = 'Location: ' . ($loc['nameLocation'] ?? $loc['address'] ?? 'shared location');
+                            break;
+                        case 'reactionMessage':   $msgBody = 'Reaction'; break;
+                        default:
+                            // Log full notification body so we can inspect it on the server
+                            error_log('WA receive.php — no text extracted. type=' . $msgType
+                                . ' chatId=' . $chatId
+                                . ' keys=' . implode(',', array_keys($msgData))
+                                . ' nb_snippet=' . substr(json_encode($nb), 0, 500));
+                            $msgBody = 'Message';
+                    }
                 }
 
                 if ($chatId) {
                     $phone       = preg_replace('/@.*/', '', $chatId);
                     $displayName = $sName ?: $phone;
 
-                    // Upsert conversation — preserve existing name, increment unread
                     $db->prepare(
                         "INSERT INTO wa_conversations
                              (chat_id, contact_name, contact_phone, last_message, last_message_at, unread_count)
@@ -178,12 +165,6 @@ try {
                     $cid = (int)($stmtCid->fetchColumn() ?: 0);
 
                     if ($cid) {
-                        $waType = 'text';
-                        if (str_contains($msgType, 'image'))    $waType = 'image';
-                        elseif (str_contains($msgType, 'audio'))    $waType = 'audio';
-                        elseif (str_contains($msgType, 'video'))    $waType = 'video';
-                        elseif (str_contains($msgType, 'document')) $waType = 'document';
-
                         $extMsgId = $nb['idMessage'] ?? null;
                         $ts       = $nb['timestamp'] ?? time();
 
@@ -208,7 +189,7 @@ try {
                 }
             }
 
-            // Always delete — clears state-change notifications, read receipts, etc.
+            // Always delete — clears state/typing/receipt notifications too
             $del = curl_init("https://api.greenapi.com/waInstance{$iid}/deleteNotification/{$token}/{$rid}");
             curl_setopt_array($del, [
                 CURLOPT_RETURNTRANSFER => true,
