@@ -144,6 +144,9 @@ $stageColors = ['new'=>'secondary','hot'=>'danger','contacted'=>'info','qualifie
                 <div class="text-muted" style="font-size:11px"><?= e($conv['contact_phone'] ?: $conv['chat_id']) ?></div>
             </div>
             <div class="d-flex gap-2">
+                <button id="btnLoadHistory" class="btn btn-sm btn-outline-secondary" onclick="loadHistory()" title="Load message history from WhatsApp">
+                    <i class="fa fa-clock-rotate-left me-1"></i><span class="d-none d-sm-inline">History</span>
+                </button>
                 <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $conv['contact_phone'] ?? $conv['chat_id']) ?>"
                    target="_blank" class="btn btn-sm btn-outline-success" title="Open in WhatsApp">
                     <i class="fab fa-whatsapp"></i>
@@ -448,6 +451,48 @@ function pollMessages() {
         }).catch(function () {});
 }
 setInterval(pollMessages, 5000);
+
+// Load message history from WhatsApp (via Green API getChatHistory)
+function loadHistory() {
+    var btn = document.getElementById('btnLoadHistory');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i><span class="d-none d-sm-inline">Loading…</span>';
+
+    fetch(BASE_URL + '/modules/whatsapp/api/history.php?conversation_id=' + convId)
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (d.success) {
+                var mc = document.getElementById('messagesContainer');
+                if (d.messages && d.messages.length > 0) {
+                    // Re-render all messages returned from DB (includes newly imported history)
+                    mc.innerHTML = '';
+                    d.messages.forEach(function (m) { appendMessage(m); });
+                    if (d.messages.length > 0) {
+                        lastMsgId = Math.max.apply(null, d.messages.map(function (m) { return parseInt(m.id) || 0; }));
+                    }
+                    scrollBottom();
+                    var label = d.imported > 0 ? d.imported + ' message' + (d.imported !== 1 ? 's' : '') + ' loaded' : 'Up to date';
+                    btn.innerHTML = '<i class="fa fa-check me-1"></i><span class="d-none d-sm-inline">' + label + '</span>';
+                } else {
+                    btn.innerHTML = '<i class="fa fa-clock-rotate-left me-1"></i><span class="d-none d-sm-inline">No history</span>';
+                }
+                // Re-enable after 5 s so user can refresh again
+                setTimeout(function () {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa fa-clock-rotate-left me-1"></i><span class="d-none d-sm-inline">History</span>';
+                }, 5000);
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa fa-clock-rotate-left me-1"></i><span class="d-none d-sm-inline">History</span>';
+                alert(d.error || 'Could not load history. Make sure WhatsApp is connected.');
+            }
+        })
+        .catch(function () {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa fa-clock-rotate-left me-1"></i><span class="d-none d-sm-inline">History</span>';
+            alert('Network error. Please try again.');
+        });
+}
 
 // Move modals to body
 document.addEventListener('DOMContentLoaded', function () {

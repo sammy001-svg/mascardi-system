@@ -241,7 +241,7 @@ include __DIR__ . '/../../includes/header.php';
 
         <!-- Stats (only when connected) -->
         <?php if ($liveState === 'authorized'): ?>
-        <div class="row g-3">
+        <div class="row g-3 mb-4">
             <div class="col-sm-4">
                 <div class="card text-center py-3">
                     <div class="fs-3 fw-bold text-primary"><?= $statConvs ?></div>
@@ -259,6 +259,39 @@ include __DIR__ . '/../../includes/header.php';
                     <div class="fs-3 fw-bold text-info"><?= $statIn ?></div>
                     <div class="text-muted small">Received Today</div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Import conversations card -->
+        <div class="card" id="importCard">
+            <div class="card-header fw-semibold py-2">
+                <i class="fa fa-cloud-download-alt me-2 text-success"></i>Import Existing Conversations
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Pull all existing WhatsApp conversations into the inbox so your team can see them immediately.
+                    <strong>Import with history</strong> also fetches the last 30 messages per conversation
+                    (top 100 most recent chats).
+                </p>
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    <button id="btnImport" class="btn btn-success btn-sm" onclick="startImport(false)">
+                        <i class="fa fa-download me-1"></i>Import Conversations
+                    </button>
+                    <button id="btnImportHistory" class="btn btn-outline-secondary btn-sm" onclick="startImport(true)">
+                        <i class="fa fa-clock-rotate-left me-1"></i>Import with Message History
+                    </button>
+                </div>
+
+                <!-- Progress -->
+                <div id="importProgress" class="mt-3" style="display:none">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="spinner-border spinner-border-sm text-success" role="status"></div>
+                        <span id="importStatus" class="text-muted small">Importing conversations…</span>
+                    </div>
+                </div>
+
+                <!-- Result -->
+                <div id="importResult" class="mt-3"></div>
             </div>
         </div>
         <?php endif; ?>
@@ -351,6 +384,74 @@ document.getElementById('toggleToken').addEventListener('click', function () {
         if (n <= 0) { clearInterval(t); location.reload(); }
     }, 1000);
 }());
+<?php endif; ?>
+
+<?php if ($liveState === 'authorized'): ?>
+// Import conversations
+var BASE_URL_WA = '<?= BASE_URL ?>';
+
+function startImport(withHistory) {
+    var btnImport  = document.getElementById('btnImport');
+    var btnHistory = document.getElementById('btnImportHistory');
+    var progress   = document.getElementById('importProgress');
+    var status     = document.getElementById('importStatus');
+    var result     = document.getElementById('importResult');
+
+    btnImport.disabled  = true;
+    btnHistory.disabled = true;
+    progress.style.display = '';
+    result.innerHTML = '';
+
+    status.textContent = withHistory
+        ? 'Importing conversations and message history… this may take a minute.'
+        : 'Importing conversations…';
+
+    var url = BASE_URL_WA + '/modules/whatsapp/api/import.php' + (withHistory ? '?history=1' : '');
+    fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            progress.style.display = 'none';
+            btnImport.disabled  = false;
+            btnHistory.disabled = false;
+
+            if (d.success) {
+                var parts = [];
+                if (d.new_convs > 0)     parts.push(d.new_convs     + ' new');
+                if (d.updated_convs > 0) parts.push(d.updated_convs + ' updated');
+                var convSummary = d.total_chats + ' conversation' + (d.total_chats !== 1 ? 's' : '')
+                                + (parts.length ? ' (' + parts.join(', ') + ')' : '');
+                var msgSummary  = d.with_history ? ', ' + d.imported_msgs + ' messages imported' : '';
+                result.innerHTML = '<div class="alert alert-success py-2 mb-0" style="font-size:13px">'
+                    + '<i class="fa fa-check-circle me-2"></i>'
+                    + '<strong>' + convSummary + '</strong>' + msgSummary + '.'
+                    + ' <a href="' + BASE_URL_WA + '/modules/whatsapp/index.php" class="alert-link ms-1">Open Inbox →</a>'
+                    + '</div>';
+            } else {
+                result.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">'
+                    + '<i class="fa fa-triangle-exclamation me-2"></i>'
+                    + (d.error || 'Import failed. Please try again.')
+                    + '</div>';
+            }
+        })
+        .catch(function () {
+            progress.style.display = 'none';
+            btnImport.disabled  = false;
+            btnHistory.disabled = false;
+            result.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">'
+                + '<i class="fa fa-wifi me-2"></i>Network error. Please try again.'
+                + '</div>';
+        });
+}
+
+// Auto-import if WhatsApp was just connected and inbox is empty
+<?php if ($statConvs === 0): ?>
+window.addEventListener('load', function () {
+    setTimeout(function () {
+        if (document.getElementById('btnImport')) startImport(false);
+    }, 800);
+});
+<?php endif; ?>
+
 <?php endif; ?>
 </script>
 
