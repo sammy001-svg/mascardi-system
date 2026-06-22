@@ -664,14 +664,15 @@ var ME_NAME  = <?= json_encode($me['name']) ?>;
 var WA_CONN  = <?= $waConnected ? 'true' : 'false' ?>;
 
 var WA = {
-    convId:       0,
-    convChatId:   '',
-    convName:     '',
-    convColor:    '#2563eb',
-    convPhone:    '',
-    lastMsgId:    0,
+    convId:        0,
+    convChatId:    '',
+    convName:      '',
+    convColor:     '#2563eb',
+    convPhone:     '',
+    lastMsgId:     0,
     chatPollTimer: null,
-    convTimer:    null,
+    receiveTimer:  null,
+    convTimer:     null,
 
     /* ── Init ─────────────────────────────────────────────── */
     init() {
@@ -682,11 +683,12 @@ var WA = {
         var urlId = parseInt(new URLSearchParams(location.search).get('id') || 0);
         if (urlId) this.openChat(urlId);
 
-        // Refresh conversation list every 15 s
-        this.convTimer = setInterval(() => this.loadConvs(), 15000);
+        // Drain Green API immediately on load, then every 5 s
+        this.receive();
+        this.receiveTimer = setInterval(() => this.receive(), 5000);
 
-        // Global Green API poll (even when no chat open) every 12 s
-        setInterval(() => this.globalPoll(), 12000);
+        // Safety-net conv list refresh every 20 s (receive() also triggers it)
+        this.convTimer = setInterval(() => this.loadConvs(), 20000);
     },
 
     /* ── Load / render conversation list ─────────────────── */
@@ -773,7 +775,7 @@ var WA = {
 
         // Start chat poll
         clearInterval(this.chatPollTimer);
-        this.chatPollTimer = setInterval(() => this.pollChat(), 5000);
+        this.chatPollTimer = setInterval(() => this.pollChat(), 3000);
 
         // Focus input
         setTimeout(() => { var inp = document.getElementById('waInput'); if (inp) inp.focus(); }, 100);
@@ -880,13 +882,16 @@ var WA = {
             + '</div></div>';
     },
 
-    /* ── Poll for new messages in current chat ────────────── */
+    /* ── Poll the local DB for new messages (3 s, no API calls) ── */
     async pollChat() {
         if (!this.convId) return;
         try {
-            const d = await fetch(BASE + '/modules/whatsapp/api/poll.php?conversation_id=' + this.convId + '&since_id=' + this.lastMsgId).then(r => r.json());
+            const d = await fetch(
+                BASE + '/modules/whatsapp/api/poll.php'
+                    + '?conversation_id=' + this.convId
+                    + '&since_id='        + this.lastMsgId
+            ).then(r => r.json());
 
-            // Append any new messages that arrived for the open conversation
             if (d.messages && d.messages.length > 0) {
                 var hadIncoming = false;
                 d.messages.forEach(m => {
@@ -894,34 +899,31 @@ var WA = {
                     if (m.direction === 'in') hadIncoming = true;
                 });
                 if (hadIncoming) this.playPing();
-            }
-
-            // If ANY new message arrived (for ANY conversation) refresh the list
-            if (d.new > 0) {
                 this.loadConvs();
-                // Show toast for messages that arrived in OTHER conversations
-                if (d.notifications) {
-                    d.notifications.forEach(n => {
-                        if (n.conv_id != this.convId) this.showToast(n.name, n.preview, n.conv_id);
-                    });
-                }
             }
-        } catch(e) {}
+        } catch(_) {}
     },
 
-    /* ── Global poll (when no chat open) ─────────────────── */
-    async globalPoll() {
-        if (this.convId) return; // chatPoll handles it when a conv is open
+    /* ── Drain Green API queue (5 s, with advisory lock) ──── */
+    async receive() {
         try {
-            const d = await fetch(BASE + '/modules/whatsapp/api/poll.php?conversation_id=0&since_id=0').then(r => r.json());
-            if (d.new > 0) {
-                this.loadConvs();
-                this.playPing();
-                if (d.notifications) {
-                    d.notifications.forEach(n => this.showToast(n.name, n.preview, n.conv_id));
-                }
+            const d = await fetch(BASE + '/modules/whatsapp/api/receive.php').then(r => r.json());
+            if (!d.new) return;
+
+            // Refresh conversation list to surface new unread badges
+            this.loadConvs();
+
+            if (d.notifications) {
+                d.notifications.forEach(n => {
+                    if (n.conv_id != this.convId) {
+                        // Show toast + ping for messages NOT in the open conversation
+                        this.showToast(n.name, n.preview, n.conv_id);
+                        this.playPing();
+                    }
+                    // Messages for the open conversation are picked up by pollChat()
+                });
             }
-        } catch(e) {}
+        } catch(_) {}
     },
 
     /* ── Soft notification sound (Web Audio API) ─────────── */
