@@ -60,6 +60,8 @@ $chatDbIds    = []; // chatId => db row id
 foreach ($chats as $chat) {
     $chatId = $chat['id'] ?? ($chat['chatId'] ?? null);
     if (!$chatId) continue;
+    // Ensure stored chatId always has a domain suffix
+    if (!str_contains($chatId, '@')) $chatId .= '@c.us';
 
     $phone = preg_replace('/@.*/', '', $chatId);
     $name  = $chat['name'] ?? ($chat['title'] ?? $phone);

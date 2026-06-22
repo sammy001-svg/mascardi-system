@@ -26,8 +26,15 @@ try {
         echo json_encode(['success' => false, 'error' => 'WhatsApp not connected']); exit;
     }
 
+    // Green API requires chatId in phone@c.us / group@g.us / id@lid format.
+    // Old imported rows may lack the suffix — add @c.us when there is no @ at all.
+    $chatId = $conv['chat_id'];
+    if ($chatId && !str_contains($chatId, '@')) {
+        $chatId .= '@c.us';
+    }
+
     $url     = "https://api.greenapi.com/waInstance{$config['instance_id']}/sendMessage/{$config['api_token']}";
-    $payload = json_encode(['chatId' => $conv['chat_id'], 'message' => $message]);
+    $payload = json_encode(['chatId' => $chatId, 'message' => $message]);
 
     $ch = curl_init($url);
     curl_setopt_array($ch, [

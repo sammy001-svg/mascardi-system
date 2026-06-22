@@ -7,13 +7,16 @@ $me  = authUser();
 
 // One-shot repair: clean up bad bodies left by previous parser versions
 try {
-    // "[textMessage]" and "📎 Message" → blank placeholder (message content is lost;
-    // user can reload history via the History button to re-fetch from WhatsApp)
     $db->exec("UPDATE wa_messages
                SET body = '(Message not loaded — tap History to reload)'
                WHERE body IN ('[textMessage]','📎 Message')
                   OR body LIKE '[text%'
                   OR body LIKE '📎 Message%'");
+} catch (\Throwable $_) {}
+
+// Repair chatIds that are stored without @domain suffix — Green API rejects them on send
+try {
+    $db->exec("UPDATE wa_conversations SET chat_id = CONCAT(chat_id, '@c.us') WHERE chat_id NOT LIKE '%@%'");
 } catch (\Throwable $_) {}
 
 // Ensure tables exist silently
