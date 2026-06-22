@@ -13,6 +13,12 @@ $db   = getDB();
 $user = authUser();
 $role = $user['role'] ?? 'mechanic';
 
+// Super Admin goes to the dedicated admin portal
+if ($role === 'admin') {
+    header('Location: ' . BASE_URL . '/modules/admin/workshop_dashboard.php');
+    exit;
+}
+
 // Customer Relations Managers get their own pipeline-focused dashboard
 if ($role === 'customer_relations') {
     header('Location: ' . BASE_URL . '/modules/crm/my_dashboard.php');

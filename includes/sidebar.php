@@ -7,6 +7,12 @@ function isActive(string $path): string {
     return str_contains($__uri, $path) ? 'active' : '';
 }
 
+// Super Admin gets the dedicated admin portal sidebar
+if (authRole() === 'admin') {
+    include __DIR__ . '/sidebar_admin.php';
+    return;
+}
+
 // Customer Relations Managers get a lean, focused sidebar
 if (authRole() === 'customer_relations') {
     include __DIR__ . '/sidebar_crm.php';
