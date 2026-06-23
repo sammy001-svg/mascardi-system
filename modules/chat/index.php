@@ -17,19 +17,48 @@ $stmt = $db->prepare("SELECT id, name, role FROM users WHERE id != ? AND status=
 $stmt->execute([$me['id']]);
 $allUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// URL-based auto-open: ?chat_with=UID (anchor-link fallback from the new-chat modal)
-$chatWithUid  = isset($_GET['chat_with']) ? (int)$_GET['chat_with'] : 0;
-$chatWithName = '';
-$chatWithColor = '#128c7e';
+// Server-side conversation open: ?chat_with=UID
+// PHP finds/creates the conversation so the page renders with chatActive visible — no JS panel toggle needed.
+$autoConvId    = 0;
+$autoConvName  = '';
+$autoConvColor = '#128c7e';
+$autoCalleeId  = 0;
+$chatWithUid   = isset($_GET['chat_with']) ? (int)$_GET['chat_with'] : 0;
 if ($chatWithUid) {
     foreach ($allUsers as $u) {
         if ((int)$u['id'] === $chatWithUid) {
-            $chatWithName  = $u['name'];
-            $chatWithColor = $palette[$chatWithUid % count($palette)];
+            $autoConvName  = $u['name'];
+            $autoConvColor = $palette[$chatWithUid % count($palette)];
+            $autoCalleeId  = $chatWithUid;
             break;
         }
     }
-    if (!$chatWithName) $chatWithUid = 0; // user not found / not active
+    if ($autoConvName) {
+        try {
+            $chk = $db->prepare("
+                SELECT cc.id FROM chat_conversations cc
+                JOIN chat_participants cp1 ON cp1.conversation_id=cc.id AND cp1.user_id=?
+                JOIN chat_participants cp2 ON cp2.conversation_id=cc.id AND cp2.user_id=?
+                WHERE cc.type='direct' LIMIT 1
+            ");
+            $chk->execute([$me['id'], $chatWithUid]);
+            $row = $chk->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                $autoConvId = (int)$row['id'];
+            } else {
+                $db->beginTransaction();
+                $db->prepare("INSERT INTO chat_conversations (type,created_by) VALUES ('direct',?)")->execute([$me['id']]);
+                $autoConvId = (int)$db->lastInsertId();
+                $ins = $db->prepare("INSERT INTO chat_participants (conversation_id,user_id) VALUES (?,?)");
+                $ins->execute([$autoConvId, $me['id']]);
+                $ins->execute([$autoConvId, $chatWithUid]);
+                $db->commit();
+            }
+        } catch (Exception $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            $autoConvId = 0;
+        }
+    }
 }
 
 include __DIR__ . '/../../includes/header.php';
@@ -662,28 +691,28 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
     <div class="cp-right" id="cpRight" style="display:flex;flex-direction:column">
 
         <!-- Welcome -->
-        <div class="chat-welcome" id="chatWelcome">
-            <div class="cw-icon"><i class="fa fa-comments"></i></div>
+        <div class=”chat-welcome” id=”chatWelcome”<?= $autoConvId ? ' style=”display:none”' : '' ?>>
+            <div class=”cw-icon”><i class=”fa fa-comments”></i></div>
             <h6>Mascardi Chat</h6>
             <p>Select a conversation from the list, or start a new one below.</p>
-            <button class="btn btn-success btn-sm px-4 mt-2"
-                    onclick="bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).show()">
-                <i class="fa fa-pen-to-square me-2"></i>New Conversation
+            <button class=”btn btn-success btn-sm px-4 mt-2”
+                    onclick=”bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).show()”>
+                <i class=”fa fa-pen-to-square me-2”></i>New Conversation
             </button>
         </div>
 
         <!-- Active conversation -->
-        <div class="chat-active" id="chatActive" style="display:none">
+        <div class=”chat-active” id=”chatActive”<?= $autoConvId ? '' : ' style=”display:none”' ?>>
 
             <!-- Header -->
-            <div class="ch-hdr">
-                <button class="ic-btn ch-back-mob" id="chBack" style="display:none" title="Back">
-                    <i class="fa fa-arrow-left"></i>
+            <div class=”ch-hdr”>
+                <button class=”ic-btn ch-back-mob” id=”chBack” style=”display:none” title=”Back”>
+                    <i class=”fa fa-arrow-left”></i>
                 </button>
-                <div class="ch-av" id="chAv" style="background:#128c7e">â€“</div>
-                <div class="ch-info">
-                    <div class="ch-name" id="chName">—</div>
-                    <div class="ch-sub"  id="chSub"></div>
+                <div class=”ch-av” id=”chAv” style=”background:<?= e($autoConvColor) ?>”><?= $autoConvId ? e(mb_strtoupper(mb_substr($autoConvName,0,1))) : '—' ?></div>
+                <div class=”ch-info”>
+                    <div class=”ch-name” id=”chName”><?= $autoConvId ? e($autoConvName) : '—' ?></div>
+                    <div class=”ch-sub”  id=”chSub”></div>
                     <div class="ch-typing" id="chTyping"><span id="chTypingName"></span><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
                 </div>
                 <div class="ch-acts">
@@ -2201,15 +2230,17 @@ const Chat = window.Chat = {
 window.Chat = Chat;
 document.addEventListener('DOMContentLoaded', () => {
     Chat.init();
-    <?php if ($chatWithUid): ?>
-    // URL-based auto-open: page was navigated to ?chat_with=UID
-    (function() {
-        var uid   = <?= $chatWithUid ?>;
-        var uname = <?= json_encode($chatWithName) ?>;
-        var ucolor = <?= json_encode($chatWithColor) ?>;
-        history.replaceState({}, '', location.pathname); // clean the URL
-        Chat.startDirect(uid, uname, ucolor);
-    })();
+    <?php if ($autoConvId): ?>
+    // Server-side opened conversation — set state and load messages directly
+    Chat.convId    = <?= $autoConvId ?>;
+    Chat.convName  = <?= json_encode($autoConvName) ?>;
+    Chat.convColor = <?= json_encode($autoConvColor) ?>;
+    Chat.calleeId  = <?= $autoCalleeId ?>;
+    Chat.convType  = 'direct';
+    history.replaceState({}, '', location.pathname);
+    Chat._fetchMsgs(true).then(() => {
+        Chat.pollTimer = setInterval(() => Chat._fetchMsgs(false), 2000);
+    });
     <?php endif; ?>
 });
 </script>
