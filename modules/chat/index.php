@@ -214,9 +214,9 @@ body > .modal-backdrop,
 }
 .msg-av-ph { width: 28px; flex-shrink: 0; } /* placeholder for grouped rows */
 
-/* Bubble */
+/* Bubble — max-width is now controlled by the .msg-bubble-col wrapper (60%) */
 .bubble {
-    max-width: 60%; min-width: 80px;
+    max-width: 100%; min-width: 80px;
     padding: 6px 10px 20px;
     border-radius: 10px; position: relative;
     word-wrap: break-word; word-break: break-word;
@@ -253,7 +253,7 @@ body > .modal-backdrop,
 }
 .b-tick { color: #53bdeb; font-size: 11px; }
 /* Hide meta on non-last grouped messages — show only on last */
-.msg-row:not(.group-last):not(.group-solo) .b-meta { display: none; }
+.msg-row:not(.group-end):not(.group-solo) .b-meta { display: none; }
 .msg-row:not(.group-last):not(.group-solo) .bubble  { padding-bottom: 8px; }
 
 /* Text */
@@ -467,7 +467,7 @@ body > .modal-backdrop,
     .cp-left  { width:100%;min-width:100%; }
     .cp-right { position:absolute;inset:0;z-index:5; }
     .ch-back-mob { display:flex !important; }
-    .bubble { max-width: 78%; }
+    .msg-bubble-col { max-width: 78%; }
 }
 
 /* ── Phase 2: Group chats · Reply · Delete ───────────────────────────────── */
@@ -577,7 +577,7 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
 /* ── Phase 4: Reactions · Read receipts · Online status ─────────────────── */
 
 /* Column wrapper so reactions sit below the bubble */
-.msg-bubble-col { display:flex; flex-direction:column; max-width:60%; min-width:0; }
+.msg-bubble-col { display:flex; flex-direction:column; max-width:60%; min-width:0; position:relative; }
 .msg-row.s .msg-bubble-col { align-items:flex-end; }
 .msg-row.r .msg-bubble-col { align-items:flex-start; }
 /* Remove max-width from .bubble itself (now on the col wrapper) */
@@ -801,9 +801,9 @@ function esc(s) {
     return d.innerHTML;
 }
 function el(id) { return document.getElementById(id); }
-function show(el,d=''){  el.style.display = d || ''; }
-function hide(el)      { el.style.display = 'none'; }
-function flex(el)      { el.style.display = 'flex'; }
+function show(e,d=''){  if (e) e.style.display = d || ''; }
+function hide(e)      { if (e) e.style.display = 'none'; }
+function flex(e)      { if (e) e.style.display = 'flex'; }
 function avatarColor(id) { return PAL[Math.abs(parseInt(id)) % PAL.length]; }
 function initials(n)  { return (n||'?').charAt(0).toUpperCase(); }
 function fmtDur(s)    { return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
@@ -1414,8 +1414,8 @@ const Chat = window.Chat = {
                     <div class="b-meta">${time} ${tickHtml}</div>
                 </div>
                 ${reactPills}
+                ${actionBar}
             </div>
-            ${actionBar}
         </div>`;
     },
 
@@ -1448,42 +1448,38 @@ const Chat = window.Chat = {
         </div>`;
     },
     async startDirect(uid, uname, ucolor) {
-        // Show loading state right away — before the modal finishes closing
-        const msgsBox = el('chatMsgs');
+        uid = parseInt(uid);
+        if (!uid) return;
+
+        // Close the modal immediately
+        const modalEl = el('newChatModal');
+        if (modalEl) {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.hide();
+        }
+
+        // Show chat panel with loading state (works behind fading modal)
+        const rp = el('cpRight');
+        if (rp) { rp.style.display = 'flex'; rp.style.flexDirection = 'column'; }
         hide(el('chatWelcome'));
         const ca = el('chatActive');
         if (ca) { ca.style.display = 'flex'; ca.style.flexDirection = 'column'; }
+        const msgsBox = el('chatMsgs');
         if (msgsBox) msgsBox.innerHTML = `<div style="text-align:center;color:#8696a0;padding:48px 0">
             <i class="fa fa-spinner fa-spin fa-lg me-2"></i>Opening conversation…</div>`;
 
-        const modalEl = el('newChatModal');
-        const modal   = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
-
-        // Wait for the modal close animation before focusing the chat input
-        const hidden = modalEl
-            ? new Promise(res => {
-                const t = setTimeout(res, 700);
-                modalEl.addEventListener('hidden.bs.modal', () => { clearTimeout(t); res(); }, { once: true });
-              })
-            : Promise.resolve();
-
-        if (modal) modal.hide();
-
         try {
-            const d = await apiPost('conversations.php', { user_id: parseInt(uid) });
-            await hidden;
-
-            if (d.conversation_id) {
+            const d = await apiPost('conversations.php', { user_id: uid });
+            if (d && d.conversation_id) {
                 await this.loadConvs();
                 await this.openConv(d.conversation_id, uname, ucolor, uid);
             } else {
                 this._chatErr(msgsBox, 'fa-comment-slash',
-                    d.error || 'Could not open conversation',
+                    (d && d.error) || 'Could not open conversation',
                     'Please try again. If the problem persists, contact your administrator.');
             }
         } catch(e) {
             console.error('startDirect', e);
-            await hidden;
             this._chatErr(msgsBox, 'fa-wifi',
                 'Connection error',
                 'Check your network connection and try again.');
@@ -1999,11 +1995,9 @@ const Chat = window.Chat = {
 
     /* â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     init() {
-        // .page-body has a CSS animation that keeps transform:translateY(0) applied,
-        // creating a stacking context. Bootstrap's backdrop (appended to body after
-        // .page-body) would paint over the modal inside that context. Moving the
-        // modal to <body> puts it outside the stacking context so it layers correctly.
-        // #newChatModal is already a direct child of <body> (rendered after footer.php).
+        // On mobile, the right panel is absolutely positioned covering the full screen.
+        // Hide it initially so the user sees the conversation list first.
+        if (window.innerWidth <= 767) hide(el('cpRight'));
 
         this.buildEmojiPicker();
         this.loadConvs();
@@ -2083,9 +2077,11 @@ const Chat = window.Chat = {
             if (ev.key === 'Escape') this.clearSearch();
         });
 
-        // Mobile back
+        // Mobile back — hide right panel (cp-left shows naturally underneath)
         el('chBack').addEventListener('click',()=>{
-            hide(el('cpRight')); clearInterval(this.pollTimer);
+            hide(el('cpRight'));
+            clearInterval(this.pollTimer);
+            this.convId = 0;
         });
 
         // Scroll-to-bottom FAB
@@ -2240,7 +2236,8 @@ ob_start(); ?>
                          data-uid="<?= (int)$u['id'] ?>"
                          data-uname="<?= e($u['name']) ?>"
                          data-ucolor="<?= e($color) ?>"
-                         style="cursor:pointer">
+                         onclick="Chat.startDirect(this.dataset.uid,this.dataset.uname,this.dataset.ucolor)"
+                         role="button" tabindex="0">
                         <div class="up-av" style="background:<?= $color ?>"><?= e($init) ?></div>
                         <div>
                             <div class="up-name"><?= e($u['name']) ?></div>
