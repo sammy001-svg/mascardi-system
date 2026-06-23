@@ -702,7 +702,7 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
         </div>
 
         <!-- Active conversation -->
-        <div class=”chat-active” id=”chatActive”<?= $autoConvId ? '' : ' style=”display:none”' ?>>
+        <div class=”chat-active<?= $autoConvId ? '' : ' d-none' ?>” id=”chatActive”>
 
             <!-- Header -->
             <div class=”ch-hdr”>
@@ -1146,8 +1146,7 @@ const Chat = window.Chat = {
         const rp = el('cpRight');
         rp.style.display = 'flex'; rp.style.flexDirection = 'column';
         hide(el('chatWelcome'));
-        const ca = el('chatActive');
-        ca.style.display = 'flex'; ca.style.flexDirection = 'column'; ca.style.flex = '1';
+        el('chatActive').classList.remove('d-none');
 
         // Sidebar active state
         document.querySelectorAll('.conv-item').forEach(e=>e.classList.remove('active'));
@@ -1508,8 +1507,7 @@ const Chat = window.Chat = {
             const rp = el('cpRight');
             if (rp) { rp.style.display = 'flex'; rp.style.flexDirection = 'column'; }
             hide(el('chatWelcome'));
-            const ca = el('chatActive');
-            if (ca) { ca.style.display = 'flex'; ca.style.flexDirection = 'column'; ca.style.flex = '1'; }
+            el('chatActive').classList.remove('d-none');
             const msgsBox = el('chatMsgs');
             if (msgsBox) msgsBox.innerHTML = `<div style="text-align:center;color:#8696a0;padding:48px 0">
                 <i class="fa fa-spinner fa-spin fa-lg me-2"></i>Opening conversation…</div>`;
