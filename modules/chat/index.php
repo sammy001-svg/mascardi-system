@@ -1448,41 +1448,41 @@ const Chat = window.Chat = {
         </div>`;
     },
     async startDirect(uid, uname, ucolor) {
-        uid = parseInt(uid);
-        if (!uid) return;
-
-        // Close the modal immediately
-        const modalEl = el('newChatModal');
-        if (modalEl) {
-            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-            modal.hide();
-        }
-
-        // Show chat panel with loading state (works behind fading modal)
-        const rp = el('cpRight');
-        if (rp) { rp.style.display = 'flex'; rp.style.flexDirection = 'column'; }
-        hide(el('chatWelcome'));
-        const ca = el('chatActive');
-        if (ca) { ca.style.display = 'flex'; ca.style.flexDirection = 'column'; }
-        const msgsBox = el('chatMsgs');
-        if (msgsBox) msgsBox.innerHTML = `<div style="text-align:center;color:#8696a0;padding:48px 0">
-            <i class="fa fa-spinner fa-spin fa-lg me-2"></i>Opening conversation…</div>`;
-
+        console.log('[Chat] startDirect called uid=' + uid + ' name=' + uname);
         try {
+            uid = parseInt(uid);
+            if (!uid) { console.warn('[Chat] startDirect: uid missing or zero'); return; }
+
+            // Close the modal immediately
+            const modalEl = el('newChatModal');
+            if (modalEl) {
+                try { bootstrap.Modal.getOrCreateInstance(modalEl).hide(); } catch(_){}
+            }
+
+            // Show chat panel with loading state
+            const rp = el('cpRight');
+            if (rp) { rp.style.display = 'flex'; rp.style.flexDirection = 'column'; }
+            hide(el('chatWelcome'));
+            const ca = el('chatActive');
+            if (ca) { ca.style.display = 'flex'; ca.style.flexDirection = 'column'; }
+            const msgsBox = el('chatMsgs');
+            if (msgsBox) msgsBox.innerHTML = `<div style="text-align:center;color:#8696a0;padding:48px 0">
+                <i class="fa fa-spinner fa-spin fa-lg me-2"></i>Opening conversation…</div>`;
+
             const d = await apiPost('conversations.php', { user_id: uid });
             if (d && d.conversation_id) {
                 await this.loadConvs();
                 await this.openConv(d.conversation_id, uname, ucolor, uid);
             } else {
-                this._chatErr(msgsBox, 'fa-comment-slash',
-                    (d && d.error) || 'Could not open conversation',
-                    'Please try again. If the problem persists, contact your administrator.');
+                const errMsg = (d && d.error) || 'Could not open conversation';
+                this._chatErr(msgsBox, 'fa-comment-slash', errMsg, 'Please try again.');
+                if (window.showToast) showToast(errMsg, 'error');
             }
         } catch(e) {
-            console.error('startDirect', e);
-            this._chatErr(msgsBox, 'fa-wifi',
-                'Connection error',
-                'Check your network connection and try again.');
+            console.error('[Chat] startDirect error:', e);
+            const msg = e.message || 'Could not open conversation. Check console for details.';
+            if (window.showToast) showToast(msg, 'error');
+            else alert('Chat error: ' + msg);
         }
     },
 
@@ -2014,11 +2014,7 @@ const Chat = window.Chat = {
         // New chat
         el('btnNewChat').addEventListener('click',()=>bootstrap.Modal.getOrCreateInstance(el('newChatModal')).show());
 
-        // User picker
-        el('upList').addEventListener('click', e=>{
-            const item=e.target.closest('.up-item');
-            if (item) this.startDirect(item.dataset.uid,item.dataset.uname,item.dataset.ucolor);
-        });
+        // User picker — handled via inline onclick on each .up-item (see _chatStartDirect below)
 
         // Emoji toggle
         el('btnEmoji').addEventListener('click',()=>this.toggleEmoji());
@@ -2185,6 +2181,8 @@ const Chat = window.Chat = {
     },
 };
 
+// Make Chat explicitly accessible from inline onclick handlers
+window.Chat = Chat;
 document.addEventListener('DOMContentLoaded', () => Chat.init());
 </script>
 
@@ -2236,7 +2234,7 @@ ob_start(); ?>
                          data-uid="<?= (int)$u['id'] ?>"
                          data-uname="<?= e($u['name']) ?>"
                          data-ucolor="<?= e($color) ?>"
-                         onclick="Chat.startDirect(this.dataset.uid,this.dataset.uname,this.dataset.ucolor)"
+                         onclick="_chatStartDirect(this.dataset.uid,this.dataset.uname,this.dataset.ucolor)"
                          role="button" tabindex="0">
                         <div class="up-av" style="background:<?= $color ?>"><?= e($init) ?></div>
                         <div>
@@ -2342,8 +2340,16 @@ ob_start(); ?>
 </div>
 
 <script>
-// Direct-chat opening is handled entirely by Chat.startDirect() which is wired
-// in Chat.init() via the upList click listener. No duplicate handler needed here.
+// Standalone function declaration (not const/var) — guaranteed on window object,
+// safely callable from inline onclick attributes in this modal.
+function _chatStartDirect(uid, uname, ucolor) {
+    console.log('[Chat] _chatStartDirect clicked uid=' + uid + ' name=' + uname);
+    if (!window.Chat || typeof Chat.startDirect !== 'function') {
+        alert('Chat is not ready. Please refresh the page and try again.');
+        return;
+    }
+    Chat.startDirect(uid, uname, ucolor);
+}
 </script>
 <?php $extraModal = ob_get_clean(); ?>
 
