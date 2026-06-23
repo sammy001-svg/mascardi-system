@@ -172,7 +172,7 @@ body > .modal-backdrop,
 .chat-welcome p  { font-size: 13px; margin: 0; max-width: 260px; line-height: 1.6; }
 
 /* Active pane */
-.chat-active { display: flex; flex-direction: column; height: 100%; position: relative; }
+.chat-active { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
 
 /* Header */
 .ch-hdr {
@@ -1118,7 +1118,7 @@ const Chat = window.Chat = {
         rp.style.display = 'flex'; rp.style.flexDirection = 'column';
         hide(el('chatWelcome'));
         const ca = el('chatActive');
-        ca.style.display = 'flex'; ca.style.flexDirection = 'column';
+        ca.style.display = 'flex'; ca.style.flexDirection = 'column'; ca.style.flex = '1';
 
         // Sidebar active state
         document.querySelectorAll('.conv-item').forEach(e=>e.classList.remove('active'));
@@ -1480,7 +1480,7 @@ const Chat = window.Chat = {
             if (rp) { rp.style.display = 'flex'; rp.style.flexDirection = 'column'; }
             hide(el('chatWelcome'));
             const ca = el('chatActive');
-            if (ca) { ca.style.display = 'flex'; ca.style.flexDirection = 'column'; }
+            if (ca) { ca.style.display = 'flex'; ca.style.flexDirection = 'column'; ca.style.flex = '1'; }
             const msgsBox = el('chatMsgs');
             if (msgsBox) msgsBox.innerHTML = `<div style="text-align:center;color:#8696a0;padding:48px 0">
                 <i class="fa fa-spinner fa-spin fa-lg me-2"></i>Opening conversation…</div>`;
