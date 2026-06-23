@@ -17,6 +17,21 @@ $stmt = $db->prepare("SELECT id, name, role FROM users WHERE id != ? AND status=
 $stmt->execute([$me['id']]);
 $allUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// URL-based auto-open: ?chat_with=UID (anchor-link fallback from the new-chat modal)
+$chatWithUid  = isset($_GET['chat_with']) ? (int)$_GET['chat_with'] : 0;
+$chatWithName = '';
+$chatWithColor = '#128c7e';
+if ($chatWithUid) {
+    foreach ($allUsers as $u) {
+        if ((int)$u['id'] === $chatWithUid) {
+            $chatWithName  = $u['name'];
+            $chatWithColor = $palette[$chatWithUid % count($palette)];
+            break;
+        }
+    }
+    if (!$chatWithName) $chatWithUid = 0; // user not found / not active
+}
+
 include __DIR__ . '/../../includes/header.php';
 ?>
 <style>
@@ -451,8 +466,9 @@ body > .modal-backdrop,
     display: flex; align-items: center; gap: 12px;
     padding: 10px 12px; cursor: pointer; border-radius: 8px;
     transition: background .12s;
+    text-decoration: none; color: inherit;
 }
-.up-item:hover { background: #f0f2f5; }
+.up-item:hover { background: #f0f2f5; text-decoration: none; color: inherit; }
 .up-av { width:42px;height:42px;border-radius:50%;color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
 .up-name { font-size:14px;font-weight:600;color:#111b21; }
 .up-role { font-size:12px;color:#667781; }
@@ -2183,7 +2199,19 @@ const Chat = window.Chat = {
 
 // Make Chat explicitly accessible from inline onclick handlers
 window.Chat = Chat;
-document.addEventListener('DOMContentLoaded', () => Chat.init());
+document.addEventListener('DOMContentLoaded', () => {
+    Chat.init();
+    <?php if ($chatWithUid): ?>
+    // URL-based auto-open: page was navigated to ?chat_with=UID
+    (function() {
+        var uid   = <?= $chatWithUid ?>;
+        var uname = <?= json_encode($chatWithName) ?>;
+        var ucolor = <?= json_encode($chatWithColor) ?>;
+        history.replaceState({}, '', location.pathname); // clean the URL
+        Chat.startDirect(uid, uname, ucolor);
+    })();
+    <?php endif; ?>
+});
 </script>
 
 <?php
@@ -2230,18 +2258,18 @@ ob_start(); ?>
                     $color = $palette[$u['id'] % count($palette)];
                     $rl    = $roleLabels[$u['role']] ?? ucfirst($u['role']);
                 ?>
-                    <div class="up-item"
-                         data-uid="<?= (int)$u['id'] ?>"
-                         data-uname="<?= e($u['name']) ?>"
-                         data-ucolor="<?= e($color) ?>"
-                         onclick="_chatStartDirect(this.dataset.uid,this.dataset.uname,this.dataset.ucolor)"
-                         role="button" tabindex="0">
+                    <a class="up-item"
+                       href="?chat_with=<?= (int)$u['id'] ?>"
+                       data-uid="<?= (int)$u['id'] ?>"
+                       data-uname="<?= e($u['name']) ?>"
+                       data-ucolor="<?= e($color) ?>"
+                       tabindex="0">
                         <div class="up-av" style="background:<?= $color ?>"><?= e($init) ?></div>
                         <div>
                             <div class="up-name"><?= e($u['name']) ?></div>
                             <div class="up-role"><?= e($rl) ?></div>
                         </div>
-                    </div>
+                    </a>
                     <?php endforeach; ?>
                     <?php if (empty($allUsers)): ?>
                         <p class="text-muted small text-center py-3 mb-0">No other users found.</p>
@@ -2340,16 +2368,26 @@ ob_start(); ?>
 </div>
 
 <script>
-// Standalone function declaration (not const/var) — guaranteed on window object,
-// safely callable from inline onclick attributes in this modal.
-function _chatStartDirect(uid, uname, ucolor) {
-    console.log('[Chat] _chatStartDirect clicked uid=' + uid + ' name=' + uname);
-    if (!window.Chat || typeof Chat.startDirect !== 'function') {
-        alert('Chat is not ready. Please refresh the page and try again.');
-        return;
+// jQuery document-level click delegation.
+// The <a href="?chat_with=UID"> on each item is an automatic JS-free fallback —
+// if this handler does NOT call e.preventDefault(), the browser navigates there.
+$(document).on('click', '#upList .up-item', function(e) {
+    e.preventDefault(); // stop anchor navigation when JS works
+    var uid    = $(this).attr('data-uid');
+    var uname  = $(this).attr('data-uname');
+    var ucolor = $(this).attr('data-ucolor');
+    console.log('[Chat] .up-item clicked uid=' + uid + ' name=' + uname);
+    if (!uid) { console.warn('[Chat] no uid on clicked item'); return; }
+    // Close modal
+    try { bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).hide(); } catch(_) {}
+    // Open conversation
+    if (window.Chat && typeof Chat.startDirect === 'function') {
+        Chat.startDirect(uid, uname, ucolor);
+    } else {
+        // JS not ready — fall back to page navigation (anchor href kicks in)
+        window.location.href = '?chat_with=' + encodeURIComponent(uid);
     }
-    Chat.startDirect(uid, uname, ucolor);
-}
+});
 </script>
 <?php $extraModal = ob_get_clean(); ?>
 
