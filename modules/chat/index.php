@@ -573,6 +573,51 @@ body > .modal-backdrop,
 .csb-cls:hover    { color:#111b21; }
 mark.sh        { background:#ffd666; color:#111b21; border-radius:2px; padding:0 1px; }
 mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); border-radius:2px; }
+
+/* ── Phase 4: Reactions · Read receipts · Online status ─────────────────── */
+
+/* Column wrapper so reactions sit below the bubble */
+.msg-bubble-col { display:flex; flex-direction:column; max-width:60%; min-width:0; }
+.msg-row.s .msg-bubble-col { align-items:flex-end; }
+.msg-row.r .msg-bubble-col { align-items:flex-start; }
+/* Remove max-width from .bubble itself (now on the col wrapper) */
+.bubble { max-width:100%; }
+
+/* Reaction pills (below bubble) */
+.msg-reactions { display:flex; flex-wrap:wrap; gap:3px; margin-top:3px; padding:0 2px; }
+.reaction-pill {
+    display:inline-flex; align-items:center; gap:4px;
+    background:rgba(255,255,255,.92); border:1.5px solid #e9edef;
+    border-radius:12px; padding:2px 7px; font-size:13px;
+    cursor:pointer; user-select:none;
+    transition:border-color .12s, background .12s;
+    box-shadow:0 1px 3px rgba(0,0,0,.1);
+    line-height:1.3;
+}
+.reaction-pill.mine  { border-color:#128c7e; background:rgba(18,140,126,.07); }
+.reaction-pill:hover { background:#f0f2f5; }
+.reaction-count { font-size:11px; color:#667781; font-weight:700; }
+
+/* Quick-react bar (shown on bubble hover, inside msg-actions) */
+.quick-react { display:flex; gap:2px; align-items:center; padding-right:4px; border-right:1px solid #e9edef; margin-right:2px; }
+.qr-btn { background:none; border:none; font-size:17px; cursor:pointer; padding:2px 3px; border-radius:6px; transition:transform .1s, background .1s; line-height:1; }
+.qr-btn:hover { transform:scale(1.3); background:rgba(0,0,0,.04); }
+
+/* Read receipt ticks */
+.b-tick-sent { color:#8696a0; }   /* gray double = sent/delivered */
+.b-tick-read { color:#53bdeb; }   /* blue double = read by others */
+
+/* Online dot on conversation list */
+.cv-av-wrap { position:relative; flex-shrink:0; }
+.online-dot {
+    position:absolute; bottom:0; right:0;
+    width:11px; height:11px; border-radius:50%;
+    background:#25d366; border:2px solid #fff;
+    pointer-events:none;
+}
+/* Online badge in chat header sub-line */
+.ch-online { color:#25d366; font-size:12px; font-weight:600; }
+.ch-lastseen { font-size:12px; color:#667781; }
 </style>
 
 <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -781,6 +826,13 @@ function fmtDay(iso) {
     if (diff===1) return 'Yesterday';
     return d.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'});
 }
+function _fmtLastSeen(secs) {
+    if (secs == null) return '';
+    if (secs < 60)   return 'just now';
+    if (secs < 3600) return Math.floor(secs/60) + 'm ago';
+    if (secs < 86400) return Math.floor(secs/3600) + 'h ago';
+    return Math.floor(secs/86400) + 'd ago';
+}
 function fileIcon(mime) {
     mime = mime||'';
     if (mime.includes('pdf'))                                return ['fa-file-pdf','text-danger'];
@@ -862,6 +914,8 @@ const Chat = window.Chat = {
     convId:0, convName:'', convColor:'#128c7e', calleeId:null,
     convType:'direct',      // 'direct' | 'group'
     lastMsgId:0, lastDay:'',
+    readMin:0,              // min last_read_msg_id from other participants (read receipts)
+    otherOnline:false, otherLastSeenDiff:null,  // online status for direct chats
     pollTimer:null,
     isRecording:false, mediaRec:null, audioChunks:[], recTimerInt:null, recSecs:0,
     curAudio:null,
@@ -967,15 +1021,20 @@ const Chat = window.Chat = {
             ? `<div class="cv-unread">${c.unread_count>99?'99+':c.unread_count}</div>` : '';
         const active    = this.convId == c.id ? 'active' : '';
         const timeStyle = c.unread_count > 0 ? 'color:#25d366;font-weight:700' : '';
+        const isOnline  = !isGroup && c.other_online;
+        const onlineDot = isOnline ? `<div class="online-dot"></div>` : '';
         const avatarEl  = isGroup
             ? `<div class="cv-av-wrap"><div class="cv-av" style="background:${color};font-size:14px"><i class="fa fa-users"></i><div class="cv-grp-ic"><i class="fa fa-users" style="font-size:6px"></i></div></div></div>`
-            : `<div class="cv-av" style="background:${color}">${esc(initials(c.display_name))}</div>`;
+            : `<div class="cv-av-wrap"><div class="cv-av" style="background:${color}">${esc(initials(c.display_name))}</div>${onlineDot}</div>`;
         return `<div class="conv-item ${active}"
                      data-cid="${c.id}"
                      data-cname="${esc(c.display_name)}"
                      data-ccolor="${color}"
                      data-callee="${c.other_user_id||0}"
-                     data-ctype="${esc(c.type||'direct')}">
+                     data-ctype="${esc(c.type||'direct')}"
+                     data-online="${isOnline ? '1' : '0'}"
+                     data-lsd="${c.other_last_seen_diff != null ? c.other_last_seen_diff : ''}"
+                     >
             ${avatarEl}
             <div class="cv-body">
                 <div class="cv-r1">
@@ -991,7 +1050,7 @@ const Chat = window.Chat = {
     },
 
     /* â”€â”€ Open conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    async openConv(cid, cname, ccolor, callee, ctype) {
+    async openConv(cid, cname, ccolor, callee, ctype, extra) {
         this.convId    = parseInt(cid)||0;
         this.convName  = cname;
         this.convColor = ccolor || '#128c7e';
@@ -999,11 +1058,14 @@ const Chat = window.Chat = {
         this.convType  = ctype || 'direct';
         this.lastMsgId = 0;
         this.lastDay   = '';
+        this.readMin   = 0;
         this.prevSenderId = null;
         this.prevMsgTs    = null;
         this.scrollUnread  = 0;
         this.oldestMsgId   = Infinity;
         this.hasMoreMsgs   = false;
+        this.otherOnline   = !!(extra && extra.online);
+        this.otherLastSeenDiff = (extra && extra.lastSeenDiff != null) ? extra.lastSeenDiff : null;
         this.clearReply();
         this.clearSearch();
 
@@ -1016,7 +1078,18 @@ const Chat = window.Chat = {
         }
         el('chAv').style.background = this.convColor;
         el('chName').textContent = cname;
-        el('chSub').textContent  = isGrp ? 'Group conversation' : '';
+        // Online / last seen sub-line for direct chats
+        if (!isGrp) {
+            if (this.otherOnline) {
+                el('chSub').innerHTML = `<span class="ch-online"><i class="fa fa-circle" style="font-size:7px;vertical-align:middle"></i> Online</span>`;
+            } else if (this.otherLastSeenDiff !== null) {
+                el('chSub').innerHTML = `<span class="ch-lastseen">Last seen ${_fmtLastSeen(this.otherLastSeenDiff)}</span>`;
+            } else {
+                el('chSub').textContent = '';
+            }
+        } else {
+            el('chSub').textContent = 'Group conversation';
+        }
 
         // Group info button for groups; call buttons for direct only
         el('btnGroupInfo').style.display = isGrp ? '' : 'none';
@@ -1066,6 +1139,8 @@ const Chat = window.Chat = {
             if (!initial) this._updateTyping(td.typing || []);
 
             const msgs = d.messages || [];
+            // Update read_min for tick rendering
+            if (typeof d.read_min === ‘number’) this.readMin = d.read_min;
             const box  = el(‘chatMsgs’);
 
             if (!msgs.length) {
@@ -1301,22 +1376,44 @@ const Chat = window.Chat = {
             body = `<span class="b-text">${esc(m.content||'')}</span>`;
         }
 
+        // Real read receipt tick
+        const isRead = sent && (parseInt(m.id) <= this.readMin);
+        const tickHtml = sent
+            ? (isRead
+                ? `<span class="b-tick b-tick-read"><i class="fa fa-check-double"></i></span>`
+                : `<span class="b-tick b-tick-sent"><i class="fa fa-check-double"></i></span>`)
+            : '';
+
+        // Reaction pills (below bubble)
+        const reactPills = this._reactHtml(m.reactions || [], m.id);
+
+        // Quick-react bar (inside action menu on hover)
+        const quickReact = `<div class="quick-react">
+            ${['👍','❤️','😂','😮','😢','✅'].map(e =>
+                `<button class="qr-btn" data-act="react" data-mid="${m.id}" data-em="${e}" title="${e}">${e}</button>`
+            ).join('')}
+        </div>`;
+
         // Action bar (Reply, Delete for own messages, Copy)
         const delBtn = sent
             ? `<button class="msg-act del" data-act="delete" data-mid="${m.id}" title="Delete"><i class="fa fa-trash"></i></button>` : '';
         const copyBtn = (m.type === 'text' || !m.type)
             ? `<button class="msg-act" data-act="copy" data-mid="${m.id}" title="Copy"><i class="fa fa-copy"></i></button>` : '';
         const actionBar = `<div class="msg-actions">
+            ${quickReact}
             <button class="msg-act" data-act="reply" data-mid="${m.id}" title="Reply"><i class="fa fa-reply"></i></button>
             ${copyBtn}${delBtn}
         </div>`;
 
         return `<div class="msg-row ${sent?'s':'r'} ${groupClass}" data-mid="${m.id}">
             ${avHtml}
-            <div class="bubble">
-                ${senderLabel}${replyBlock}
-                ${body}
-                <div class="b-meta">${time} ${tick}</div>
+            <div class="msg-bubble-col">
+                <div class="bubble">
+                    ${senderLabel}${replyBlock}
+                    ${body}
+                    <div class="b-meta">${time} ${tickHtml}</div>
+                </div>
+                ${reactPills}
             </div>
             ${actionBar}
         </div>`;
@@ -1628,6 +1725,24 @@ const Chat = window.Chat = {
         el('replyBarText').textContent = '';
     },
 
+    /* ── Reactions ──────────────────────────────────────────────────────────── */
+    _reactHtml(reactions, msgId) {
+        if (!reactions || !reactions.length) return '';
+        const pills = reactions.map(r =>
+            `<span class="reaction-pill${r.m ? ' mine' : ''}"
+                   data-act="react" data-mid="${msgId}" data-em="${esc(r.e)}"
+                   title="${esc(r.u)}">${r.e}${r.n > 1 ? ` <span class="reaction-count">${r.n}</span>` : ''}</span>`
+        ).join('');
+        return `<div class="msg-reactions">${pills}</div>`;
+    },
+    async react(msgId, emoji) {
+        try {
+            await apiPost('react.php', { message_id: parseInt(msgId), emoji });
+            // Refresh messages to update reaction state
+            await this._fetchMsgs(false);
+        } catch(e) { console.error('react', e); }
+    },
+
     /* ── Delete message ─────────────────────────────────────────────────────── */
     async deleteMsg(msgId) {
         if (!confirm('Delete this message for everyone?')) return;
@@ -1898,7 +2013,8 @@ const Chat = window.Chat = {
         // Conversation clicks
         el('convList').addEventListener('click', e=>{
             const item=e.target.closest('.conv-item');
-            if (item) this.openConv(item.dataset.cid,item.dataset.cname,item.dataset.ccolor,item.dataset.callee,item.dataset.ctype);
+            if (item) this.openConv(item.dataset.cid,item.dataset.cname,item.dataset.ccolor,item.dataset.callee,item.dataset.ctype,
+                { online: item.dataset.online==='1', lastSeenDiff: item.dataset.lsd ? parseInt(item.dataset.lsd) : null });
         });
 
         // New chat
@@ -1996,6 +2112,10 @@ const Chat = window.Chat = {
             // Voice play
             const pb=e.target.closest('.b-play');
             if (pb&&pb.dataset.src&&!pb.onclick) { this.playVoice(pb.dataset.src,pb.dataset.vid); return; }
+            // Quick-react buttons and reaction pills
+            const qr = e.target.closest('[data-act="react"]');
+            if (qr) { this.react(qr.dataset.mid, qr.dataset.em); return; }
+
             // Message action bar
             const act=e.target.closest('.msg-act');
             if (act) {

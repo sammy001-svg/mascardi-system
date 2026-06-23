@@ -31,7 +31,8 @@ if ($method === 'GET') {
                    AND cm2.is_deleted = 0) AS unread_count,
                 u_other.id        AS other_user_id,
                 u_other.name      AS other_user_name,
-                u_other.role      AS other_user_role
+                u_other.role      AS other_user_role,
+                u_other.last_seen AS other_last_seen
             FROM chat_participants cp
             JOIN chat_conversations cc ON cc.id = cp.conversation_id
             LEFT JOIN chat_messages cm_last ON cm_last.id = (
@@ -57,6 +58,16 @@ if ($method === 'GET') {
             elseif ($c['last_msg_type'] === 'call')    { $c['last_preview'] = '📞 ' . ($c['last_msg_content'] ?? 'Call'); }
             elseif ($c['last_msg_type'] === 'system')  { $c['last_preview'] = $c['last_msg_content'] ?? ''; }
             else                                        { $c['last_preview'] = $c['last_msg_content'] ?? ''; }
+
+            // Online status for direct chats (last_seen within 3 minutes = online)
+            if ($c['type'] === 'direct' && $c['other_last_seen']) {
+                $diff = time() - strtotime($c['other_last_seen']);
+                $c['other_online'] = $diff < 180;
+                $c['other_last_seen_diff'] = $diff;
+            } else {
+                $c['other_online'] = false;
+                $c['other_last_seen_diff'] = null;
+            }
         }
         unset($c);
 
