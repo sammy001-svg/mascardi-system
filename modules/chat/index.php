@@ -200,8 +200,9 @@ body > .modal-backdrop,
 .chat-welcome h6 { font-size: 22px; font-weight: 300; color: #3b4a54; margin: 0; }
 .chat-welcome p  { font-size: 13px; margin: 0; max-width: 260px; line-height: 1.6; }
 
-/* Active pane */
-.chat-active { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
+/* Active pane — hidden by default; JS/PHP adds .is-open to show */
+.chat-active           { display: none !important; flex-direction: column; flex: 1; min-height: 0; position: relative; }
+.chat-active.is-open   { display: flex !important; }
 
 /* Header */
 .ch-hdr {
@@ -653,7 +654,6 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
 .b-tick-read { color:#53bdeb; }   /* blue double = read by others */
 
 /* Online dot on conversation list */
-.cv-av-wrap { position:relative; flex-shrink:0; }
 .online-dot {
     position:absolute; bottom:0; right:0;
     width:11px; height:11px; border-radius:50%;
@@ -702,16 +702,16 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
         </div>
 
         <!-- Active conversation -->
-        <div class=”chat-active<?= $autoConvId ? '' : ' d-none' ?>” id=”chatActive”>
+        <div class=”chat-active<?= $autoConvId ? ' is-open' : '' ?>” id=”chatActive”>
 
             <!-- Header -->
             <div class=”ch-hdr”>
                 <button class=”ic-btn ch-back-mob” id=”chBack” style=”display:none” title=”Back”>
                     <i class=”fa fa-arrow-left”></i>
                 </button>
-                <div class=”ch-av” id=”chAv” style=”background:<?= e($autoConvColor) ?>”><?= $autoConvId ? e(mb_strtoupper(mb_substr($autoConvName,0,1))) : '—' ?></div>
+                <div class=”ch-av” id=”chAv” style=”background:<?= e($autoConvColor) ?>”><?= $autoConvId ? e(mb_strtoupper(mb_substr($autoConvName,0,1))) : '' ?></div>
                 <div class=”ch-info”>
-                    <div class=”ch-name” id=”chName”><?= $autoConvId ? e($autoConvName) : '—' ?></div>
+                    <div class=”ch-name” id=”chName”><?= $autoConvId ? e($autoConvName) : '' ?></div>
                     <div class=”ch-sub”  id=”chSub”></div>
                     <div class="ch-typing" id="chTyping"><span id="chTypingName"></span><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
                 </div>
@@ -1146,7 +1146,7 @@ const Chat = window.Chat = {
         const rp = el('cpRight');
         rp.style.display = 'flex'; rp.style.flexDirection = 'column';
         hide(el('chatWelcome'));
-        el('chatActive').classList.remove('d-none');
+        el('chatActive').classList.add('is-open');
 
         // Sidebar active state
         document.querySelectorAll('.conv-item').forEach(e=>e.classList.remove('active'));
@@ -1492,22 +1492,18 @@ const Chat = window.Chat = {
         </div>`;
     },
     async startDirect(uid, uname, ucolor) {
-        console.log('[Chat] startDirect called uid=' + uid + ' name=' + uname);
         try {
             uid = parseInt(uid);
-            if (!uid) { console.warn('[Chat] startDirect: uid missing or zero'); return; }
+            if (!uid) return;
 
             // Close the modal immediately
-            const modalEl = el('newChatModal');
-            if (modalEl) {
-                try { bootstrap.Modal.getOrCreateInstance(modalEl).hide(); } catch(_){}
-            }
+            try { bootstrap.Modal.getOrCreateInstance(el('newChatModal')).hide(); } catch(_){}
 
-            // Show chat panel with loading state
+            // Show chat panel with loading spinner
             const rp = el('cpRight');
             if (rp) { rp.style.display = 'flex'; rp.style.flexDirection = 'column'; }
             hide(el('chatWelcome'));
-            el('chatActive').classList.remove('d-none');
+            el('chatActive').classList.add('is-open');
             const msgsBox = el('chatMsgs');
             if (msgsBox) msgsBox.innerHTML = `<div style="text-align:center;color:#8696a0;padding:48px 0">
                 <i class="fa fa-spinner fa-spin fa-lg me-2"></i>Opening conversation…</div>`;
@@ -1517,15 +1513,17 @@ const Chat = window.Chat = {
                 await this.loadConvs();
                 await this.openConv(d.conversation_id, uname, ucolor, uid);
             } else {
-                const errMsg = (d && d.error) || 'Could not open conversation';
-                this._chatErr(msgsBox, 'fa-comment-slash', errMsg, 'Please try again.');
+                // API failed — go back to welcome screen
+                el('chatActive').classList.remove('is-open');
+                show(el('chatWelcome'));
+                const errMsg = (d && d.error) || 'Could not open conversation. Please try again.';
                 if (window.showToast) showToast(errMsg, 'error');
             }
         } catch(e) {
-            console.error('[Chat] startDirect error:', e);
-            const msg = e.message || 'Could not open conversation. Check console for details.';
-            if (window.showToast) showToast(msg, 'error');
-            else alert('Chat error: ' + msg);
+            // Unexpected error — go back to welcome screen
+            el('chatActive').classList.remove('is-open');
+            show(el('chatWelcome'));
+            if (window.showToast) showToast('Could not open conversation. Please try again.', 'error');
         }
     },
 
@@ -2401,19 +2399,14 @@ ob_start(); ?>
 // The <a href="?chat_with=UID"> on each item is an automatic JS-free fallback —
 // if this handler does NOT call e.preventDefault(), the browser navigates there.
 $(document).on('click', '#upList .up-item', function(e) {
-    e.preventDefault(); // stop anchor navigation when JS works
+    e.preventDefault();
     var uid    = $(this).attr('data-uid');
     var uname  = $(this).attr('data-uname');
     var ucolor = $(this).attr('data-ucolor');
-    console.log('[Chat] .up-item clicked uid=' + uid + ' name=' + uname);
-    if (!uid) { console.warn('[Chat] no uid on clicked item'); return; }
-    // Close modal
-    try { bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).hide(); } catch(_) {}
-    // Open conversation
+    if (!uid) return;
     if (window.Chat && typeof Chat.startDirect === 'function') {
         Chat.startDirect(uid, uname, ucolor);
     } else {
-        // JS not ready — fall back to page navigation (anchor href kicks in)
         window.location.href = '?chat_with=' + encodeURIComponent(uid);
     }
 });
