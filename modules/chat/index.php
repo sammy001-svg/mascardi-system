@@ -188,17 +188,37 @@ body > .modal-backdrop,
 .chat-welcome {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 12px; background: #f0f2f5; color: #8696a0;
-    text-align: center;
+    gap: 0; background: #f0f2f5; color: #8696a0;
+    text-align: center; padding: 32px 24px;
 }
 .cw-icon {
-    width: 88px; height: 88px; border-radius: 50%;
-    background: #e9edef;
+    width: 96px; height: 96px; border-radius: 50%;
+    background: linear-gradient(135deg, #128c7e 0%, #075e54 100%);
     display: flex; align-items: center; justify-content: center;
-    font-size: 36px; color: #aebac1; margin-bottom: 4px;
+    font-size: 40px; color: #fff; margin-bottom: 20px;
+    box-shadow: 0 8px 28px rgba(18,140,126,.35);
 }
-.chat-welcome h6 { font-size: 22px; font-weight: 300; color: #3b4a54; margin: 0; }
-.chat-welcome p  { font-size: 13px; margin: 0; max-width: 260px; line-height: 1.6; }
+.chat-welcome h6 { font-size: 22px; font-weight: 700; color: #111b21; margin: 0 0 8px; }
+.chat-welcome p  { font-size: 13.5px; margin: 0 0 24px; max-width: 280px; line-height: 1.7; color: #667781; }
+.cw-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.cw-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 22px; border-radius: 24px; font-size: 13.5px; font-weight: 600;
+    border: none; cursor: pointer; transition: all .18s; text-decoration: none;
+}
+.cw-btn-primary { background: #128c7e; color: #fff; box-shadow: 0 4px 14px rgba(18,140,126,.3); }
+.cw-btn-primary:hover { background: #0f7268; color: #fff; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(18,140,126,.4); }
+.cw-btn-secondary { background: #fff; color: #128c7e; border: 1.5px solid #128c7e; }
+.cw-btn-secondary:hover { background: #f0faf9; transform: translateY(-1px); }
+.cw-tips { margin-top: 32px; display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 420px; }
+.cw-tip {
+    display: flex; align-items: flex-start; gap: 10px; text-align: left;
+    background: #fff; border-radius: 10px; padding: 12px 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); max-width: 180px;
+}
+.cw-tip-ic { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+.cw-tip-text { font-size: 12px; color: #54656f; line-height: 1.5; }
+.cw-tip-text strong { display: block; font-weight: 700; color: #111b21; margin-bottom: 2px; font-size: 12.5px; }
 
 /* Active pane — hidden by default; JS/PHP adds .is-open to show */
 .chat-active           { display: none !important; flex-direction: column; flex: 1; min-height: 0; position: relative; }
@@ -693,12 +713,30 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
         <!-- Welcome -->
         <div class=”chat-welcome” id=”chatWelcome”<?= $autoConvId ? ' style=”display:none”' : '' ?>>
             <div class=”cw-icon”><i class=”fa fa-comments”></i></div>
-            <h6>Mascardi Chat</h6>
-            <p>Select a conversation from the list, or start a new one below.</p>
-            <button class=”btn btn-success btn-sm px-4 mt-2”
-                    onclick=”bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).show()”>
-                <i class=”fa fa-pen-to-square me-2”></i>New Conversation
-            </button>
+            <h6>Mascardi Team Chat</h6>
+            <p>Message your colleagues directly or create group conversations to collaborate with your team.</p>
+            <div class=”cw-actions”>
+                <button class=”cw-btn cw-btn-primary”
+                        onclick=”bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).show()”>
+                    <i class=”fa fa-pen-to-square”></i>New Conversation
+                </button>
+            </div>
+            <div class=”cw-tips”>
+                <div class=”cw-tip”>
+                    <span class=”cw-tip-ic”>💬</span>
+                    <div class=”cw-tip-text”>
+                        <strong>Direct Message</strong>
+                        Select a colleague to start a private chat instantly.
+                    </div>
+                </div>
+                <div class=”cw-tip”>
+                    <span class=”cw-tip-ic”>👥</span>
+                    <div class=”cw-tip-text”>
+                        <strong>Group Chat</strong>
+                        Create groups for departments or projects.
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Active conversation -->
@@ -1146,7 +1184,9 @@ const Chat = window.Chat = {
         const rp = el('cpRight');
         rp.style.display = 'flex'; rp.style.flexDirection = 'column';
         hide(el('chatWelcome'));
-        el('chatActive').classList.add('is-open');
+        const ca = el('chatActive');
+        ca.style.removeProperty('display'); // clear any JS-forced hide
+        ca.classList.add('is-open');
 
         // Sidebar active state
         document.querySelectorAll('.conv-item').forEach(e=>e.classList.remove('active'));
@@ -1503,7 +1543,9 @@ const Chat = window.Chat = {
             const rp = el('cpRight');
             if (rp) { rp.style.display = 'flex'; rp.style.flexDirection = 'column'; }
             hide(el('chatWelcome'));
-            el('chatActive').classList.add('is-open');
+            const _ca = el('chatActive');
+            _ca.style.removeProperty('display'); // clear any JS-forced hide
+            _ca.classList.add('is-open');
             const msgsBox = el('chatMsgs');
             if (msgsBox) msgsBox.innerHTML = `<div style="text-align:center;color:#8696a0;padding:48px 0">
                 <i class="fa fa-spinner fa-spin fa-lg me-2"></i>Opening conversation…</div>`;
@@ -2225,7 +2267,20 @@ const Chat = window.Chat = {
 // Make Chat explicitly accessible from inline onclick handlers
 window.Chat = Chat;
 document.addEventListener('DOMContentLoaded', () => {
+    // Belt-and-suspenders: force chatActive hidden if no conversation is open.
+    // This runs after DOM is ready but before paint, so it works regardless of
+    // which CSS version the server has cached or is serving.
+    <?php if (!$autoConvId): ?>
+    (function() {
+        var ca = document.getElementById('chatActive');
+        if (ca && !ca.classList.contains('is-open')) {
+            ca.style.setProperty('display', 'none', 'important');
+        }
+    })();
+    <?php endif; ?>
+
     Chat.init();
+
     <?php if ($autoConvId): ?>
     // Server-side opened conversation — set state and load messages directly
     Chat.convId    = <?= $autoConvId ?>;
