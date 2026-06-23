@@ -740,7 +740,7 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
         </div>
 
         <!-- Active conversation -->
-        <div class=”chat-active<?= $autoConvId ? ' is-open' : '' ?>” id=”chatActive”>
+        <div class=”chat-active<?= $autoConvId ? ' is-open' : '' ?>” id=”chatActive”<?= !$autoConvId ? ' style=”display:none !important”' : '' ?>>
 
             <!-- Header -->
             <div class=”ch-hdr”>
