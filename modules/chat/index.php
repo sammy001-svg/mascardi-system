@@ -220,9 +220,23 @@ body > .modal-backdrop,
 .cw-tip-text { font-size: 12px; color: #54656f; line-height: 1.5; }
 .cw-tip-text strong { display: block; font-weight: 700; color: #111b21; margin-bottom: 2px; font-size: 12.5px; }
 
-/* Active pane — hidden by default; JS/PHP adds .is-open to show */
-.chat-active           { display: none !important; flex-direction: column; flex: 1; min-height: 0; position: relative; }
-.chat-active.is-open   { display: flex !important; }
+/* Active pane — moved off-screen until .is-open is added (avoids display:none override issues) */
+.chat-active {
+    position: fixed !important;
+    top: -200vh !important; left: -200vw !important;
+    width: 0 !important; height: 0 !important;
+    overflow: hidden !important; visibility: hidden !important;
+    pointer-events: none !important;
+    flex-direction: column; min-height: 0;
+}
+.chat-active.is-open {
+    position: relative !important;
+    top: auto !important; left: auto !important;
+    width: auto !important; height: auto !important;
+    overflow: visible !important; visibility: visible !important;
+    pointer-events: auto !important;
+    display: flex !important; flex: 1 !important; min-height: 0;
+}
 
 /* Header */
 .ch-hdr {
@@ -740,7 +754,7 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
         </div>
 
         <!-- Active conversation -->
-        <div class=”chat-active<?= $autoConvId ? ' is-open' : '' ?>” id=”chatActive”<?= !$autoConvId ? ' style=”display:none !important”' : '' ?>>
+        <div class=”chat-active<?= $autoConvId ? ' is-open' : '' ?>” id=”chatActive”<?= !$autoConvId ? ' style=”position:fixed!important;top:-200vh!important;left:-200vw!important;width:0!important;height:0!important;overflow:hidden!important;visibility:hidden!important”' : '' ?>>
 
             <!-- Header -->
             <div class=”ch-hdr”>
@@ -1185,7 +1199,7 @@ const Chat = window.Chat = {
         rp.style.display = 'flex'; rp.style.flexDirection = 'column';
         hide(el('chatWelcome'));
         const ca = el('chatActive');
-        ca.style.removeProperty('display'); // clear any JS-forced hide
+        ca.removeAttribute('style');
         ca.classList.add('is-open');
 
         // Sidebar active state
@@ -1544,7 +1558,7 @@ const Chat = window.Chat = {
             if (rp) { rp.style.display = 'flex'; rp.style.flexDirection = 'column'; }
             hide(el('chatWelcome'));
             const _ca = el('chatActive');
-            _ca.style.removeProperty('display'); // clear any JS-forced hide
+            _ca.removeAttribute('style');
             _ca.classList.add('is-open');
             const msgsBox = el('chatMsgs');
             if (msgsBox) msgsBox.innerHTML = `<div style="text-align:center;color:#8696a0;padding:48px 0">
@@ -2274,7 +2288,7 @@ document.addEventListener('DOMContentLoaded', () => {
     (function() {
         var ca = document.getElementById('chatActive');
         if (ca && !ca.classList.contains('is-open')) {
-            ca.style.setProperty('display', 'none', 'important');
+            ca.style.cssText = 'position:fixed!important;top:-200vh!important;left:-200vw!important;width:0!important;height:0!important;overflow:hidden!important;visibility:hidden!important';
         }
     })();
     <?php endif; ?>
