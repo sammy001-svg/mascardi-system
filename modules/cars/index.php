@@ -166,6 +166,11 @@ include __DIR__ . '/../../includes/header.php';
                     <td><?= statusBadge($car['status']) ?></td>
                     <td>
                         <div class="d-flex gap-1">
+                            <?php if ($section === 'workshop'): ?>
+                            <a href="workshop.php?id=<?= $car['id'] ?>" class="btn btn-xs btn-warning" title="Workshop Progress">
+                                <i class="fa fa-screwdriver-wrench"></i>
+                            </a>
+                            <?php endif; ?>
                             <a href="view.php?id=<?= $car['id'] ?>" class="btn btn-xs btn-outline-primary" title="View">
                                 <i class="fa fa-eye"></i>
                             </a>

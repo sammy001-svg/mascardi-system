@@ -59,6 +59,11 @@ include __DIR__ . '/../../includes/header.php';
             <i class="fa fa-clipboard-check me-1"></i>Inspect
         </a>
         <?php endif; ?>
+        <?php if ($car['status'] === 'in_workshop'): ?>
+        <a href="workshop.php?id=<?= $id ?>" class="btn btn-sm btn-primary">
+            <i class="fa fa-screwdriver-wrench me-1"></i>Workshop Progress
+        </a>
+        <?php endif; ?>
         <?php if (canEditDelete()): ?>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <?php endif; ?>
