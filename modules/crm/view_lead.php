@@ -326,7 +326,7 @@ $availCarsForModal = [];
 try {
     $availCarsForModal = $db->query("
         SELECT id, make, model, year, color, registration_number,
-               COALESCE(NULLIF(asking_price,0), NULLIF(selling_price,0), 0) AS sale_price
+               COALESCE(asking_price, selling_price, 0) AS sale_price
         FROM cars WHERE car_type = 'inventory'
         ORDER BY make, model LIMIT 300
     ")->fetchAll();
@@ -1161,7 +1161,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                             <?php if (empty($availCarsForModal)): ?>
                             <div class="form-text text-warning">
                                 <i class="fa fa-triangle-exclamation me-1"></i>
-                                No vehicles with status "completed" or "arrived" found in inventory.
+                                No inventory vehicles found. Add vehicles under All Cars first.
                             </div>
                             <?php endif; ?>
                         </div>
