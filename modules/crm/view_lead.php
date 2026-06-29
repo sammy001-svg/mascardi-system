@@ -1054,7 +1054,7 @@ document.getElementById('confirmLost') && document.getElementById('confirmLost')
                     $availCars = $db->query("
                         SELECT id, make, model, year, color, registration_number,
                                chassis_number, COALESCE(entry_number,'') AS entry_number
-                        FROM cars WHERE status='available' ORDER BY make, model LIMIT 200
+                        FROM cars WHERE status IN ('completed','arrived') ORDER BY make, model LIMIT 200
                     ")->fetchAll();
                     foreach ($availCars as $ac):
                         $sel = ($lead['pinned_car_id'] == $ac['id']) ? 'selected' : '';
