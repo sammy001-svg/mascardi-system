@@ -112,76 +112,94 @@ if ($__wa): ?>
 <?php if (isset($extraModal)) echo $extraModal; ?>
 
 <!-- ══════════════════════════════════════════════════════════════
-     PWA Install Banner
-     • Slides up from the bottom of the screen
+     PWA Install Modal
+     • Centered popup on every page visit (not shown when already installed)
      • Chrome/Edge/Android: native one-tap install via deferredPrompt
      • iOS Safari: step-by-step Share → Add to Home Screen guide
      • All others: browser-specific address-bar instruction
 ═══════════════════════════════════════════════════════════════ -->
-<div id="pwaBanner" role="dialog" aria-label="Install App" style="
-    display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;
-    background:#fff;border-top:1px solid #e2e8f0;
-    box-shadow:0 -4px 24px rgba(0,0,0,.12);
-    padding:0;font-family:inherit;
-    transform:translateY(100%);transition:transform .35s cubic-bezier(.4,0,.2,1)">
+<div id="pwaOverlay" role="dialog" aria-modal="true" aria-label="Install App" style="
+    display:none;position:fixed;inset:0;z-index:99999;
+    background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+    align-items:center;justify-content:center;padding:16px;
+    opacity:0;transition:opacity .25s ease">
 
-    <!-- Main panel: icon + text + buttons -->
-    <div id="pwaBannerMain" style="display:flex;align-items:center;gap:14px;padding:14px 16px">
-        <img src="<?= BASE_URL ?>/assets/images/icons/icon-192.png"
-             width="48" height="48" alt="" style="border-radius:12px;flex-shrink:0">
-        <div style="flex:1;min-width:0">
-            <div style="font-weight:700;font-size:15px;color:#0f172a;line-height:1.2">
-                Install <?= e(getSetting('company_name', APP_NAME)) ?>
-            </div>
-            <div style="font-size:12px;color:#64748b;margin-top:2px">
-                Add to home screen for fast, offline access
-            </div>
-        </div>
-        <button id="pwaBannerInstall" style="
-            background:#2563eb;color:#fff;border:none;border-radius:8px;
-            padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;
-            white-space:nowrap;flex-shrink:0">
-            Install
-        </button>
-        <button id="pwaBannerClose" aria-label="Dismiss" style="
-            background:none;border:none;padding:6px;cursor:pointer;
-            color:#94a3b8;font-size:18px;flex-shrink:0;line-height:1">
+    <div id="pwaModal" style="
+        background:#fff;border-radius:20px;width:100%;max-width:380px;
+        box-shadow:0 24px 64px rgba(0,0,0,.35);position:relative;
+        transform:scale(.9) translateY(24px);
+        transition:transform .32s cubic-bezier(.34,1.56,.64,1)">
+
+        <!-- Close button -->
+        <button id="pwaClose" aria-label="Close" style="
+            position:absolute;top:12px;right:12px;width:32px;height:32px;
+            background:#f1f5f9;border:none;border-radius:50%;cursor:pointer;
+            color:#64748b;font-size:14px;line-height:32px;text-align:center;z-index:1">
             &#x2715;
         </button>
-    </div>
 
-    <!-- iOS guide panel (hidden until needed) -->
-    <div id="pwaBannerIos" style="display:none;padding:12px 16px 16px;border-top:1px solid #f1f5f9">
-        <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#1e293b">
-            How to install on iPhone / iPad:
-        </p>
-        <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:7px">
-            <span style="background:#2563eb;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">1</span>
-            <span style="font-size:13px;color:#334155">Tap the <strong>Share</strong> <i class="fa fa-arrow-up-from-bracket" style="color:#2563eb"></i> button in Safari's toolbar</span>
+        <!-- ── Main panel ──────────────────────────────────────────────── -->
+        <div id="pwaMain" style="padding:32px 24px 24px;text-align:center">
+            <img src="<?= BASE_URL ?>/assets/images/icons/icon-192.png"
+                 width="80" height="80" alt=""
+                 style="border-radius:20px;margin-bottom:16px;box-shadow:0 4px 16px rgba(37,99,235,.25)">
+            <div style="font-size:20px;font-weight:800;color:#0f172a;margin-bottom:6px;line-height:1.2">
+                Install <?= e(getSetting('company_name', APP_NAME)) ?>
+            </div>
+            <div style="font-size:13px;color:#64748b;line-height:1.6;margin-bottom:24px">
+                Add to your home screen for instant access —<br>works offline, no app store needed.
+            </div>
+            <button id="pwaInstallBtn" style="
+                display:block;width:100%;background:#2563eb;color:#fff;border:none;
+                border-radius:12px;padding:14px;font-size:15px;font-weight:700;
+                cursor:pointer;margin-bottom:10px;letter-spacing:.01em;
+                box-shadow:0 4px 14px rgba(37,99,235,.4);transition:opacity .15s">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:6px;margin-top:-2px"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                Install App
+            </button>
+            <button id="pwaDismissBtn" style="
+                display:block;width:100%;background:none;border:none;
+                color:#94a3b8;font-size:13px;cursor:pointer;padding:8px">
+                Not now
+            </button>
         </div>
-        <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:7px">
-            <span style="background:#2563eb;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">2</span>
-            <span style="font-size:13px;color:#334155">Scroll down and tap <strong>"Add to Home Screen"</strong></span>
-        </div>
-        <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:14px">
-            <span style="background:#2563eb;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">3</span>
-            <span style="font-size:13px;color:#334155">Tap <strong>"Add"</strong> in the top-right corner</span>
-        </div>
-        <button id="pwaBannerIosOk" style="
-            width:100%;background:#2563eb;color:#fff;border:none;border-radius:8px;
-            padding:10px;font-size:14px;font-weight:600;cursor:pointer">
-            Got it
-        </button>
-    </div>
 
-    <!-- Browser hint panel (hidden until needed) -->
-    <div id="pwaBannerHint" style="display:none;padding:12px 16px 14px;border-top:1px solid #f1f5f9">
-        <p id="pwaBannerHintText" style="margin:0 0 10px;font-size:13px;color:#334155;line-height:1.7"></p>
-        <button id="pwaBannerHintOk" style="
-            width:100%;background:#2563eb;color:#fff;border:none;border-radius:8px;
-            padding:10px;font-size:14px;font-weight:600;cursor:pointer">
-            Got it
-        </button>
+        <!-- ── iOS guide panel ─────────────────────────────────────────── -->
+        <div id="pwaIos" style="display:none;padding:24px 24px 20px">
+            <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:16px">
+                How to install on iPhone / iPad:
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px">
+                <span style="background:#2563eb;color:#fff;border-radius:50%;min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">1</span>
+                <span style="font-size:13px;color:#334155;line-height:1.5">Tap the <strong>Share</strong> <i class="fa fa-arrow-up-from-bracket" style="color:#2563eb"></i> button in Safari's toolbar</span>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px">
+                <span style="background:#2563eb;color:#fff;border-radius:50%;min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">2</span>
+                <span style="font-size:13px;color:#334155;line-height:1.5">Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:20px">
+                <span style="background:#2563eb;color:#fff;border-radius:50%;min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">3</span>
+                <span style="font-size:13px;color:#334155;line-height:1.5">Tap <strong>"Add"</strong> in the top-right corner</span>
+            </div>
+            <button id="pwaIosOk" style="
+                display:block;width:100%;background:#2563eb;color:#fff;border:none;
+                border-radius:12px;padding:13px;font-size:14px;font-weight:700;cursor:pointer">
+                Got it
+            </button>
+        </div>
+
+        <!-- ── Browser hint panel ──────────────────────────────────────── -->
+        <div id="pwaHint" style="display:none;padding:24px 24px 20px">
+            <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:12px">
+                How to install:
+            </div>
+            <p id="pwaHintText" style="font-size:13px;color:#334155;line-height:1.75;margin:0 0 20px"></p>
+            <button id="pwaHintOk" style="
+                display:block;width:100%;background:#2563eb;color:#fff;border:none;
+                border-radius:12px;padding:13px;font-size:14px;font-weight:700;cursor:pointer">
+                Got it
+            </button>
+        </div>
     </div>
 </div>
 
@@ -190,86 +208,75 @@ if ($__wa): ?>
 (function () {
     'use strict';
 
-    var DISMISS_KEY  = 'pwa_b_v6';   // bump version to clear old dismissals
-    var DISMISS_DAYS = 3;
-    var ua           = navigator.userAgent;
-    var isIOS        = /iphone|ipad|ipod/i.test(ua) && !window.MSStream;
-    var isIOSSaf     = isIOS && /^((?!chrome|android).)*safari/i.test(ua);
-    var isChrome     = /chrome|chromium|crios/i.test(ua) && !/edg/i.test(ua);
-    var isEdge       = /edg/i.test(ua);
-    var isFF         = /firefox|fxios/i.test(ua);
-    var isSamsung    = /samsungbrowser/i.test(ua);
+    var ua        = navigator.userAgent;
+    var isIOS     = /iphone|ipad|ipod/i.test(ua) && !window.MSStream;
+    var isIOSSaf  = isIOS && /^((?!chrome|android).)*safari/i.test(ua);
+    var isChrome  = /chrome|chromium|crios/i.test(ua) && !/edg/i.test(ua);
+    var isEdge    = /edg/i.test(ua);
+    var isFF      = /firefox|fxios/i.test(ua);
+    var isSamsung = /samsungbrowser/i.test(ua);
     var deferredPrompt = null;
+    var modalOpen  = false;
 
-    // ── Helpers ───────────────────────────────────────────────────────────
     function isStandalone() {
         return window.matchMedia('(display-mode: standalone)').matches
             || window.navigator.standalone === true;
     }
-    function isDismissed() {
-        var ts = localStorage.getItem(DISMISS_KEY);
-        return ts && (Date.now() - parseInt(ts, 10)) < DISMISS_DAYS * 86400000;
-    }
-    function dismiss() {
-        localStorage.setItem(DISMISS_KEY, String(Date.now()));
-        hideBanner();
-    }
 
-    // ── Banner show / hide ────────────────────────────────────────────────
-    var banner = document.getElementById('pwaBanner');
-    function showBanner() {
-        if (!banner) return;
-        banner.style.display = 'block';
+    // ── Modal open / close ────────────────────────────────────────────────
+    var overlay = document.getElementById('pwaOverlay');
+    var modal   = document.getElementById('pwaModal');
+
+    function openModal() {
+        if (!overlay || isStandalone() || modalOpen) return;
+        modalOpen = true;
+        overlay.style.display = 'flex';
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
-                banner.style.transform = 'translateY(0)';
+                overlay.style.opacity = '1';
+                if (modal) modal.style.transform = 'scale(1) translateY(0)';
             });
         });
     }
-    function hideBanner() {
-        if (!banner) return;
-        banner.style.transform = 'translateY(100%)';
-        setTimeout(function () { banner.style.display = 'none'; }, 380);
+
+    function closeModal() {
+        if (!overlay) return;
+        modalOpen = false;
+        overlay.style.opacity = '0';
+        if (modal) modal.style.transform = 'scale(.9) translateY(24px)';
+        setTimeout(function () { overlay.style.display = 'none'; }, 300);
     }
 
     // ── Panel switching ───────────────────────────────────────────────────
-    var panelMain = document.getElementById('pwaBannerMain');
-    var panelIos  = document.getElementById('pwaBannerIos');
-    var panelHint = document.getElementById('pwaBannerHint');
-
     function showPanel(which) {
-        panelMain && (panelMain.style.display = which === 'main' ? 'flex'  : 'none');
-        panelIos  && (panelIos.style.display  = which === 'ios'  ? 'block' : 'none');
-        panelHint && (panelHint.style.display  = which === 'hint' ? 'block' : 'none');
+        var main = document.getElementById('pwaMain');
+        var ios  = document.getElementById('pwaIos');
+        var hint = document.getElementById('pwaHint');
+        if (main) main.style.display = which === 'main' ? 'block' : 'none';
+        if (ios)  ios.style.display  = which === 'ios'  ? 'block' : 'none';
+        if (hint) hint.style.display = which === 'hint' ? 'block' : 'none';
     }
 
-    // ── Native install prompt ─────────────────────────────────────────────
+    // ── Native install prompt capture ─────────────────────────────────────
     function capturePrompt(e) {
-        // Do NOT call e.preventDefault() — Chrome's native install UI must
-        // remain active as a guaranteed fallback.
         deferredPrompt = e;
-        console.log('[PWA] deferredPrompt set ✓ — custom Install button now active');
+        console.log('[PWA] beforeinstallprompt captured ✓ — Install button will trigger native dialog');
     }
     window.addEventListener('beforeinstallprompt', capturePrompt);
-    // Pick up event captured early in <head> (fires before footer script runs)
     if (window.__pwaBeforeInstall) {
         deferredPrompt = window.__pwaBeforeInstall;
         window.__pwaBeforeInstall = null;
-        console.log('[PWA] deferredPrompt restored from __pwaBeforeInstall ✓');
+        console.log('[PWA] deferredPrompt restored from head capture ✓');
     }
-    console.log('[PWA] init — deferredPrompt:', deferredPrompt ? 'AVAILABLE' : 'null (Chrome native UI handles install)');
 
     // ── Install action ────────────────────────────────────────────────────
     function doInstall() {
-        console.log('[PWA] Install clicked — deferredPrompt:', deferredPrompt ? 'available' : 'null');
         if (deferredPrompt) {
-            // Chrome / Edge / Android — native one-tap install dialog
+            // Real one-tap native install dialog (Chrome / Edge / Android)
             deferredPrompt.prompt();
             deferredPrompt.userChoice.then(function (r) {
-                console.log('[PWA] userChoice:', r.outcome);
                 if (r.outcome === 'accepted') {
-                    hideBanner();
-                    localStorage.removeItem(DISMISS_KEY);
+                    closeModal();
                     if (typeof window.showToast === 'function') {
                         window.showToast('success', 'App Installed',
                             'Launch it from your home screen anytime.');
@@ -280,68 +287,62 @@ if ($__wa): ?>
         } else if (isIOSSaf) {
             showPanel('ios');
         } else {
-            // Chrome / Edge shows a native install icon in the address bar.
-            // Point the user directly to it — it works even without our prompt.
             var hint = '';
             if (isChrome || isEdge) {
-                hint = '<strong>Chrome has an install button ready for you:</strong><br>'
-                     + '&bull; <strong>Desktop:</strong> look for the '
+                hint = '<strong>Chrome is ready to install — just one more step:</strong><br><br>'
+                     + '&bull; <strong>Desktop:</strong> click the '
                      + '<svg width="15" height="15" viewBox="0 0 24 24" fill="#2563eb" style="vertical-align:middle;margin:0 2px"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>'
-                     + ' install icon in the <strong>address bar</strong> (right side).<br>'
-                     + '&bull; <strong>Android:</strong> tap the menu <strong>&#8942;</strong> &rarr; <strong>"Add to Home Screen"</strong> or <strong>"Install App"</strong>.';
+                     + ' install icon in the <strong>right side of the address bar</strong>.<br>'
+                     + '&bull; <strong>Android:</strong> tap the <strong>&#8942;</strong> menu &rarr; <strong>"Add to Home Screen"</strong>.';
             } else if (isSamsung) {
-                hint = 'Tap the menu <strong>&#8942;</strong> and choose <strong>"Add page to"</strong> &rarr; <strong>"Home screen"</strong>.';
+                hint = 'Tap the <strong>&#8942;</strong> menu &rarr; <strong>"Add page to"</strong> &rarr; <strong>"Home screen"</strong>.';
             } else if (isFF) {
                 hint = 'Tap the <strong>home</strong> icon in the Firefox address bar, then <strong>"Add to Home Screen"</strong>.';
             } else if (isIOS) {
-                hint = 'Open this page in <strong>Safari</strong>, tap the <strong>Share</strong> button, then <strong>"Add to Home Screen"</strong>.';
+                hint = 'This page must be opened in <strong>Safari</strong>. Then tap the <strong>Share</strong> button &rarr; <strong>"Add to Home Screen"</strong>.';
             } else {
-                hint = 'Open your browser menu and look for <strong>"Install App"</strong> or <strong>"Add to Home Screen"</strong>.';
+                hint = 'Use your browser menu and look for <strong>"Install App"</strong> or <strong>"Add to Home Screen"</strong>.';
             }
-            var hintEl = document.getElementById('pwaBannerHintText');
-            if (hintEl) hintEl.innerHTML = hint;
+            document.getElementById('pwaHintText').innerHTML = hint;
             showPanel('hint');
         }
     }
 
     // ── Wire up buttons ───────────────────────────────────────────────────
-    var btnInstall = document.getElementById('pwaBannerInstall');
-    var btnClose   = document.getElementById('pwaBannerClose');
-    var btnIosOk   = document.getElementById('pwaBannerIosOk');
-    var btnHintOk  = document.getElementById('pwaBannerHintOk');
+    document.getElementById('pwaInstallBtn').addEventListener('click', doInstall);
+    document.getElementById('pwaClose').addEventListener('click', closeModal);
+    document.getElementById('pwaDismissBtn').addEventListener('click', closeModal);
+    document.getElementById('pwaIosOk').addEventListener('click', closeModal);
+    document.getElementById('pwaHintOk').addEventListener('click', closeModal);
 
-    btnInstall && btnInstall.addEventListener('click', doInstall);
-    btnClose   && btnClose.addEventListener('click', dismiss);
-    btnIosOk   && btnIosOk.addEventListener('click', dismiss);
-    btnHintOk  && btnHintOk.addEventListener('click', dismiss);
+    // Close on backdrop click
+    overlay && overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeModal();
+    });
 
-    // Topbar shortcut button — show for iOS Safari and when prompt is available
+    // Topbar shortcut button re-opens the modal
     var topbarBtn = document.getElementById('pwaInstallTopbarBtn');
-    if (topbarBtn && (isIOSSaf || deferredPrompt)) {
-        topbarBtn.classList.remove('d-none');
-    }
     if (topbarBtn) {
-        topbarBtn.addEventListener('click', function () {
-            showPanel('main');
-            showBanner();
-        });
-        // Also reveal it when the prompt fires later
+        if (isIOSSaf || deferredPrompt) topbarBtn.classList.remove('d-none');
+        topbarBtn.addEventListener('click', function () { showPanel('main'); openModal(); });
         window.addEventListener('beforeinstallprompt', function () {
             topbarBtn.classList.remove('d-none');
         });
     }
 
-    // app installed — clean up
+    // Hide everything once installed
     window.addEventListener('appinstalled', function () {
-        hideBanner();
+        closeModal();
         if (topbarBtn) topbarBtn.classList.add('d-none');
         deferredPrompt = null;
-        localStorage.removeItem(DISMISS_KEY);
+        if (typeof window.showToast === 'function') {
+            window.showToast('success', 'App Installed', 'Launch it from your home screen anytime.');
+        }
     });
 
-    // ── Auto-show after 2 s (all browsers, all platforms) ─────────────────
-    if (!isStandalone() && !isDismissed()) {
-        setTimeout(function () { showPanel('main'); showBanner(); }, 2000);
+    // ── Show modal on every page load (unless already installed) ──────────
+    if (!isStandalone()) {
+        setTimeout(function () { showPanel('main'); openModal(); }, 800);
     }
 
     // ── Service Worker ────────────────────────────────────────────────────
@@ -355,8 +356,7 @@ if ($__wa): ?>
                             if (this.state === 'installed' && navigator.serviceWorker.controller) {
                                 if (typeof window.showToast === 'function') {
                                     window.showToast('info', 'Update Available',
-                                        'Reload to get the latest version.',
-                                        8000);
+                                        'Reload to get the latest version.', 8000);
                                 }
                             }
                         });
@@ -377,8 +377,7 @@ if ($__wa): ?>
     window.addEventListener('offline', function () {
         setNetworkDot(false);
         if (typeof window.showToast === 'function') {
-            window.showToast('warning', 'No Connection',
-                'You are offline. Some features may not work.');
+            window.showToast('warning', 'No Connection', 'You are offline. Some features may not work.');
         }
     });
 
