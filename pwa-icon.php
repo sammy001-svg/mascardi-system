@@ -1,24 +1,41 @@
 <?php
 /**
- * PWA icon generator — serves a valid PNG at the requested size.
- * Supports three rendering paths (best to worst quality):
- *   1. GD (imagecreatetruecolor) — full car silhouette
- *   2. Pure PHP PNG writer        — solid blue rounded square (no GD needed)
- *   3. SVG redirect               — last resort
+ * PWA icon generator — PUBLIC resource, no auth/session required.
  *
- * Chrome/Android require genuine 192px + 512px PNG icons in the manifest
- * for beforeinstallprompt to fire.  The pure-PHP fallback ensures this
- * works even on hosts where the GD extension is disabled.
+ * Generates a branded PNG icon at the requested size and caches it
+ * as a static file so the web server can serve it directly on future requests.
+ *
+ * Three rendering paths (best → fallback):
+ *   1. GD extension   — full car silhouette
+ *   2. Pure PHP PNG   — blue rounded square + M lettermark (no GD needed)
+ *   3. Should never reach here; both paths above always produce output
+ *
+ * Chrome requires genuine 192 px and 512 px PNGs in the manifest for
+ * beforeinstallprompt to fire — no SVG, no redirect, no corruption.
  */
-require_once __DIR__ . '/config/app.php';
+
+// ── Safety: buffer everything so no stray byte can corrupt the PNG ────────
+ob_start();
 
 $s = max(16, min(512, (int)($_GET['s'] ?? 192)));
 
-header('Content-Type: image/png');
-header('Cache-Control: public, max-age=604800');
-header('X-Content-Type-Options: nosniff');
+// ── Serve static cached file if it exists ────────────────────────────────
+$cacheDir  = __DIR__ . '/assets/images/icons';
+$cacheFile = $cacheDir . '/icon-' . $s . '.png';
 
-/* ── Path 1: GD available ─────────────────────────────────────────────── */
+if (file_exists($cacheFile) && filesize($cacheFile) > 100) {
+    ob_end_clean();
+    header('Content-Type: image/png');
+    header('Cache-Control: public, max-age=604800');
+    header('X-Content-Type-Options: nosniff');
+    readfile($cacheFile);
+    exit;
+}
+
+// ── Generate PNG ──────────────────────────────────────────────────────────
+$pngData = null;
+
+/* Path 1: GD ---------------------------------------------------------------- */
 if (function_exists('imagecreatetruecolor')) {
     $img = imagecreatetruecolor($s, $s);
 
@@ -61,14 +78,34 @@ if (function_exists('imagecreatetruecolor')) {
     imagefilledellipse($img, $cx + 5*$u, $cy + 4*$u, 4*$u, 4*$u, $white);
     imagefilledellipse($img, $cx + 5*$u, $cy + 4*$u, 2*$u, 2*$u, $darkBlue);
 
+    // Capture PNG bytes without sending to output
+    ob_start();
     imagepng($img);
+    $pngData = ob_get_clean();
     imagedestroy($img);
-    exit;
 }
 
-/* ── Path 2: Pure PHP PNG — no GD needed ─────────────────────────────── */
-// Builds a minimal but fully valid PNG from raw bytes.
-// Icon: blue rounded-square background + white "M" lettermark.
+/* Path 2: Pure PHP PNG (no GD) ---------------------------------------------- */
+if (!$pngData) {
+    $pngData = buildPNG($s, $s);
+}
+
+// ── Cache to static file for future requests ─────────────────────────────
+if ($pngData && is_dir($cacheDir) && is_writable($cacheDir)) {
+    file_put_contents($cacheFile, $pngData);
+}
+
+// ── Output ────────────────────────────────────────────────────────────────
+ob_end_clean(); // discard any stray output accumulated above
+header('Content-Type: image/png');
+header('Cache-Control: public, max-age=604800');
+header('X-Content-Type-Options: nosniff');
+echo $pngData;
+exit;
+
+// ─────────────────────────────────────────────────────────────────────────
+// Pure-PHP PNG builder — works without any PHP extensions
+// ─────────────────────────────────────────────────────────────────────────
 
 function pngChunk(string $type, string $data): string {
     $chunk = $type . $data;
@@ -76,90 +113,63 @@ function pngChunk(string $type, string $data): string {
 }
 
 function buildPNG(int $w, int $h): string {
-    // Each pixel: RGBA (4 bytes, colour type 6)
     $bg_r = 37;  $bg_g = 99;  $bg_b = 235;  // #2563eb brand blue
     $wh_r = 255; $wh_g = 255; $wh_b = 255;  // white
 
-    // Pre-compute rounded-corner radius (18 % of size)
     $corner = (int)($w * 0.18);
 
-    // Build raw scanlines (filter byte 0 + RGBA per pixel)
     $raw = '';
     for ($y = 0; $y < $h; $y++) {
         $raw .= "\x00"; // None filter
         for ($x = 0; $x < $w; $x++) {
-            // Determine if this pixel is inside the rounded square
+            // Rounded corner clipping
             $inCorner = false;
             if ($x < $corner && $y < $corner) {
                 $dx = $corner - $x; $dy = $corner - $y;
-                $inCorner = ($dx * $dx + $dy * $dy) > ($corner * $corner);
+                $inCorner = ($dx*$dx + $dy*$dy) > ($corner*$corner);
             } elseif ($x > $w - 1 - $corner && $y < $corner) {
                 $dx = $x - ($w - 1 - $corner); $dy = $corner - $y;
-                $inCorner = ($dx * $dx + $dy * $dy) > ($corner * $corner);
+                $inCorner = ($dx*$dx + $dy*$dy) > ($corner*$corner);
             } elseif ($x < $corner && $y > $h - 1 - $corner) {
                 $dx = $corner - $x; $dy = $y - ($h - 1 - $corner);
-                $inCorner = ($dx * $dx + $dy * $dy) > ($corner * $corner);
+                $inCorner = ($dx*$dx + $dy*$dy) > ($corner*$corner);
             } elseif ($x > $w - 1 - $corner && $y > $h - 1 - $corner) {
                 $dx = $x - ($w - 1 - $corner); $dy = $y - ($h - 1 - $corner);
-                $inCorner = ($dx * $dx + $dy * $dy) > ($corner * $corner);
+                $inCorner = ($dx*$dx + $dy*$dy) > ($corner*$corner);
             }
 
-            if ($inCorner) {
-                // Transparent
-                $raw .= "\x00\x00\x00\x00";
-                continue;
-            }
+            if ($inCorner) { $raw .= "\x00\x00\x00\x00"; continue; }
 
-            // White "M" lettermark occupying centre 50% of icon
-            $margin  = (int)($w * 0.25);
-            $lw      = max(1, (int)($w * 0.07)); // stroke width
-            $top     = $margin;
-            $bot     = $h - $margin;
-            $left    = $margin;
-            $right   = $w - $margin;
-            $mid_x   = (int)($w / 2);
-            $mid_y   = (int)($h * 0.55);
+            // White "M" lettermark, centre 50% of icon
+            $margin = (int)($w * 0.25);
+            $lw     = max(1, (int)($w * 0.07));
+            $top    = $margin; $bot = $h - $margin;
+            $left   = $margin; $right = $w - $margin;
+            $mid_x  = (int)($w / 2);
+            $mid_y  = (int)($h * 0.55);
 
             $isM = false;
-            // Left vertical bar
-            if ($x >= $left && $x < $left + $lw && $y >= $top && $y <= $bot) $isM = true;
-            // Right vertical bar
-            if ($x >= $right - $lw && $x < $right && $y >= $top && $y <= $bot) $isM = true;
-            // Left diagonal (top-left to centre-top)
-            if (!$isM) {
-                $slope_x = $mid_x - $left;
-                $slope_y = $mid_y - $top;
-                if ($slope_x > 0) {
-                    $t = ($y - $top) / max(1, $slope_y);
-                    $expectedX = $left + (int)($t * $slope_x);
-                    if ($x >= $expectedX && $x < $expectedX + $lw && $y >= $top && $y <= $mid_y) $isM = true;
-                }
+            if ($x >= $left && $x < $left + $lw && $y >= $top && $y <= $bot)     $isM = true;
+            if ($x >= $right - $lw && $x < $right && $y >= $top && $y <= $bot)   $isM = true;
+            if (!$isM && ($slope_x = $mid_x - $left) > 0) {
+                $t = ($y - $top) / max(1, $mid_y - $top);
+                $ex = $left + (int)($t * $slope_x);
+                if ($x >= $ex && $x < $ex + $lw && $y >= $top && $y <= $mid_y)   $isM = true;
             }
-            // Right diagonal (top-right to centre-top)
-            if (!$isM) {
-                $slope_x = $right - $mid_x;
-                $slope_y = $mid_y - $top;
-                if ($slope_x > 0) {
-                    $t = ($y - $top) / max(1, $slope_y);
-                    $expectedX = $right - (int)($t * $slope_x);
-                    if ($x >= $expectedX - $lw && $x < $expectedX && $y >= $top && $y <= $mid_y) $isM = true;
-                }
+            if (!$isM && ($slope_x = $right - $mid_x) > 0) {
+                $t = ($y - $top) / max(1, $mid_y - $top);
+                $ex = $right - (int)($t * $slope_x);
+                if ($x >= $ex - $lw && $x < $ex && $y >= $top && $y <= $mid_y)   $isM = true;
             }
 
-            if ($isM) {
-                $raw .= chr($wh_r) . chr($wh_g) . chr($wh_b) . "\xff";
-            } else {
-                $raw .= chr($bg_r) . chr($bg_g) . chr($bg_b) . "\xff";
-            }
+            if ($isM) { $raw .= chr($wh_r).chr($wh_g).chr($wh_b)."\xff"; }
+            else      { $raw .= chr($bg_r).chr($bg_g).chr($bg_b)."\xff"; }
         }
     }
 
     $png  = "\x89PNG\r\n\x1a\n";
-    $png .= pngChunk('IHDR', pack('NNCCCCC', $w, $h, 8, 6, 0, 0, 0)); // colour type 6 = RGBA
+    $png .= pngChunk('IHDR', pack('NNCCCCC', $w, $h, 8, 6, 0, 0, 0));
     $png .= pngChunk('IDAT', gzcompress($raw, 6));
     $png .= pngChunk('IEND', '');
     return $png;
 }
-
-echo buildPNG($s, $s);
-exit;

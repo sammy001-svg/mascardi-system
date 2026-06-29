@@ -1,13 +1,14 @@
 <?php
 /**
- * PWA Web App Manifest
- * Served as JSON with dynamic BASE_URL so the app works in any subdirectory.
- * Browsers fetch this before the user logs in — no auth required.
+ * PWA Web App Manifest — public resource, no auth required.
+ * Output buffering ensures no stray byte corrupts the JSON response.
  */
+ob_start();
 require_once __DIR__ . '/config/app.php';
+ob_end_clean(); // discard any accidental output from config/session setup
 
 header('Content-Type: application/manifest+json; charset=utf-8');
-header('Cache-Control: public, max-age=86400');
+header('Cache-Control: no-cache, must-revalidate'); // always fresh so icon changes are picked up
 header('X-Content-Type-Options: nosniff');
 
 // Attempt to load company name from DB; fall back to constant gracefully
@@ -46,30 +47,38 @@ $manifest = [
     'categories'       => ['business', 'productivity'],
 
     'icons' => [
-        // PNG icons are required by Chrome/Android for the beforeinstallprompt to fire
+        // Static PNGs (generated + cached by pwa-icon.php on first request)
+        // Chrome/Android require genuine PNG icons for beforeinstallprompt to fire
         [
-            'src'     => $base . '/pwa-icon.php?s=192',
+            'src'     => file_exists(BASE_PATH . '/assets/images/icons/icon-192.png')
+                            ? $base . '/assets/images/icons/icon-192.png'
+                            : $base . '/pwa-icon.php?s=192&v=4',
             'sizes'   => '192x192',
             'type'    => 'image/png',
             'purpose' => 'any',
         ],
         [
-            'src'     => $base . '/pwa-icon.php?s=512',
+            'src'     => file_exists(BASE_PATH . '/assets/images/icons/icon-192.png')
+                            ? $base . '/assets/images/icons/icon-192.png'
+                            : $base . '/pwa-icon.php?s=192&v=4',
+            'sizes'   => '192x192',
+            'type'    => 'image/png',
+            'purpose' => 'maskable',
+        ],
+        [
+            'src'     => file_exists(BASE_PATH . '/assets/images/icons/icon-512.png')
+                            ? $base . '/assets/images/icons/icon-512.png'
+                            : $base . '/pwa-icon.php?s=512&v=4',
             'sizes'   => '512x512',
             'type'    => 'image/png',
             'purpose' => 'any',
         ],
-        // SVG fallbacks for browsers that support them
         [
-            'src'     => $base . '/assets/images/icons/icon.svg',
-            'sizes'   => 'any',
-            'type'    => 'image/svg+xml',
-            'purpose' => 'any',
-        ],
-        [
-            'src'     => $base . '/assets/images/icons/maskable.svg',
-            'sizes'   => 'any',
-            'type'    => 'image/svg+xml',
+            'src'     => file_exists(BASE_PATH . '/assets/images/icons/icon-512.png')
+                            ? $base . '/assets/images/icons/icon-512.png'
+                            : $base . '/pwa-icon.php?s=512&v=4',
+            'sizes'   => '512x512',
+            'type'    => 'image/png',
             'purpose' => 'maskable',
         ],
     ],

@@ -7,9 +7,9 @@
  *   - POST / API requests:         Network-only (never cache)
  */
 
-const CACHE_SHELL   = 'mascardi-shell-v3';
-const CACHE_PAGES   = 'mascardi-pages-v3';
-const CACHE_IMAGES  = 'mascardi-images-v3';
+const CACHE_SHELL   = 'mascardi-shell-v4';
+const CACHE_PAGES   = 'mascardi-pages-v4';
+const CACHE_IMAGES  = 'mascardi-images-v4';
 const ALL_CACHES    = [CACHE_SHELL, CACHE_PAGES, CACHE_IMAGES];
 
 // Detect the base path from where this SW is hosted
@@ -41,13 +41,19 @@ const SHELL_URLS = [
 self.addEventListener('install', event => {
     event.waitUntil(
         (async () => {
-            // Cache the offline page unconditionally
-            const pagesCache = await caches.open(CACHE_PAGES);
-            await pagesCache.add(new Request(OFFLINE_URL, { cache: 'reload' }));
+            // Cache the offline page — wrapped in try/catch so a redirect or
+            // server error on offline.php never kills the entire SW install
+            try {
+                const pagesCache = await caches.open(CACHE_PAGES);
+                const res = await fetch(new Request(OFFLINE_URL, { cache: 'reload' }));
+                if (res.ok) await pagesCache.put(OFFLINE_URL, res);
+            } catch (e) {
+                console.warn('[SW] Could not cache offline page:', e.message);
+            }
 
-            // Cache shell assets — ignore individual failures (CDN may be offline)
+            // Cache shell assets — individual failures are already ignored
             const shellCache = await caches.open(CACHE_SHELL);
-            const results = await Promise.allSettled(
+            await Promise.allSettled(
                 SHELL_URLS.map(url =>
                     shellCache.add(url).catch(e => {
                         console.warn('[SW] Shell cache miss:', url, e.message);
