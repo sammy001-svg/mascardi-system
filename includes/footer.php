@@ -189,12 +189,12 @@ if ($__wa): ?>
         });
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────
+    // ── State ────────────────────────────────────────────────────────────
     var deferredPrompt = null;
     var overlay        = document.getElementById('pwaOverlay');
     var topbarBtn      = document.getElementById('pwaInstallTopbarBtn');
-    var DISMISS_KEY    = 'pwa_popup_dismissed';
-    var DISMISS_DAYS   = 7;
+    var DISMISS_KEY    = 'pwa_popup_dismissed_v2';
+    var DISMISS_DAYS   = 3;
 
     function isStandalone() {
         return window.matchMedia('(display-mode: standalone)').matches
@@ -204,14 +204,19 @@ if ($__wa): ?>
         var ts = localStorage.getItem(DISMISS_KEY);
         return ts && (Date.now() - parseInt(ts, 10)) < DISMISS_DAYS * 86400000;
     }
-    function showTopbarBtn() {
-        if (topbarBtn && !isStandalone()) topbarBtn.classList.remove('d-none');
-    }
-    function hideTopbarBtn() {
-        if (topbarBtn) topbarBtn.classList.add('d-none');
-    }
+    var ua        = navigator.userAgent;
+    var isIOS     = /iphone|ipad|ipod/i.test(ua) && !window.MSStream;
+    var isIOSSaf  = isIOS && /^((?!chrome|android).)*safari/i.test(ua);
+    var isChrome  = /chrome|chromium|crios/i.test(ua) && !/edg/i.test(ua);
+    var isEdge    = /edg/i.test(ua);
+    var isFF      = /firefox|fxios/i.test(ua);
+    var isSamsung = /samsungbrowser/i.test(ua);
+
+    // Nothing to do if already running as installed app
+    if (isStandalone()) return;
+
     function showPopup() {
-        if (!overlay || isStandalone()) return;
+        if (!overlay) return;
         overlay.style.display = 'flex';
         setTimeout(function () { overlay.classList.add('pwa-overlay-visible'); }, 20);
     }
@@ -222,42 +227,67 @@ if ($__wa): ?>
         if (dismiss) localStorage.setItem(DISMISS_KEY, String(Date.now()));
     }
 
-    // ── iOS Safari ───────────────────────────────────────────────────────
-    var isIOS    = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
-    var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    if (isIOS && isSafari && !isStandalone()) {
-        var iosEl  = document.getElementById('pwaIosInstructions');
-        var chrEl  = document.getElementById('pwaChromActions');
-        if (iosEl)  iosEl.style.display  = '';
-        if (chrEl)  chrEl.style.display  = 'none';
-        showTopbarBtn();
-        if (!isDismissed()) setTimeout(showPopup, 3000);
-    }
+    // ── Always show topbar install button for non-standalone users ───────
+    if (topbarBtn) topbarBtn.classList.remove('d-none');
 
-    // ── Chrome / Edge / Android ──────────────────────────────────────────
-    function onInstallPrompt(e) {
-        e.preventDefault();
-        deferredPrompt = e;
-        showTopbarBtn();
-        if (!isDismissed()) setTimeout(showPopup, 2500);
-    }
-    // Use event captured in <head> if it already fired
+    // ── Capture native install prompt if Chrome/Edge provides it ────────
+    function onInstallPrompt(e) { e.preventDefault(); deferredPrompt = e; }
     if (window.__pwaBeforeInstall) {
         deferredPrompt = window.__pwaBeforeInstall;
         window.__pwaBeforeInstall = null;
-        showTopbarBtn();
-        if (!isDismissed()) setTimeout(showPopup, 2500);
     }
     window.addEventListener('beforeinstallprompt', onInstallPrompt);
 
-    // ── Topbar install button ────────────────────────────────────────────
+    // ── Set popup content based on browser / capability ──────────────────
+    function configurePopup() {
+        var chrEl      = document.getElementById('pwaChromActions');
+        var iosEl      = document.getElementById('pwaIosInstructions');
+        var installBtn = document.getElementById('pwaPopupInstallBtn');
+
+        if (isIOSSaf) {
+            if (chrEl) chrEl.style.display = 'none';
+            if (iosEl) iosEl.style.display = '';
+
+        } else if (deferredPrompt) {
+            if (iosEl) iosEl.style.display = 'none';
+            if (chrEl) chrEl.style.display = '';
+            if (installBtn) installBtn.innerHTML = '<i class="fa fa-download me-2"></i>Install App';
+
+        } else {
+            // No native prompt — show browser-specific manual instructions
+            if (iosEl) iosEl.style.display = 'none';
+            if (chrEl) {
+                chrEl.style.display = '';
+                var hint = '';
+                if (isChrome || isEdge) {
+                    hint = 'Tap the <i class="fa fa-download"></i> install icon in the address bar &mdash; or tap &#8942; menu &rarr; <strong>Install App</strong> / <strong>Add to Home Screen</strong>.';
+                } else if (isFF) {
+                    hint = 'Tap the <i class="fa fa-house"></i> icon in the address bar, then <strong>Add to Home Screen</strong>.';
+                } else if (isSamsung) {
+                    hint = 'Tap &#8942; menu &rarr; <strong>Add page to</strong> &rarr; <strong>Home screen</strong>.';
+                } else if (isIOS) {
+                    hint = 'Open this page in <strong>Safari</strong>, tap the Share button, then <strong>Add to Home Screen</strong>.';
+                } else {
+                    hint = 'Use your browser menu to find <strong>Install App</strong> or <strong>Add to Home Screen</strong>.';
+                }
+                chrEl.innerHTML =
+                    '<div style="background:#eff6ff;border-radius:10px;padding:14px 16px;font-size:13px;color:#1e40af;line-height:1.7">'
+                    + hint + '</div>'
+                    + '<button id="pwaDismissManual" class="btn btn-link text-muted w-100 mt-2" style="font-size:13px">Close</button>';
+                var dm = document.getElementById('pwaDismissManual');
+                dm && dm.addEventListener('click', function () { hidePopup(true); });
+            }
+        }
+    }
+
+    // ── Install / open-popup action ──────────────────────────────────────
     function triggerInstall() {
         if (deferredPrompt) {
             hidePopup(false);
             deferredPrompt.prompt();
             deferredPrompt.userChoice.then(function (result) {
                 if (result.outcome === 'accepted') {
-                    hideTopbarBtn();
+                    if (topbarBtn) topbarBtn.classList.add('d-none');
                     if (typeof window.showToast === 'function') {
                         window.showToast('success', 'App Installed!',
                             'Launch it from your home screen or taskbar anytime.');
@@ -266,24 +296,7 @@ if ($__wa): ?>
                 deferredPrompt = null;
             });
         } else {
-            // No native prompt — show the popup with instructions
-            var chrEl = document.getElementById('pwaChromActions');
-            var iosEl = document.getElementById('pwaIosInstructions');
-            if (!isIOS) {
-                // Desktop/Android without native prompt: show browser hint
-                if (chrEl) chrEl.innerHTML =
-                    '<div style="background:#eff6ff;border-radius:10px;padding:14px 16px;font-size:13px;color:#1e40af;text-align:left">'
-                    + '<strong>How to install:</strong><br>'
-                    + '• <b>Chrome/Edge desktop</b>: click the <i class="fa fa-download"></i> icon in the address bar<br>'
-                    + '• <b>Android Chrome</b>: tap ⋮ menu → "Add to Home screen"'
-                    + '</div>'
-                    + '<button id="pwaPopupDismissBtn2" class="btn btn-link text-muted w-100 mt-2" style="font-size:13px">Close</button>';
-                var d2 = document.getElementById('pwaPopupDismissBtn2');
-                d2 && d2.addEventListener('click', function () { hidePopup(true); });
-            } else {
-                if (chrEl) chrEl.style.display = 'none';
-                if (iosEl) iosEl.style.display  = '';
-            }
+            configurePopup();
             showPopup();
         }
     }
@@ -307,9 +320,17 @@ if ($__wa): ?>
         if (e.target === overlay) hidePopup(true);
     });
 
+    // ── Auto-show popup after 3 s — works on ALL browsers, no event needed
+    if (!isDismissed()) {
+        setTimeout(function () {
+            configurePopup();
+            showPopup();
+        }, 3000);
+    }
+
     window.addEventListener('appinstalled', function () {
         hidePopup(true);
-        hideTopbarBtn();
+        if (topbarBtn) topbarBtn.classList.add('d-none');
         deferredPrompt = null;
         localStorage.removeItem(DISMISS_KEY);
     });
