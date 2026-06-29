@@ -38,6 +38,57 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// ── Remember-me auto-login ───────────────────────────────────
+if (!isset($_SESSION['auth_user']) && !empty($_COOKIE['rm_tok']) && function_exists('getDB')) {
+    try {
+        $db   = getDB();
+        $hash = hash('sha256', $_COOKIE['rm_tok']);
+        $stmt = $db->prepare("
+            SELECT rt.id AS token_id, u.id, u.name, u.username, u.role,
+                   u.linked_id, u.linked_type
+            FROM remember_tokens rt
+            JOIN users u ON u.id = rt.user_id
+            WHERE rt.token_hash = ? AND rt.expires_at > NOW() AND u.status = 'active'
+            LIMIT 1
+        ");
+        $stmt->execute([$hash]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            // Rotate the token to prevent replay attacks
+            $newToken = bin2hex(random_bytes(32));
+            $newHash  = hash('sha256', $newToken);
+            $db->prepare("DELETE FROM remember_tokens WHERE id = ?")->execute([$row['token_id']]);
+            $db->prepare("INSERT INTO remember_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))")
+               ->execute([$row['id'], $newHash]);
+            setcookie('rm_tok', $newToken, [
+                'expires'  => time() + 30 * 86400,
+                'path'     => '/',
+                'httponly' => true,
+                'samesite' => 'Lax',
+                'secure'   => isset($_SERVER['HTTPS']),
+            ]);
+            session_regenerate_id(true);
+            $_SESSION['auth_user'] = [
+                'id'          => (int)$row['id'],
+                'name'        => $row['name'],
+                'username'    => $row['username'],
+                'role'        => $row['role'],
+                'linked_id'   => $row['linked_id'],
+                'linked_type' => $row['linked_type'],
+            ];
+            $_SESSION['last_activity']    = time();
+            $_SESSION['sess_regenerated'] = time();
+            $db->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$row['id']]);
+        } else {
+            // Token expired or invalid — clear the stale cookie
+            setcookie('rm_tok', '', time() - 3600, '/', '', isset($_SERVER['HTTPS']), true);
+        }
+        unset($db, $stmt, $row, $hash, $newToken, $newHash);
+    } catch (Exception $e) {
+        // Silently fail — user signs in manually
+    }
+}
+
 // ── Session timeout (30 min inactivity) ─────────────────────
 if (isset($_SESSION['auth_user'])) {
     $timeout = 1800;

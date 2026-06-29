@@ -32,6 +32,35 @@ function hasAdminUser(): bool {
     }
 }
 
+function _issueRememberToken(PDO $db, int $userId): void {
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS remember_tokens (
+            id         INT AUTO_INCREMENT PRIMARY KEY,
+            user_id    INT NOT NULL,
+            token_hash VARCHAR(64) NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_token (token_hash),
+            KEY        idx_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Remove old tokens for this user and clean up global expired ones
+        $db->prepare("DELETE FROM remember_tokens WHERE user_id = ? OR expires_at < NOW()")->execute([$userId]);
+        $token = bin2hex(random_bytes(32));
+        $hash  = hash('sha256', $token);
+        $db->prepare("INSERT INTO remember_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))")
+           ->execute([$userId, $hash]);
+        setcookie('rm_tok', $token, [
+            'expires'  => time() + 30 * 86400,
+            'path'     => '/',
+            'httponly' => true,
+            'samesite' => 'Lax',
+            'secure'   => isset($_SERVER['HTTPS']),
+        ]);
+    } catch (Exception $e) {
+        // Non-fatal — user just won't be remembered
+    }
+}
+
 $isFirstRun = !hasAdminUser();
 $error = '';
 $setupDone = false;
@@ -117,6 +146,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         $db->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
 
+                        // Remember-me cookie
+                        if (!empty($_POST['remember_me'])) {
+                            _issueRememberToken($db, (int)$user['id']);
+                        }
+
                         $next = $_GET['next'] ?? '';
                         if ($next && str_starts_with(urldecode($next), '/')) {
                             header('Location: ' . urldecode($next));
@@ -141,6 +175,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['auth_user'] = ['id' => $user['id'], 'name' => $user['name'], 'username' => $user['username'], 'role' => $user['role'], 'linked_id' => $user['linked_id'], 'linked_type' => $user['linked_type']];
                     $_SESSION['last_activity'] = time();
                     $db->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
+                    if (!empty($_POST['remember_me'])) {
+                        _issueRememberToken($db, (int)$user['id']);
+                    }
                     header('Location: ' . BASE_URL . '/index.php'); exit;
                 } else {
                     $error = 'Invalid username or password.';
@@ -218,6 +255,9 @@ body::before {
 .field-wrap > i:first-child { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 14px; pointer-events: none; }
 .password-toggle { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); color: #94a3b8; cursor: pointer; z-index: 10; transition: color .15s; background: none; border: none; padding: 0; font-size: 14px; display: flex; align-items: center; }
 .password-toggle:hover { color: #2563eb; }
+.form-check-input { width: 16px; height: 16px; margin-top: 2px; cursor: pointer; accent-color: #2563eb; border-color: #cbd5e1; }
+.form-check-input:checked { background-color: #2563eb; border-color: #2563eb; }
+.form-check-label { font-size: 13px; color: #64748b; cursor: pointer; user-select: none; }
 .btn-login { background: linear-gradient(135deg,#2563eb,#1d4ed8); border: none; padding: 13px; font-size: 15px; font-weight: 700; border-radius: 12px; letter-spacing: .3px; transition: box-shadow .15s, transform .1s; }
 .btn-login:hover { box-shadow: 0 6px 20px rgba(37,99,235,.45); transform: translateY(-1px); }
 .first-run-badge { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #1d4ed8; margin-bottom: 18px; }
@@ -300,12 +340,18 @@ body::before {
                 <div class="field-wrap"><i class="fa fa-user"></i>
                 <input type="text" name="username" class="form-control" placeholder="Enter your username" required autocomplete="username" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"></div>
             </div>
-            <div class="mb-4">
+            <div class="mb-3">
                 <label class="form-label">Password</label>
                 <div class="field-wrap">
                     <i class="fa fa-lock"></i>
                     <input type="password" name="password" class="form-control password-input" placeholder="Enter your password" required autocomplete="current-password">
                     <button type="button" class="password-toggle"><i class="fa fa-eye"></i></button>
+                </div>
+            </div>
+            <div class="mb-4">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="remember_me" id="rememberMe" value="1"<?= !empty($_POST['remember_me']) ? ' checked' : '' ?>>
+                    <label class="form-check-label" for="rememberMe">Remember me for 30 days</label>
                 </div>
             </div>
             <button type="submit" class="btn btn-login btn-primary w-100 text-white">
