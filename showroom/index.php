@@ -166,7 +166,7 @@ include __DIR__ . '/header.php';
 
             <!-- Hero image / featured car card -->
             <div class="col-lg-6 d-none d-lg-block">
-                <?php if ($featuredAll): $fc = $featuredAll[0]; $fcImg = $fc['primary_image'] ? BASE_URL . '/uploads/cars/' . $fc['primary_image'] : null; ?>
+                <?php if ($featuredAll): $fc = $featuredAll[0]; $fcImg = $fc['primary_image'] ? thumbUrl('cars', $fc['primary_image']) : null; ?>
                 <div style="position:relative">
                     <!-- Main featured car card -->
                     <div style="background:rgba(255,255,255,.06);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:24px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.4)">
@@ -328,7 +328,7 @@ include __DIR__ . '/header.php';
 
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px">
             <?php foreach (array_slice($featuredAll, 0, 3) as $fc):
-                $fcImg = $fc['primary_image'] ? BASE_URL . '/uploads/cars/' . $fc['primary_image'] : null;
+                $fcImg = $fc['primary_image'] ? thumbUrl('cars', $fc['primary_image']) : null;
                 $waMsg = urlencode("Hi, I'm interested in the {$fc['year']} {$fc['make']} {$fc['model']} (KES " . number_format((float)$fc['asking_price']) . ").");
             ?>
             <div class="featured-card">
@@ -518,7 +518,7 @@ include __DIR__ . '/header.php';
                 <!-- Car grid -->
                 <div class="inv-grid">
                     <?php foreach ($filteredCars as $car):
-                        $img = $car['primary_image'] ? BASE_URL . '/uploads/cars/' . $car['primary_image'] : null;
+                        $img = $car['primary_image'] ? thumbUrl('cars', $car['primary_image']) : null;
                         $waMsg = urlencode("Hi, I'm interested in the {$car['year']} {$car['make']} {$car['model']} (KES " . number_format((float)$car['asking_price']) . ") listed on your showroom.");
                         $isNew = strtotime($car['created_at']) > strtotime('-30 days');
                     ?>

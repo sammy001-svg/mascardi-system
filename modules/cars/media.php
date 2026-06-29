@@ -112,7 +112,7 @@ include __DIR__ . '/../../includes/header.php';
                     <?php foreach ($images as $img): ?>
                     <div class="col">
                         <div class="card h-100 border-0 shadow-sm overflow-hidden gallery-card">
-                            <img src="<?= BASE_URL ?>/uploads/cars/<?= e($img['file_path']) ?>" class="card-img-top" style="height:150px; object-fit:cover;" loading="lazy" decoding="async">
+                            <img src="<?= thumbUrl('cars', $img['file_path']) ?>" class="card-img-top" style="height:150px; object-fit:cover;" loading="lazy" decoding="async">
                             <?php if ($img['is_primary']): ?>
                             <div class="position-absolute top-0 start-0 m-2">
                                 <span class="badge bg-primary">Primary</span>

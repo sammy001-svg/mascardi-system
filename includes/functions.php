@@ -232,8 +232,111 @@ function handleUpload(array $file, string $targetDir, array $allowedTypes = ['jp
         throw new Exception("Failed to move uploaded file.");
     }
 
+    // Auto-compress full image + generate thumbnail if GD is available
+    if (in_array($ext, ['jpg','jpeg','png','webp','gif'])) {
+        _imgProcess($targetPath, $ext, $targetDir);
+    }
+
     return $filename;
 }
+
+/**
+ * Compress/resize an uploaded image and generate a thumbnail.
+ * Full image:  max 1920×1200, quality 82 (JPEG) — typically reduces 5–15 MB → 200–600 KB
+ * Thumbnail:   max 480×360,   quality 75        — stored in targetDir/thumbs/
+ * Silently skips if GD is unavailable or the image cannot be read.
+ */
+function _imgProcess(string $filePath, string $ext, string $targetDir): void {
+    if (!function_exists('imagecreatetruecolor')) return;
+    try {
+        $src = _imgLoad($filePath, $ext);
+        if (!$src) return;
+
+        $ow = imagesx($src);
+        $oh = imagesy($src);
+
+        // ── Full image: resize to max 1920×1200, preserve aspect ────────
+        [$nw, $nh] = _imgFit($ow, $oh, 1920, 1200);
+        if ($nw < $ow || $nh < $oh) {
+            $dst = imagecreatetruecolor($nw, $nh);
+            _imgAlpha($dst, $ext);
+            imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $ow, $oh);
+            _imgSave($dst, $filePath, $ext, 82);
+            imagedestroy($dst);
+        }
+
+        // ── Thumbnail: max 480×360 ───────────────────────────────────────
+        $thumbDir = $targetDir . '/thumbs';
+        if (!is_dir($thumbDir)) @mkdir($thumbDir, 0755, true);
+        $thumbPath = $thumbDir . '/' . basename($filePath);
+
+        // Re-load (may have been re-saved above)
+        $src2 = _imgLoad($filePath, $ext);
+        if ($src2) {
+            [$tw, $th] = _imgFit(imagesx($src2), imagesy($src2), 480, 360);
+            $tdst = imagecreatetruecolor($tw, $th);
+            _imgAlpha($tdst, $ext);
+            imagecopyresampled($tdst, $src2, 0, 0, 0, 0, $tw, $th, imagesx($src2), imagesy($src2));
+            _imgSave($tdst, $thumbPath, $ext, 75);
+            imagedestroy($tdst);
+            imagedestroy($src2);
+        }
+
+        imagedestroy($src);
+    } catch (\Throwable $e) {
+        // Never fail an upload due to image processing errors
+        error_log('[imgProcess] ' . $e->getMessage());
+    }
+}
+
+function _imgLoad(string $path, string $ext) {
+    return match($ext) {
+        'jpg','jpeg' => @imagecreatefromjpeg($path),
+        'png'        => @imagecreatefrompng($path),
+        'webp'       => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($path) : false,
+        'gif'        => @imagecreatefromgif($path),
+        default      => false,
+    };
+}
+
+function _imgSave($img, string $path, string $ext, int $quality): void {
+    match($ext) {
+        'jpg','jpeg' => imagejpeg($img, $path, $quality),
+        'png'        => imagepng($img, $path, (int)round((100 - $quality) / 10)),
+        'webp'       => function_exists('imagewebp') ? imagewebp($img, $path, $quality) : imagejpeg($img, $path, $quality),
+        'gif'        => imagegif($img, $path),
+        default      => imagejpeg($img, $path, $quality),
+    };
+}
+
+function _imgAlpha($img, string $ext): void {
+    if (in_array($ext, ['png','webp','gif'])) {
+        imagealphablending($img, false);
+        imagesavealpha($img, true);
+        $transparent = imagecolorallocatealpha($img, 0, 0, 0, 127);
+        imagefill($img, 0, 0, $transparent);
+        imagealphablending($img, true);
+    }
+}
+
+function _imgFit(int $w, int $h, int $maxW, int $maxH): array {
+    if ($w <= $maxW && $h <= $maxH) return [$w, $h];
+    $ratio = min($maxW / $w, $maxH / $h);
+    return [max(1, (int)round($w * $ratio)), max(1, (int)round($h * $ratio))];
+}
+
+/**
+ * Return the thumbnail URL for an uploaded file, falling back to full if thumb missing.
+ * Usage: thumbUrl('cars', $filename)  →  BASE_URL/uploads/cars/thumbs/abc.jpg
+ */
+function thumbUrl(string $subDir, string $filename): string {
+    $thumbFile = BASE_PATH . '/uploads/' . $subDir . '/thumbs/' . $filename;
+    if ($filename && file_exists($thumbFile)) {
+        return BASE_URL . '/uploads/' . $subDir . '/thumbs/' . $filename;
+    }
+    return BASE_URL . '/uploads/' . $subDir . '/' . $filename;
+}
+
 /**
  * Internal helper to convert number to words without currency wrapper
  */

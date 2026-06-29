@@ -19,7 +19,7 @@ if (!$car) { header('Location: ' . BASE_URL . '/showroom/'); exit; }
 $images = $db->prepare("SELECT * FROM car_images WHERE car_id=? ORDER BY is_primary DESC, id ASC");
 $images->execute([$id]);
 $images = $images->fetchAll(PDO::FETCH_ASSOC);
-$primaryImg = $images ? BASE_URL . '/uploads/cars/' . $images[0]['file_path'] : null;
+$primaryImg = $images ? thumbUrl('cars', $images[0]['file_path']) : null;
 
 // Similar vehicles (same make or body type, excluding this car)
 $similar = $db->prepare("
@@ -171,7 +171,7 @@ include __DIR__ . '/header.php';
                     <button class="vg-thumb <?= $i === 0 ? 'active' : '' ?>"
                             onclick="selectPhoto(<?= $i ?>)"
                             data-src="<?= BASE_URL . '/uploads/cars/' . htmlspecialchars($img['file_path']) ?>">
-                        <img src="<?= BASE_URL . '/uploads/cars/' . htmlspecialchars($img['file_path']) ?>" alt="Photo <?= $i+1 ?>" loading="lazy" decoding="async">
+                        <img src="<?= thumbUrl('cars', $img['file_path']) ?>" alt="Photo <?= $i+1 ?>" loading="lazy" decoding="async">
                     </button>
                     <?php endforeach; ?>
                 </div>
@@ -392,7 +392,7 @@ include __DIR__ . '/header.php';
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px">
             <?php foreach ($similar as $sv):
-                $svImg = $sv['primary_image'] ? BASE_URL . '/uploads/cars/' . $sv['primary_image'] : null;
+                $svImg = $sv['primary_image'] ? thumbUrl('cars', $sv['primary_image']) : null;
             ?>
             <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $sv['id'] ?>" class="vsim-card">
                 <div class="vsim-img">

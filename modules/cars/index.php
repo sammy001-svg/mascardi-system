@@ -136,7 +136,7 @@ include __DIR__ . '/../../includes/header.php';
                     <td class="ps-3">
                         <div class="d-flex align-items-center gap-2">
                             <?php if ($car['primary_image']): ?>
-                            <img src="<?= BASE_URL ?>/uploads/cars/<?= e($car['primary_image']) ?>"
+                            <img src="<?= thumbUrl('cars', $car['primary_image']) ?>"
                                  class="rounded border shadow-sm" style="width:50px;height:40px;object-fit:cover"
                                  loading="lazy" decoding="async" width="50" height="40">
                             <?php else: ?>

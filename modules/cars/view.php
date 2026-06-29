@@ -93,7 +93,7 @@ include __DIR__ . '/../../includes/header.php';
                         if($thumbCount >= 6) break;
                     ?>
                     <div class="col-4">
-                        <img src="<?= BASE_URL ?>/uploads/cars/<?= e($img['file_path']) ?>" class="img-fluid rounded border shadow-sm" style="height:80px; width:100%; object-fit:cover;" loading="lazy" decoding="async" width="120" height="80">
+                        <img src="<?= thumbUrl('cars', $img['file_path']) ?>" class="img-fluid rounded border shadow-sm" style="height:80px; width:100%; object-fit:cover;" loading="lazy" decoding="async" width="120" height="80">
                     </div>
                     <?php $thumbCount++; endforeach; ?>
                     <?php if (count($images) > 7): ?>
