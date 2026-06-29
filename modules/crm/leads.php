@@ -228,6 +228,54 @@ $stages = [
     'delivered' => ['Delivered', 'success'],
 ];
 
+// ── Duplicate scan (admin / super_admin only, once per session) ───────────────
+$systemDuplicates = [];
+if (in_array($me['role'], ['admin','super_admin']) && empty($_GET['skip_dup_scan'])) {
+    try {
+        // Find leads that share a normalised phone suffix (last 9 digits) — most reliable duplicate signal
+        $dupRows = $db->query("
+            SELECT a.id AS id_a, a.name AS name_a, a.phone AS phone_a, a.stage AS stage_a,
+                   b.id AS id_b, b.name AS name_b, b.phone AS phone_b, b.stage AS stage_b
+            FROM crm_leads a
+            JOIN crm_leads b ON b.id > a.id
+            WHERE a.phone IS NOT NULL AND a.phone <> ''
+              AND b.phone IS NOT NULL AND b.phone <> ''
+              AND LENGTH(REGEXP_REPLACE(a.phone,'[^0-9]','')) >= 7
+              AND RIGHT(REGEXP_REPLACE(a.phone,'[^0-9]',''),9)
+                  = RIGHT(REGEXP_REPLACE(b.phone,'[^0-9]',''),9)
+            LIMIT 20
+        ")->fetchAll();
+        $systemDuplicates = $dupRows;
+    } catch (\Throwable $_) {
+        // REGEXP_REPLACE not available (MySQL < 8) — fall back to exact phone match
+        try {
+            $dupRows = $db->query("
+                SELECT a.id AS id_a, a.name AS name_a, a.phone AS phone_a, a.stage AS stage_a,
+                       b.id AS id_b, b.name AS name_b, b.phone AS phone_b, b.stage AS stage_b
+                FROM crm_leads a
+                JOIN crm_leads b ON b.id > a.id
+                WHERE a.phone IS NOT NULL AND a.phone <> ''
+                  AND a.phone = b.phone
+                LIMIT 20
+            ")->fetchAll();
+            $systemDuplicates = $dupRows;
+        } catch (\Throwable $_) {}
+    }
+
+    // Send in-app notifications to admin + super_admin for each duplicate pair (once)
+    if ($systemDuplicates) {
+        require_once __DIR__ . '/../../includes/notifications.php';
+        foreach ($systemDuplicates as $pair) {
+            notifyRoles(['admin','super_admin'], 'warning',
+                'Duplicate Leads Detected',
+                '"' . $pair['name_a'] . '" (#' . $pair['id_a'] . ') and "'
+                    . $pair['name_b'] . '" (#' . $pair['id_b'] . ') have the same phone number. Please delete one.',
+                BASE_URL . '/modules/crm/leads.php'
+            );
+        }
+    }
+}
+
 $sources = [
     'walk_in'    => 'Walk-in',    'referral'  => 'Referral',
     'facebook'   => 'Facebook',   'instagram' => 'Instagram',
@@ -260,6 +308,44 @@ include __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
     </div>
 </div>
+
+<?php if (!empty($systemDuplicates)): ?>
+<!-- ── Duplicate leads alert (admin / super_admin) ─────────────────────── -->
+<div class="alert alert-warning border-warning mb-3 shadow-sm" id="dupSystemAlert">
+    <div class="d-flex align-items-start gap-2">
+        <i class="fa fa-triangle-exclamation fa-lg mt-1 text-warning flex-shrink-0"></i>
+        <div class="flex-grow-1">
+            <strong><?= count($systemDuplicates) ?> duplicate lead pair<?= count($systemDuplicates) > 1 ? 's' : '' ?> found in the system.</strong>
+            <p class="mb-2 mt-1" style="font-size:13px">
+                The following leads share the same phone number. Please review and delete the unwanted entry.
+            </p>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0" style="font-size:12.5px;background:#fff">
+                    <thead class="table-light">
+                        <tr><th>#</th><th>Lead A</th><th>Phone</th><th>Stage</th><th></th><th>Lead B</th><th>Phone</th><th>Stage</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($systemDuplicates as $i => $pair): ?>
+                    <tr>
+                        <td class="text-muted"><?= $i + 1 ?></td>
+                        <td class="fw-semibold"><?= e($pair['name_a']) ?> <small class="text-muted">#<?= $pair['id_a'] ?></small></td>
+                        <td><?= e($pair['phone_a']) ?></td>
+                        <td><span class="badge bg-secondary"><?= ucfirst($pair['stage_a']) ?></span></td>
+                        <td><a href="view_lead.php?id=<?= $pair['id_a'] ?>" class="btn btn-xs btn-outline-primary" target="_blank">View</a></td>
+                        <td class="fw-semibold"><?= e($pair['name_b']) ?> <small class="text-muted">#<?= $pair['id_b'] ?></small></td>
+                        <td><?= e($pair['phone_b']) ?></td>
+                        <td><span class="badge bg-secondary"><?= ucfirst($pair['stage_b']) ?></span></td>
+                        <td><a href="view_lead.php?id=<?= $pair['id_b'] ?>" class="btn btn-xs btn-outline-primary" target="_blank">View</a></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <button type="button" class="btn-close" onclick="document.getElementById('dupSystemAlert').remove()"></button>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Filters -->
 <div class="card mb-3">
