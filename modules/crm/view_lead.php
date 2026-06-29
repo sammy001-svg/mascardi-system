@@ -7,6 +7,12 @@ $pageTitle = 'Lead';
 $db  = getDB();
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN pinned_car_id INT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN lead_score TINYINT UNSIGNED DEFAULT 0"); } catch (\Throwable $_) {}
+// Test drive & car extended fields
+try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN driver_id_no VARCHAR(50) NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN kd_number VARCHAR(50) NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN chassis_number VARCHAR(100) NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN entry_number VARCHAR(100) NULL"); } catch (\Throwable $_) {}
 require_once __DIR__ . '/crm_helpers.php';
 $id  = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/crm/leads.php');
@@ -181,35 +187,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'schedule_test_drive' && canWrite('crm')) {
-        $tdDate  = trim($_POST['td_date'] ?? '');
-        $tdTime  = trim($_POST['td_time'] ?? '');
-        $tdCarId = (int)($_POST['td_car_id'] ?? 0) ?: null;
-        $tdNotes = trim($_POST['td_notes'] ?? '') ?: null;
-        $tdDur   = (int)($_POST['td_duration'] ?? 60);
+        $tdDate      = trim($_POST['td_date']         ?? '');
+        $tdTime      = trim($_POST['td_time']         ?? '');
+        $tdCarId     = (int)($_POST['td_car_id']      ?? 0) ?: null;
+        $tdNotes     = trim($_POST['td_notes']        ?? '') ?: null;
+        $tdDur       = (int)($_POST['td_duration']    ?? 60);
+        $tdDriverId  = trim($_POST['td_driver_id_no'] ?? '') ?: null;
+        $tdKdNum     = trim($_POST['td_kd_number']    ?? '') ?: null;
+        $tdChassis   = trim($_POST['td_chassis_number'] ?? '') ?: null;
+        $tdEntry     = trim($_POST['td_entry_number'] ?? '') ?: null;
 
-        if ($tdDate && $tdTime) {
-            try {
-                $db->prepare("CREATE TABLE IF NOT EXISTS crm_test_drives (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    lead_id INT NOT NULL, car_id INT NULL,
-                    scheduled_date DATE NOT NULL, scheduled_time TIME NOT NULL,
-                    duration_minutes INT DEFAULT 60,
-                    status ENUM('scheduled','completed','no_show','cancelled') DEFAULT 'scheduled',
-                    notes TEXT NULL, outcome TEXT NULL,
-                    created_by INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                )")->execute([]);
-            } catch (\Throwable $_) {}
+        if (!$tdDate || !$tdTime) {
+            setFlash('error', 'Date and time are required.');
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+        }
+        if (!$tdDriverId || !$tdKdNum) {
+            setFlash('error', 'Driver ID number and KD number are required.');
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+        }
 
-            try {
-                $db->prepare("INSERT INTO crm_test_drives (lead_id, car_id, scheduled_date, scheduled_time, duration_minutes, notes, created_by) VALUES (?,?,?,?,?,?,?)")
-                   ->execute([$id, $tdCarId, $tdDate, $tdTime, $tdDur, $tdNotes, $uid]);
-                $db->prepare("INSERT INTO crm_activities (lead_id, type, summary, created_by) VALUES (?,?,?,?)")
-                   ->execute([$id, 'test_drive', "Test drive scheduled for {$tdDate} at {$tdTime}", $uid]);
-                setFlash('success', 'Test drive scheduled.');
-            } catch (\Throwable $e) {
-                setFlash('error', 'Could not schedule: ' . $e->getMessage());
-            }
+        try {
+            $db->prepare("CREATE TABLE IF NOT EXISTS crm_test_drives (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                lead_id INT NOT NULL, car_id INT NULL,
+                scheduled_date DATE NOT NULL, scheduled_time TIME NOT NULL,
+                duration_minutes INT DEFAULT 60,
+                status ENUM('scheduled','completed','no_show','cancelled') DEFAULT 'scheduled',
+                notes TEXT NULL, outcome TEXT NULL,
+                created_by INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )")->execute([]);
+        } catch (\Throwable $_) {}
+
+        try {
+            $db->prepare("
+                INSERT INTO crm_test_drives
+                    (lead_id, car_id, scheduled_date, scheduled_time, duration_minutes,
+                     driver_id_no, kd_number, chassis_number, entry_number, notes, created_by)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            ")->execute([$id, $tdCarId, $tdDate, $tdTime, $tdDur,
+                         $tdDriverId, $tdKdNum, $tdChassis, $tdEntry, $tdNotes, $uid]);
+
+            $tdNewId = (int)$db->lastInsertId();
+            $car = $tdCarId ? $db->prepare("SELECT make, model, registration_number FROM cars WHERE id=?")->execute([$tdCarId]) : null;
+            $carDesc = $tdCarId ? (function() use ($db, $tdCarId) {
+                $r = $db->prepare("SELECT make, model, registration_number FROM cars WHERE id=?");
+                $r->execute([$tdCarId]); $r = $r->fetch();
+                return $r ? "{$r['make']} {$r['model']}" . ($r['registration_number'] ? " ({$r['registration_number']})" : '') : '';
+            })() : '';
+
+            $db->prepare("INSERT INTO crm_activities (lead_id, type, summary, created_by) VALUES (?,?,?,?)")
+               ->execute([$id, 'test_drive',
+                   "Test drive scheduled: {$tdDate} at {$tdTime}" . ($carDesc ? " — {$carDesc}" : ''),
+                   $uid]);
+
+            setFlash('success', 'Test drive scheduled. <a href="' . BASE_URL . '/modules/crm/test_drive_slip.php?id=' . $tdNewId . '" target="_blank" class="alert-link">Print Slip</a>');
+        } catch (\Throwable $e) {
+            setFlash('error', 'Could not schedule: ' . $e->getMessage());
         }
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
     }
@@ -229,12 +263,14 @@ $activities->execute([$id]); $activities = $activities->fetchAll();
 $testDrives = [];
 try {
     $tdStmt = $db->prepare("
-        SELECT td.*, c.make, c.model, c.registration_number
+        SELECT td.*,
+               c.make, c.model, c.registration_number, c.year AS car_year, c.color AS car_color,
+               c.chassis_number AS car_chassis, c.entry_number AS car_entry
         FROM crm_test_drives td
         LEFT JOIN cars c ON c.id = td.car_id
         WHERE td.lead_id = ?
         ORDER BY td.scheduled_date DESC, td.scheduled_time DESC
-        LIMIT 5
+        LIMIT 20
     ");
     $tdStmt->execute([$id]);
     $testDrives = $tdStmt->fetchAll();
@@ -755,20 +791,50 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
             <ul class="list-group list-group-flush" style="font-size:12.5px">
                 <?php foreach ($testDrives as $td):
                     $tdColors = ['scheduled'=>'primary','completed'=>'success','no_show'=>'danger','cancelled'=>'secondary'];
-                    $tdColor = $tdColors[$td['status']] ?? 'secondary';
+                    $tdColor  = $tdColors[$td['status']] ?? 'secondary';
+                    $chassis  = $td['chassis_number'] ?: $td['car_chassis'] ?? '';
+                    $entry    = $td['entry_number']   ?: $td['car_entry']   ?? '';
                 ?>
                 <li class="list-group-item py-2">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="fw-semibold"><?= date('d M Y', strtotime($td['scheduled_date'])) ?> at <?= date('H:i', strtotime($td['scheduled_time'])) ?></div>
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold">
+                                <?= date('d M Y', strtotime($td['scheduled_date'])) ?>
+                                at <?= date('H:i', strtotime($td['scheduled_time'])) ?>
+                                <span class="text-muted fw-normal">(<?= $td['duration_minutes'] ?> min)</span>
+                            </div>
                             <?php if ($td['make']): ?>
-                            <div class="text-muted small"><?= e($td['make'].' '.$td['model']) ?><?= $td['registration_number'] ? ' ('.$td['registration_number'].')' : '' ?></div>
+                            <div class="text-muted small">
+                                <?= e($td['make'].' '.$td['model']) ?>
+                                <?= $td['registration_number'] ? ' · '.e($td['registration_number']) : '' ?>
+                                <?= $td['car_year'] ? ' · '.e($td['car_year']) : '' ?>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($chassis || $entry): ?>
+                            <div class="text-muted small">
+                                <?php if ($chassis): ?><span title="Chassis">Chassis: <code><?= e($chassis) ?></code></span><?php endif; ?>
+                                <?php if ($chassis && $entry): ?> &nbsp;·&nbsp; <?php endif; ?>
+                                <?php if ($entry): ?><span title="Entry No">Entry: <code><?= e($entry) ?></code></span><?php endif; ?>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($td['driver_id_no'] || $td['kd_number']): ?>
+                            <div class="text-muted small">
+                                <?php if ($td['driver_id_no']): ?>ID: <?= e($td['driver_id_no']) ?><?php endif; ?>
+                                <?php if ($td['driver_id_no'] && $td['kd_number']): ?> &nbsp;·&nbsp; <?php endif; ?>
+                                <?php if ($td['kd_number']): ?>KD: <?= e($td['kd_number']) ?><?php endif; ?>
+                            </div>
                             <?php endif; ?>
                             <?php if ($td['outcome']): ?>
                             <div class="text-muted small fst-italic mt-1"><?= e($td['outcome']) ?></div>
                             <?php endif; ?>
                         </div>
-                        <span class="badge bg-<?= $tdColor ?>"><?= ucfirst(str_replace('_',' ',$td['status'])) ?></span>
+                        <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+                            <span class="badge bg-<?= $tdColor ?>"><?= ucfirst(str_replace('_',' ',$td['status'])) ?></span>
+                            <a href="<?= BASE_URL ?>/modules/crm/test_drive_slip.php?id=<?= $td['id'] ?>"
+                               target="_blank" class="btn btn-xs btn-outline-secondary" style="font-size:10px;padding:2px 7px">
+                                <i class="fa fa-print me-1"></i>Slip
+                            </a>
+                        </div>
                     </div>
                 </li>
                 <?php endforeach; ?>
@@ -967,39 +1033,68 @@ document.getElementById('confirmLost') && document.getElementById('confirmLost')
 
 <!-- Schedule Test Drive Modal -->
 <div class="modal fade" id="scheduleTdModal" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h6 class="modal-title"><i class="fa fa-car-side me-2"></i>Schedule Test Drive — <?= e($lead['name']) ?></h6>
+        <h6 class="modal-title"><i class="fa fa-car-side me-2 text-primary"></i>Schedule Test Drive — <?= e($lead['name']) ?></h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form method="POST">
         <input type="hidden" name="action" value="schedule_test_drive">
         <div class="modal-body">
           <div class="row g-3">
+
+            <!-- ── Vehicle ─────────────────────────────────────────── -->
             <div class="col-12">
-              <label class="form-label fw-semibold">Vehicle</label>
-              <select name="td_car_id" class="form-select form-select-sm">
-                <option value="">— Select from inventory (optional) —</option>
+              <label class="form-label fw-semibold">Vehicle <span class="text-danger">*</span></label>
+              <select name="td_car_id" id="tdCarSelect" class="form-select form-select-sm" required>
+                <option value="">— Select from inventory —</option>
                 <?php
                 try {
-                    $availCars = $db->query("SELECT id, make, model, registration_number FROM cars WHERE car_type='inventory' ORDER BY make, model LIMIT 100")->fetchAll();
+                    $availCars = $db->query("
+                        SELECT id, make, model, year, color, registration_number,
+                               chassis_number, COALESCE(entry_number,'') AS entry_number
+                        FROM cars WHERE status='available' ORDER BY make, model LIMIT 200
+                    ")->fetchAll();
                     foreach ($availCars as $ac):
                         $sel = ($lead['pinned_car_id'] == $ac['id']) ? 'selected' : '';
+                        $label = e(trim($ac['make'].' '.$ac['model'].' '.($ac['year']??'')) . ($ac['registration_number'] ? ' ('.$ac['registration_number'].')' : ''));
                 ?>
-                <option value="<?= $ac['id'] ?>" <?= $sel ?>><?= e($ac['make'].' '.$ac['model'].' '.($ac['registration_number']?'('.$ac['registration_number'].')':'')) ?></option>
+                <option value="<?= $ac['id'] ?>" <?= $sel ?>
+                        data-chassis="<?= e($ac['chassis_number'] ?? '') ?>"
+                        data-entry="<?= e($ac['entry_number'] ?? '') ?>"
+                        data-reg="<?= e($ac['registration_number'] ?? '') ?>">
+                  <?= $label ?>
+                </option>
                 <?php endforeach; } catch (\Throwable $_) {} ?>
               </select>
             </div>
-            <div class="col-6">
-              <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
-              <input type="date" name="td_date" class="form-control form-control-sm" min="<?= date('Y-m-d') ?>" required>
+
+            <!-- ── Auto-filled vehicle details ────────────────────── -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Chassis Number</label>
+              <input type="text" name="td_chassis_number" id="tdChassisNum"
+                     class="form-control form-control-sm" readonly
+                     placeholder="Auto-filled from vehicle">
             </div>
-            <div class="col-6">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Entry Number</label>
+              <input type="text" name="td_entry_number" id="tdEntryNum"
+                     class="form-control form-control-sm" readonly
+                     placeholder="Auto-filled from vehicle">
+            </div>
+
+            <!-- ── Date / Time / Duration ──────────────────────────── -->
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
+              <input type="date" name="td_date" class="form-control form-control-sm"
+                     min="<?= date('Y-m-d') ?>" required>
+            </div>
+            <div class="col-md-4">
               <label class="form-label fw-semibold">Time <span class="text-danger">*</span></label>
               <input type="time" name="td_time" class="form-control form-control-sm" required value="10:00">
             </div>
-            <div class="col-12">
+            <div class="col-md-4">
               <label class="form-label fw-semibold">Duration</label>
               <select name="td_duration" class="form-select form-select-sm">
                 <option value="30">30 minutes</option>
@@ -1008,20 +1103,56 @@ document.getElementById('confirmLost') && document.getElementById('confirmLost')
                 <option value="120">2 hours</option>
               </select>
             </div>
+
+            <!-- ── Driver details ──────────────────────────────────── -->
+            <div class="col-12"><hr class="my-0"><small class="text-muted fw-semibold text-uppercase" style="font-size:10px;letter-spacing:.06em">Driver Details</small></div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Driver National ID No <span class="text-danger">*</span></label>
+              <input type="text" name="td_driver_id_no" class="form-control form-control-sm"
+                     placeholder="e.g. 12345678" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">KD Number (Driver's Licence) <span class="text-danger">*</span></label>
+              <input type="text" name="td_kd_number" class="form-control form-control-sm"
+                     placeholder="e.g. KD12345678A" required>
+            </div>
+
+            <!-- ── Notes ───────────────────────────────────────────── -->
             <div class="col-12">
               <label class="form-label fw-semibold">Notes</label>
-              <textarea name="td_notes" class="form-control form-control-sm" rows="2" placeholder="Any special notes for the test drive…"></textarea>
+              <textarea name="td_notes" class="form-control form-control-sm" rows="2"
+                        placeholder="Any special notes for the test drive…"></textarea>
             </div>
+
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary btn-sm"><i class="fa fa-calendar-check me-1"></i>Schedule</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="fa fa-calendar-check me-1"></i>Schedule &amp; Save
+          </button>
         </div>
       </form>
     </div>
   </div>
 </div>
+
+<script>
+// Auto-fill chassis + entry number when vehicle is selected
+(function () {
+    var sel     = document.getElementById('tdCarSelect');
+    var chassis = document.getElementById('tdChassisNum');
+    var entry   = document.getElementById('tdEntryNum');
+    if (!sel) return;
+    function fill() {
+        var opt = sel.options[sel.selectedIndex];
+        chassis.value = opt ? (opt.dataset.chassis || '') : '';
+        entry.value   = opt ? (opt.dataset.entry   || '') : '';
+    }
+    sel.addEventListener('change', fill);
+    fill(); // fill on load if car pre-selected
+}());
+</script>
 
 <!-- WhatsApp Templates Modal -->
 <?php if ($lead['phone']): ?>
