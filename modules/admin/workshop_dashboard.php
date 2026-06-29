@@ -9,10 +9,13 @@ $db = getDB();
 // ── KPI Stats ──────────────────────────────────────────────────────────────
 $s = [];
 try {
-    // Revenue from service-booking payments (confirmed)
+    // Total service revenue: direct booking payments + payments on service-job invoices
     $s['total_revenue']     = (float)$db->query("
-        SELECT COALESCE(SUM(amount),0) FROM payments
-        WHERE service_booking_id IS NOT NULL AND status='confirmed'
+        SELECT COALESCE(SUM(p.amount),0)
+        FROM payments p
+        LEFT JOIN invoices i ON i.id = p.invoice_id
+        WHERE p.status = 'confirmed'
+          AND (p.service_booking_id IS NOT NULL OR i.job_id IS NOT NULL)
     ")->fetchColumn();
 
     // Bookings today (by preferred_date or booking_date)
@@ -45,11 +48,15 @@ try {
           AND MONTH(updated_at)=MONTH(NOW()) AND YEAR(updated_at)=YEAR(NOW())
     ")->fetchColumn();
 
-    // Revenue this month only (for month-on-month context)
+    // Service revenue this month: direct booking payments + service-job invoice payments
     $s['revenue_month']     = (float)$db->query("
-        SELECT COALESCE(SUM(amount),0) FROM payments
-        WHERE service_booking_id IS NOT NULL AND status='confirmed'
-          AND MONTH(payment_date)=MONTH(NOW()) AND YEAR(payment_date)=YEAR(NOW())
+        SELECT COALESCE(SUM(p.amount),0)
+        FROM payments p
+        LEFT JOIN invoices i ON i.id = p.invoice_id
+        WHERE p.status = 'confirmed'
+          AND (p.service_booking_id IS NOT NULL OR i.job_id IS NOT NULL)
+          AND MONTH(p.payment_date) = MONTH(NOW())
+          AND YEAR(p.payment_date)  = YEAR(NOW())
     ")->fetchColumn();
 
     // Overdue jobs
@@ -59,20 +66,30 @@ try {
           AND end_date < CURDATE() AND end_date IS NOT NULL
     ")->fetchColumn();
 
+    // Vehicles currently in workshop
+    $s['in_workshop']       = (int)$db->query("
+        SELECT COUNT(*) FROM cars WHERE status = 'in_workshop'
+    ")->fetchColumn();
+
 } catch (\Throwable $_) {
     foreach (['total_revenue','bookings_today','pending_bookings','low_stock',
-              'active_jobs','completed_month','revenue_month','overdue_jobs'] as $k) $s[$k] = 0;
+              'active_jobs','completed_month','revenue_month','overdue_jobs','in_workshop'] as $k) $s[$k] = 0;
 }
 
-// ── Recent Payments (service bookings) ────────────────────────────────────
+// ── Recent Payments (service bookings + service-job invoices) ─────────────
 try {
     $recentPayments = $db->query("
         SELECT p.id, p.payment_number, p.payment_date, p.amount, p.payment_method,
                p.status, p.client_name, p.reference_number,
-               sb.booking_number, sb.service_type, sb.car_registration
+               COALESCE(sb.booking_number, i.invoice_number) AS booking_number,
+               COALESCE(sb.service_type, 'Invoice Payment') AS service_type,
+               COALESCE(sb.car_registration, c.registration_number) AS car_registration
         FROM payments p
         LEFT JOIN service_bookings sb ON sb.id = p.service_booking_id
-        WHERE p.service_booking_id IS NOT NULL
+        LEFT JOIN invoices i ON i.id = p.invoice_id
+        LEFT JOIN cars c ON c.id = i.car_id
+        WHERE p.status = 'confirmed'
+          AND (p.service_booking_id IS NOT NULL OR i.job_id IS NOT NULL)
         ORDER BY p.created_at DESC LIMIT 8
     ")->fetchAll(PDO::FETCH_ASSOC);
 } catch (\Throwable $_) { $recentPayments = []; }
@@ -132,12 +149,14 @@ try {
 // ── Monthly revenue trend (last 6 months, line chart) ─────────────────────
 try {
     $revRows = $db->query("
-        SELECT DATE_FORMAT(payment_date,'%b %Y') AS mo,
-               DATE_FORMAT(payment_date,'%Y-%m') AS mo_key,
-               SUM(amount) AS total
-        FROM payments
-        WHERE service_booking_id IS NOT NULL AND status='confirmed'
-          AND payment_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
+        SELECT DATE_FORMAT(p.payment_date,'%b %Y') AS mo,
+               DATE_FORMAT(p.payment_date,'%Y-%m') AS mo_key,
+               SUM(p.amount) AS total
+        FROM payments p
+        LEFT JOIN invoices i ON i.id = p.invoice_id
+        WHERE p.status = 'confirmed'
+          AND (p.service_booking_id IS NOT NULL OR i.job_id IS NOT NULL)
+          AND p.payment_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
         GROUP BY mo_key ORDER BY mo_key ASC
     ")->fetchAll(PDO::FETCH_ASSOC);
 } catch (\Throwable $_) { $revRows = []; }
@@ -163,6 +182,29 @@ try {
 $donutLabels = ['Pending','In Progress','Waiting Parts','On Hold'];
 $donutKeys   = ['pending','in_progress','waiting_parts','on_hold'];
 $donutData   = array_map(fn($k) => (int)($jobStatuses[$k] ?? 0), $donutKeys);
+
+// ── Vehicles currently in workshop with active job details ─────────────────
+try {
+    $workshopVehicles = $db->query("
+        SELECT c.id AS car_id, c.make, c.model, c.registration_number,
+               c.chassis_number, c.owner_name,
+               wj.id AS job_id, wj.job_number, wj.status AS job_status,
+               wj.priority, wj.start_date, wj.end_date,
+               m.name AS mechanic_name,
+               sb.service_type, sb.booking_number
+        FROM cars c
+        LEFT JOIN workshop_jobs wj ON wj.car_id = c.id
+              AND wj.status NOT IN ('completed','cancelled')
+        LEFT JOIN mechanics m ON m.id = wj.mechanic_id
+        LEFT JOIN service_bookings sb ON sb.id = (
+            SELECT id FROM service_bookings
+            WHERE car_id = c.id AND status NOT IN ('cancelled','completed')
+            ORDER BY created_at DESC LIMIT 1
+        )
+        WHERE c.status = 'in_workshop'
+        ORDER BY wj.priority DESC, c.created_at DESC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $_) { $workshopVehicles = []; }
 
 // ── Chart payload ─────────────────────────────────────────────────────────
 $chartPayload = json_encode([
@@ -369,15 +411,17 @@ function fmtMoney($v) { return 'KSh ' . number_format($v, 0); }
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="admin-kpi-card">
-            <div class="kpi-icon-wrap" style="background:#f0fdf4">
-                <i class="fa fa-calendar-alt" style="color:#16a34a"></i>
+        <a href="<?= BASE_URL ?>/modules/cars/index.php?section=workshop" style="text-decoration:none">
+        <div class="admin-kpi-card" style="<?= $s['in_workshop'] > 0 ? 'border-color:#fcd34d' : '' ?>">
+            <div class="kpi-icon-wrap" style="background:#fef3c7">
+                <i class="fa fa-screwdriver-wrench" style="color:#f59e0b"></i>
             </div>
             <div>
-                <div class="kpi-value"><?= count($upcomingBookings) ?></div>
-                <div class="kpi-label">Upcoming Bookings</div>
+                <div class="kpi-value" style="<?= $s['in_workshop'] > 0 ? 'color:#d97706' : '' ?>"><?= $s['in_workshop'] ?></div>
+                <div class="kpi-label">Vehicles In Workshop</div>
             </div>
         </div>
+        </a>
     </div>
 </div>
 
@@ -387,9 +431,9 @@ function fmtMoney($v) { return 'KSh ' . number_format($v, 0); }
         <div class="chart-card h-100">
             <div class="section-header mb-3">
                 <h2><i class="fa fa-chart-pie me-2" style="color:#2563eb"></i>Active Job Status</h2>
-                <span style="font-size:12px;color:var(--text-3)"><?= $s['active_jobs'] ?> active</span>
+                <span style="font-size:12px;color:var(--text-3)"><?= $s['active_jobs'] ?> active &bull; <?= $s['in_workshop'] ?> in workshop</span>
             </div>
-            <div style="height:240px;position:relative">
+            <div style="height:220px;position:relative">
                 <canvas id="donutJobStatus"></canvas>
             </div>
         </div>
@@ -398,13 +442,121 @@ function fmtMoney($v) { return 'KSh ' . number_format($v, 0); }
         <div class="chart-card h-100">
             <div class="section-header mb-3">
                 <h2><i class="fa fa-chart-line me-2" style="color:#2563eb"></i>Monthly Service Revenue</h2>
-                <span style="font-size:12px;color:var(--text-3)">Last 6 months</span>
+                <span style="font-size:12px;color:var(--text-3)">Last 6 months &bull; bookings + invoiced jobs</span>
             </div>
-            <div style="height:240px;position:relative">
+            <div style="height:220px;position:relative">
                 <canvas id="lineRevenue"></canvas>
             </div>
         </div>
     </div>
+</div>
+
+<!-- ── Vehicles In Workshop ────────────────────────────────────────────────── -->
+<div class="chart-card mb-4">
+    <div class="section-header">
+        <h2><i class="fa fa-screwdriver-wrench me-2" style="color:#f59e0b"></i>Vehicles Currently In Workshop</h2>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge" style="background:#fef3c7;color:#b45309"><?= $s['in_workshop'] ?> vehicle<?= $s['in_workshop'] !== 1 ? 's' : '' ?></span>
+            <a href="<?= BASE_URL ?>/modules/cars/index.php?section=workshop" class="btn btn-sm btn-outline-warning">View All</a>
+        </div>
+    </div>
+    <?php if (empty($workshopVehicles)): ?>
+    <div style="padding:40px;text-align:center;color:var(--text-3)">
+        <i class="fa fa-screwdriver-wrench fa-2x mb-2 d-block" style="color:#e2e8f0"></i>
+        No vehicles currently in the workshop
+    </div>
+    <?php else: ?>
+    <div class="table-responsive">
+        <table class="table mb-0" style="font-size:12.5px">
+            <thead>
+                <tr style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3)">
+                    <th class="ps-0">Vehicle</th>
+                    <th>Registration</th>
+                    <th>Service / Booking</th>
+                    <th>Job Card</th>
+                    <th>Mechanic</th>
+                    <th>Priority</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($workshopVehicles as $v):
+                    $jobStatus = $v['job_status'] ?? 'pending';
+                    $isOverdue = !empty($v['end_date']) && $v['end_date'] < date('Y-m-d');
+                    $pri = strtolower($v['priority'] ?? 'medium');
+                    $priColor = in_array($pri, ['urgent','critical','high']) ? '#ef4444'
+                              : ($pri === 'medium' ? '#eab308' : '#22c55e');
+                ?>
+                <tr>
+                    <td class="ps-0">
+                        <div class="fw-semibold"><?= e(trim($v['make'] . ' ' . $v['model'])) ?></div>
+                        <?php if ($v['owner_name']): ?>
+                        <div style="color:var(--text-3);font-size:11px"><?= e($v['owner_name']) ?></div>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <span style="font-weight:600"><?= e($v['registration_number'] ?: '—') ?></span>
+                        <?php if ($v['chassis_number']): ?>
+                        <div style="color:var(--text-3);font-size:10px"><?= e($v['chassis_number']) ?></div>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($v['service_type']): ?>
+                        <div style="font-size:11.5px"><?= e($v['service_type']) ?></div>
+                        <?php endif; ?>
+                        <?php if ($v['booking_number']): ?>
+                        <div style="color:var(--text-3);font-size:10px"><?= e($v['booking_number']) ?></div>
+                        <?php endif; ?>
+                        <?php if (!$v['service_type'] && !$v['booking_number']): ?>
+                        <span style="color:var(--text-3)">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($v['job_number']): ?>
+                        <a href="<?= BASE_URL ?>/modules/jobs/view.php?id=<?= $v['job_id'] ?>" style="color:var(--brand);font-weight:600;text-decoration:none">
+                            <?= e($v['job_number']) ?>
+                        </a>
+                        <?php else: ?>
+                        <span style="color:var(--text-3)">No job card</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?= e($v['mechanic_name'] ?? 'Unassigned') ?></td>
+                    <td>
+                        <span class="d-flex align-items-center gap-1 priority-<?= $pri ?>">
+                            <span class="priority-dot" style="background:<?= $priColor ?>"></span>
+                            <?= ucfirst($pri) ?>
+                        </span>
+                    </td>
+                    <td>
+                        <?php if ($v['end_date']): ?>
+                        <span style="color:<?= $isOverdue ? '#dc2626' : 'var(--text)' ?>;font-weight:<?= $isOverdue ? '600' : '400' ?>">
+                            <?= date('d M', strtotime($v['end_date'])) ?>
+                        </span>
+                        <?php if ($isOverdue): ?>
+                        <div style="color:#dc2626;font-size:10px">OVERDUE</div>
+                        <?php endif; ?>
+                        <?php else: ?>
+                        <span style="color:var(--text-3)">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <span class="status-badge badge-<?= $jobStatus ?>">
+                            <?= ucwords(str_replace('_',' ', $jobStatus)) ?>
+                        </span>
+                    </td>
+                    <td>
+                        <a href="<?= BASE_URL ?>/modules/cars/workshop.php?id=<?= $v['car_id'] ?>" class="btn btn-sm" style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;font-size:11px;padding:3px 10px">
+                            <i class="fa fa-arrow-up-right-from-square me-1"></i>Progress
+                        </a>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- ── Recent Payments + Upcoming Bookings ───────────────────────────────── -->
