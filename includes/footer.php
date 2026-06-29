@@ -119,7 +119,7 @@ if ($__wa): ?>
         </button>
 
         <div class="pwa-popup-icon">
-            <img src="<?= BASE_URL ?>/assets/images/icons/icon.svg" width="56" height="56" alt="">
+            <img src="<?= BASE_URL ?>/pwa-icon.php?s=96" width="56" height="56" alt="" style="border-radius:14px">
         </div>
         <h4 id="pwaPopupTitle" class="pwa-popup-title">Install <?= e(getSetting('company_name', APP_NAME)) ?></h4>
         <p class="pwa-popup-subtitle">Add this app to your home screen or desktop for instant, offline-capable access.</p>
@@ -131,32 +131,37 @@ if ($__wa): ?>
             <div class="pwa-popup-benefit"><i class="fa fa-mobile-screen text-info"></i><span>Available on mobile &amp; desktop</span></div>
         </div>
 
-        <!-- Chrome / Edge / Android: native prompt -->
-        <div id="pwaChromActions" class="pwa-popup-actions">
+        <!-- Step 1: Install button (always shown first) -->
+        <div id="pwaActions" class="pwa-popup-actions">
             <button id="pwaPopupInstallBtn" class="btn btn-primary btn-lg w-100 fw-bold">
                 <i class="fa fa-download me-2"></i>Install App
             </button>
             <button id="pwaPopupDismissBtn" class="btn btn-link text-muted w-100 mt-1" style="font-size:13px">
-                Not now — remind me in 7 days
+                Not now — remind me in 3 days
             </button>
         </div>
 
-        <!-- iOS Safari: manual instructions -->
-        <div id="pwaIosInstructions" class="pwa-ios-instructions" style="display:none">
-            <p class="pwa-ios-header">How to install on iPhone / iPad</p>
-            <div class="pwa-ios-step">
-                <div class="pwa-ios-step-num">1</div>
-                <span>Tap the <strong>Share</strong> button <i class="fa fa-arrow-up-from-bracket ms-1"></i> in Safari's bottom toolbar</span>
+        <!-- Step 2: Manual instructions (shown when native install not available) -->
+        <div id="pwaManualInstruct" style="display:none">
+            <!-- iOS Safari walkthrough -->
+            <div id="pwaIosInstructions" class="pwa-ios-instructions" style="display:none">
+                <p class="pwa-ios-header">How to install on iPhone / iPad</p>
+                <div class="pwa-ios-step">
+                    <div class="pwa-ios-step-num">1</div>
+                    <span>Tap the <strong>Share</strong> button <i class="fa fa-arrow-up-from-bracket ms-1"></i> in Safari's bottom toolbar</span>
+                </div>
+                <div class="pwa-ios-step">
+                    <div class="pwa-ios-step-num">2</div>
+                    <span>Scroll and tap <strong>"Add to Home Screen"</strong></span>
+                </div>
+                <div class="pwa-ios-step">
+                    <div class="pwa-ios-step-num">3</div>
+                    <span>Tap <strong>"Add"</strong> in the top-right corner</span>
+                </div>
             </div>
-            <div class="pwa-ios-step">
-                <div class="pwa-ios-step-num">2</div>
-                <span>Scroll and tap <strong>"Add to Home Screen"</strong></span>
-            </div>
-            <div class="pwa-ios-step">
-                <div class="pwa-ios-step-num">3</div>
-                <span>Tap <strong>"Add"</strong> in the top-right corner</span>
-            </div>
-            <button id="pwaIosGotIt" class="btn btn-primary w-100 mt-3 fw-bold">Got it!</button>
+            <!-- Other browsers: short hint set by JS -->
+            <div id="pwaBrowserHint"></div>
+            <button id="pwaGotItBtn" class="btn btn-primary w-100 mt-3 fw-bold">Got it!</button>
         </div>
     </div>
 </div>
@@ -193,7 +198,7 @@ if ($__wa): ?>
     var deferredPrompt = null;
     var overlay        = document.getElementById('pwaOverlay');
     var topbarBtn      = document.getElementById('pwaInstallTopbarBtn');
-    var DISMISS_KEY    = 'pwa_popup_dismissed_v2';
+    var DISMISS_KEY    = 'pwa_popup_dismissed_v3';
     var DISMISS_DAYS   = 3;
 
     function isStandalone() {
@@ -226,63 +231,75 @@ if ($__wa): ?>
         setTimeout(function () { overlay.style.display = 'none'; }, 320);
         if (dismiss) localStorage.setItem(DISMISS_KEY, String(Date.now()));
     }
+    function isPopupOpen() {
+        return overlay && overlay.style.display !== 'none';
+    }
 
-    // ── Always show topbar install button for non-standalone users ───────
+    // ── Always show topbar install button ────────────────────────────────
     if (topbarBtn) topbarBtn.classList.remove('d-none');
 
-    // ── Capture native install prompt if Chrome/Edge provides it ────────
-    function onInstallPrompt(e) { e.preventDefault(); deferredPrompt = e; }
+    // ── Capture native install prompt whenever Chrome/Edge provides it ───
+    function onInstallPrompt(e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        // If popup is already open showing manual instructions, upgrade it
+        if (isPopupOpen()) showInstallButton();
+    }
     if (window.__pwaBeforeInstall) {
         deferredPrompt = window.__pwaBeforeInstall;
         window.__pwaBeforeInstall = null;
     }
     window.addEventListener('beforeinstallprompt', onInstallPrompt);
 
-    // ── Set popup content based on browser / capability ──────────────────
-    function configurePopup() {
-        var chrEl      = document.getElementById('pwaChromActions');
-        var iosEl      = document.getElementById('pwaIosInstructions');
-        var installBtn = document.getElementById('pwaPopupInstallBtn');
+    // ── Popup panel helpers ───────────────────────────────────────────────
+    var actionsEl  = document.getElementById('pwaActions');
+    var manualEl   = document.getElementById('pwaManualInstruct');
+    var iosEl      = document.getElementById('pwaIosInstructions');
+    var browserEl  = document.getElementById('pwaBrowserHint');
+    var installBtn = document.getElementById('pwaPopupInstallBtn');
+
+    function showInstallButton() {
+        // Show the Install App button, hide manual instructions
+        if (actionsEl) actionsEl.style.display = '';
+        if (manualEl)  manualEl.style.display  = 'none';
+        if (installBtn) installBtn.innerHTML = '<i class="fa fa-download me-2"></i>Install App';
+    }
+
+    function showManualInstructions() {
+        // Hide the button panel, show step-by-step guide
+        if (actionsEl) actionsEl.style.display = 'none';
+        if (manualEl)  manualEl.style.display  = '';
 
         if (isIOSSaf) {
-            if (chrEl) chrEl.style.display = 'none';
             if (iosEl) iosEl.style.display = '';
-
-        } else if (deferredPrompt) {
-            if (iosEl) iosEl.style.display = 'none';
-            if (chrEl) chrEl.style.display = '';
-            if (installBtn) installBtn.innerHTML = '<i class="fa fa-download me-2"></i>Install App';
-
+            if (browserEl) browserEl.style.display = 'none';
         } else {
-            // No native prompt — show browser-specific manual instructions
             if (iosEl) iosEl.style.display = 'none';
-            if (chrEl) {
-                chrEl.style.display = '';
-                var hint = '';
-                if (isChrome || isEdge) {
-                    hint = 'Tap the <i class="fa fa-download"></i> install icon in the address bar &mdash; or tap &#8942; menu &rarr; <strong>Install App</strong> / <strong>Add to Home Screen</strong>.';
-                } else if (isFF) {
-                    hint = 'Tap the <i class="fa fa-house"></i> icon in the address bar, then <strong>Add to Home Screen</strong>.';
-                } else if (isSamsung) {
-                    hint = 'Tap &#8942; menu &rarr; <strong>Add page to</strong> &rarr; <strong>Home screen</strong>.';
-                } else if (isIOS) {
-                    hint = 'Open this page in <strong>Safari</strong>, tap the Share button, then <strong>Add to Home Screen</strong>.';
-                } else {
-                    hint = 'Use your browser menu to find <strong>Install App</strong> or <strong>Add to Home Screen</strong>.';
-                }
-                chrEl.innerHTML =
-                    '<div style="background:#eff6ff;border-radius:10px;padding:14px 16px;font-size:13px;color:#1e40af;line-height:1.7">'
-                    + hint + '</div>'
-                    + '<button id="pwaDismissManual" class="btn btn-link text-muted w-100 mt-2" style="font-size:13px">Close</button>';
-                var dm = document.getElementById('pwaDismissManual');
-                dm && dm.addEventListener('click', function () { hidePopup(true); });
+            var hint = '';
+            if (isChrome || isEdge) {
+                hint = 'Look for the <i class="fa fa-download"></i> install icon in your address bar, or tap &#8942; &rarr; <strong>Install App</strong> / <strong>Add to Home Screen</strong>.';
+            } else if (isFF) {
+                hint = 'Tap the <i class="fa fa-house"></i> icon in the address bar, then <strong>Add to Home Screen</strong>.';
+            } else if (isSamsung) {
+                hint = 'Tap &#8942; menu &rarr; <strong>Add page to</strong> &rarr; <strong>Home screen</strong>.';
+            } else if (isIOS) {
+                hint = 'Open this page in <strong>Safari</strong>, tap the Share button <i class="fa fa-arrow-up-from-bracket"></i>, then <strong>Add to Home Screen</strong>.';
+            } else {
+                hint = 'Use your browser menu to find <strong>Install App</strong> or <strong>Add to Home Screen</strong>.';
+            }
+            if (browserEl) {
+                browserEl.innerHTML =
+                    '<div style="background:#eff6ff;border-radius:10px;padding:14px 16px;font-size:13px;color:#1e40af;line-height:1.8">'
+                    + hint + '</div>';
+                browserEl.style.display = '';
             }
         }
     }
 
-    // ── Install / open-popup action ──────────────────────────────────────
+    // ── Main install action ───────────────────────────────────────────────
     function triggerInstall() {
         if (deferredPrompt) {
+            // Native one-tap install (Chrome/Edge/Android)
             hidePopup(false);
             deferredPrompt.prompt();
             deferredPrompt.userChoice.then(function (result) {
@@ -296,15 +313,15 @@ if ($__wa): ?>
                 deferredPrompt = null;
             });
         } else {
-            configurePopup();
-            showPopup();
+            // Show step-by-step guide inside the popup
+            showManualInstructions();
+            if (!isPopupOpen()) showPopup();
         }
     }
 
     topbarBtn && topbarBtn.addEventListener('click', triggerInstall);
 
     // ── Popup buttons ────────────────────────────────────────────────────
-    var installBtn = document.getElementById('pwaPopupInstallBtn');
     installBtn && installBtn.addEventListener('click', triggerInstall);
 
     var dismissBtn = document.getElementById('pwaPopupDismissBtn');
@@ -313,17 +330,17 @@ if ($__wa): ?>
     var closeBtn = document.getElementById('pwaPopupClose');
     closeBtn && closeBtn.addEventListener('click', function () { hidePopup(true); });
 
-    var gotItBtn = document.getElementById('pwaIosGotIt');
+    var gotItBtn = document.getElementById('pwaGotItBtn');
     gotItBtn && gotItBtn.addEventListener('click', function () { hidePopup(true); });
 
     overlay && overlay.addEventListener('click', function (e) {
         if (e.target === overlay) hidePopup(true);
     });
 
-    // ── Auto-show popup after 3 s — works on ALL browsers, no event needed
+    // ── Auto-show popup after 3 s for all non-standalone users ───────────
     if (!isDismissed()) {
         setTimeout(function () {
-            configurePopup();
+            showInstallButton(); // start in "Install App" state
             showPopup();
         }, 3000);
     }
