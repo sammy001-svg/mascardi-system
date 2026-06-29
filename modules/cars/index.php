@@ -126,6 +126,7 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endif; ?>
                     <th>Chassis</th>
                     <th>Location</th>
+                    <th>Price</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
@@ -162,6 +163,10 @@ include __DIR__ . '/../../includes/header.php';
                     <td><code class="small"><?= e($car['chassis_number']) ?></code></td>
                     <td class="small text-muted">
                         <i class="fa fa-location-dot me-1"></i><?= e($car['location_name'] ?: '—') ?>
+                    </td>
+                    <td class="fw-semibold text-nowrap">
+                        <?php $__p = (float)($car['asking_price'] ?? 0); ?>
+                        <?= $__p > 0 ? money($__p) : '<span class="text-muted">—</span>' ?>
                     </td>
                     <td><?= statusBadge($car['status']) ?></td>
                     <td>
