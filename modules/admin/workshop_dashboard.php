@@ -9,13 +9,14 @@ $db = getDB();
 // ── KPI Stats ──────────────────────────────────────────────────────────────
 $s = [];
 try {
-    // Total service revenue: direct booking payments + payments on service-job invoices
+    // Total service revenue: all confirmed payments
     $s['total_revenue']     = (float)$db->query("
-        SELECT COALESCE(SUM(p.amount),0)
-        FROM payments p
-        LEFT JOIN invoices i ON i.id = p.invoice_id
-        WHERE p.status = 'confirmed'
-          AND (p.service_booking_id IS NOT NULL OR i.job_id IS NOT NULL)
+        SELECT COALESCE(SUM(amount),0) FROM payments WHERE status='confirmed'
+    ")->fetchColumn();
+
+    // Pending (not yet confirmed) — for context
+    $s['pending_revenue']   = (float)$db->query("
+        SELECT COALESCE(SUM(amount),0) FROM payments WHERE status='pending'
     ")->fetchColumn();
 
     // Bookings today (by preferred_date or booking_date)
@@ -48,15 +49,11 @@ try {
           AND MONTH(updated_at)=MONTH(NOW()) AND YEAR(updated_at)=YEAR(NOW())
     ")->fetchColumn();
 
-    // Service revenue this month: direct booking payments + service-job invoice payments
+    // Service revenue this month: all confirmed payments this month
     $s['revenue_month']     = (float)$db->query("
-        SELECT COALESCE(SUM(p.amount),0)
-        FROM payments p
-        LEFT JOIN invoices i ON i.id = p.invoice_id
-        WHERE p.status = 'confirmed'
-          AND (p.service_booking_id IS NOT NULL OR i.job_id IS NOT NULL)
-          AND MONTH(p.payment_date) = MONTH(NOW())
-          AND YEAR(p.payment_date)  = YEAR(NOW())
+        SELECT COALESCE(SUM(amount),0) FROM payments
+        WHERE status='confirmed'
+          AND MONTH(payment_date)=MONTH(NOW()) AND YEAR(payment_date)=YEAR(NOW())
     ")->fetchColumn();
 
     // Overdue jobs
@@ -72,11 +69,11 @@ try {
     ")->fetchColumn();
 
 } catch (\Throwable $_) {
-    foreach (['total_revenue','bookings_today','pending_bookings','low_stock',
+    foreach (['total_revenue','pending_revenue','bookings_today','pending_bookings','low_stock',
               'active_jobs','completed_month','revenue_month','overdue_jobs','in_workshop'] as $k) $s[$k] = 0;
 }
 
-// ── Recent Payments (service bookings + service-job invoices) ─────────────
+// ── Recent Payments ────────────────────────────────────────────────────────
 try {
     $recentPayments = $db->query("
         SELECT p.id, p.payment_number, p.payment_date, p.amount, p.payment_method,
@@ -89,7 +86,6 @@ try {
         LEFT JOIN invoices i ON i.id = p.invoice_id
         LEFT JOIN cars c ON c.id = i.car_id
         WHERE p.status = 'confirmed'
-          AND (p.service_booking_id IS NOT NULL OR i.job_id IS NOT NULL)
         ORDER BY p.created_at DESC LIMIT 8
     ")->fetchAll(PDO::FETCH_ASSOC);
 } catch (\Throwable $_) { $recentPayments = []; }
@@ -149,14 +145,12 @@ try {
 // ── Monthly revenue trend (last 6 months, line chart) ─────────────────────
 try {
     $revRows = $db->query("
-        SELECT DATE_FORMAT(p.payment_date,'%b %Y') AS mo,
-               DATE_FORMAT(p.payment_date,'%Y-%m') AS mo_key,
-               SUM(p.amount) AS total
-        FROM payments p
-        LEFT JOIN invoices i ON i.id = p.invoice_id
-        WHERE p.status = 'confirmed'
-          AND (p.service_booking_id IS NOT NULL OR i.job_id IS NOT NULL)
-          AND p.payment_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
+        SELECT DATE_FORMAT(payment_date,'%b %Y') AS mo,
+               DATE_FORMAT(payment_date,'%Y-%m') AS mo_key,
+               SUM(amount) AS total
+        FROM payments
+        WHERE status='confirmed'
+          AND payment_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
         GROUP BY mo_key ORDER BY mo_key ASC
     ")->fetchAll(PDO::FETCH_ASSOC);
 } catch (\Throwable $_) { $revRows = []; }
@@ -331,6 +325,9 @@ function fmtMoney($v) { return 'KSh ' . number_format($v, 0); }
                 <div class="kpi-value-sm text-truncate"><?= fmtMoney($s['total_revenue']) ?></div>
                 <div class="kpi-label">Total Service Revenue</div>
                 <div class="kpi-sub">This month: <?= fmtMoney($s['revenue_month']) ?></div>
+                <?php if ($s['pending_revenue'] > 0): ?>
+                <div class="kpi-sub" style="color:#d97706"><?= fmtMoney($s['pending_revenue']) ?> pending confirmation</div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
