@@ -172,12 +172,10 @@ if ($__wa): ?>
             navigator.serviceWorker
                 .register('<?= BASE_URL ?>/sw.js')
                 .then(function (reg) {
-                    // Prompt user when a new SW is waiting (new version deployed)
                     reg.addEventListener('updatefound', function () {
                         var newWorker = reg.installing;
                         newWorker && newWorker.addEventListener('statechange', function () {
                             if (this.state === 'installed' && navigator.serviceWorker.controller) {
-                                // New version available — show a toast
                                 if (typeof window.showToast === 'function') {
                                     window.showToast('info', 'Update Available',
                                         'A new version is ready. <a href="#" onclick="location.reload();return false;">Reload now</a>',
@@ -187,17 +185,16 @@ if ($__wa): ?>
                         });
                     });
                 })
-                .catch(function (err) {
-                    console.warn('[SW] Registration failed:', err);
-                });
+                .catch(function (err) { console.warn('[SW] Registration failed:', err); });
         });
     }
 
-    // ── Install popup ────────────────────────────────────────────────────
-    var deferredPrompt  = null;
-    var overlay         = document.getElementById('pwaOverlay');
-    var DISMISS_KEY     = 'pwa_popup_dismissed';
-    var DISMISS_DAYS    = 7;
+    // ── Helpers ──────────────────────────────────────────────────────────
+    var deferredPrompt = null;
+    var overlay        = document.getElementById('pwaOverlay');
+    var topbarBtn      = document.getElementById('pwaInstallTopbarBtn');
+    var DISMISS_KEY    = 'pwa_popup_dismissed';
+    var DISMISS_DAYS   = 7;
 
     function isStandalone() {
         return window.matchMedia('(display-mode: standalone)').matches
@@ -207,8 +204,14 @@ if ($__wa): ?>
         var ts = localStorage.getItem(DISMISS_KEY);
         return ts && (Date.now() - parseInt(ts, 10)) < DISMISS_DAYS * 86400000;
     }
+    function showTopbarBtn() {
+        if (topbarBtn && !isStandalone()) topbarBtn.classList.remove('d-none');
+    }
+    function hideTopbarBtn() {
+        if (topbarBtn) topbarBtn.classList.add('d-none');
+    }
     function showPopup() {
-        if (!overlay || isDismissed() || isStandalone()) return;
+        if (!overlay || isStandalone()) return;
         overlay.style.display = 'flex';
         setTimeout(function () { overlay.classList.add('pwa-overlay-visible'); }, 20);
     }
@@ -219,85 +222,104 @@ if ($__wa): ?>
         if (dismiss) localStorage.setItem(DISMISS_KEY, String(Date.now()));
     }
 
-    // Detect iOS Safari (no native beforeinstallprompt support)
+    // ── iOS Safari ───────────────────────────────────────────────────────
     var isIOS    = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
     var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     if (isIOS && isSafari && !isStandalone()) {
-        document.getElementById('pwaIosInstructions') && (document.getElementById('pwaIosInstructions').style.display = '');
-        document.getElementById('pwaChromActions')    && (document.getElementById('pwaChromActions').style.display    = 'none');
-        setTimeout(showPopup, 2500);
+        var iosEl  = document.getElementById('pwaIosInstructions');
+        var chrEl  = document.getElementById('pwaChromActions');
+        if (iosEl)  iosEl.style.display  = '';
+        if (chrEl)  chrEl.style.display  = 'none';
+        showTopbarBtn();
+        if (!isDismissed()) setTimeout(showPopup, 3000);
     }
 
-    // Chrome / Edge / Android: use the event captured early in <head>,
-    // or listen for it if it hasn't fired yet.
-    // beforeinstallprompt can fire BEFORE footer scripts run (especially on
-    // cached/fast pages), so we always capture it in the <head> first.
+    // ── Chrome / Edge / Android ──────────────────────────────────────────
     function onInstallPrompt(e) {
         e.preventDefault();
         deferredPrompt = e;
-        setTimeout(showPopup, 2000);
+        showTopbarBtn();
+        if (!isDismissed()) setTimeout(showPopup, 2500);
     }
+    // Use event captured in <head> if it already fired
     if (window.__pwaBeforeInstall) {
-        // Already captured early — use it immediately
         deferredPrompt = window.__pwaBeforeInstall;
         window.__pwaBeforeInstall = null;
-        setTimeout(showPopup, 2000);
+        showTopbarBtn();
+        if (!isDismissed()) setTimeout(showPopup, 2500);
     }
-    // Also keep listening in case the event fires after this script runs
     window.addEventListener('beforeinstallprompt', onInstallPrompt);
 
-    // Install button
-    var installBtn = document.getElementById('pwaPopupInstallBtn');
-    installBtn && installBtn.addEventListener('click', function () {
-        if (!deferredPrompt) {
-            // Fallback: show iOS-style instructions if no native prompt
-            var chromActions = document.getElementById('pwaChromActions');
-            var iosInstr     = document.getElementById('pwaIosInstructions');
-            if (chromActions) chromActions.style.display = 'none';
-            if (iosInstr)     iosInstr.style.display     = '';
-            return;
-        }
-        hidePopup(false);
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then(function (result) {
-            if (result.outcome === 'accepted') {
-                if (typeof window.showToast === 'function') {
-                    window.showToast('success', 'App Installed!', 'Launch it from your home screen or desktop anytime.');
+    // ── Topbar install button ────────────────────────────────────────────
+    function triggerInstall() {
+        if (deferredPrompt) {
+            hidePopup(false);
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(function (result) {
+                if (result.outcome === 'accepted') {
+                    hideTopbarBtn();
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('success', 'App Installed!',
+                            'Launch it from your home screen or taskbar anytime.');
+                    }
                 }
+                deferredPrompt = null;
+            });
+        } else {
+            // No native prompt — show the popup with instructions
+            var chrEl = document.getElementById('pwaChromActions');
+            var iosEl = document.getElementById('pwaIosInstructions');
+            if (!isIOS) {
+                // Desktop/Android without native prompt: show browser hint
+                if (chrEl) chrEl.innerHTML =
+                    '<div style="background:#eff6ff;border-radius:10px;padding:14px 16px;font-size:13px;color:#1e40af;text-align:left">'
+                    + '<strong>How to install:</strong><br>'
+                    + '• <b>Chrome/Edge desktop</b>: click the <i class="fa fa-download"></i> icon in the address bar<br>'
+                    + '• <b>Android Chrome</b>: tap ⋮ menu → "Add to Home screen"'
+                    + '</div>'
+                    + '<button id="pwaPopupDismissBtn2" class="btn btn-link text-muted w-100 mt-2" style="font-size:13px">Close</button>';
+                var d2 = document.getElementById('pwaPopupDismissBtn2');
+                d2 && d2.addEventListener('click', function () { hidePopup(true); });
+            } else {
+                if (chrEl) chrEl.style.display = 'none';
+                if (iosEl) iosEl.style.display  = '';
             }
-            deferredPrompt = null;
-        });
-    });
+            showPopup();
+        }
+    }
 
-    // "Not now" button
+    topbarBtn && topbarBtn.addEventListener('click', triggerInstall);
+
+    // ── Popup buttons ────────────────────────────────────────────────────
+    var installBtn = document.getElementById('pwaPopupInstallBtn');
+    installBtn && installBtn.addEventListener('click', triggerInstall);
+
     var dismissBtn = document.getElementById('pwaPopupDismissBtn');
     dismissBtn && dismissBtn.addEventListener('click', function () { hidePopup(true); });
 
-    // Close ×
     var closeBtn = document.getElementById('pwaPopupClose');
     closeBtn && closeBtn.addEventListener('click', function () { hidePopup(true); });
 
-    // iOS "Got it"
     var gotItBtn = document.getElementById('pwaIosGotIt');
     gotItBtn && gotItBtn.addEventListener('click', function () { hidePopup(true); });
 
-    // Click outside card to dismiss
     overlay && overlay.addEventListener('click', function (e) {
         if (e.target === overlay) hidePopup(true);
     });
 
-    // Already installed
     window.addEventListener('appinstalled', function () {
         hidePopup(true);
+        hideTopbarBtn();
         deferredPrompt = null;
+        localStorage.removeItem(DISMISS_KEY);
     });
 
     // ── Network status indicator ─────────────────────────────────────────
     function updateNetworkStatus() {
-        var online = navigator.onLine;
+        var online    = navigator.onLine;
         var indicator = document.getElementById('networkStatusDot');
         if (!indicator) return;
-        indicator.title = online ? 'Online' : 'Offline — some features may be unavailable';
+        indicator.title     = online ? 'Online' : 'Offline — some features may be unavailable';
         indicator.className = online ? 'network-dot network-online' : 'network-dot network-offline';
     }
     window.addEventListener('online',  updateNetworkStatus);

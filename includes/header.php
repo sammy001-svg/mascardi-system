@@ -119,6 +119,12 @@ window.addEventListener('beforeinstallprompt', function(e) {
             </div>
         </div>
 
+        <!-- Install App button (hidden until installable or on iOS) -->
+        <button id="pwaInstallTopbarBtn" class="topbar-icon-btn d-none" title="Install App"
+                style="color:#2563eb" aria-label="Install App">
+            <i class="fa fa-download"></i>
+        </button>
+
         <!-- Network status indicator -->
         <span id="networkStatusDot" class="network-dot network-online" title="Online"></span>
 
