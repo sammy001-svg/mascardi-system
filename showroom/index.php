@@ -2,6 +2,10 @@
 require_once __DIR__ . '/../includes/functions.php';
 $db = getDB();
 
+// Inline migrations — silent no-op if columns already exist
+try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
+
 // ── Active filters ────────────────────────────────────────────────────────────
 $filterMake  = trim($_GET['make']  ?? '');
 $filterBody  = trim($_GET['body']  ?? '');
@@ -15,12 +19,12 @@ $search      = trim($_GET['q']     ?? '');
 // ── All inventory cars (stats + category counts) ──────────────────────────────
 $allCars = $db->query("
     SELECT c.id, c.make, c.model, c.year, c.color, c.body_type,
-           c.transmission, c.fuel_type, c.asking_price, c.mileage,
+           c.transmission, c.fuel_type, c.asking_price, c.offer_price, c.mileage,
            c.engine_cc, c.featured, c.notes, c.created_at,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image,
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
     FROM cars c
-    WHERE c.car_type='inventory'
+    WHERE c.car_type='inventory' AND c.show_on_website = 1
     ORDER BY c.featured DESC, c.created_at DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -43,7 +47,7 @@ $makes = $db->query("
 ")->fetchAll(PDO::FETCH_COLUMN);
 
 // ── Filtered inventory ────────────────────────────────────────────────────────
-$where  = ["c.car_type='inventory'"];
+$where  = ["c.car_type='inventory'", "c.show_on_website = 1"];
 $params = [];
 if ($filterMake)  { $where[] = 'c.make = ?';          $params[] = $filterMake; }
 if ($filterBody)  { $where[] = 'c.body_type = ?';     $params[] = $filterBody; }
@@ -68,7 +72,7 @@ $orderBy = match($sort) {
 
 $stmt = $db->prepare("
     SELECT c.id, c.make, c.model, c.year, c.color, c.body_type,
-           c.transmission, c.fuel_type, c.asking_price, c.mileage,
+           c.transmission, c.fuel_type, c.asking_price, c.offer_price, c.mileage,
            c.engine_cc, c.featured, c.notes, c.created_at,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image,
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
@@ -190,7 +194,15 @@ include __DIR__ . '/header.php';
                             </div>
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
                                 <div style="font-size:26px;font-weight:900;color:#60a5fa;letter-spacing:-1px">
-                                    KES <?= number_format((float)$fc['asking_price']) ?>
+                                    <?php if (!empty($fc['offer_price']) && $fc['offer_price'] > 0): ?>
+                                        <span style="font-size:11px;background:#dc2626;color:#fff;padding:2px 8px;border-radius:12px;vertical-align:middle;margin-right:6px;font-weight:700">SALE</span>
+                                        KES <?= number_format((float)$fc['offer_price']) ?>
+                                        <?php if (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
+                                        <del style="font-size:14px;color:rgba(255,255,255,.4);font-weight:500;margin-left:6px">KES <?= number_format((float)$fc['asking_price']) ?></del>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        KES <?= number_format((float)$fc['asking_price']) ?>
+                                    <?php endif; ?>
                                 </div>
                                 <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fc['id'] ?>"
                                    style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;text-decoration:none;transition:box-shadow .15s"
@@ -363,7 +375,13 @@ include __DIR__ . '/header.php';
                         <?php if ($fc['color']):       ?><span><i class="fa fa-palette me-1"></i><?= htmlspecialchars($fc['color']) ?></span><?php endif; ?>
                     </div>
                     <div class="featured-price">
-                        <?php if (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
+                        <?php if (!empty($fc['offer_price']) && $fc['offer_price'] > 0): ?>
+                            <span style="font-size:11px;background:#dc2626;color:#fff;padding:2px 8px;border-radius:12px;vertical-align:middle;margin-right:6px;font-weight:700">SALE</span>
+                            KES <?= number_format((float)$fc['offer_price']) ?>
+                            <?php if (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
+                            <del style="font-size:14px;color:#94a3b8;font-weight:500;display:block;margin-top:2px">KES <?= number_format((float)$fc['asking_price']) ?></del>
+                            <?php endif; ?>
+                        <?php elseif (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
                             KES <?= number_format((float)$fc['asking_price']) ?>
                         <?php else: ?>
                             <span style="font-size:15px;font-weight:700;color:#64748b">Contact for Price</span>
@@ -555,7 +573,13 @@ include __DIR__ . '/header.php';
                                 <?php if ($car['color']):     ?><span><?= htmlspecialchars($car['color']) ?></span><?php endif; ?>
                             </div>
                             <div class="inv-price">
-                                <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
+                                <?php if (!empty($car['offer_price']) && $car['offer_price'] > 0): ?>
+                                    <span style="font-size:10px;background:#dc2626;color:#fff;padding:2px 7px;border-radius:10px;vertical-align:middle;margin-right:5px;font-weight:700">SALE</span>
+                                    KES <?= number_format((float)$car['offer_price']) ?>
+                                    <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
+                                    <del style="font-size:13px;color:#94a3b8;font-weight:500;display:block;margin-top:1px">KES <?= number_format((float)$car['asking_price']) ?></del>
+                                    <?php endif; ?>
+                                <?php elseif (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
                                     KES <?= number_format((float)$car['asking_price']) ?>
                                 <?php else: ?>
                                     <span style="font-size:14px;font-weight:700;color:#64748b">Contact for Price</span>
