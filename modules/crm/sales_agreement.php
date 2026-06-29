@@ -7,11 +7,18 @@ $db  = getDB();
 $me  = authUser();
 $uid = (int)$me['id'];
 
+// Ensure all columns used on this page exist (same pattern as view_lead.php / proforma.php)
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN pinned_car_id  INT           NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_amount DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_date   DATE          NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_notes  TEXT          NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+
 $leadId = (int)($_GET['lead_id'] ?? 0);
 if (!$leadId) { setFlash('error','No lead specified.'); redirect(BASE_URL.'/modules/crm/leads.php'); }
 
-$lead = $db->prepare("SELECT * FROM crm_leads WHERE id = ?");
-$lead->execute([$leadId]); $lead = $lead->fetch();
+$stLead = $db->prepare("SELECT * FROM crm_leads WHERE id = ?");
+$stLead->execute([$leadId]);
+$lead = $stLead->fetch();
 if (!$lead) { setFlash('error','Lead not found.'); redirect(BASE_URL.'/modules/crm/leads.php'); }
 
 if ($me['role'] === 'customer_relations' && (int)$lead['assigned_to'] !== $uid) {
@@ -39,15 +46,21 @@ if (!empty($lead['pinned_car_id'])) {
 // Load client if converted
 $client = null;
 if (!empty($lead['client_id'])) {
-    $sc = $db->prepare("SELECT * FROM clients WHERE id = ?");
-    $sc->execute([(int)$lead['client_id']]); $client = $sc->fetch() ?: null;
+    try {
+        $stClient = $db->prepare("SELECT * FROM clients WHERE id = ?");
+        $stClient->execute([(int)$lead['client_id']]);
+        $client = $stClient->fetch() ?: null;
+    } catch (\Throwable $_) {}
 }
 
 // Agent
 $agent = null;
 if (!empty($lead['assigned_to'])) {
-    $sa = $db->prepare("SELECT name, email, phone FROM users WHERE id = ?");
-    $sa->execute([(int)$lead['assigned_to']]); $agent = $sa->fetch() ?: null;
+    try {
+        $stAgent = $db->prepare("SELECT name, email, phone FROM users WHERE id = ?");
+        $stAgent->execute([(int)$lead['assigned_to']]);
+        $agent = $stAgent->fetch() ?: null;
+    } catch (\Throwable $_) {}
 }
 
 // Company settings

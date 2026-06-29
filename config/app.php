@@ -132,6 +132,9 @@ set_error_handler(function(int $errno, string $errstr, string $errfile, int $err
 set_exception_handler(function(Throwable $e): void {
     $msg = get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
     error_log($msg);
+    // Discard any partial HTML buffered by header.php's ob_start() so the error
+    // page renders cleanly instead of being appended after a broken page layout.
+    while (ob_get_level() > 0) { ob_end_clean(); }
     if (headers_sent()) { echo '<p style="color:red">An error occurred.</p>'; return; }
     http_response_code(500);
     if (defined('APP_DEBUG') && APP_DEBUG) {
