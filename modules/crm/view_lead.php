@@ -326,7 +326,7 @@ $availCarsForModal = [];
 try {
     $availCarsForModal = $db->query("
         SELECT id, make, model, year, color, registration_number,
-               COALESCE(asking_price, selling_price, 0) AS sale_price
+               IFNULL(asking_price, 0) AS sale_price
         FROM cars WHERE car_type = 'inventory'
         ORDER BY make, model LIMIT 300
     ")->fetchAll();
