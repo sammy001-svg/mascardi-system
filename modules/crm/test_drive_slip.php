@@ -21,47 +21,71 @@ if (!$tdId) {
 }
 
 // Load test drive + lead + car
-$stmt = $db->prepare("
-    SELECT
-        td.id              AS td_id,
-        td.scheduled_date,
-        td.scheduled_time,
-        td.duration_minutes,
-        td.notes           AS td_notes,
-        td.driver_id_no,
-        td.kd_number,
-        td.chassis_number  AS td_chassis,
-        td.entry_number    AS td_entry,
-        td.status          AS td_status,
-
-        l.id               AS lead_id,
-        l.name             AS lead_name,
-        l.phone            AS lead_phone,
-        l.email            AS lead_email,
-        l.stage            AS lead_stage,
-
-        c.id               AS car_id,
-        c.make,
-        c.model,
-        c.year,
-        c.color,
-        c.registration_number,
-        COALESCE(td.chassis_number, c.chassis_number, '') AS chassis_number,
-        COALESCE(td.entry_number,   c.entry_number,   '') AS entry_number
-
-    FROM crm_test_drives td
-    JOIN crm_leads l ON l.id = td.lead_id
-    LEFT JOIN cars c ON c.id = td.car_id
-    WHERE td.id = ?
-    LIMIT 1
-");
+// Two-step: basic columns first, then optional extended columns
+$td = null;
 try {
+    $stmt = $db->prepare("
+        SELECT
+            td.id              AS td_id,
+            td.scheduled_date,
+            td.scheduled_time,
+            td.duration_minutes,
+            td.notes           AS td_notes,
+            td.status          AS td_status,
+            td.lead_id,
+            td.car_id,
+
+            l.name             AS lead_name,
+            l.phone            AS lead_phone,
+            l.email            AS lead_email,
+            l.stage            AS lead_stage,
+
+            c.make,
+            c.model,
+            c.year,
+            c.color,
+            c.registration_number
+        FROM crm_test_drives td
+        JOIN crm_leads l ON l.id = td.lead_id
+        LEFT JOIN cars c ON c.id = td.car_id
+        WHERE td.id = ?
+        LIMIT 1
+    ");
     $stmt->execute([$tdId]);
     $td = $stmt->fetch();
 } catch (\Throwable $e) {
-    error_log('test_drive_slip query error: ' . $e->getMessage());
-    setFlash('error', 'Could not load test drive slip. ' . $e->getMessage());
+    error_log('test_drive_slip base query error: ' . $e->getMessage());
+    setFlash('error', 'Could not load slip: ' . $e->getMessage());
     redirect(BASE_URL . '/modules/crm/leads.php');
+}
+
+// Extended columns (added by migrations — may not exist on first run)
+$td['driver_id_no']  = null;
+$td['kd_number']     = null;
+$td['chassis_number'] = null;
+$td['entry_number']  = null;
+try {
+    $ext = $db->prepare("
+        SELECT
+            td.driver_id_no,
+            td.kd_number,
+            COALESCE(td.chassis_number, c.chassis_number, '') AS chassis_number,
+            COALESCE(td.entry_number,   c.entry_number,   '') AS entry_number
+        FROM crm_test_drives td
+        LEFT JOIN cars c ON c.id = td.car_id
+        WHERE td.id = ?
+        LIMIT 1
+    ");
+    $ext->execute([$tdId]);
+    $row = $ext->fetch();
+    if ($row) {
+        $td['driver_id_no']   = $row['driver_id_no'];
+        $td['kd_number']      = $row['kd_number'];
+        $td['chassis_number'] = $row['chassis_number'];
+        $td['entry_number']   = $row['entry_number'];
+    }
+} catch (\Throwable $_) {
+    // Extended columns don't exist yet — show blanks
 }
 
 if (!$td) {
