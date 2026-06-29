@@ -52,8 +52,11 @@
 <script>
 window.__pwaBeforeInstall = null;
 window.addEventListener('beforeinstallprompt', function(e) {
-    e.preventDefault();
+    // Do NOT call e.preventDefault() — without it Chrome shows its own
+    // native install UI (address-bar icon / Android mini-infobar) automatically.
+    // We also store the event so our custom banner can call .prompt() too.
     window.__pwaBeforeInstall = e;
+    console.log('[PWA] beforeinstallprompt fired ✓');
 });
 </script>
 </head>

@@ -190,7 +190,7 @@ if ($__wa): ?>
 (function () {
     'use strict';
 
-    var DISMISS_KEY  = 'pwa_b_v5';   // bump version to clear old dismissals
+    var DISMISS_KEY  = 'pwa_b_v6';   // bump version to clear old dismissals
     var DISMISS_DAYS = 3;
     var ua           = navigator.userAgent;
     var isIOS        = /iphone|ipad|ipod/i.test(ua) && !window.MSStream;
@@ -245,21 +245,28 @@ if ($__wa): ?>
 
     // ── Native install prompt ─────────────────────────────────────────────
     function capturePrompt(e) {
-        e.preventDefault();
+        // Do NOT call e.preventDefault() — Chrome's native install UI must
+        // remain active as a guaranteed fallback.
         deferredPrompt = e;
+        console.log('[PWA] deferredPrompt set ✓ — custom Install button now active');
     }
     window.addEventListener('beforeinstallprompt', capturePrompt);
+    // Pick up event captured early in <head> (fires before footer script runs)
     if (window.__pwaBeforeInstall) {
         deferredPrompt = window.__pwaBeforeInstall;
         window.__pwaBeforeInstall = null;
+        console.log('[PWA] deferredPrompt restored from __pwaBeforeInstall ✓');
     }
+    console.log('[PWA] init — deferredPrompt:', deferredPrompt ? 'AVAILABLE' : 'null (Chrome native UI handles install)');
 
     // ── Install action ────────────────────────────────────────────────────
     function doInstall() {
+        console.log('[PWA] Install clicked — deferredPrompt:', deferredPrompt ? 'available' : 'null');
         if (deferredPrompt) {
-            // Chrome / Edge / Android — real native install dialog
+            // Chrome / Edge / Android — native one-tap install dialog
             deferredPrompt.prompt();
             deferredPrompt.userChoice.then(function (r) {
+                console.log('[PWA] userChoice:', r.outcome);
                 if (r.outcome === 'accepted') {
                     hideBanner();
                     localStorage.removeItem(DISMISS_KEY);
@@ -271,21 +278,25 @@ if ($__wa): ?>
                 deferredPrompt = null;
             });
         } else if (isIOSSaf) {
-            // iOS Safari — show step-by-step guide
             showPanel('ios');
         } else {
-            // Everything else — show browser-specific hint
+            // Chrome / Edge shows a native install icon in the address bar.
+            // Point the user directly to it — it works even without our prompt.
             var hint = '';
             if (isChrome || isEdge) {
-                hint = 'Look for the <strong>install</strong> <svg width="14" height="14" viewBox="0 0 24 24" fill="#2563eb" style="vertical-align:middle"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> icon in your browser\'s address bar &mdash; or tap the menu <strong>&#8942;</strong> and choose <strong>Install App</strong> or <strong>Add to Home Screen</strong>.';
-            } else if (isFF) {
-                hint = 'Tap the home icon in the address bar, then tap <strong>Add to Home Screen</strong>.';
+                hint = '<strong>Chrome has an install button ready for you:</strong><br>'
+                     + '&bull; <strong>Desktop:</strong> look for the '
+                     + '<svg width="15" height="15" viewBox="0 0 24 24" fill="#2563eb" style="vertical-align:middle;margin:0 2px"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>'
+                     + ' install icon in the <strong>address bar</strong> (right side).<br>'
+                     + '&bull; <strong>Android:</strong> tap the menu <strong>&#8942;</strong> &rarr; <strong>"Add to Home Screen"</strong> or <strong>"Install App"</strong>.';
             } else if (isSamsung) {
-                hint = 'Tap the menu <strong>&#8942;</strong> and choose <strong>Add page to</strong> &rarr; <strong>Home screen</strong>.';
+                hint = 'Tap the menu <strong>&#8942;</strong> and choose <strong>"Add page to"</strong> &rarr; <strong>"Home screen"</strong>.';
+            } else if (isFF) {
+                hint = 'Tap the <strong>home</strong> icon in the Firefox address bar, then <strong>"Add to Home Screen"</strong>.';
             } else if (isIOS) {
-                hint = 'Open this page in <strong>Safari</strong>, tap the share button, then <strong>Add to Home Screen</strong>.';
+                hint = 'Open this page in <strong>Safari</strong>, tap the <strong>Share</strong> button, then <strong>"Add to Home Screen"</strong>.';
             } else {
-                hint = 'Use your browser menu to find <strong>Install App</strong> or <strong>Add to Home Screen</strong>.';
+                hint = 'Open your browser menu and look for <strong>"Install App"</strong> or <strong>"Add to Home Screen"</strong>.';
             }
             var hintEl = document.getElementById('pwaBannerHintText');
             if (hintEl) hintEl.innerHTML = hint;
@@ -304,13 +315,19 @@ if ($__wa): ?>
     btnIosOk   && btnIosOk.addEventListener('click', dismiss);
     btnHintOk  && btnHintOk.addEventListener('click', dismiss);
 
-    // Topbar shortcut button (if present)
+    // Topbar shortcut button — show for iOS Safari and when prompt is available
     var topbarBtn = document.getElementById('pwaInstallTopbarBtn');
-    if (topbarBtn) {
+    if (topbarBtn && (isIOSSaf || deferredPrompt)) {
         topbarBtn.classList.remove('d-none');
+    }
+    if (topbarBtn) {
         topbarBtn.addEventListener('click', function () {
             showPanel('main');
             showBanner();
+        });
+        // Also reveal it when the prompt fires later
+        window.addEventListener('beforeinstallprompt', function () {
+            topbarBtn.classList.remove('d-none');
         });
     }
 

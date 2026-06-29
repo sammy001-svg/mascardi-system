@@ -1,5 +1,5 @@
 /**
- * Mascardi Car Yard — Service Worker v5
+ * Mascardi Car Yard — Service Worker v6
  *
  * Strategy:
  *   HTML pages  → Network-first, cache fallback, offline page last resort
@@ -7,7 +7,7 @@
  *   API / POST  → Network-only (never cached)
  */
 
-const VERSION    = 'v5';
+const VERSION    = 'v6';
 const CACHE_NAME = 'mascardi-' + VERSION;
 const BASE       = self.location.pathname.replace(/\/sw\.js$/, '');
 const OFFLINE    = BASE + '/offline.php';
