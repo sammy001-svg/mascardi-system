@@ -11,6 +11,27 @@ $uid = (int)$me['id'];
 $isCrmAgent = ($me['role'] === 'customer_relations');
 $pageTitle  = $isCrmAgent ? 'My Leads' : 'All Leads';
 
+// ─── SINGLE LEAD DELETE (super_admin only) ───────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_lead') {
+    if ($me['role'] !== 'super_admin') {
+        setFlash('danger', 'Only Super Admin can delete leads.');
+        redirect('leads.php');
+    }
+    $delId = (int)($_POST['lead_id'] ?? 0);
+    if (!$delId) { setFlash('warning', 'Invalid lead.'); redirect('leads.php'); }
+
+    try {
+        $db->prepare("DELETE FROM crm_activities  WHERE lead_id = ?")->execute([$delId]);
+        $db->prepare("DELETE FROM crm_test_drives WHERE lead_id = ?")->execute([$delId]);
+        $db->prepare("DELETE FROM crm_leads        WHERE id      = ?")->execute([$delId]);
+        setFlash('success', 'Lead deleted successfully.');
+    } catch (\Throwable $e) {
+        setFlash('danger', 'Delete failed: ' . $e->getMessage());
+    }
+    redirect('leads.php');
+}
+// ─── END DELETE HANDLER ───────────────────────────────────────────────────────
+
 // ─── BULK ACTION POST HANDLER ────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_action'])) {
     $bulkAction = $_POST['bulk_action'];
@@ -443,7 +464,18 @@ include __DIR__ . '/../../includes/header.php';
                 <?php if (!$isCrmAgent): ?><td class="small text-muted"><?= e($l['assigned_name'] ?? '—') ?></td><?php endif; ?>
                 <td class="small text-muted"><?= fmtDate($l['created_at'], 'd M') ?></td>
                 <td class="pe-3">
-                    <a href="view_lead.php?id=<?= $l['id'] ?>" class="btn btn-xs btn-outline-primary">View</a>
+                    <div class="d-flex gap-1">
+                        <a href="view_lead.php?id=<?= $l['id'] ?>" class="btn btn-xs btn-outline-primary">View</a>
+                        <?php if ($me['role'] === 'super_admin'): ?>
+                        <form method="POST" class="delete-lead-form" data-name="<?= e($l['name']) ?>">
+                            <input type="hidden" name="action"  value="delete_lead">
+                            <input type="hidden" name="lead_id" value="<?= $l['id'] ?>">
+                            <button type="submit" class="btn btn-xs btn-outline-danger" title="Delete lead">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </form>
+                        <?php endif; ?>
+                    </div>
                 </td>
             </tr>
             <?php endforeach; ?>
@@ -503,6 +535,17 @@ include __DIR__ . '/../../includes/header.php';
         updateBar();
     };
 }());
+
+// Delete confirmation
+document.querySelectorAll('.delete-lead-form').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var name = form.dataset.name || 'this lead';
+        if (confirm('Permanently delete "' + name + '" and all their activities?\n\nThis cannot be undone.')) {
+            form.submit();
+        }
+    });
+});
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

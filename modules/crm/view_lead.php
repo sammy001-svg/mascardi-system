@@ -65,6 +65,23 @@ $salesUsers = $db->query("SELECT id, name FROM users WHERE status='active' ORDER
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
+    if ($action === 'delete_lead') {
+        if ($me['role'] !== 'super_admin') {
+            setFlash('danger', 'Only Super Admin can delete leads.');
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+        }
+        try {
+            $db->prepare("DELETE FROM crm_activities  WHERE lead_id = ?")->execute([$id]);
+            $db->prepare("DELETE FROM crm_test_drives WHERE lead_id = ?")->execute([$id]);
+            $db->prepare("DELETE FROM crm_leads        WHERE id      = ?")->execute([$id]);
+            setFlash('success', 'Lead "' . $lead['name'] . '" has been deleted.');
+        } catch (\Throwable $e) {
+            setFlash('danger', 'Delete failed: ' . $e->getMessage());
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+        }
+        redirect(BASE_URL . '/modules/crm/leads.php');
+    }
+
     if ($action === 'update_stage' && canWrite('crm')) {
         $newStage   = $_POST['stage']       ?? '';
         $lostReason = trim($_POST['lost_reason'] ?? '') ?: null;
@@ -321,8 +338,54 @@ include __DIR__ . '/../../includes/header.php';
         <a href="leads.php" class="btn btn-sm btn-outline-secondary">
             <i class="fa fa-arrow-left me-1"></i>Back
         </a>
+        <?php if ($me['role'] === 'super_admin'): ?>
+        <button type="button" class="btn btn-sm btn-danger" id="deleteLeadBtn"
+                data-name="<?= e($lead['name']) ?>">
+            <i class="fa fa-trash me-1"></i>Delete Lead
+        </button>
+        <?php endif; ?>
     </div>
 </div>
+
+<?php if ($me['role'] === 'super_admin'): ?>
+<!-- Delete confirmation modal -->
+<div class="modal fade" id="deleteLeadModal" tabindex="-1" aria-labelledby="deleteLeadModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title text-danger" id="deleteLeadModalLabel">
+                    <i class="fa fa-triangle-exclamation me-2"></i>Delete Lead
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">You are about to permanently delete:</p>
+                <p class="fw-bold fs-5 text-dark mb-3"><?= e($lead['name']) ?></p>
+                <div class="alert alert-danger py-2 mb-0" style="font-size:13px">
+                    <i class="fa fa-circle-exclamation me-1"></i>
+                    This will also delete all activity history and test drives for this lead.
+                    <strong>This cannot be undone.</strong>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST">
+                    <input type="hidden" name="action"  value="delete_lead">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fa fa-trash me-1"></i>Yes, Delete Permanently
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('deleteLeadBtn').addEventListener('click', function () {
+    var modal = new bootstrap.Modal(document.getElementById('deleteLeadModal'));
+    modal.show();
+});
+</script>
+<?php endif; ?>
 
 <div class="row g-4">
     <!-- Left: details + stage -->
