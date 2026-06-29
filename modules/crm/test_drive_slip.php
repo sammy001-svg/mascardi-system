@@ -24,7 +24,8 @@ if (!$tdId) {
 $stmt = $db->prepare("
     SELECT
         td.id              AS td_id,
-        td.scheduled_at,
+        td.scheduled_date,
+        td.scheduled_time,
         td.duration_minutes,
         td.notes           AS td_notes,
         td.driver_id_no,
@@ -80,7 +81,7 @@ if ($me['role'] === 'customer_relations') {
 }
 
 // Booking reference
-$ref = 'TD-' . date('Y', strtotime($td['scheduled_at'])) . '-' . str_pad($tdId, 5, '0', STR_PAD_LEFT);
+$ref = 'TD-' . date('Y', strtotime($td['scheduled_date'])) . '-' . str_pad($tdId, 5, '0', STR_PAD_LEFT);
 
 // Company details from settings (fall back to defaults)
 $companyName    = getSetting('company_name',    'Mascardi Luxury Cars');
@@ -89,7 +90,7 @@ $companyEmail   = getSetting('company_email',   '');
 $companyAddress = getSetting('company_address', 'Nairobi, Kenya');
 $companyLogo    = BASE_URL . '/assets/img/logo.png';
 
-function e2(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
+function e2($v): string { return htmlspecialchars((string)($v ?? ''), ENT_QUOTES, 'UTF-8'); }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -295,7 +296,7 @@ function e2(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
         </div>
         <div class="info-item">
           <label>Date &amp; Time</label>
-          <span><?= e2(date('d M Y, h:i A', strtotime($td['scheduled_at']))) ?></span>
+          <span><?= e2(date('d M Y', strtotime($td['scheduled_date'])) . ', ' . date('h:i A', strtotime($td['scheduled_time']))) ?></span>
         </div>
         <div class="info-item">
           <label>Duration</label>
