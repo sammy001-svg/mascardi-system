@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -r 'require_once '\\\\''includes/functions.php'\\\\''; $db=getDB\\(\\); $r=$db->query\\('\\\\''DESCRIBE cars'\\\\''\\)->fetchAll\\(PDO::FETCH_COLUMN\\); echo implode\\('\\\\'', '\\\\'',$r\\);')"
+    ]
+  }
+}
