@@ -58,10 +58,10 @@ if (!isset($_SESSION['auth_user']) && !empty($_COOKIE['rm_tok']) && function_exi
             $newToken = bin2hex(random_bytes(32));
             $newHash  = hash('sha256', $newToken);
             $db->prepare("DELETE FROM remember_tokens WHERE id = ?")->execute([$row['token_id']]);
-            $db->prepare("INSERT INTO remember_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))")
+            $db->prepare("INSERT INTO remember_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 YEAR))")
                ->execute([$row['id'], $newHash]);
             setcookie('rm_tok', $newToken, [
-                'expires'  => time() + 30 * 86400,
+                'expires'  => time() + 10 * 365 * 86400,
                 'path'     => '/',
                 'httponly' => true,
                 'samesite' => 'Lax',

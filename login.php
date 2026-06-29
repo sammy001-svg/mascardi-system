@@ -47,10 +47,10 @@ function _issueRememberToken(PDO $db, int $userId): void {
         $db->prepare("DELETE FROM remember_tokens WHERE user_id = ? OR expires_at < NOW()")->execute([$userId]);
         $token = bin2hex(random_bytes(32));
         $hash  = hash('sha256', $token);
-        $db->prepare("INSERT INTO remember_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))")
+        $db->prepare("INSERT INTO remember_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 YEAR))")
            ->execute([$userId, $hash]);
         setcookie('rm_tok', $token, [
-            'expires'  => time() + 30 * 86400,
+            'expires'  => time() + 10 * 365 * 86400,
             'path'     => '/',
             'httponly' => true,
             'samesite' => 'Lax',
@@ -351,7 +351,7 @@ body::before {
             <div class="mb-4">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="remember_me" id="rememberMe" value="1"<?= !empty($_POST['remember_me']) ? ' checked' : '' ?>>
-                    <label class="form-check-label" for="rememberMe">Remember me for 30 days</label>
+                    <label class="form-check-label" for="rememberMe">Remember me on this browser</label>
                 </div>
             </div>
             <button type="submit" class="btn btn-login btn-primary w-100 text-white">
