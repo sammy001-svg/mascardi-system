@@ -9,6 +9,11 @@ $car->execute([$id]);
 $car = $car->fetch();
 if (!$car) { setFlash('error','Car not found.'); redirect(BASE_URL.'/modules/cars/index.php'); }
 
+// In-workshop vehicles have their own dedicated progress page
+if ($car['status'] === 'in_workshop') {
+    redirect(BASE_URL . '/modules/cars/workshop.php?id=' . $id);
+}
+
 $intake   = $db->prepare("SELECT * FROM car_intake WHERE car_id=? ORDER BY id DESC LIMIT 1");
 $intake->execute([$id]); $intake = $intake->fetch();
 

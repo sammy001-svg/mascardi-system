@@ -168,12 +168,13 @@ include __DIR__ . '/../../includes/header.php';
                         <div class="d-flex gap-1">
                             <?php if ($section === 'workshop'): ?>
                             <a href="workshop.php?id=<?= $car['id'] ?>" class="btn btn-xs btn-warning" title="Workshop Progress">
-                                <i class="fa fa-screwdriver-wrench"></i>
+                                <i class="fa fa-screwdriver-wrench me-1"></i>Progress
                             </a>
-                            <?php endif; ?>
+                            <?php else: ?>
                             <a href="view.php?id=<?= $car['id'] ?>" class="btn btn-xs btn-outline-primary" title="View">
                                 <i class="fa fa-eye"></i>
                             </a>
+                            <?php endif; ?>
                             <?php if (canWrite('cars')): ?>
                             <a href="edit.php?id=<?= $car['id'] ?>" class="btn btn-xs btn-outline-secondary" title="Edit">
                                 <i class="fa fa-pen"></i>
