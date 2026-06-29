@@ -8,6 +8,7 @@
 // Buffer any accidental output from config (session start, warnings, etc.)
 ob_start();
 require_once __DIR__ . '/config/app.php';
+require_once __DIR__ . '/config/database.php';
 ob_end_clean();
 
 // Derive base URL (safe for sub-directory deployments)
@@ -24,7 +25,7 @@ try {
         $appName      = $row['setting_value'];
         $appShortName = explode(' ', $appName)[0];
     }
-} catch (Exception $e) { /* use defaults */ }
+} catch (\Throwable $e) { /* use defaults */ }
 
 // Static PNG paths (committed to git, always exist)
 $icon192 = $base . '/assets/images/icons/icon-192.png';
