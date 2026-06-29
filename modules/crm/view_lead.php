@@ -326,8 +326,8 @@ $availCarsForModal = [];
 try {
     $availCarsForModal = $db->query("
         SELECT id, make, model, year, color, registration_number,
-               COALESCE(NULLIF(selling_price,0), NULLIF(asking_price,0), 0) AS sale_price
-        FROM cars WHERE status IN ('completed','arrived')
+               COALESCE(NULLIF(asking_price,0), NULLIF(selling_price,0), 0) AS sale_price
+        FROM cars WHERE car_type = 'inventory'
         ORDER BY make, model LIMIT 300
     ")->fetchAll();
 } catch (\Throwable $_) {}
