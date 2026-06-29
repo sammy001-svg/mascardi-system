@@ -6,6 +6,14 @@ canAccess('crm') || redirect(BASE_URL . '/index.php');
 $db = getDB();
 $me = authUser();
 
+// Ensure extended columns exist (same migrations as view_lead.php)
+try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN chassis_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN driver_id_no VARCHAR(50) NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN kd_number VARCHAR(50) NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN chassis_number VARCHAR(100) NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN entry_number VARCHAR(100) NULL"); } catch (\Throwable $_) {}
+
 $tdId = (int)($_GET['id'] ?? 0);
 if (!$tdId) {
     setFlash('error', 'No test drive specified.');
@@ -46,8 +54,14 @@ $stmt = $db->prepare("
     WHERE td.id = ?
     LIMIT 1
 ");
-$stmt->execute([$tdId]);
-$td = $stmt->fetch();
+try {
+    $stmt->execute([$tdId]);
+    $td = $stmt->fetch();
+} catch (\Throwable $e) {
+    error_log('test_drive_slip query error: ' . $e->getMessage());
+    setFlash('error', 'Could not load test drive slip. ' . $e->getMessage());
+    redirect(BASE_URL . '/modules/crm/leads.php');
+}
 
 if (!$td) {
     setFlash('error', 'Test drive not found.');
