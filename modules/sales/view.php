@@ -39,6 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cance
     redirect(BASE_URL . '/modules/sales/index.php');
 }
 
+try { $db->exec("ALTER TABLE car_sales ADD COLUMN cost_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+$canSeeProfit = hasRole(['admin','super_admin','general_manager','sales_manager','finance_manager','finance_officer']);
+
 $pageTitle = $sale['sale_number'];
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -84,6 +87,18 @@ include __DIR__ . '/../../includes/header.php';
                     <dt class="col-5 text-muted">Sale Number</dt><dd class="col-7 fw-bold"><?= e($sale['sale_number']) ?></dd>
                     <dt class="col-5 text-muted">Sale Date</dt><dd class="col-7"><?= fmtDate($sale['sale_date']) ?></dd>
                     <dt class="col-5 text-muted">Sale Price</dt><dd class="col-7 fw-bold text-success fs-6"><?= money((float)$sale['sale_price']) ?></dd>
+                    <?php if ($canSeeProfit && $sale['cost_price'] !== null): ?>
+                    <dt class="col-5 text-muted">Cost Price</dt><dd class="col-7 text-muted"><?= money((float)$sale['cost_price']) ?></dd>
+                    <?php
+                        $grossProfit = (float)$sale['sale_price'] - (float)$sale['cost_price'];
+                        $margin = $sale['cost_price'] > 0 ? round($grossProfit / (float)$sale['sale_price'] * 100, 1) : null;
+                    ?>
+                    <dt class="col-5 text-muted">Gross Profit</dt>
+                    <dd class="col-7 fw-bold <?= $grossProfit >= 0 ? 'text-success' : 'text-danger' ?>">
+                        <?= money($grossProfit) ?>
+                        <?php if ($margin !== null): ?><small class="text-muted fw-normal">(<?= $margin ?>% margin)</small><?php endif; ?>
+                    </dd>
+                    <?php endif; ?>
                     <dt class="col-5 text-muted">Payment</dt><dd class="col-7"><?= statusBadge($sale['payment_status']) ?> — <?= e(ucwords(str_replace('_',' ',$sale['payment_method']))) ?></dd>
                     <?php if ($sale['deposit_amount'] > 0): ?>
                     <dt class="col-5 text-muted">Deposit</dt><dd class="col-7"><?= money((float)$sale['deposit_amount']) ?></dd>

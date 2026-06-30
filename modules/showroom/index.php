@@ -5,6 +5,12 @@ canAccess('showroom') || hasRole(['admin','sales_manager','sales_officer','sales
 $pageTitle = 'Showroom Inquiries';
 $db = getDB();
 
+// Inline migrations — ensure columns exist
+try { $db->exec("ALTER TABLE showroom_inquiries ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'new'"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE showroom_inquiries ADD COLUMN notes TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE showroom_inquiries ADD COLUMN responded_by INT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE showroom_inquiries ADD COLUMN responded_at DATETIME NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+
 // ── Handle status update ──────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     verifyCsrf();
