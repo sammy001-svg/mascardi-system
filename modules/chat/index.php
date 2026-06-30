@@ -8,9 +8,17 @@ $me      = authUser();
 $db      = getDB();
 $palette = ['#075e54','#128c7e','#e76f51','#2a9d8f','#264653','#e9c46a'];
 $roleLabels = [
-    'admin'=>'Admin','workshop_manager'=>'Workshop Manager',
-    'sales_person'=>'Sales Person','sales_officer'=>'Sales Officer',
-    'manager'=>'Manager','mechanic'=>'Mechanic',
+    'super_admin'        => 'Super Admin',
+    'admin'              => 'Admin',
+    'general_manager'    => 'General Manager',
+    'sales_manager'      => 'Sales Manager',
+    'workshop_manager'   => 'Workshop Manager',
+    'sales_person'       => 'Sales Person',
+    'sales_officer'      => 'Sales Officer',
+    'customer_relations' => 'Customer Relations',
+    'receptionist'       => 'Receptionist',
+    'manager'            => 'Manager',
+    'mechanic'           => 'Mechanic',
 ];
 
 $stmt = $db->prepare("SELECT id, name, role FROM users WHERE id != ? AND status='active' ORDER BY name ASC");
@@ -117,11 +125,15 @@ body > .modal-backdrop,
 .cp-hdr {
     display: flex; align-items: center; justify-content: space-between;
     padding: 13px 16px;
-    background: #f0f2f5;
-    border-bottom: 1px solid #e9edef;
+    background: #1e293b;
+    border-bottom: 1px solid #0f172a;
     flex-shrink: 0;
 }
-.cp-hdr h5 { margin: 0; font-size: 18px; font-weight: 700; color: #111b21; }
+.cp-hdr h5 { margin: 0; font-size: 16px; font-weight: 700; color: #f1f5f9; letter-spacing: .2px; }
+.cp-hdr-brand { display: flex; align-items: center; gap: 9px; }
+.cp-hdr-icon { width: 30px; height: 30px; border-radius: 8px; background: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; flex-shrink: 0; }
+.cp-hdr .ic-btn { color: #94a3b8; }
+.cp-hdr .ic-btn:hover { background: rgba(255,255,255,.1); color: #f1f5f9; }
 .cp-search { padding: 8px 12px; flex-shrink: 0; }
 .cp-si { position: relative; }
 .cp-si input {
@@ -147,7 +159,7 @@ body > .modal-backdrop,
     user-select: none;
 }
 .conv-item:hover  { background: #f5f6f6; }
-.conv-item.active { background: #f0f2f5; }
+.conv-item.active { background: #eff6ff; border-left: 3px solid #2563eb; }
 .cv-av {
     width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
@@ -167,7 +179,7 @@ body > .modal-backdrop,
 }
 .cv-unread {
     min-width: 20px; height: 20px; padding: 0 6px;
-    background: #25d366; color: #fff; border-radius: 10px;
+    background: #2563eb; color: #fff; border-radius: 10px;
     font-size: 11px; font-weight: 700;
     display: inline-flex; align-items: center; justify-content: center;
     flex-shrink: 0;
@@ -193,10 +205,10 @@ body > .modal-backdrop,
 }
 .cw-icon {
     width: 96px; height: 96px; border-radius: 50%;
-    background: linear-gradient(135deg, #128c7e 0%, #075e54 100%);
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
     display: flex; align-items: center; justify-content: center;
     font-size: 40px; color: #fff; margin-bottom: 20px;
-    box-shadow: 0 8px 28px rgba(18,140,126,.35);
+    box-shadow: 0 8px 28px rgba(37,99,235,.35);
 }
 .chat-welcome h6 { font-size: 22px; font-weight: 700; color: #111b21; margin: 0 0 8px; }
 .chat-welcome p  { font-size: 13.5px; margin: 0 0 24px; max-width: 280px; line-height: 1.7; color: #667781; }
@@ -206,10 +218,10 @@ body > .modal-backdrop,
     padding: 10px 22px; border-radius: 24px; font-size: 13.5px; font-weight: 600;
     border: none; cursor: pointer; transition: all .18s; text-decoration: none;
 }
-.cw-btn-primary { background: #128c7e; color: #fff; box-shadow: 0 4px 14px rgba(18,140,126,.3); }
-.cw-btn-primary:hover { background: #0f7268; color: #fff; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(18,140,126,.4); }
-.cw-btn-secondary { background: #fff; color: #128c7e; border: 1.5px solid #128c7e; }
-.cw-btn-secondary:hover { background: #f0faf9; transform: translateY(-1px); }
+.cw-btn-primary { background: #2563eb; color: #fff; box-shadow: 0 4px 14px rgba(37,99,235,.3); }
+.cw-btn-primary:hover { background: #1d4ed8; color: #fff; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(37,99,235,.4); }
+.cw-btn-secondary { background: #fff; color: #2563eb; border: 1.5px solid #2563eb; }
+.cw-btn-secondary:hover { background: #eff6ff; transform: translateY(-1px); }
 .cw-tips { margin-top: 32px; display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 420px; }
 .cw-tip {
     display: flex; align-items: flex-start; gap: 10px; text-align: left;
@@ -260,10 +272,9 @@ body > .modal-backdrop,
 .chat-msgs {
     flex: 1; overflow-y: auto; padding: 12px 16px 8px;
     display: flex; flex-direction: column;
-    background: #efeae2;
-    /* subtle dot pattern */
-    background-image: radial-gradient(circle, rgba(0,0,0,.04) 1px, transparent 1px);
-    background-size: 20px 20px;
+    background: #f1f5f9;
+    background-image: radial-gradient(circle, rgba(37,99,235,.04) 1px, transparent 1px);
+    background-size: 22px 22px;
     scroll-behavior: smooth;
 }
 .chat-msgs::-webkit-scrollbar { width: 5px; }
@@ -307,7 +318,7 @@ body > .modal-backdrop,
 
 /* Sent bubble */
 .msg-row.s .bubble {
-    background: #d9fdd3;
+    background: #dbeafe;
     border-radius: 10px 2px 10px 10px;
 }
 /* Received bubble */
@@ -363,16 +374,16 @@ body > .modal-backdrop,
 .b-voice { display: flex; align-items: center; gap: 10px; min-width: 220px; padding: 2px 0 4px; }
 .b-play {
     width: 38px; height: 38px; border-radius: 50%;
-    background: #128c7e; color: #fff; border: none;
+    background: #2563eb; color: #fff; border: none;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; font-size: 14px; flex-shrink: 0;
     transition: background .15s;
 }
-.b-play:hover { background: #0f7268; }
+.b-play:hover { background: #1d4ed8; }
 .b-wf {
     flex: 1; height: 26px; border-radius: 4px; cursor: pointer;
     background: linear-gradient(to right,
-        #128c7e 0%, #128c7e var(--p,0%),
+        #2563eb 0%, #2563eb var(--p,0%),
         rgba(0,0,0,.14) var(--p,0%), rgba(0,0,0,.14) 100%);
 }
 .b-dur { font-size: 11.5px; color: #667781; min-width: 34px; text-align: right; }
@@ -400,7 +411,7 @@ body > .modal-backdrop,
 .scroll-fab .sfab-badge {
     position: absolute; top: -4px; right: -4px;
     min-width: 18px; height: 18px; padding: 0 4px;
-    background: #25d366; color: #fff;
+    background: #2563eb; color: #fff;
     border-radius: 9px; font-size: 10px; font-weight: 700;
     display: flex; align-items: center; justify-content: center;
 }
@@ -445,7 +456,7 @@ body > .modal-backdrop,
     transition: background .15s;
 }
 .bar-ic:hover { background: #e9edef; }
-.bar-ic.active-emoji { color: #128c7e; background: #e0f7f4; }
+.bar-ic.active-emoji { color: #2563eb; background: #dbeafe; }
 
 .bar-center { flex: 1; display: flex; flex-direction: column; }
 .bar-input {
@@ -456,7 +467,7 @@ body > .modal-backdrop,
     border: 1.5px solid transparent;
     transition: border-color .15s;
 }
-.bar-input:focus { border-color: #25d366; }
+.bar-input:focus { border-color: #2563eb; }
 .bar-input:empty::before { content: attr(data-ph); color: #8696a0; pointer-events: none; }
 
 /* Recording bar */
@@ -481,12 +492,12 @@ body > .modal-backdrop,
 
 .bar-send {
     width: 44px; height: 44px; border-radius: 50%; border: none;
-    background: #128c7e; color: #fff; font-size: 18px;
+    background: #2563eb; color: #fff; font-size: 18px;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; flex-shrink: 0;
     transition: background .15s, transform .1s;
 }
-.bar-send:hover  { background: #0f7268; }
+.bar-send:hover  { background: #1d4ed8; }
 .bar-send:active { transform: scale(.9); }
 .bar-send.rec-on { background: #dc2626; }
 
@@ -557,7 +568,7 @@ body > .modal-backdrop,
 .cv-grp-ic {
     position:absolute; bottom:-2px; right:-2px;
     width:16px; height:16px; border-radius:50%;
-    background:#128c7e; border:2px solid #fff;
+    background:#2563eb; border:2px solid #fff;
     display:flex; align-items:center; justify-content:center;
     font-size:7px; color:#fff;
 }
@@ -587,26 +598,26 @@ body > .modal-backdrop,
 
 /* Reply preview block inside a bubble */
 .reply-prev {
-    background:rgba(0,0,0,.07); border-left:3px solid #128c7e;
+    background:rgba(0,0,0,.07); border-left:3px solid #2563eb;
     border-radius:4px; padding:5px 10px; margin-bottom:6px;
     cursor:pointer; transition:background .12s;
     max-width:100%;
 }
 .reply-prev:hover { background:rgba(0,0,0,.11); }
-.rp-name  { font-size:11.5px; font-weight:700; color:#128c7e; margin-bottom:2px; }
+.rp-name  { font-size:11.5px; font-weight:700; color:#2563eb; margin-bottom:2px; }
 .rp-text  { font-size:12px; color:#667781; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
-.msg-row.s .reply-prev { border-color:#0d7a6d; }
-.msg-row.s .rp-name    { color:#0d7a6d; }
+.msg-row.s .reply-prev { border-color:#1d4ed8; }
+.msg-row.s .rp-name    { color:#1d4ed8; }
 
 /* Reply bar (shown above the input area when replying to a message) */
 .reply-bar { padding:8px 12px 4px; background:#f0f2f5; }
 .reply-bar-inner {
     display:flex; align-items:center; gap:10px;
-    background:#fff; border-left:4px solid #128c7e;
+    background:#fff; border-left:4px solid #2563eb;
     border-radius:6px; padding:7px 12px;
 }
 .reply-bar-meta { flex:1; min-width:0; }
-.reply-bar-name { font-size:12px; font-weight:700; color:#128c7e; margin-bottom:1px; }
+.reply-bar-name { font-size:12px; font-weight:700; color:#2563eb; margin-bottom:1px; }
 .reply-bar-text { font-size:12.5px; color:#667781; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .reply-bar-cls  { background:none; border:none; color:#8696a0; font-size:18px; cursor:pointer; line-height:1; flex-shrink:0; }
 .reply-bar-cls:hover { color:#111b21; }
@@ -614,7 +625,7 @@ body > .modal-backdrop,
 /* Modal tabs (Direct / Group) */
 .nc-tabs { display:flex; gap:4px; margin-bottom:10px; }
 .nc-tab  { flex:1; padding:8px; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; background:#f0f2f5; color:#54656f; transition:background .15s,color .15s; font-family:inherit; }
-.nc-tab.active { background:#128c7e; color:#fff; }
+.nc-tab.active { background:#2563eb; color:#fff; }
 
 /* Group info modal member row */
 .gi-member { display:flex; align-items:center; gap:12px; padding:9px 4px; border-bottom:1px solid #f5f6f6; }
@@ -632,9 +643,9 @@ body > .modal-backdrop,
 .load-more-btn:disabled { opacity:.5; cursor:wait; }
 
 /* Typing indicator (in chat header) */
-.ch-typing { font-size:12px; color:#128c7e; overflow:hidden; max-height:0; transition:max-height .2s; }
+.ch-typing { font-size:12px; color:#2563eb; overflow:hidden; max-height:0; transition:max-height .2s; }
 .ch-typing.visible { max-height:20px; }
-.typing-dot { display:inline-block; width:4px; height:4px; border-radius:50%; background:#128c7e; margin:0 1.5px; vertical-align:middle; animation:tdot 1.2s ease-in-out infinite; }
+.typing-dot { display:inline-block; width:4px; height:4px; border-radius:50%; background:#2563eb; margin:0 1.5px; vertical-align:middle; animation:tdot 1.2s ease-in-out infinite; }
 .typing-dot:nth-child(2) { animation-delay:.2s; }
 .typing-dot:nth-child(3) { animation-delay:.4s; }
 @keyframes tdot { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
@@ -674,7 +685,7 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
     box-shadow:0 1px 3px rgba(0,0,0,.1);
     line-height:1.3;
 }
-.reaction-pill.mine  { border-color:#128c7e; background:rgba(18,140,126,.07); }
+.reaction-pill.mine  { border-color:#2563eb; background:rgba(37,99,235,.07); }
 .reaction-pill:hover { background:#f0f2f5; }
 .reaction-count { font-size:11px; color:#667781; font-weight:700; }
 
@@ -695,8 +706,42 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
     pointer-events:none;
 }
 /* Online badge in chat header sub-line */
-.ch-online { color:#25d366; font-size:12px; font-weight:600; }
+.ch-online { color:#22c55e; font-size:12px; font-weight:600; }
 .ch-lastseen { font-size:12px; color:#667781; }
+
+/* ── Conversation section headers ─────────────────────────────────────────── */
+.conv-section-hdr {
+    padding: 12px 16px 4px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .8px;
+    text-transform: uppercase; color: #94a3b8;
+    user-select: none;
+}
+
+/* ── Left panel user profile footer ──────────────────────────────────────── */
+.cp-user-foot {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: #f8fafc; border-top: 1px solid #e9edef;
+    flex-shrink: 0;
+}
+.cpu-av {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 14px;
+}
+.cpu-info { flex: 1; min-width: 0; }
+.cpu-name { font-size: 13px; font-weight: 600; color: #111b21; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cpu-role { font-size: 11px; color: #667781; }
+.cpu-status { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #22c55e; flex-shrink: 0; }
+.cpu-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+
+/* ── Chat header role badge ───────────────────────────────────────────────── */
+.ch-role-badge {
+    display: inline-block; font-size: 10.5px; font-weight: 600;
+    padding: 1px 7px; border-radius: 10px;
+    background: #eff6ff; color: #2563eb; margin-left: 6px;
+    vertical-align: middle;
+}
 </style>
 
 <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -707,7 +752,10 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
     <!-- LEFT: Conversation list -->
     <div class="cp-left">
         <div class="cp-hdr">
-            <h5>Messages</h5>
+            <div class="cp-hdr-brand">
+                <div class="cp-hdr-icon"><i class="fa fa-comments"></i></div>
+                <h5>Team Chat</h5>
+            </div>
             <button class="ic-btn" id="btnNewChat" title="New conversation">
                 <i class="fa fa-pen-to-square"></i>
             </button>
@@ -715,10 +763,24 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
         <div class="cp-search">
             <div class="cp-si">
                 <i class="fa fa-magnifying-glass"></i>
-                <input type="text" id="convSearch" placeholder="Search conversations…" autocomplete="off">
+                <input type="text" id="convSearch" placeholder="Search or start a conversation…" autocomplete="off">
             </div>
         </div>
         <div class="conv-list" id="convList"></div>
+        <!-- Logged-in user strip -->
+        <div class="cp-user-foot">
+            <div class="cpu-av" style="background:<?= e($palette[(int)$me['id'] % count($palette)]) ?>">
+                <?= e(mb_strtoupper(mb_substr($me['name'], 0, 1))) ?>
+            </div>
+            <div class="cpu-info">
+                <div class="cpu-name"><?= e($me['name']) ?></div>
+                <div class="cpu-role"><?= e($roleLabels[$me['role']] ?? ucwords(str_replace('_', ' ', $me['role']))) ?></div>
+            </div>
+            <div class="cpu-status">
+                <div class="cpu-status-dot"></div>
+                <span>Online</span>
+            </div>
+        </div>
     </div>
 
     <!-- RIGHT: Active chat -->
@@ -1078,17 +1140,28 @@ const Chat = window.Chat = {
             const list = el('convList');
             if (!convs.length) {
                 list.innerHTML = `<div class="conv-empty">
-                    <div class="ce-icon"><i class="fa fa-message"></i></div>
+                    <div class="ce-icon"><i class="fa fa-comments"></i></div>
                     No conversations yet.<br>
-                    <small style="display:block;margin:8px 0 12px">Search for a colleague below to start chatting.</small>
-                    <button class="btn btn-success btn-sm px-4"
+                    <small style="display:block;margin:8px 0 12px">Click the compose button above to message a colleague.</small>
+                    <button class="btn btn-primary btn-sm px-4"
                         onclick="bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).show()">
                         <i class="fa fa-pen-to-square me-1"></i> New Conversation
                     </button>
                 </div>`;
                 return;
             }
-            list.innerHTML = convs.map(c => this._convHtml(c)).join('');
+            const directs = convs.filter(c => c.type !== 'group');
+            const groups  = convs.filter(c => c.type === 'group');
+            let html = '';
+            if (directs.length) {
+                html += `<div class="conv-section-hdr">Direct Messages</div>`;
+                html += directs.map(c => this._convHtml(c)).join('');
+            }
+            if (groups.length) {
+                html += `<div class="conv-section-hdr">Group Chats</div>`;
+                html += groups.map(c => this._convHtml(c)).join('');
+            }
+            list.innerHTML = html;
             if (this.convId)
                 list.querySelector(`[data-cid="${this.convId}"]`)?.classList.add('active');
 
@@ -1117,7 +1190,7 @@ const Chat = window.Chat = {
         const badge   = c.unread_count > 0
             ? `<div class="cv-unread">${c.unread_count>99?'99+':c.unread_count}</div>` : '';
         const active    = this.convId == c.id ? 'active' : '';
-        const timeStyle = c.unread_count > 0 ? 'color:#25d366;font-weight:700' : '';
+        const timeStyle = c.unread_count > 0 ? 'color:#2563eb;font-weight:700' : '';
         const isOnline  = !isGroup && c.other_online;
         const onlineDot = isOnline ? `<div class="online-dot"></div>` : '';
         const avatarEl  = isGroup
@@ -1922,7 +1995,7 @@ const Chat = window.Chat = {
                 return `<div class="gi-member">
                     <div style="width:36px;height:36px;border-radius:50%;background:${avatarColor(m.id)};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0">${esc(initials(m.name))}</div>
                     <div class="gi-member-info">
-                        <div class="gi-member-name">${esc(m.name)}${isMe ? ' <span style="color:#128c7e;font-size:12px">(you)</span>' : ''}</div>
+                        <div class="gi-member-name">${esc(m.name)}${isMe ? ' <span style="color:#2563eb;font-size:12px">(you)</span>' : ''}</div>
                         <div class="gi-member-role">${esc(rl)}</div>
                     </div>
                     ${rmBtn}
