@@ -1,13 +1,15 @@
 /**
- * Mascardi Car Yard — Service Worker v6
+ * Mascardi Car Yard — Service Worker v7
  *
  * Strategy:
- *   HTML pages  → Network-first, cache fallback, offline page last resort
- *   Static assets → Cache-first (CSS, JS, fonts, images)
- *   API / POST  → Network-only (never cached)
+ *   HTML pages    → Network-first, cache fallback, offline page last resort
+ *   Static assets → Cache-first (CSS, JS, fonts, local images)
+ *   CDN origins   → Cache-first by hostname (covers fonts.googleapis.com CSS,
+ *                   cdn.jsdelivr.net, cdnjs.cloudflare.com, etc.)
+ *   API / POST    → Network-only (never cached)
  */
 
-const VERSION    = 'v6';
+const VERSION    = 'v7';
 const CACHE_NAME = 'mascardi-' + VERSION;
 const BASE       = self.location.pathname.replace(/\/sw\.js$/, '');
 const OFFLINE    = BASE + '/offline.php';
@@ -47,18 +49,34 @@ self.addEventListener('activate', event => {
     );
 });
 
+// CDN origins — always use cache-first regardless of path/extension
+const CDN_HOSTS = new Set([
+    'cdn.jsdelivr.net',
+    'cdnjs.cloudflare.com',
+    'cdn.datatables.net',
+    'code.jquery.com',
+    'fonts.googleapis.com',
+    'fonts.gstatic.com',
+]);
+
 // ── Fetch ──────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
     const { request } = event;
     const url = new URL(request.url);
 
-    // Only handle GET on same origin (or CDN assets)
+    // Only handle GET
     if (request.method !== 'GET') return;
 
     // Never intercept auth-sensitive paths
     if (/\/(login|logout|api\/)/.test(url.pathname)) return;
 
-    // Static files → cache-first
+    // CDN assets — cache-first by hostname (covers fonts CSS, versioned libs, etc.)
+    if (CDN_HOSTS.has(url.hostname)) {
+        event.respondWith(cacheFirst(request));
+        return;
+    }
+
+    // Local static files — cache-first by extension
     if (/\.(css|js|woff2?|ttf|png|jpg|jpeg|gif|webp|svg|ico)(\?|$)/.test(url.pathname)) {
         event.respondWith(cacheFirst(request));
         return;

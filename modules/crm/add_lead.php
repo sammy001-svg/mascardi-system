@@ -71,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $assignedTo = (int)($_POST['assigned_to'] ?? 0) ?: null;
     $notes      = trim($_POST['notes']         ?? '') ?: null;
     $followUp   = trim($_POST['follow_up_date'] ?? '') ?: null;
+    $campaign   = trim($_POST['campaign']       ?? '') ?: null;
 
     if (!$name) $errors[] = 'Lead name is required.';
     if (!in_array($source, $sources)) $errors[] = 'Invalid source.';
@@ -85,9 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $db->prepare("
                 INSERT INTO crm_leads
-                    (name, phone, email, source, interested_in, budget, stage, assigned_to, notes, follow_up_date)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
-            ")->execute([$name,$phone,$email,$source,$interestedIn,$budget,$stage,$assignedTo,$notes,$followUp]);
+                    (name, phone, email, source, campaign, interested_in, budget, stage, assigned_to, notes, follow_up_date)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            ")->execute([$name,$phone,$email,$source,$campaign,$interestedIn,$budget,$stage,$assignedTo,$notes,$followUp]);
 
             $newId = (int)$db->lastInsertId();
             logActivity('create','crm_leads',$newId,"New lead: $name");
@@ -252,7 +253,7 @@ document.getElementById('confirmDup').addEventListener('change', function () {
                     </div>
                 </div>
 
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label fw-semibold">Lead Source <span class="text-danger">*</span></label>
                     <select name="source" class="form-select" required>
                         <?php foreach ($sourceLabels as $k => $lbl): ?>
@@ -261,7 +262,15 @@ document.getElementById('confirmDup').addEventListener('change', function () {
                     </select>
                 </div>
 
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Campaign / Ad</label>
+                    <input type="text" name="campaign" class="form-control"
+                           value="<?= e($_POST['campaign'] ?? '') ?>"
+                           placeholder="e.g. Facebook Summer Ad, Google Q4…">
+                    <div class="form-text">Optional — tracks which campaign brought this lead</div>
+                </div>
+
+                <div class="col-md-3">
                     <label class="form-label fw-semibold">Initial Stage</label>
                     <select name="stage" class="form-select">
                         <?php foreach ($stageLabels as $k => $lbl): ?>
@@ -270,7 +279,7 @@ document.getElementById('confirmDup').addEventListener('change', function () {
                     </select>
                 </div>
 
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label fw-semibold">Assigned To</label>
                     <select name="assigned_to" class="form-select select2">
                         <option value="">— Unassigned —</option>

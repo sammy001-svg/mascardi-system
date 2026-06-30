@@ -6,6 +6,10 @@ $pageTitle = 'Add Car';
 $db = getDB();
 $errors = [];
 
+// Inline migrations — silent no-op if columns already exist
+try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $chassis   = trim($_POST['chassis_number'] ?? '');
     $reg       = trim($_POST['registration_number'] ?? '');
@@ -21,10 +25,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $ownerPhone = trim($_POST['owner_phone'] ?? '');
     $body       = trim($_POST['body_type'] ?? '');
     $notes      = trim($_POST['notes'] ?? '');
-    $askingPrice = ($_POST['asking_price'] ?? '') !== '' ? (float)$_POST['asking_price'] : null;
-    $mileage     = ($_POST['mileage']      ?? '') !== '' ? (int)$_POST['mileage']        : null;
-    $engineCc    = ($_POST['engine_cc']    ?? '') !== '' ? (int)$_POST['engine_cc']      : null;
-    $featured    = isset($_POST['featured']) ? 1 : 0;
+    $askingPrice  = ($_POST['asking_price'] ?? '') !== '' ? (float)$_POST['asking_price'] : null;
+    $mileage      = ($_POST['mileage']      ?? '') !== '' ? (int)$_POST['mileage']        : null;
+    $engineCc     = ($_POST['engine_cc']    ?? '') !== '' ? (int)$_POST['engine_cc']      : null;
+    $featured     = isset($_POST['featured']) ? 1 : 0;
+    $offerPrice   = ($_POST['offer_price']  ?? '') !== '' ? (float)$_POST['offer_price']  : null;
+    $showOnWeb    = isset($_POST['show_on_website']) ? 1 : 0;
 
     if (!$chassis) $errors[] = 'Chassis number is required.';
     if (!$make)    $errors[] = 'Make is required.';
@@ -36,8 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $locId    = (int)($_POST['location_id'] ?? 1);
             $clientId = $_POST['client_id'] ? (int)$_POST['client_id'] : null;
-            $stmt = $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,client_id,location_id,body_type,notes,asking_price,mileage,engine_cc,featured) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-            $stmt->execute([$chassis,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$clientId,$locId,$body,$notes,$askingPrice,$mileage,$engineCc,$featured]);
+            $stmt = $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,client_id,location_id,body_type,notes,asking_price,mileage,engine_cc,featured,offer_price,show_on_website) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([$chassis,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$clientId,$locId,$body,$notes,$askingPrice,$mileage,$engineCc,$featured,$offerPrice,$showOnWeb]);
             $carId = $db->lastInsertId();
             
             logActivity('create', 'cars', $carId, "Added car: $make $model ($chassis)");
@@ -171,12 +177,21 @@ include __DIR__ . '/../../includes/header.php';
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Asking Price <small class="text-muted">(KES — leave blank to hide from showroom)</small></label>
+                    <label class="form-label">Asking Price <small class="text-muted">(KES — leave blank to hide price)</small></label>
                     <div class="input-group">
                         <span class="input-group-text">KES</span>
                         <input type="number" name="asking_price" class="form-control" step="1" min="0"
                                value="<?= $_POST['asking_price'] ?? '' ?>" placeholder="e.g. 2500000">
                     </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Offer / Sale Price <small class="text-muted">(KES — optional, shown as sale price)</small></label>
+                    <div class="input-group">
+                        <span class="input-group-text text-danger"><i class="fa fa-tag"></i></span>
+                        <input type="number" name="offer_price" class="form-control" step="1" min="0"
+                               value="<?= $_POST['offer_price'] ?? '' ?>" placeholder="e.g. 2200000">
+                    </div>
+                    <div class="form-text">Displays with strikethrough on asking price</div>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Mileage <small class="text-muted">(km)</small></label>
@@ -188,13 +203,23 @@ include __DIR__ . '/../../includes/header.php';
                     <input type="number" name="engine_cc" class="form-control" min="0"
                            value="<?= $_POST['engine_cc'] ?? '' ?>" placeholder="e.g. 1800">
                 </div>
-                <div class="col-md-3 d-flex align-items-end pb-1">
+                <div class="col-md-2 d-flex align-items-end pb-1">
                     <div class="form-check">
                         <input type="checkbox" name="featured" id="featuredChk" class="form-check-input" value="1"
                                <?= isset($_POST['featured']) ? 'checked' : '' ?>>
                         <label class="form-check-label fw-semibold" for="featuredChk">
-                            <i class="fa fa-star text-warning me-1"></i>Featured listing
-                            <div class="text-muted fw-normal" style="font-size:11.5px">Highlighted on the showroom homepage</div>
+                            <i class="fa fa-star text-warning me-1"></i>Featured
+                            <div class="text-muted fw-normal" style="font-size:11.5px">Highlighted on homepage</div>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-2 d-flex align-items-end pb-1">
+                    <div class="form-check">
+                        <input type="checkbox" name="show_on_website" id="showOnWebChk" class="form-check-input" value="1"
+                               <?= $_SERVER['REQUEST_METHOD'] !== 'POST' || isset($_POST['show_on_website']) ? 'checked' : '' ?>>
+                        <label class="form-check-label fw-semibold" for="showOnWebChk">
+                            <i class="fa fa-globe text-success me-1"></i>Show on website
+                            <div class="text-muted fw-normal" style="font-size:11.5px">Visible in public showroom</div>
                         </label>
                     </div>
                 </div>

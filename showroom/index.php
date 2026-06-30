@@ -2,25 +2,32 @@
 require_once __DIR__ . '/../includes/functions.php';
 $db = getDB();
 
+// Inline migrations — silent no-op if columns already exist
+try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
+
 // ── Active filters ────────────────────────────────────────────────────────────
-$filterMake  = trim($_GET['make']  ?? '');
-$filterBody  = trim($_GET['body']  ?? '');
-$filterFuel  = trim($_GET['fuel']  ?? '');
-$filterTrans = trim($_GET['trans'] ?? '');
-$filterMin   = (int)($_GET['min']  ?? 0);
-$filterMax   = (int)($_GET['max']  ?? 0);
-$sort        = $_GET['sort'] ?? 'featured';
-$search      = trim($_GET['q']     ?? '');
+$filterMake    = trim($_GET['make']     ?? '');
+$filterBody    = trim($_GET['body']     ?? '');
+$filterFuel    = trim($_GET['fuel']     ?? '');
+$filterTrans   = trim($_GET['trans']   ?? '');
+$filterMin     = (int)($_GET['min']    ?? 0);
+$filterMax     = (int)($_GET['max']    ?? 0);
+$filterYearMin = (int)($_GET['year_min'] ?? 0);
+$filterYearMax = (int)($_GET['year_max'] ?? 0);
+$filterMileMax = (int)($_GET['mile_max'] ?? 0);
+$sort          = $_GET['sort'] ?? 'featured';
+$search        = trim($_GET['q']        ?? '');
 
 // ── All inventory cars (stats + category counts) ──────────────────────────────
 $allCars = $db->query("
     SELECT c.id, c.make, c.model, c.year, c.color, c.body_type,
-           c.transmission, c.fuel_type, c.asking_price, c.mileage,
+           c.transmission, c.fuel_type, c.asking_price, c.offer_price, c.mileage,
            c.engine_cc, c.featured, c.notes, c.created_at,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image,
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
     FROM cars c
-    WHERE c.car_type='inventory'
+    WHERE c.car_type='inventory' AND c.show_on_website = 1
     ORDER BY c.featured DESC, c.created_at DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -35,23 +42,31 @@ foreach ($allCars as $c) {
 }
 arsort($catCounts);
 
-// ── Make list for filter ──────────────────────────────────────────────────────
+// ── Make list + year range for filters ───────────────────────────────────────
 $makes = $db->query("
     SELECT DISTINCT make FROM cars
     WHERE car_type='inventory' AND make != ''
     ORDER BY make
 ")->fetchAll(PDO::FETCH_COLUMN);
 
+$yearRange = $db->query("
+    SELECT MIN(year) AS min_yr, MAX(year) AS max_yr
+    FROM cars WHERE car_type='inventory' AND show_on_website=1 AND year > 0
+")->fetch(PDO::FETCH_ASSOC) ?: ['min_yr' => 2000, 'max_yr' => date('Y')];
+
 // ── Filtered inventory ────────────────────────────────────────────────────────
-$where  = ["c.car_type='inventory'"];
+$where  = ["c.car_type='inventory'", "c.show_on_website = 1"];
 $params = [];
 if ($filterMake)  { $where[] = 'c.make = ?';          $params[] = $filterMake; }
 if ($filterBody)  { $where[] = 'c.body_type = ?';     $params[] = $filterBody; }
 if ($filterFuel)  { $where[] = 'c.fuel_type = ?';     $params[] = $filterFuel; }
 if ($filterTrans) { $where[] = 'c.transmission = ?';  $params[] = $filterTrans; }
 // Price filter only applies to cars that have a price set
-if ($filterMin)   { $where[] = 'c.asking_price IS NOT NULL AND c.asking_price >= ?'; $params[] = $filterMin; }
-if ($filterMax)   { $where[] = 'c.asking_price IS NOT NULL AND c.asking_price <= ?'; $params[] = $filterMax; }
+if ($filterMin)     { $where[] = 'c.asking_price IS NOT NULL AND c.asking_price >= ?'; $params[] = $filterMin; }
+if ($filterMax)     { $where[] = 'c.asking_price IS NOT NULL AND c.asking_price <= ?'; $params[] = $filterMax; }
+if ($filterYearMin) { $where[] = 'c.year >= ?'; $params[] = $filterYearMin; }
+if ($filterYearMax) { $where[] = 'c.year <= ?'; $params[] = $filterYearMax; }
+if ($filterMileMax) { $where[] = 'c.mileage IS NOT NULL AND c.mileage <= ?'; $params[] = $filterMileMax; }
 if ($search) {
     $where[] = '(c.make LIKE ? OR c.model LIKE ? OR c.body_type LIKE ? OR c.color LIKE ?)';
     $params  = array_merge($params, ["%$search%", "%$search%", "%$search%", "%$search%"]);
@@ -68,7 +83,7 @@ $orderBy = match($sort) {
 
 $stmt = $db->prepare("
     SELECT c.id, c.make, c.model, c.year, c.color, c.body_type,
-           c.transmission, c.fuel_type, c.asking_price, c.mileage,
+           c.transmission, c.fuel_type, c.asking_price, c.offer_price, c.mileage,
            c.engine_cc, c.featured, c.notes, c.created_at,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image,
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
@@ -80,7 +95,8 @@ $stmt->execute($params);
 $filteredCars = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $filteredCount = count($filteredCars);
 
-$isFiltered = $filterMake || $filterBody || $filterFuel || $filterTrans || $filterMin || $filterMax || $search;
+$isFiltered = $filterMake || $filterBody || $filterFuel || $filterTrans || $filterMin || $filterMax
+           || $filterYearMin || $filterYearMax || $filterMileMax || $search;
 $companyName = getSetting('company_name', 'Mascardi Car Yard');
 $__waClean   = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSetting('company_phone', '')));
 $pageTitle   = 'Quality Vehicles';
@@ -190,7 +206,15 @@ include __DIR__ . '/header.php';
                             </div>
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
                                 <div style="font-size:26px;font-weight:900;color:#60a5fa;letter-spacing:-1px">
-                                    KES <?= number_format((float)$fc['asking_price']) ?>
+                                    <?php if (!empty($fc['offer_price']) && $fc['offer_price'] > 0): ?>
+                                        <span style="font-size:11px;background:#dc2626;color:#fff;padding:2px 8px;border-radius:12px;vertical-align:middle;margin-right:6px;font-weight:700">SALE</span>
+                                        KES <?= number_format((float)$fc['offer_price']) ?>
+                                        <?php if (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
+                                        <del style="font-size:14px;color:rgba(255,255,255,.4);font-weight:500;margin-left:6px">KES <?= number_format((float)$fc['asking_price']) ?></del>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        KES <?= number_format((float)$fc['asking_price']) ?>
+                                    <?php endif; ?>
                                 </div>
                                 <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fc['id'] ?>"
                                    style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;text-decoration:none;transition:box-shadow .15s"
@@ -363,7 +387,13 @@ include __DIR__ . '/header.php';
                         <?php if ($fc['color']):       ?><span><i class="fa fa-palette me-1"></i><?= htmlspecialchars($fc['color']) ?></span><?php endif; ?>
                     </div>
                     <div class="featured-price">
-                        <?php if (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
+                        <?php if (!empty($fc['offer_price']) && $fc['offer_price'] > 0): ?>
+                            <span style="font-size:11px;background:#dc2626;color:#fff;padding:2px 8px;border-radius:12px;vertical-align:middle;margin-right:6px;font-weight:700">SALE</span>
+                            KES <?= number_format((float)$fc['offer_price']) ?>
+                            <?php if (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
+                            <del style="font-size:14px;color:#94a3b8;font-weight:500;display:block;margin-top:2px">KES <?= number_format((float)$fc['asking_price']) ?></del>
+                            <?php endif; ?>
+                        <?php elseif (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
                             KES <?= number_format((float)$fc['asking_price']) ?>
                         <?php else: ?>
                             <span style="font-size:15px;font-weight:700;color:#64748b">Contact for Price</span>
@@ -468,6 +498,32 @@ include __DIR__ . '/header.php';
                         </div>
                     </div>
 
+                    <!-- Year range -->
+                    <div>
+                        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;display:block;margin-bottom:8px">Year</label>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <input type="number" name="year_min" value="<?= $filterYearMin ?: '' ?>"
+                                   placeholder="<?= $yearRange['min_yr'] ?>"
+                                   min="<?= $yearRange['min_yr'] ?>" max="<?= $yearRange['max_yr'] ?>"
+                                   style="flex:1;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 10px;font-size:13px;font-family:inherit;outline:none;width:0;min-width:0"
+                                   onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
+                            <span style="color:#94a3b8;flex-shrink:0;font-size:12px">–</span>
+                            <input type="number" name="year_max" value="<?= $filterYearMax ?: '' ?>"
+                                   placeholder="<?= $yearRange['max_yr'] ?>"
+                                   min="<?= $yearRange['min_yr'] ?>" max="<?= $yearRange['max_yr'] ?>"
+                                   style="flex:1;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 10px;font-size:13px;font-family:inherit;outline:none;width:0;min-width:0"
+                                   onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
+                        </div>
+                    </div>
+
+                    <!-- Max mileage -->
+                    <div>
+                        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;display:block;margin-bottom:8px">Max Mileage (km)</label>
+                        <input type="number" name="mile_max" value="<?= $filterMileMax ?: '' ?>" placeholder="e.g. 80000" min="0"
+                               style="width:100%;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none"
+                               onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
+                    </div>
+
                     <button type="submit" style="width:100%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:12px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;transition:box-shadow .15s;font-family:inherit"
                             onmouseover="this.style.boxShadow='0 4px 16px rgba(37,99,235,.4)'"
                             onmouseout="this.style.boxShadow='none'">
@@ -480,8 +536,15 @@ include __DIR__ . '/header.php';
             <div>
                 <!-- Sort + count bar -->
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-                    <div style="font-size:13.5px;color:#64748b">
-                        Showing <strong style="color:#0f172a"><?= $filteredCount ?></strong> of <strong style="color:#0f172a"><?= $totalStock ?></strong> vehicles
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        <div style="font-size:13.5px;color:#64748b">
+                            Showing <strong style="color:#0f172a"><?= $filteredCount ?></strong> of <strong style="color:#0f172a"><?= $totalStock ?></strong> vehicles
+                        </div>
+                        <button id="favFilterBtn" onclick="toggleFavFilter()"
+                                style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:700;color:#0f172a;cursor:pointer;display:flex;align-items:center;gap:5px">
+                            <i class="fa fa-heart" style="color:#dc2626"></i> Saved
+                            <span id="favCount" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;font-weight:700">0</span>
+                        </button>
                     </div>
                     <form method="GET" action="#inventory" style="display:flex;align-items:center;gap:8px">
                         <?php foreach (['make','body','fuel','trans','q'] as $k): ?>
@@ -489,8 +552,11 @@ include __DIR__ . '/header.php';
                         <input type="hidden" name="<?= $k ?>" value="<?= htmlspecialchars($_GET[$k]) ?>">
                         <?php endif; ?>
                         <?php endforeach; ?>
-                        <?php if ($filterMin): ?><input type="hidden" name="min" value="<?= $filterMin ?>"><?php endif; ?>
-                        <?php if ($filterMax): ?><input type="hidden" name="max" value="<?= $filterMax ?>"><?php endif; ?>
+                        <?php if ($filterMin):     ?><input type="hidden" name="min"      value="<?= $filterMin ?>"><?php endif; ?>
+                        <?php if ($filterMax):     ?><input type="hidden" name="max"      value="<?= $filterMax ?>"><?php endif; ?>
+                        <?php if ($filterYearMin): ?><input type="hidden" name="year_min" value="<?= $filterYearMin ?>"><?php endif; ?>
+                        <?php if ($filterYearMax): ?><input type="hidden" name="year_max" value="<?= $filterYearMax ?>"><?php endif; ?>
+                        <?php if ($filterMileMax): ?><input type="hidden" name="mile_max" value="<?= $filterMileMax ?>"><?php endif; ?>
                         <span style="font-size:13px;color:#64748b;white-space:nowrap">Sort by:</span>
                         <select name="sort" style="border:1.5px solid #e2e8f0;border-radius:9px;padding:7px 12px;font-size:13px;font-family:inherit;outline:none;cursor:pointer;background:#fff;color:#0f172a"
                                 onchange="this.form.submit()">
@@ -522,7 +588,7 @@ include __DIR__ . '/header.php';
                         $waMsg = urlencode("Hi, I'm interested in the {$car['year']} {$car['make']} {$car['model']} (KES " . number_format((float)$car['asking_price']) . ") listed on your showroom.");
                         $isNew = strtotime($car['created_at']) > strtotime('-30 days');
                     ?>
-                    <div class="inv-card">
+                    <div class="inv-card" data-car-id="<?= $car['id'] ?>" data-car-name="<?= htmlspecialchars($car['year'].' '.$car['make'].' '.$car['model']) ?>">
                         <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="inv-img-wrap">
                             <?php if ($car['featured']): ?>
                             <span class="inv-badge-featured"><i class="fa fa-star me-1"></i>Featured</span>
@@ -555,7 +621,13 @@ include __DIR__ . '/header.php';
                                 <?php if ($car['color']):     ?><span><?= htmlspecialchars($car['color']) ?></span><?php endif; ?>
                             </div>
                             <div class="inv-price">
-                                <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
+                                <?php if (!empty($car['offer_price']) && $car['offer_price'] > 0): ?>
+                                    <span style="font-size:10px;background:#dc2626;color:#fff;padding:2px 7px;border-radius:10px;vertical-align:middle;margin-right:5px;font-weight:700">SALE</span>
+                                    KES <?= number_format((float)$car['offer_price']) ?>
+                                    <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
+                                    <del style="font-size:13px;color:#94a3b8;font-weight:500;display:block;margin-top:1px">KES <?= number_format((float)$car['asking_price']) ?></del>
+                                    <?php endif; ?>
+                                <?php elseif (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
                                     KES <?= number_format((float)$car['asking_price']) ?>
                                 <?php else: ?>
                                     <span style="font-size:14px;font-weight:700;color:#64748b">Contact for Price</span>
@@ -570,6 +642,14 @@ include __DIR__ . '/header.php';
                                     <i class="fa-brands fa-whatsapp"></i>
                                 </a>
                                 <?php endif; ?>
+                                <button class="fav-btn inv-btn-icon" data-id="<?= $car['id'] ?>"
+                                        onclick="toggleFav(<?= $car['id'] ?>,this)" title="Save to favorites">
+                                    <i class="fa-regular fa-heart"></i>
+                                </button>
+                                <button class="cmp-btn inv-btn-icon" data-id="<?= $car['id'] ?>"
+                                        onclick="toggleCompare(<?= $car['id'] ?>,this)" title="Add to compare">
+                                    <i class="fa fa-scale-balanced"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -817,6 +897,12 @@ select.qb-input { cursor:pointer; }
 .inv-btn-wa { width:38px; height:38px; background:#dcfce7; color:#16a34a; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:18px; text-decoration:none; transition:background .15s; flex-shrink:0; }
 .inv-btn-wa:hover { background:#25d366; color:#fff; }
 
+/* Inventory icon buttons (fav + compare) */
+.inv-btn-icon { width:38px; height:38px; background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; cursor:pointer; transition:background .15s,color .15s; flex-shrink:0; }
+.inv-btn-icon:hover { background:#e2e8f0; color:#0f172a; }
+.inv-btn-icon.active-fav { background:#fef2f2; color:#dc2626; border-color:#fca5a5; }
+.inv-btn-icon.active-cmp { background:#eff6ff; color:#2563eb; border-color:#93c5fd; }
+
 /* Responsive */
 @media (max-width: 1024px) {
     #inventory > .container-xl > div:last-child { grid-template-columns: 1fr; }
@@ -829,5 +915,121 @@ select.qb-input { cursor:pointer; }
     .inv-grid { grid-template-columns: 1fr; }
 }
 </style>
+
+<!-- ── Compare sticky bar ─────────────────────────────────────────────────── -->
+<div id="compareBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#0f172a;border-top:1px solid rgba(255,255,255,.08);padding:12px 20px;z-index:1050;box-shadow:0 -4px 24px rgba(0,0,0,.35)">
+    <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="color:#64748b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">Compare:</span>
+        <div id="compareSlots" style="display:flex;gap:8px;flex:1;flex-wrap:wrap"></div>
+        <a id="compareBtn" href="#"
+           style="background:#2563eb;color:#fff;padding:9px 20px;border-radius:9px;font-size:13.5px;font-weight:700;text-decoration:none;white-space:nowrap;transition:background .15s">
+            Compare Cars
+        </a>
+        <button onclick="clearCompare()"
+                style="background:rgba(255,255,255,.06);color:#64748b;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;white-space:nowrap">
+            <i class="fa fa-xmark me-1"></i>Clear
+        </button>
+    </div>
+</div>
+
+<script>
+var BASE_URL_JS = '<?= BASE_URL ?>';
+
+/* ── Favorites ─────────────────────────────────────────────────────────── */
+var FAV_KEY = 'msc_favs';
+function getFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); } catch(e){return[];} }
+function saveFavs(ids) { localStorage.setItem(FAV_KEY,JSON.stringify(ids)); }
+
+function toggleFav(id, btn) {
+    var favs = getFavs(), idx = favs.indexOf(id);
+    if (idx >= 0) favs.splice(idx,1); else favs.push(id);
+    saveFavs(favs);
+    syncFavUI();
+    if (showingFavs) applyFavFilter();
+}
+
+function syncFavUI() {
+    var favs = getFavs();
+    document.querySelectorAll('.fav-btn').forEach(function(b) {
+        var id = parseInt(b.dataset.id);
+        var saved = favs.indexOf(id) >= 0;
+        b.querySelector('i').className = saved ? 'fa fa-heart' : 'fa-regular fa-heart';
+        b.classList.toggle('active-fav', saved);
+    });
+    var cnt = favs.length, el = document.getElementById('favCount');
+    if (el) { el.textContent = cnt; el.style.display = cnt ? '' : 'none'; }
+}
+
+var showingFavs = false;
+function toggleFavFilter() {
+    showingFavs = !showingFavs;
+    applyFavFilter();
+    var btn = document.getElementById('favFilterBtn');
+    if (btn) {
+        btn.style.background = showingFavs ? '#fef2f2' : '';
+        btn.style.borderColor = showingFavs ? '#fca5a5' : '';
+        btn.style.color = showingFavs ? '#dc2626' : '';
+    }
+}
+function applyFavFilter() {
+    var favs = getFavs();
+    document.querySelectorAll('.inv-card').forEach(function(c) {
+        c.style.display = showingFavs && favs.indexOf(parseInt(c.dataset.carId)) < 0 ? 'none' : '';
+    });
+}
+
+/* ── Compare ────────────────────────────────────────────────────────────── */
+var compareIds = [], compareNames = {};
+
+function toggleCompare(id, btn) {
+    var idx = compareIds.indexOf(id);
+    if (idx >= 0) {
+        compareIds.splice(idx,1);
+        delete compareNames[id];
+    } else {
+        if (compareIds.length >= 3) { alert('You can compare up to 3 cars at a time.'); return; }
+        compareIds.push(id);
+        var card = document.querySelector('.inv-card[data-car-id="'+id+'"]');
+        compareNames[id] = card ? card.dataset.carName : 'Car '+id;
+    }
+    syncCompareUI();
+}
+
+function syncCompareUI() {
+    document.querySelectorAll('.cmp-btn').forEach(function(b) {
+        var active = compareIds.indexOf(parseInt(b.dataset.id)) >= 0;
+        b.querySelector('i').className = active ? 'fa fa-check' : 'fa fa-scale-balanced';
+        b.classList.toggle('active-cmp', active);
+    });
+
+    var bar = document.getElementById('compareBar');
+    var slots = document.getElementById('compareSlots');
+    var btn = document.getElementById('compareBtn');
+    if (!compareIds.length) { bar.style.display = 'none'; return; }
+    bar.style.display = '';
+
+    slots.innerHTML = compareIds.map(function(id) {
+        return '<div style="background:rgba(255,255,255,.08);color:#e2e8f0;border-radius:8px;padding:5px 10px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px">'
+            + '<span>' + (compareNames[id]||'Car '+id) + '</span>'
+            + '<button onclick="toggleCompare('+id+',this)" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;padding:0;line-height:1">&times;</button>'
+            + '</div>';
+    }).join('');
+
+    var qs = compareIds.map(function(id){return'ids[]='+id;}).join('&');
+    btn.href = compareIds.length >= 2 ? BASE_URL_JS+'/showroom/compare.php?'+qs : '#';
+    btn.style.opacity = compareIds.length >= 2 ? '1' : '0.5';
+    btn.onclick = compareIds.length < 2 ? function(e){e.preventDefault();alert('Select at least 2 cars to compare.');} : null;
+    btn.textContent = compareIds.length >= 2 ? 'Compare '+compareIds.length+' Cars →' : 'Select '+(2-compareIds.length)+' more…';
+}
+
+function clearCompare() {
+    compareIds = []; compareNames = {};
+    syncCompareUI();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    syncFavUI();
+});
+</script>
 
 <?php include __DIR__ . '/footer.php'; ?>

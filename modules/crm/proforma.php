@@ -239,6 +239,17 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </div>
 
+        <?php if ($lead['stage'] === 'reserved'): ?>
+        <!-- Reservation status strip -->
+        <div style="background:#fefce8;border-bottom:2px solid #fde047;padding:10px 28px;display:flex;align-items:center;gap:12px">
+            <i class="fa fa-bookmark" style="color:#ca8a04;font-size:16px"></i>
+            <span style="font-weight:700;color:#854d0e;font-size:13.5px">VEHICLE RESERVED</span>
+            <?php if (!empty($lead['deposit_date'])): ?>
+            <span style="color:#92400e;font-size:12px">· Deposit received <?= fmtDate($lead['deposit_date'],'d M Y') ?></span>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
         <!-- ══ PREPARED FOR / SALES EXEC ══════════════════════════════════════ -->
         <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:2px solid #e5e7eb">
             <!-- Customer -->
@@ -382,6 +393,9 @@ include __DIR__ . '/../../includes/header.php';
             } elseif (!empty($lead['budget'])) {
                 $price = (float)$lead['budget'];
             }
+            $deposit = (float)($lead['deposit_amount'] ?? 0);
+            $balance = $deposit > 0 ? max(0, $price - $deposit) : 0;
+            $isReserved = ($lead['stage'] === 'reserved' && $deposit > 0);
             ?>
 
             <table style="width:100%;border-collapse:collapse">
@@ -404,17 +418,48 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endif; ?>
+
+                <?php if ($isReserved): ?>
+                <!-- Deposit paid row -->
+                <tr>
+                    <td style="padding:8px 0;font-size:14px;color:#16a34a;font-weight:500">
+                        <i class="fa fa-bookmark me-2" style="font-size:12px"></i>
+                        Deposit Paid
+                        <?php if ($lead['deposit_date']): ?>
+                        <span style="font-size:11px;color:#6b7280;margin-left:6px">(<?= fmtDate($lead['deposit_date'],'d M Y') ?>)</span>
+                        <?php endif; ?>
+                    </td>
+                    <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:600;color:#16a34a">
+                        – <?= money($deposit) ?>
+                    </td>
+                </tr>
+                <?php endif; ?>
+
                 <!-- Divider -->
                 <tr>
                     <td colspan="2">
                         <div style="border-top:2px dashed #d1d5db;margin:8px 0"></div>
                     </td>
                 </tr>
+
+                <?php if ($isReserved && $price > 0): ?>
+                <!-- Balance due row -->
+                <tr style="background:#fff7ed;border-radius:8px">
+                    <td style="padding:12px 16px;font-size:16px;font-weight:800;color:#c2410c;border-radius:8px 0 0 8px">
+                        <i class="fa fa-hourglass-half me-2"></i>BALANCE DUE
+                    </td>
+                    <td style="padding:12px 16px;text-align:right;font-size:18px;font-weight:900;color:#c2410c;border-radius:0 8px 8px 0">
+                        <?= money($balance) ?>
+                    </td>
+                </tr>
+                <tr><td colspan="2" style="padding:6px 0"></td></tr>
+                <?php endif; ?>
+
                 <!-- Total -->
                 <tr style="background:#f0fdf4;border-radius:8px">
                     <td style="padding:12px 16px;font-size:16px;font-weight:800;
                                 color:#0f172a;border-radius:8px 0 0 8px">
-                        <i class="fa fa-equals me-2 text-success"></i>TOTAL
+                        <i class="fa fa-equals me-2 text-success"></i><?= $isReserved ? 'VEHICLE PRICE' : 'TOTAL' ?>
                     </td>
                     <td style="padding:12px 16px;text-align:right;font-size:18px;font-weight:900;
                                 color:#16a34a;border-radius:0 8px 8px 0">
@@ -433,7 +478,8 @@ include __DIR__ . '/../../includes/header.php';
 
             <?php if ($price > 0): ?>
             <div style="margin-top:10px;font-size:12px;color:#6b7280;font-style:italic">
-                <?= numberToWords($price) ?>
+                <?= numberToWords($isReserved ? $balance : $price) ?>
+                <?= $isReserved ? ' (balance remaining)' : '' ?>
             </div>
             <?php endif; ?>
         </div>

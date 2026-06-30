@@ -2,6 +2,11 @@
 require_once __DIR__ . '/../includes/functions.php';
 
 $db = getDB();
+
+// Inline migrations — silent no-op if columns already exist
+try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
+
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) { header('Location: ' . BASE_URL . '/showroom/'); exit; }
 
@@ -9,7 +14,7 @@ $stmt = $db->prepare("
     SELECT c.*, l.name AS location_name
     FROM cars c
     LEFT JOIN locations l ON l.id = c.location_id
-    WHERE c.id = ? AND c.car_type = 'inventory'
+    WHERE c.id = ? AND c.car_type = 'inventory' AND c.show_on_website = 1
 ");
 $stmt->execute([$id]);
 $car = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -23,10 +28,10 @@ $primaryImg = $images ? thumbUrl('cars', $images[0]['file_path']) : null;
 
 // Similar vehicles (same make or body type, excluding this car)
 $similar = $db->prepare("
-    SELECT c.id, c.make, c.model, c.year, c.asking_price, c.body_type, c.transmission, c.fuel_type,
+    SELECT c.id, c.make, c.model, c.year, c.asking_price, c.offer_price, c.body_type, c.transmission, c.fuel_type,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image
     FROM cars c
-    WHERE c.car_type='inventory' AND c.id != ?
+    WHERE c.car_type='inventory' AND c.show_on_website = 1 AND c.id != ?
       AND (c.make = ? OR c.body_type = ?)
     ORDER BY c.featured DESC, c.created_at DESC LIMIT 3
 ");
@@ -36,14 +41,16 @@ $similar = $similar->fetchAll(PDO::FETCH_ASSOC);
 $companyName   = getSetting('company_name',    'Mascardi Car Yard');
 $companyPhone  = getSetting('company_phone',   '');
 $whatsappPhone = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', $companyPhone));
-$hasPrice      = !empty($car['asking_price']) && $car['asking_price'] > 0;
+$hasOffer = !empty($car['offer_price']) && $car['offer_price'] > 0;
+$hasPrice = !empty($car['asking_price']) && $car['asking_price'] > 0;
+$displayPrice = $hasOffer ? $car['offer_price'] : ($hasPrice ? $car['asking_price'] : null);
+$priceStr = $displayPrice ? 'KES ' . number_format((float)$displayPrice) : 'Contact for Price';
 
 $carTitle = $car['year'] . ' ' . $car['make'] . ' ' . $car['model'];
-$priceStr = $hasPrice ? 'KES ' . number_format((float)$car['asking_price']) : 'Contact for Price';
-$waMsg    = urlencode("Hi, I'm interested in the {$carTitle}" . ($hasPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? " . BASE_URL . "/showroom/view.php?id={$id}");
+$waMsg    = urlencode("Hi, I'm interested in the {$carTitle}" . ($displayPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? " . BASE_URL . "/showroom/view.php?id={$id}");
 
 $pageTitle = $carTitle;
-$metaDesc  = "Buy this {$carTitle} at {$companyName}." . ($hasPrice ? " {$priceStr}." : '') . " Finance available.";
+$metaDesc  = "Buy this {$carTitle} at {$companyName}." . ($displayPrice ? " {$priceStr}." : '') . " Finance available.";
 if ($primaryImg) $ogImage = $primaryImg;
 
 include __DIR__ . '/header.php';
@@ -87,7 +94,14 @@ include __DIR__ . '/header.php';
 
         <!-- Price -->
         <div class="vh-price">
+            <?php if ($hasOffer): ?>
+            <span class="vh-price-label">Sale Price</span>
+            <span class="vh-price-value"><?= $priceStr ?></span>
             <?php if ($hasPrice): ?>
+            <del class="vh-price-note" style="font-size:16px;opacity:.6">KES <?= number_format((float)$car['asking_price']) ?></del>
+            <?php endif; ?>
+            <span class="vh-price-note">Finance available</span>
+            <?php elseif ($hasPrice): ?>
             <span class="vh-price-label">Asking Price</span>
             <span class="vh-price-value"><?= $priceStr ?></span>
             <span class="vh-price-note">Finance available</span>
@@ -268,7 +282,17 @@ include __DIR__ . '/header.php';
                 <!-- Price card -->
                 <div class="vi-price-card">
                     <div class="vi-price-bg">
+                        <?php if ($hasOffer): ?>
+                        <div class="vi-price-lbl">
+                            <span style="background:#dc2626;color:#fff;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;margin-right:8px">SALE</span>Sale Price
+                        </div>
+                        <div class="vi-price-amt"><?= $priceStr ?></div>
                         <?php if ($hasPrice): ?>
+                        <div class="vi-price-note"><del>KES <?= number_format((float)$car['asking_price']) ?></del> &bull; Finance available</div>
+                        <?php else: ?>
+                        <div class="vi-price-note">Finance available &bull; Negotiable</div>
+                        <?php endif; ?>
+                        <?php elseif ($hasPrice): ?>
                         <div class="vi-price-lbl">Asking Price</div>
                         <div class="vi-price-amt"><?= $priceStr ?></div>
                         <div class="vi-price-note">Finance available &bull; Negotiable</div>
@@ -406,7 +430,13 @@ include __DIR__ . '/header.php';
                     <div class="vsim-meta"><?= $sv['year'] ?><?= $sv['body_type'] ? ' &bull; '.$sv['body_type'] : '' ?></div>
                     <div class="vsim-name"><?= htmlspecialchars($sv['make'].' '.$sv['model']) ?></div>
                     <div class="vsim-price">
+                        <?php if (!empty($sv['offer_price']) && $sv['offer_price'] > 0): ?>
+                        <span style="font-size:10px;background:#dc2626;color:#fff;padding:1px 7px;border-radius:10px;vertical-align:middle;margin-right:4px;font-weight:700">SALE</span>
+                        KES <?= number_format((float)$sv['offer_price']) ?>
                         <?php if (!empty($sv['asking_price']) && $sv['asking_price'] > 0): ?>
+                        <del style="font-size:12px;color:#94a3b8;font-weight:500;margin-left:4px">KES <?= number_format((float)$sv['asking_price']) ?></del>
+                        <?php endif; ?>
+                        <?php elseif (!empty($sv['asking_price']) && $sv['asking_price'] > 0): ?>
                         KES <?= number_format((float)$sv['asking_price']) ?>
                         <?php else: ?>
                         <span style="color:#94a3b8;font-size:13px">Contact for Price</span>

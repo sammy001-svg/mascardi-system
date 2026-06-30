@@ -10,6 +10,11 @@ $user = authUser();
 $preCarId = (int)($_GET['car_id'] ?? 0);
 $errors   = [];
 
+// Inline migration
+try { $db->exec("ALTER TABLE car_sales ADD COLUMN cost_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+
+$canSeeProfit = hasRole(['admin','super_admin','general_manager','sales_manager','finance_manager','finance_officer']);
+
 // Cars available for sale (completed + no existing active sale)
 $cars = $db->query("
     SELECT c.id, c.make, c.model, c.year, c.chassis_number, c.registration_number, c.status
@@ -35,6 +40,7 @@ $d = [
     'deposit_amount'  => '',
     'balance_amount'  => '',
     'finance_company' => '',
+    'cost_price'      => '',
     'notes'           => '',
 ];
 
@@ -51,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['deposit_amount']  = $_POST['deposit_amount'] ?: '0';
     $d['balance_amount']  = $_POST['balance_amount'] ?: '0';
     $d['finance_company'] = trim($_POST['finance_company'] ?? '');
+    $d['cost_price']      = $_POST['cost_price'] ?? '';
     $d['notes']           = trim($_POST['notes'] ?? '');
 
     if (!$d['car_id'])        $errors[] = 'Please select a vehicle.';
@@ -62,13 +69,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $db->beginTransaction();
             $saleNum = nextNumber('car_sales', 'sale_number', getSetting('sale_prefix', 'SALE'));
+            $costPrice = ($d['cost_price'] !== '' && $d['cost_price'] !== null) ? (float)$d['cost_price'] : null;
             $db->prepare("INSERT INTO car_sales
-                (sale_number, car_id, sale_date, sale_price, buyer_name, buyer_phone, buyer_email,
+                (sale_number, car_id, sale_date, sale_price, cost_price, buyer_name, buyer_phone, buyer_email,
                  buyer_id_number, payment_method, payment_status, deposit_amount, balance_amount,
                  finance_company, sold_by, notes)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                ->execute([
-                   $saleNum, $d['car_id'], $d['sale_date'], (float)$d['sale_price'],
+                   $saleNum, $d['car_id'], $d['sale_date'], (float)$d['sale_price'], $costPrice,
                    $d['buyer_name'], $d['buyer_phone'], $d['buyer_email'], $d['buyer_id_number'],
                    $d['payment_method'], $d['payment_status'],
                    (float)$d['deposit_amount'], (float)$d['balance_amount'],
@@ -142,6 +150,13 @@ include __DIR__ . '/../../includes/header.php';
                         <input type="number" name="sale_price" id="salePrice" class="form-control" min="0" step="0.01"
                                value="<?= e($d['sale_price']) ?>" required placeholder="0.00">
                     </div>
+                    <?php if ($canSeeProfit): ?>
+                    <div class="col-md-4">
+                        <label class="form-label">Cost Price (KES) <small class="text-muted">(optional — for profit tracking)</small></label>
+                        <input type="number" name="cost_price" class="form-control" min="0" step="0.01"
+                               value="<?= e($d['cost_price']) ?>" placeholder="What we paid for the car">
+                    </div>
+                    <?php endif; ?>
                     <div class="col-12">
                         <label class="form-label">Notes</label>
                         <textarea name="notes" class="form-control" rows="2" placeholder="Any special conditions, trade-in details, etc."><?= e($d['notes']) ?></textarea>

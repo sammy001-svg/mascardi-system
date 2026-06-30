@@ -5,6 +5,14 @@
 <!-- Toast notification stack -->
 <div id="toastStack" class="toast-stack"></div>
 
+<!-- Image skeleton shimmer — active while lazy images are off-screen -->
+<style>
+img[loading="lazy"]{background:linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%);background-size:200% 100%;animation:imgSkel 1.4s ease infinite;min-height:1px}
+img[loading="lazy"].img-loaded{background:none;animation:none}
+@keyframes imgSkel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){img[loading="lazy"]{animation:none;background:#f3f4f6}}
+</style>
+
 <!-- ── Floating WhatsApp ──────────────────────────────────────── -->
 <?php
 $__wa = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSetting('company_phone', '')));
@@ -386,3 +394,12 @@ if ($__wa): ?>
 
 </body>
 </html>
+<?php
+/* Inject loading="lazy" decoding="async" on every <img> that doesn't already carry
+   a loading= attribute. Runs once per request via the ob_start() opened in header.php. */
+if (ob_get_level() > 0) {
+    $__html = ob_get_clean();
+    $__html = preg_replace('/<img\s(?![^>]*loading=)/i', '<img loading="lazy" decoding="async" ', $__html);
+    echo $__html;
+}
+?>

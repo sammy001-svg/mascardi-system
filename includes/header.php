@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<?php ob_start(); ?><!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -35,15 +35,30 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-<!-- Bootstrap 5 -->
+<!-- CDN preconnect — eliminates DNS + TCP round-trip latency on first visit -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="preconnect" href="https://cdn.datatables.net" crossorigin>
+<link rel="preconnect" href="https://code.jquery.com" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+<link rel="dns-prefetch" href="https://cdn.datatables.net">
+<link rel="dns-prefetch" href="https://code.jquery.com">
+
+<!-- Bootstrap 5 — render-critical, load synchronously -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<!-- Font Awesome 6 -->
+<!-- Font Awesome 6 — render-critical (icons visible on initial paint), load synchronously -->
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-<!-- DataTables -->
-<link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
-<!-- Select2 -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet">
+<!-- DataTables CSS — deferred; only needed for sort arrows & pagination chrome -->
+<link rel="preload" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css"></noscript>
+<!-- Select2 CSS — deferred; only needed once user opens a styled dropdown -->
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+</noscript>
 <!-- Custom — cache-busted so changes always load -->
 <link href="<?= BASE_URL ?>/assets/css/style.css?v=<?= @filemtime(BASE_PATH . '/assets/css/style.css') ?: time() ?>" rel="stylesheet">
 <meta name="csrf-token" content="<?= csrfToken() ?>">
@@ -153,7 +168,8 @@ window.addEventListener('beforeinstallprompt', function(e) {
                     id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                 <?php if ($__profileImg): ?>
                 <img src="<?= BASE_URL ?>/uploads/profiles/<?= e($__profileImg) ?>"
-                     class="topbar-avatar rounded-circle" style="object-fit:cover;padding:0">
+                     class="topbar-avatar rounded-circle" style="object-fit:cover;padding:0"
+                     loading="eager" decoding="async">
                 <?php else: ?>
                 <div class="topbar-avatar"><?= strtoupper(substr($__user['name'], 0, 1)) ?></div>
                 <?php endif; ?>
@@ -168,7 +184,7 @@ window.addEventListener('beforeinstallprompt', function(e) {
                     <div class="dd-user-info">
                         <?php if ($__profileImg): ?>
                         <img src="<?= BASE_URL ?>/uploads/profiles/<?= e($__profileImg) ?>"
-                             class="rounded-circle border mb-2"
+                             class="rounded-circle border mb-2" loading="eager" decoding="async"
                              style="width:48px;height:48px;object-fit:cover;display:block;margin:0 auto 8px">
                         <?php endif; ?>
                         <div class="dd-user-name"><?= e($__user['name']) ?></div>

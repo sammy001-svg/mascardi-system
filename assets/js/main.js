@@ -1,4 +1,4 @@
-/* Mascardi System — main.js v5 */
+/* Mascardi System — main.js v6 */
 
 /* ─────────────────────────────────────────────────────────
    DARK MODE
@@ -221,3 +221,28 @@ $(function () {
     $('#btnPrint').on('click', function () { window.print(); });
 
 });
+
+/* ─────────────────────────────────────────────────────────
+   IMAGE PERFORMANCE — skeleton removal + broken-image fallback
+   Runs after DOM is ready so all injected loading="lazy" attrs are present.
+   ───────────────────────────────────────────────────────── */
+(function () {
+    function markLoaded(img) {
+        img.classList.add('img-loaded');
+    }
+    function markError(img) {
+        img.classList.add('img-loaded');
+        img.style.opacity = '0.25';
+        img.style.filter  = 'grayscale(1)';
+        if (!img.alt) img.alt = 'Image unavailable';
+    }
+
+    document.querySelectorAll('img[loading="lazy"]').forEach(function (img) {
+        if (img.complete) {
+            (img.naturalWidth > 0) ? markLoaded(img) : markError(img);
+            return;
+        }
+        img.addEventListener('load',  function () { markLoaded(this); });
+        img.addEventListener('error', function () { markError(this); });
+    });
+}());

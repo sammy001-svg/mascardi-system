@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_action'])) {
         try {
             $extraOwner = $isCrmAgent ? " AND l.assigned_to = $uid" : '';
             $stmt = $db->prepare("
-                SELECT l.name, l.phone, l.email, l.source, l.stage,
+                SELECT l.name, l.phone, l.email, l.source, l.campaign, l.stage,
                        l.interested_in, l.budget, l.follow_up_date, l.created_at,
                        u.name AS assigned_name
                 FROM crm_leads l
@@ -132,13 +132,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_action'])) {
         header('Content-Disposition: attachment; filename="leads_export_' . date('Ymd_His') . '.csv"');
         header('Pragma: no-cache');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Name','Phone','Email','Source','Stage','Interested In','Budget','Follow-up Date','Assigned To','Added Date']);
+        fputcsv($out, ['Name','Phone','Email','Source','Campaign','Stage','Interested In','Budget','Follow-up Date','Assigned To','Added Date']);
         foreach ($exportLeads as $row) {
             fputcsv($out, [
                 $row['name'],
                 $row['phone'],
                 $row['email'],
                 $exportSources[$row['source']] ?? $row['source'],
+                $row['campaign'] ?? '',
                 $row['stage'],
                 $row['interested_in'],
                 $row['budget'],
@@ -156,10 +157,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_action'])) {
 }
 // ─── END BULK ACTION HANDLER ─────────────────────────────────────────────────
 
-$filterStage  = $_GET['stage']  ?? '';
-$filterSource = $_GET['source'] ?? '';
-$filterUser   = $isCrmAgent ? $uid : (int)($_GET['assigned'] ?? 0);
-$search       = trim($_GET['q'] ?? '');
+// Inline migrations — silent no-op if columns already exist
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN campaign VARCHAR(150) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN last_notified_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+
+$filterStage    = $_GET['stage']    ?? '';
+$filterSource   = $_GET['source']   ?? '';
+$filterCampaign = trim($_GET['campaign'] ?? '');
+$filterUser     = $isCrmAgent ? $uid : (int)($_GET['assigned'] ?? 0);
+$search         = trim($_GET['q'] ?? '');
+$sortBy         = in_array($_GET['sort'] ?? '', ['score_desc','score_asc','updated','overdue']) ? $_GET['sort'] : 'overdue';
 
 $where  = ['1=1'];
 $params = [];
@@ -172,13 +179,21 @@ if ($isCrmAgent) {
 
 if ($filterStage)                { $where[] = 'l.stage = ?';       $params[] = $filterStage; }
 if ($filterSource)               { $where[] = 'l.source = ?';      $params[] = $filterSource; }
+if ($filterCampaign)             { $where[] = 'l.campaign = ?';    $params[] = $filterCampaign; }
 if (!$isCrmAgent && $filterUser) { $where[] = 'l.assigned_to = ?'; $params[] = $filterUser; }
 if ($search) {
-    $where[]  = '(l.name LIKE ? OR l.phone LIKE ? OR l.email LIKE ? OR l.interested_in LIKE ?)';
-    $params   = array_merge($params, ["%$search%","%$search%","%$search%","%$search%"]);
+    $where[]  = '(l.name LIKE ? OR l.phone LIKE ? OR l.email LIKE ? OR l.interested_in LIKE ? OR l.campaign LIKE ?)';
+    $params   = array_merge($params, ["%$search%","%$search%","%$search%","%$search%","%$search%"]);
 }
 
 $whereStr = implode(' AND ', $where);
+
+$orderSQL = match($sortBy) {
+    'score_desc' => 'l.lead_score DESC, l.updated_at DESC',
+    'score_asc'  => 'l.lead_score ASC,  l.updated_at DESC',
+    'updated'    => 'l.updated_at DESC',
+    default      => 'CASE WHEN l.follow_up_date < CURDATE() AND l.stage NOT IN (\'lost\',\'delivered\') THEN 0 ELSE 1 END, l.updated_at DESC',
+};
 
 try {
     $leads = $db->prepare("
@@ -186,17 +201,26 @@ try {
         FROM crm_leads l
         LEFT JOIN users u ON u.id = l.assigned_to
         WHERE $whereStr
-        ORDER BY
-            CASE WHEN l.follow_up_date < CURDATE() AND l.stage NOT IN ('lost','delivered') THEN 0 ELSE 1 END,
-            l.updated_at DESC
+        ORDER BY $orderSQL
     ");
     $leads->execute($params);
     $leads = $leads->fetchAll();
 
     // Managers see all staff in filter; CRM agents don't get the staff filter
     $salesUsers = $isCrmAgent ? [] : $db->query("SELECT id, name FROM users WHERE status='active' ORDER BY name")->fetchAll();
+
+    // Distinct campaigns for the campaign filter dropdown
+    $campaignOptions = [];
+    try {
+        $campaignScope = $isCrmAgent ? "AND assigned_to = $uid" : '';
+        $campaignOptions = $db->query("
+            SELECT DISTINCT campaign FROM crm_leads
+            WHERE campaign IS NOT NULL AND campaign <> '' $campaignScope
+            ORDER BY campaign ASC
+        ")->fetchAll(PDO::FETCH_COLUMN);
+    } catch (\Throwable $_) {}
 } catch (\Throwable $e) {
-    $leads = []; $salesUsers = [];
+    $leads = []; $salesUsers = []; $campaignOptions = [];
 }
 
 // ── Stale lead detection ──────────────────────────────────────────────────────
@@ -371,6 +395,16 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endforeach; ?>
                 </select>
             </div>
+            <?php if ($campaignOptions): ?>
+            <div class="col-sm-2">
+                <select name="campaign" class="form-select form-select-sm">
+                    <option value="">All Campaigns</option>
+                    <?php foreach ($campaignOptions as $c): ?>
+                    <option value="<?= e($c) ?>" <?= $filterCampaign === $c ? 'selected' : '' ?>><?= e($c) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
             <?php if (!$isCrmAgent): ?>
             <div class="col-sm-2">
                 <select name="assigned" class="form-select form-select-sm">
@@ -381,6 +415,14 @@ include __DIR__ . '/../../includes/header.php';
                 </select>
             </div>
             <?php endif; ?>
+            <div class="col-sm-2">
+                <select name="sort" class="form-select form-select-sm">
+                    <option value="overdue"    <?= $sortBy === 'overdue'    ? 'selected' : '' ?>>Overdue First</option>
+                    <option value="score_desc" <?= $sortBy === 'score_desc' ? 'selected' : '' ?>>Score: High → Low</option>
+                    <option value="score_asc"  <?= $sortBy === 'score_asc'  ? 'selected' : '' ?>>Score: Low → High</option>
+                    <option value="updated"    <?= $sortBy === 'updated'    ? 'selected' : '' ?>>Recently Updated</option>
+                </select>
+            </div>
             <div class="col-auto d-flex gap-2">
                 <button class="btn btn-sm btn-primary"><i class="fa fa-filter me-1"></i>Filter</button>
                 <a href="leads.php" class="btn btn-sm btn-outline-secondary">Clear</a>
@@ -449,7 +491,7 @@ include __DIR__ . '/../../includes/header.php';
                     <th>Contact</th>
                     <th>Interested In</th>
                     <th>Budget</th>
-                    <th>Source</th>
+                    <th>Source / Campaign</th>
                     <th>Stage</th>
                     <th>Score</th>
                     <th>Follow-up</th>
@@ -464,20 +506,9 @@ include __DIR__ . '/../../includes/header.php';
                 $isOverdue = $l['follow_up_date'] && $l['follow_up_date'] < date('Y-m-d')
                              && !in_array($l['stage'], ['lost','delivered']);
 
-                // ── Lead Score (max 60 without per-row activity queries) ────
-                $score = 0;
-                $stageScores = ['hot'=>25,'lukewarm'=>20,'cold'=>10,'reserved'=>25,'lost'=>0,'delivered'=>0];
-                $score += $stageScores[$l['stage']] ?? 0;
-                $b = (float)($l['budget'] ?? 0);
-                if ($b >= 5000000)       $score += 20;
-                elseif ($b >= 2000000)   $score += 15;
-                elseif ($b >= 1000000)   $score += 10;
-                elseif ($b >= 500000)    $score += 5;
-                elseif ($b > 0)          $score += 2;
-                if (!empty($l['phone']))          $score += 5;
-                if (!empty($l['email']))          $score += 5;
-                if (!empty($l['interested_in']))  $score += 5;
-                $scoreColor = $score >= 50 ? 'success' : ($score >= 35 ? 'warning' : ($score >= 20 ? 'info' : 'secondary'));
+                // ── Lead Score — use stored DB value (updated when lead is viewed) ──
+                $score = (int)($l['lead_score'] ?? 0);
+                $scoreColor = $score >= 70 ? 'success' : ($score >= 50 ? 'primary' : ($score >= 35 ? 'warning' : ($score >= 20 ? 'info' : 'secondary')));
 
                 // ── WhatsApp link ─────────────────────────────────────────
                 $waNum = '';
@@ -528,7 +559,12 @@ include __DIR__ . '/../../includes/header.php';
                     <div class="text-truncate"><?= e($l['interested_in'] ?: '—') ?></div>
                 </td>
                 <td class="small"><?= $l['budget'] ? money((float)$l['budget']) : '—' ?></td>
-                <td><span class="badge bg-light text-dark border" style="font-size:11px"><?= e($sources[$l['source']] ?? $l['source']) ?></span></td>
+                <td>
+                    <span class="badge bg-light text-dark border" style="font-size:11px"><?= e($sources[$l['source']] ?? $l['source']) ?></span>
+                    <?php if (!empty($l['campaign'])): ?>
+                    <div class="mt-1"><span class="badge bg-info-subtle text-info border border-info-subtle" style="font-size:10px"><i class="fa fa-bullhorn me-1"></i><?= e($l['campaign']) ?></span></div>
+                    <?php endif; ?>
+                </td>
                 <td><span class="badge bg-<?= $stageColor ?>" style="font-size:11px"><?= $stageLabel ?></span></td>
                 <td>
                     <div style="display:flex;align-items:center;gap:4px;min-width:60px">
