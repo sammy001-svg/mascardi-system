@@ -668,6 +668,30 @@ a:hover { text-decoration: underline; }
 .welcome-stats { gap: 28px !important; }
 
 /* ─────────────────────────────────────────────────────────
+   DASHBOARD SECTION HEADERS
+   ───────────────────────────────────────────────────────── */
+.dash-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    margin-top: 4px;
+}
+.dash-section-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--text-3);
+    white-space: nowrap;
+}
+.dash-section-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* ─────────────────────────────────────────────────────────
    QUICK ACTIONS
    ───────────────────────────────────────────────────────── */
 .quick-actions-grid {
