@@ -11,6 +11,20 @@ $cntInv  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='inventory'
 $cntCli  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='client'")->fetchColumn();
 $cntWork = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status='in_workshop'")->fetchColumn();
 
+// Filter dropdowns — only needed on inventory tab
+$invMakes     = [];
+$invLocations = [];
+if ($section === 'inventory') {
+    $invMakes = $db->query(
+        "SELECT DISTINCT make FROM cars WHERE car_type='inventory' AND make != '' ORDER BY make ASC"
+    )->fetchAll(PDO::FETCH_COLUMN);
+    $invLocations = $db->query(
+        "SELECT l.id, l.name FROM locations l
+         INNER JOIN cars c ON c.location_id = l.id AND c.car_type = 'inventory'
+         GROUP BY l.id, l.name ORDER BY l.name ASC"
+    )->fetchAll();
+}
+
 $extraJs = '<script>
 (function () {
     var section  = ' . json_encode($section) . ';
@@ -22,7 +36,11 @@ $extraJs = '<script>
         processing  : true,
         ajax: {
             url  : apiUrl,
-            data : function (d) { d.section = section; },
+            data : function (d) {
+                d.section          = section;
+                d.filter_make      = $("#filterMake").val()     || "";
+                d.filter_location  = $("#filterLocation").val() || "";
+            },
             error: function () {
                 if (typeof window.showToast === "function") {
                     window.showToast("Could not load vehicle data. Please refresh.", "error");
@@ -53,6 +71,14 @@ $extraJs = '<script>
             infoFiltered        : \'(filtered from _MAX_ total)\',
         },
         // Delegated confirm-delete already wired in main.js via $(document).on(...)
+    });
+
+    // Reload table when inventory filters change
+    $(document).on("change", "#filterMake, #filterLocation", function () {
+        table.ajax.reload();
+    });
+    $(document).on("click", "#filterReset", function () {
+        $("#filterMake, #filterLocation").val("").trigger("change");
     });
 }());
 </script>';
@@ -93,6 +119,39 @@ include __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
     </a>
 </div>
+
+<?php if ($section === 'inventory' && ($invMakes || $invLocations)): ?>
+<!-- ── Inventory filters ─────────────────────────────────────────────────── -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4 col-sm-6">
+                <label class="form-label small text-muted mb-1">Make</label>
+                <select id="filterMake" class="form-select form-select-sm">
+                    <option value="">All Makes</option>
+                    <?php foreach ($invMakes as $mk): ?>
+                    <option value="<?= e($mk) ?>"><?= e($mk) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-4 col-sm-6">
+                <label class="form-label small text-muted mb-1">Location</label>
+                <select id="filterLocation" class="form-select form-select-sm">
+                    <option value="">All Locations</option>
+                    <?php foreach ($invLocations as $loc): ?>
+                    <option value="<?= $loc['id'] ?>"><?= e($loc['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button id="filterReset" class="btn btn-sm btn-outline-secondary">
+                    <i class="fa fa-xmark me-1"></i>Reset
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- ── Cars Table — empty shell, DataTables fills via AJAX ──────────────── -->
 <div class="card">

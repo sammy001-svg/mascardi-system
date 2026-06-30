@@ -36,11 +36,9 @@ try {
           {$ownerWhere}
     ")->fetchColumn();
 
-    // Notify for leads due today that haven't been notified today yet
-    // We use a simple "last_notified_date" column, added via auto-migration
-    try {
-        $db->exec("ALTER TABLE crm_leads ADD COLUMN last_notified_date DATE NULL DEFAULT NULL");
-    } catch (\Throwable $_) {}
+    // Inline migrations
+    try { $db->exec("ALTER TABLE crm_leads ADD COLUMN last_notified_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+    try { $db->exec("ALTER TABLE crm_leads ADD COLUMN followup_escalated_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 
     $dueToday = $db->query("
         SELECT id, name, interested_in FROM crm_leads
@@ -61,6 +59,34 @@ try {
             BASE_URL . '/modules/crm/view_lead.php?id=' . (int)$lead['id']
         );
         $db->prepare("UPDATE crm_leads SET last_notified_date = ? WHERE id = ?")
+           ->execute([$today, (int)$lead['id']]);
+    }
+
+    // Escalate leads 3+ days overdue — notify managers once per day
+    $escalationCutoff = date('Y-m-d', strtotime('-3 days'));
+    $overdueLeads = $db->query("
+        SELECT l.id, l.name, l.interested_in, l.follow_up_date,
+               u.name AS assigned_name
+        FROM crm_leads l
+        LEFT JOIN users u ON u.id = l.assigned_to
+        WHERE l.follow_up_date < '{$escalationCutoff}'
+          AND l.stage NOT IN ('lost','delivered')
+          AND (l.followup_escalated_date IS NULL OR l.followup_escalated_date < '{$today}')
+        LIMIT 10
+    ")->fetchAll();
+
+    foreach ($overdueLeads as $lead) {
+        $daysLate = (int)((strtotime($today) - strtotime($lead['follow_up_date'])) / 86400);
+        $assignee = $lead['assigned_name'] ? " (assigned to {$lead['assigned_name']})" : '';
+        notifyRoles(
+            ['super_admin', 'admin', 'sales_manager', 'general_manager'],
+            'warning',
+            "Overdue escalation: {$lead['name']}",
+            "Follow-up is {$daysLate} days overdue{$assignee}."
+                . ($lead['interested_in'] ? " Interested in: {$lead['interested_in']}." : ''),
+            BASE_URL . '/modules/crm/view_lead.php?id=' . (int)$lead['id']
+        );
+        $db->prepare("UPDATE crm_leads SET followup_escalated_date = ? WHERE id = ?")
            ->execute([$today, (int)$lead['id']]);
     }
 

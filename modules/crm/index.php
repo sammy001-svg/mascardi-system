@@ -195,8 +195,10 @@ include __DIR__ . '/../../includes/header.php';
             </div>
             <div class="kanban-body">
                 <?php foreach ($colLeads as $lead):
-                    $isOverdue = $lead['follow_up_date'] && $lead['follow_up_date'] < date('Y-m-d');
-                    $isSoon    = !$isOverdue && $lead['follow_up_date'] && $lead['follow_up_date'] <= date('Y-m-d', strtotime('+2 days'));
+                    $isOverdue  = $lead['follow_up_date'] && $lead['follow_up_date'] < date('Y-m-d');
+                    $isSoon     = !$isOverdue && $lead['follow_up_date'] && $lead['follow_up_date'] <= date('Y-m-d', strtotime('+2 days'));
+                    $cardScore  = (int)($lead['lead_score'] ?? 0);
+                    $cardScoreColor = $cardScore >= 70 ? 'success' : ($cardScore >= 50 ? 'primary' : ($cardScore >= 35 ? 'warning' : ($cardScore >= 20 ? 'info' : 'secondary')));
                 ?>
                 <div class="lead-card <?= $isOverdue ? 'overdue' : ($isSoon ? 'soon' : '') ?>"
                      onclick="location.href='view_lead.php?id=<?= $lead['id'] ?>'">
@@ -215,11 +217,16 @@ include __DIR__ . '/../../includes/header.php';
                         <?php else: ?>
                         <span></span>
                         <?php endif; ?>
-                        <?php if ($lead['follow_up_date']): ?>
-                        <span class="badge <?= $isOverdue ? 'bg-danger' : ($isSoon ? 'bg-warning text-dark' : 'bg-light text-dark border') ?>" style="font-size:10px">
-                            <i class="fa fa-calendar me-1"></i><?= fmtDate($lead['follow_up_date'], 'd M') ?>
-                        </span>
-                        <?php endif; ?>
+                        <div class="d-flex align-items-center gap-1">
+                            <?php if ($cardScore > 0): ?>
+                            <span class="badge bg-<?= $cardScoreColor ?>-subtle text-<?= $cardScoreColor ?> border border-<?= $cardScoreColor ?>-subtle" style="font-size:10px" title="Lead score"><?= $cardScore ?></span>
+                            <?php endif; ?>
+                            <?php if ($lead['follow_up_date']): ?>
+                            <span class="badge <?= $isOverdue ? 'bg-danger' : ($isSoon ? 'bg-warning text-dark' : 'bg-light text-dark border') ?>" style="font-size:10px">
+                                <i class="fa fa-calendar me-1"></i><?= fmtDate($lead['follow_up_date'], 'd M') ?>
+                            </span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
                 <?php endforeach; ?>

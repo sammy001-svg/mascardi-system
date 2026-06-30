@@ -25,12 +25,14 @@ try { $db->exec("ALTER TABLE car_images ADD INDEX idx_ci_primary (car_id, is_pri
 $section = in_array($_GET['section'] ?? '', ['inventory', 'client', 'workshop'])
          ? $_GET['section'] : 'inventory';
 
-$draw   = (int)($_GET['draw']   ?? 1);
-$start  = (int)($_GET['start']  ?? 0);
-$length = min(100, max(10, (int)($_GET['length'] ?? 25)));
-$search = trim($_GET['search']['value'] ?? '');
-$oCol   = (int)(($_GET['order'][0]['column'] ?? 99));
-$oDir   = (($_GET['order'][0]['dir'] ?? 'desc') === 'asc') ? 'ASC' : 'DESC';
+$draw           = (int)($_GET['draw']   ?? 1);
+$start          = (int)($_GET['start']  ?? 0);
+$length         = min(100, max(10, (int)($_GET['length'] ?? 25)));
+$search         = trim($_GET['search']['value'] ?? '');
+$oCol           = (int)(($_GET['order'][0]['column'] ?? 99));
+$oDir           = (($_GET['order'][0]['dir'] ?? 'desc') === 'asc') ? 'ASC' : 'DESC';
+$filterMake     = trim($_GET['filter_make']     ?? '');
+$filterLocation = (int)($_GET['filter_location'] ?? 0);
 
 // Map column index → SQL expression (only orderable columns)
 $colMap = [
@@ -62,18 +64,31 @@ if ($search !== '') {
     $searchParams = [$s, $s, $s, $s, $s, $s];
 }
 
-$fullWhere = $baseWhere . $searchWhere;
+// ── Inventory dropdown filters ────────────────────────────────────────────────
+$filterWhere  = '';
+$filterParams = [];
+if ($filterMake !== '') {
+    $filterWhere   .= ' AND c.make = ?';
+    $filterParams[] = $filterMake;
+}
+if ($filterLocation > 0) {
+    $filterWhere   .= ' AND c.location_id = ?';
+    $filterParams[] = $filterLocation;
+}
+
+$fullWhere = $baseWhere . $searchWhere . $filterWhere;
 
 // ── Counts ───────────────────────────────────────────────────────────────────
 $totalRecords = (int)$db->query("SELECT COUNT(*) FROM cars c WHERE {$baseWhere}")->fetchColumn();
 
-if ($search !== '') {
+$allFilterParams = array_merge($searchParams, $filterParams);
+if ($allFilterParams) {
     $cntStmt = $db->prepare(
         "SELECT COUNT(*) FROM cars c
          LEFT JOIN locations l ON l.id = c.location_id
          WHERE {$fullWhere}"
     );
-    $cntStmt->execute($searchParams);
+    $cntStmt->execute($allFilterParams);
     $filteredRecords = (int)$cntStmt->fetchColumn();
 } else {
     $filteredRecords = $totalRecords;
@@ -100,7 +115,7 @@ $sql = "
 ";
 
 $stmt = $db->prepare($sql);
-$stmt->execute(array_merge($searchParams, [$length, $start]));
+$stmt->execute(array_merge($allFilterParams, [$length, $start]));
 $rows = $stmt->fetchAll();
 
 // ── Pre-compute permissions once (not per-row) ────────────────────────────────

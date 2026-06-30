@@ -6,6 +6,7 @@ canAccess('crm') || redirect(BASE_URL . '/index.php');
 $pageTitle = 'Lead';
 $db  = getDB();
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN pinned_car_id INT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN campaign VARCHAR(150) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN lead_score TINYINT UNSIGNED DEFAULT 0"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_amount DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
@@ -148,11 +149,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $notes       = trim($_POST['notes']          ?? '') ?: null;
         $followUp    = trim($_POST['follow_up_date'] ?? '') ?: null;
         $lostReason  = trim($_POST['lost_reason']    ?? '') ?: null;
+        $campaign    = trim($_POST['campaign']       ?? '') ?: null;
 
         if ($name) {
             $prevAssigned = (int)$lead['assigned_to'];
-            $db->prepare("UPDATE crm_leads SET name=?,phone=?,email=?,interested_in=?,budget=?,assigned_to=?,notes=?,follow_up_date=?,lost_reason=?,updated_at=NOW() WHERE id=?")
-               ->execute([$name,$phone,$email,$interestedIn,$budget,$assignedTo,$notes,$followUp,$lostReason,$id]);
+            $db->prepare("UPDATE crm_leads SET name=?,phone=?,email=?,interested_in=?,budget=?,assigned_to=?,notes=?,follow_up_date=?,lost_reason=?,campaign=?,updated_at=NOW() WHERE id=?")
+               ->execute([$name,$phone,$email,$interestedIn,$budget,$assignedTo,$notes,$followUp,$lostReason,$campaign,$id]);
             if ($assignedTo && $assignedTo !== $prevAssigned) {
                 require_once __DIR__ . '/../../includes/notifications.php';
                 createNotification((int)$assignedTo, 'info',
@@ -515,6 +517,14 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                     <dd class="col-7 small"><?= $lead['email'] ? e($lead['email']) : '—' ?></dd>
                     <dt class="col-5 text-muted">Source</dt>
                     <dd class="col-7"><?= e($sourceLabels[$lead['source']] ?? $lead['source']) ?></dd>
+                    <?php if (!empty($lead['campaign'])): ?>
+                    <dt class="col-5 text-muted">Campaign</dt>
+                    <dd class="col-7">
+                        <span class="badge bg-info-subtle text-info border border-info-subtle">
+                            <i class="fa fa-bullhorn me-1"></i><?= e($lead['campaign']) ?>
+                        </span>
+                    </dd>
+                    <?php endif; ?>
                     <dt class="col-5 text-muted">Interested In</dt>
                     <dd class="col-7 small"><?= $lead['interested_in'] ? e($lead['interested_in']) : '—' ?></dd>
                     <dt class="col-5 text-muted">Budget</dt>
@@ -931,6 +941,12 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                             <option value="<?= $u['id'] ?>" <?= $lead['assigned_to'] == $u['id'] ? 'selected' : '' ?>><?= e($u['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Campaign / Ad</label>
+                        <input type="text" name="campaign" class="form-control form-control-sm"
+                               value="<?= e($lead['campaign'] ?? '') ?>"
+                               placeholder="e.g. Facebook Summer Ad, Google Q4…">
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-semibold">Notes</label>
