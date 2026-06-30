@@ -19,6 +19,12 @@ if ($role === 'admin') {
     exit;
 }
 
+// General Manager → dedicated executive dashboard
+if ($role === 'general_manager') {
+    header('Location: ' . BASE_URL . '/modules/admin/gm_dashboard.php');
+    exit;
+}
+
 // Customer Relations Managers get their own pipeline-focused dashboard
 if ($role === 'customer_relations') {
     header('Location: ' . BASE_URL . '/modules/crm/my_dashboard.php');
