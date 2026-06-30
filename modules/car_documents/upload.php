@@ -7,6 +7,23 @@ $pageTitle = 'Upload Document';
 $db     = getDB();
 $errors = [];
 
+try { $db->exec("CREATE TABLE IF NOT EXISTS car_documents (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    car_id      INT NOT NULL,
+    doc_type    VARCHAR(50) NOT NULL DEFAULT 'other',
+    title       VARCHAR(255) NOT NULL,
+    file_path   VARCHAR(255) NOT NULL,
+    file_name   VARCHAR(255),
+    file_size   INT,
+    mime_type   VARCHAR(100),
+    expiry_date DATE NULL,
+    notes       TEXT,
+    uploaded_by INT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_car_id (car_id),
+    INDEX idx_expiry (expiry_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $_) {}
+
 // Pre-select car from GET
 $preCarId = (int)($_GET['car_id'] ?? 0);
 $preCar   = null;

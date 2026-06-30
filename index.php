@@ -66,6 +66,11 @@ if ($role === 'mechanic') {
     try { $stats['cars_sold_month'] = (int)$db->query("SELECT COUNT(*) FROM car_sales WHERE status='active' AND MONTH(sale_date)=MONTH(NOW()) AND YEAR(sale_date)=YEAR(NOW())")->fetchColumn(); }
     catch (\Throwable $e) { $stats['cars_sold_month'] = 0; }
 
+    try {
+        $stats['docs_expired']      = (int)$db->query("SELECT COUNT(*) FROM car_documents WHERE expiry_date IS NOT NULL AND expiry_date < CURDATE()")->fetchColumn();
+        $stats['docs_expiring_soon']= (int)$db->query("SELECT COUNT(*) FROM car_documents WHERE expiry_date IS NOT NULL AND expiry_date >= CURDATE() AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)")->fetchColumn();
+    } catch (\Throwable $_) { $stats['docs_expired'] = 0; $stats['docs_expiring_soon'] = 0; }
+
     if ($role === 'super_admin') {
         $__lm = date('Y-m', strtotime('-1 month'));
         $stats['revenue_last_month'] = (float)$db->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid' AND DATE_FORMAT(created_at,'%Y-%m')='{$__lm}'")->fetchColumn();
@@ -773,7 +778,22 @@ include __DIR__ . '/includes/header.php';
                 </a>
                 <?php endif; ?>
 
-                <?php if (empty($overdueJobsList) && empty($criticalIssuesList) && $stats['low_stock'] === 0): ?>
+                <?php if (($stats['docs_expired'] ?? 0) > 0): ?>
+                <div class="list-group-item bg-danger bg-opacity-10 py-1 px-3 text-danger fw-semibold" style="font-size:11px">EXPIRED DOCS (<?= $stats['docs_expired'] ?>)</div>
+                <a href="<?= BASE_URL ?>/modules/car_documents/index.php?expiry=expired" class="list-group-item list-group-item-action py-2">
+                    <div class="fw-medium" style="font-size:12.5px"><i class="fa fa-circle-xmark text-danger me-1"></i><?= $stats['docs_expired'] ?> document<?= $stats['docs_expired'] > 1 ? 's' : '' ?> expired</div>
+                    <div class="text-muted" style="font-size:11px">Click to review expired car documents</div>
+                </a>
+                <?php endif; ?>
+
+                <?php if (($stats['docs_expiring_soon'] ?? 0) > 0): ?>
+                <div class="list-group-item bg-warning bg-opacity-25 py-1 px-3 text-warning-emphasis fw-semibold" style="font-size:11px">DOCS EXPIRING SOON (<?= $stats['docs_expiring_soon'] ?>)</div>
+                <a href="<?= BASE_URL ?>/modules/car_documents/index.php?expiry=soon" class="list-group-item list-group-item-action py-2">
+                    <div class="fw-medium" style="font-size:12.5px"><i class="fa fa-triangle-exclamation text-warning me-1"></i><?= $stats['docs_expiring_soon'] ?> document<?= $stats['docs_expiring_soon'] > 1 ? 's' : '' ?> expiring within 30 days</div>
+                </a>
+                <?php endif; ?>
+
+                <?php if (empty($overdueJobsList) && empty($criticalIssuesList) && $stats['low_stock'] === 0 && ($stats['docs_expired'] ?? 0) === 0 && ($stats['docs_expiring_soon'] ?? 0) === 0): ?>
                 <div class="list-group-item text-center text-success py-4 small">
                     <i class="fa fa-circle-check fa-lg mb-1 d-block"></i>No alerts right now
                 </div>
