@@ -84,6 +84,7 @@ function statusBadge(string $status): string {
         'urgent'         => 'danger',
         'normal'         => 'primary',
         'low'            => 'secondary',
+        'reserved'       => 'purple',
     ];
     $class = $map[$status] ?? 'secondary';
     $label = ucwords(str_replace('_', ' ', $status));

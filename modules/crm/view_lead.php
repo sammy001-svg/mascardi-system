@@ -9,6 +9,7 @@ try { $db->exec("ALTER TABLE crm_leads ADD COLUMN pinned_car_id INT NULL DEFAULT
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN lead_score TINYINT UNSIGNED DEFAULT 0"); } catch (\Throwable $_) {}
 // Test drive & car extended fields
 try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars MODIFY COLUMN status ENUM('in_transit','arrived','in_assessment','in_workshop','completed','sold','delivered','reserved') DEFAULT 'in_transit'"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN driver_id_no VARCHAR(50) NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN kd_number VARCHAR(50) NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN chassis_number VARCHAR(100) NULL"); } catch (\Throwable $_) {}
@@ -98,6 +99,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->prepare("UPDATE crm_leads SET converted_at=NOW() WHERE id=? AND converted_at IS NULL")->execute([$id]);
             }
             logActivity('update','crm_leads',$id,"Stage changed to: $newStage");
+            // Sync car status when lead stage moves through reserved
+            $pinnedCarId = (int)($lead['pinned_car_id'] ?? 0);
+            if ($pinnedCarId) {
+                if ($newStage === 'reserved') {
+                    $db->prepare("UPDATE cars SET status='reserved', updated_at=NOW() WHERE id=?")->execute([$pinnedCarId]);
+                } elseif ($lead['stage'] === 'reserved') {
+                    if ($newStage === 'delivered') {
+                        $db->prepare("UPDATE cars SET status='sold', updated_at=NOW() WHERE id=? AND status='reserved'")->execute([$pinnedCarId]);
+                    } else {
+                        $db->prepare("UPDATE cars SET status='arrived', updated_at=NOW() WHERE id=? AND status='reserved'")->execute([$pinnedCarId]);
+                    }
+                }
+            }
             require_once __DIR__ . '/../../includes/notifications.php';
             if ($newStage === 'delivered') {
                 notifyRoles(['admin','sales_manager','general_manager'], 'sale',
@@ -179,9 +193,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'pin_car' && canWrite('crm')) {
-        $carId = (int)($_POST['car_id'] ?? 0) ?: null;
+        $carId    = (int)($_POST['car_id'] ?? 0) ?: null;
+        $oldCarId = (int)($lead['pinned_car_id'] ?? 0) ?: null;
         $db->prepare("UPDATE crm_leads SET pinned_car_id = ?, updated_at = NOW() WHERE id = ?")
            ->execute([$carId, $id]);
+        // If lead is already reserved, keep car status in sync
+        if ($lead['stage'] === 'reserved') {
+            if ($oldCarId && $oldCarId !== $carId) {
+                $db->prepare("UPDATE cars SET status='arrived', updated_at=NOW() WHERE id=? AND status='reserved'")->execute([$oldCarId]);
+            }
+            if ($carId) {
+                $db->prepare("UPDATE cars SET status='reserved', updated_at=NOW() WHERE id=?")->execute([$carId]);
+            }
+        }
         setFlash('success', $carId ? 'Vehicle linked to lead.' : 'Vehicle link removed.');
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
     }
