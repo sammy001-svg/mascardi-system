@@ -9,9 +9,21 @@ $id   = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/clients/index.php');
 
 try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL AFTER id_number"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE car_sales ADD COLUMN client_id INT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 $client = $db->prepare("SELECT * FROM clients WHERE id=?");
 $client->execute([$id]); $client = $client->fetch();
 if (!$client) { setFlash('error','Not found.'); redirect(BASE_URL.'/modules/clients/index.php'); }
+
+// Link sale to this client
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['link_sale_id']) && canWrite('clients')) {
+    $linkSaleId = (int)$_POST['link_sale_id'];
+    if ($linkSaleId) {
+        $db->prepare("UPDATE car_sales SET client_id = ? WHERE id = ? AND (client_id IS NULL OR client_id = ?)")
+           ->execute([$id, $linkSaleId, $id]);
+        setFlash('success', 'Sale linked to this client.');
+    }
+    redirect(BASE_URL . '/modules/clients/view.php?id=' . $id);
+}
 
 // Portal access management
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['portal_action']) && canWrite('clients')) {
@@ -74,12 +86,41 @@ $paymentsStmt = $db->prepare("
 $paymentsStmt->execute([$id, $id, $id]);
 $clientPayments = $paymentsStmt->fetchAll();
 
+// Car purchase history — matched by explicit client_id OR phone/email
+$salesOrClauses  = ['cs.client_id = ?'];
+$salesParams     = [$id];
+if (!empty($client['phone'])) { $salesOrClauses[] = 'cs.buyer_phone = ?'; $salesParams[] = $client['phone']; }
+if (!empty($client['email'])) { $salesOrClauses[] = 'cs.buyer_email = ?'; $salesParams[] = $client['email']; }
+try {
+    $salesStmt = $db->prepare("
+        SELECT cs.id, cs.sale_number, cs.sale_date, cs.sale_price, cs.payment_status,
+               cs.buyer_name, cs.client_id AS linked_client_id,
+               c.make, c.model, c.year, c.chassis_number
+        FROM car_sales cs
+        JOIN cars c ON c.id = cs.car_id
+        WHERE cs.status = 'active' AND (" . implode(' OR ', $salesOrClauses) . ")
+        ORDER BY cs.sale_date DESC
+    ");
+    $salesStmt->execute($salesParams);
+    $clientSales = $salesStmt->fetchAll();
+} catch (\Throwable $_) { $clientSales = []; }
+$totalSalesValue = array_sum(array_column($clientSales, 'sale_price'));
+$isRepeatBuyer   = count($clientSales) > 1;
+$canSeeProfit    = hasRole(['admin','super_admin','general_manager','sales_manager','finance_manager','finance_officer']);
+
 $pageTitle = $client['name'];
 include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
-        <h5 class="mb-1"><i class="fa fa-user me-2 text-primary"></i><?= e($client['name']) ?></h5>
+        <h5 class="mb-1">
+            <i class="fa fa-user me-2 text-primary"></i><?= e($client['name']) ?>
+            <?php if ($isRepeatBuyer): ?>
+            <span class="badge ms-2" style="background:#6d28d9;color:#fff;font-size:12px;vertical-align:middle">
+                <i class="fa fa-rotate me-1"></i>Repeat Buyer
+            </span>
+            <?php endif; ?>
+        </h5>
         <div class="text-muted small"><?= e($client['email']) ?><?= $client['phone'] ? ' · ' . e($client['phone']) : '' ?></div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
@@ -199,6 +240,26 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </div>
     </div>
+    <?php if (!empty($clientSales)): ?>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="border-left:4px solid #6d28d9">
+            <div class="stat-icon" style="background:#f5f3ff;color:#6d28d9"><i class="fa fa-tag"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Car Purchases</div>
+                <div class="stat-value"><?= count($clientSales) ?></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="border-left:4px solid #0369a1">
+            <div class="stat-icon" style="background:#e0f2fe;color:#0369a1"><i class="fa fa-circle-dollar-to-slot"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Lifetime Value</div>
+                <div class="stat-value stat-value-sm"><?= money($totalSalesValue) ?></div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- Portal Access Management -->
@@ -513,6 +574,64 @@ include __DIR__ . '/../../includes/header.php';
                 <td class="text-muted small"><?= e($n['sent_by']) ?></td>
                 <td class="text-muted small"><?= fmtDate($n['created_at'], 'd M Y, H:i') ?></td>
                 <td><?= $n['is_read'] ? '<span class="badge bg-success">Read</span>' : '<span class="badge bg-secondary">Unread</span>' ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Car Purchases -->
+<?php if (!empty($clientSales)): ?>
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fa fa-tag me-2" style="color:#6d28d9"></i>Car Purchases
+            <?php if ($isRepeatBuyer): ?>
+            <span class="badge ms-2" style="background:#6d28d9">Repeat Buyer</span>
+            <?php endif; ?>
+        </span>
+        <span class="badge bg-light text-dark border"><?= count($clientSales) ?> purchase<?= count($clientSales) > 1 ? 's' : '' ?> · <?= money($totalSalesValue) ?> total</span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0" style="font-size:13px">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-3">Sale #</th>
+                    <th>Vehicle</th>
+                    <th>Date</th>
+                    <th class="text-end">Sale Price</th>
+                    <th>Payment</th>
+                    <th class="text-center pe-3">Link</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($clientSales as $cs):
+                $payBadge = match($cs['payment_status'] ?? '') {
+                    'paid_full' => ['bg-success','Paid'],
+                    'partial'   => ['bg-warning text-dark','Partial'],
+                    'financed'  => ['bg-info','Financed'],
+                    default     => ['bg-secondary','Pending'],
+                };
+            ?>
+            <tr>
+                <td class="ps-3 fw-bold"><?= e($cs['sale_number']) ?></td>
+                <td>
+                    <span class="fw-medium"><?= e($cs['year'] . ' ' . $cs['make'] . ' ' . $cs['model']) ?></span>
+                    <?php if ($cs['chassis_number']): ?><div class="text-muted" style="font-size:11px"><code><?= e($cs['chassis_number']) ?></code></div><?php endif; ?>
+                </td>
+                <td class="text-muted small"><?= fmtDate($cs['sale_date']) ?></td>
+                <td class="text-end fw-semibold"><?= money((float)$cs['sale_price']) ?></td>
+                <td><span class="badge <?= $payBadge[0] ?>"><?= $payBadge[1] ?></span></td>
+                <td class="text-center pe-3">
+                    <a href="<?= BASE_URL ?>/modules/sales/view.php?id=<?= $cs['id'] ?>" class="btn btn-xs btn-outline-primary"><i class="fa fa-eye"></i></a>
+                    <?php if (!$cs['linked_client_id'] && canWrite('clients')): ?>
+                    <form method="POST" class="d-inline" onsubmit="return confirm('Link this sale to this client account?')">
+                        <input type="hidden" name="link_sale_id" value="<?= $cs['id'] ?>">
+                        <button class="btn btn-xs btn-outline-secondary" title="Link sale to this client"><i class="fa fa-link"></i></button>
+                    </form>
+                    <?php endif; ?>
+                </td>
             </tr>
             <?php endforeach; ?>
             </tbody>
