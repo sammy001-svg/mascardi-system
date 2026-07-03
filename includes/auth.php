@@ -131,7 +131,7 @@ function canAccess(string $module): bool {
             'showroom_transfers','key_handovers','dispatch','team',
         ],
         'customer_relations' => [
-            'clients','crm','chat',
+            'clients','crm','chat','cars',
         ],
         'receptionist'      => [
             'clients','service_bookings','quick_assessments','cars','chat','showroom',
