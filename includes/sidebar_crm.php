@@ -147,6 +147,15 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
         }());
         </script>
 
+        <!-- ══ FLEET ═════════════════════════════════════════════ -->
+        <div class="nav-section">Fleet</div>
+
+        <a href="<?= BASE_URL ?>/modules/cars/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/cars/') ? 'active' : '' ?>"
+           data-label="All Cars">
+            <i class="fa fa-car"></i><span>All Cars</span>
+        </a>
+
         <!-- ══ COMMUNICATION ══════════════════════════════════════ -->
         <div class="nav-section">Communication</div>
 
