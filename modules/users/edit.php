@@ -69,28 +69,40 @@ foreach ($moduleGroups as $group) {
     foreach ($group as $m) { $allModuleKeys[] = $m['key']; }
 }
 
-// Role defaults (mirrors auth.php fallback maps)
+// Role defaults (mirrors auth.php fallback maps exactly — keep in sync)
 $roleAccessDefaults = [
-    'workshop_manager'  => ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','chat','reports'],
-    'sales_person'      => ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales','crm','installments','car_documents','inspections','chat'],
-    'sales_officer'     => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales','crm','installments','car_costs','car_documents','inspections','chat'],
-    'accountant'        => ['payments','invoices','quotations','expenses','reports','clients','sales','installments','car_costs','cars','chat'],
-    'hr_manager'        => ['attendance','payroll','mechanics','drivers','expenses','reports','chat'],
-    'inventory_manager' => ['inventory','suppliers','lpo','parts_requests','cars','issues','car_documents','chat'],
-    'receptionist'      => ['clients','service_bookings','quick_assessments','cars','chat'],
-    'mechanic'          => ['jobs','assessments','parts_requests','issues','car_documents','inspections','chat'],
-    'driver'            => ['cars','assessments'],
+    'general_manager'    => ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','chat','reports','clients','service_bookings','crm','payments','invoices','quotations','sales','installments','expenses'],
+    'finance_manager'    => ['payments','invoices','quotations','expenses','reports','clients','sales','installments','car_costs','cars','chat','lpo','payroll','attendance','inventory','suppliers','parts_requests'],
+    'accountant'         => ['payments','invoices','quotations','expenses','reports','clients','sales','installments','car_costs','cars','chat'],
+    'cashier'            => ['payments','invoices','installments','clients','chat','sales'],
+    'sales_manager'      => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales','crm','installments','car_costs','car_documents','inspections','chat','reports','expenses','assessments'],
+    'sales_officer'      => ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales','crm','installments','car_costs','car_documents','inspections','chat'],
+    'sales_person'       => ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales','crm','installments','car_documents','inspections','chat'],
+    'customer_relations' => ['clients','crm','chat','cars'],
+    'receptionist'       => ['clients','service_bookings','quick_assessments','cars','chat'],
+    'workshop_manager'   => ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','chat','reports'],
+    'mechanic'           => ['jobs','assessments','parts_requests','issues','car_documents','inspections','chat'],
+    'driver'             => ['cars','assessments'],
+    'inventory_manager'  => ['inventory','suppliers','lpo','parts_requests','cars','issues','car_documents','chat'],
+    'procurement_officer'=> ['inventory','suppliers','lpo','parts_requests','cars','issues','car_documents','chat','reports'],
+    'hr_manager'         => ['attendance','payroll','mechanics','drivers','expenses','reports','chat'],
 ];
 $roleWriteDefaults = [
-    'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','car_documents','inspections','attendance','payroll'],
-    'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments'],
-    'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments'],
-    'accountant'        => ['payments','invoices','quotations','expenses','sales','installments'],
-    'hr_manager'        => ['attendance','payroll'],
-    'inventory_manager' => ['inventory','suppliers','lpo','parts_requests'],
-    'receptionist'      => ['clients','service_bookings','quick_assessments'],
-    'mechanic'          => ['assessments','parts_requests'],
-    'driver'            => [],
+    'general_manager'    => ['quotations','invoices','sales'],
+    'finance_manager'    => ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo'],
+    'accountant'         => ['payments','invoices','quotations','expenses','sales','installments'],
+    'cashier'            => ['payments','installments'],
+    'sales_manager'      => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses'],
+    'sales_officer'      => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments'],
+    'sales_person'       => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments'],
+    'customer_relations' => ['clients','crm'],
+    'receptionist'       => ['clients','service_bookings','quick_assessments'],
+    'workshop_manager'   => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','car_documents','inspections','attendance','payroll'],
+    'mechanic'           => ['assessments','parts_requests'],
+    'driver'             => [],
+    'inventory_manager'  => ['inventory','suppliers','lpo','parts_requests'],
+    'procurement_officer'=> ['lpo','suppliers','inventory','parts_requests'],
+    'hr_manager'         => ['attendance','payroll'],
 ];
 
 // Load current saved permissions for this user
@@ -217,26 +229,35 @@ include __DIR__ . '/../../includes/header.php';
                 <label class="form-label">System Role <span class="text-danger">*</span></label>
                 <select name="role" id="roleSelect" class="form-select" <?= $isSelf ? 'disabled' : '' ?>>
                     <optgroup label="Administration">
-                        <option value="admin"             <?= $user['role']==='admin'             ?'selected':'' ?>>Admin — Full unrestricted access</option>
-                    </optgroup>
-                    <optgroup label="Operations">
-                        <option value="workshop_manager"  <?= $user['role']==='workshop_manager'  ?'selected':'' ?>>Workshop Manager</option>
-                        <option value="mechanic"          <?= $user['role']==='mechanic'          ?'selected':'' ?>>Mechanic</option>
-                        <option value="driver"            <?= $user['role']==='driver'            ?'selected':'' ?>>Driver</option>
-                        <option value="inventory_manager" <?= $user['role']==='inventory_manager' ?'selected':'' ?>>Inventory Manager</option>
+                        <option value="admin"              <?= $user['role']==='admin'              ?'selected':'' ?>>Admin — Full unrestricted access</option>
+                        <option value="super_admin"        <?= $user['role']==='super_admin'        ?'selected':'' ?>>Super Admin</option>
+                        <option value="general_manager"    <?= $user['role']==='general_manager'    ?'selected':'' ?>>General Manager</option>
                     </optgroup>
                     <optgroup label="Sales & Client Relations">
-                        <option value="sales_person"      <?= $user['role']==='sales_person'      ?'selected':'' ?>>Sales Person</option>
-                        <option value="sales_officer"     <?= $user['role']==='sales_officer'     ?'selected':'' ?>>Sales Officer</option>
-                        <option value="receptionist"      <?= $user['role']==='receptionist'      ?'selected':'' ?>>Receptionist / Front Desk</option>
+                        <option value="sales_manager"      <?= $user['role']==='sales_manager'      ?'selected':'' ?>>Sales Manager</option>
+                        <option value="sales_officer"      <?= $user['role']==='sales_officer'      ?'selected':'' ?>>Sales Officer</option>
+                        <option value="sales_person"       <?= $user['role']==='sales_person'       ?'selected':'' ?>>Sales Person</option>
+                        <option value="customer_relations" <?= $user['role']==='customer_relations' ?'selected':'' ?>>Customer Relations Manager</option>
+                        <option value="receptionist"       <?= $user['role']==='receptionist'       ?'selected':'' ?>>Receptionist / Front Desk</option>
                     </optgroup>
-                    <optgroup label="Finance & HR">
-                        <option value="accountant"        <?= $user['role']==='accountant'        ?'selected':'' ?>>Accountant</option>
-                        <option value="hr_manager"        <?= $user['role']==='hr_manager'        ?'selected':'' ?>>HR Manager</option>
+                    <optgroup label="Finance">
+                        <option value="finance_manager"    <?= $user['role']==='finance_manager'    ?'selected':'' ?>>Finance Manager</option>
+                        <option value="accountant"         <?= $user['role']==='accountant'         ?'selected':'' ?>>Accountant</option>
+                        <option value="cashier"            <?= $user['role']==='cashier'            ?'selected':'' ?>>Cashier</option>
+                    </optgroup>
+                    <optgroup label="Operations">
+                        <option value="workshop_manager"   <?= $user['role']==='workshop_manager'   ?'selected':'' ?>>Workshop Manager</option>
+                        <option value="mechanic"           <?= $user['role']==='mechanic'           ?'selected':'' ?>>Mechanic</option>
+                        <option value="driver"             <?= $user['role']==='driver'             ?'selected':'' ?>>Driver</option>
+                        <option value="inventory_manager"  <?= $user['role']==='inventory_manager'  ?'selected':'' ?>>Inventory Manager</option>
+                        <option value="procurement_officer"<?= $user['role']==='procurement_officer'?'selected':'' ?>>Procurement Officer</option>
+                    </optgroup>
+                    <optgroup label="HR">
+                        <option value="hr_manager"         <?= $user['role']==='hr_manager'         ?'selected':'' ?>>HR Manager</option>
                     </optgroup>
                     <?php if (in_array($user['role'],['manager'])): ?>
                     <optgroup label="Legacy">
-                        <option value="manager"           <?= $user['role']==='manager'           ?'selected':'' ?>>Manager (legacy)</option>
+                        <option value="manager"            <?= $user['role']==='manager'            ?'selected':'' ?>>Manager (legacy)</option>
                     </optgroup>
                     <?php endif; ?>
                 </select>
@@ -443,47 +464,66 @@ function permDesc(string $key): string {
 <script>
 (function () {
     var roleDesc = {
-        admin:             'Full unrestricted access. Permissions below do not apply to Admin.',
-        workshop_manager:  'Manages the full workshop — jobs, mechanics, assessments, inventory, attendance and payroll.',
-        sales_person:      'Handles client interactions, bookings, quick assessments and the sales pipeline.',
-        sales_officer:     'Manages invoices, quotations, payment collection and the sales pipeline.',
-        accountant:        'Full financial access — invoices, payments, expenses, reports and cost analysis.',
-        hr_manager:        'Manages staff attendance and processes monthly payroll.',
-        inventory_manager: 'Manages parts stock, supplier orders and purchase requisitions.',
-        receptionist:      'Front desk — client check-ins, service bookings and quick assessments.',
-        mechanic:          'Accesses assigned job cards and performs vehicle assessments.',
-        driver:            'Field staff — limited access to car records and pre-departure assessments.',
-        manager:           'Legacy broad-access role. Consider migrating to a specific role.',
+        admin:              'Full unrestricted access. Permissions below do not apply to Admin.',
+        super_admin:        'Full unrestricted access — same as Admin.',
+        general_manager:    'Broad management access across all departments.',
+        finance_manager:    'Full financial access — payments, invoices, expenses, payroll and reports.',
+        accountant:         'Accounting access — invoices, payments, expenses, reports and cost analysis.',
+        cashier:            'Handles payments and installment collection.',
+        sales_manager:      'Manages the sales team, pipeline, quotations, invoices and reporting.',
+        sales_officer:      'Manages invoices, quotations, payment collection and the sales pipeline.',
+        sales_person:       'Handles client interactions, bookings, quick assessments and the sales pipeline.',
+        customer_relations: 'Manages client relationships — CRM, clients, and can view all cars.',
+        receptionist:       'Front desk — client check-ins, service bookings and quick assessments.',
+        workshop_manager:   'Manages the full workshop — jobs, mechanics, assessments, inventory, attendance and payroll.',
+        mechanic:           'Accesses assigned job cards and performs vehicle assessments.',
+        driver:             'Field staff — limited access to car records and pre-departure assessments.',
+        inventory_manager:  'Manages parts stock, supplier orders and purchase requisitions.',
+        procurement_officer:'Handles purchasing — LPOs, suppliers, parts requests and stock.',
+        hr_manager:         'Manages staff attendance and processes monthly payroll.',
+        manager:            'Legacy broad-access role. Consider migrating to a specific role.',
     };
 
     var roleDefaults = {
-        workshop_manager: {
-            access: ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','chat','reports'],
-            write:  ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','car_documents','inspections','attendance','payroll']
+        general_manager: {
+            access: ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','chat','reports','clients','service_bookings','crm','payments','invoices','quotations','sales','installments','expenses'],
+            write:  ['quotations','invoices','sales']
         },
-        sales_person: {
-            access: ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales','crm','installments','car_documents','inspections','chat'],
-            write:  ['service_bookings','quick_assessments','clients','payments','sales','crm','installments']
-        },
-        sales_officer: {
-            access: ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales','crm','installments','car_costs','car_documents','inspections','chat'],
-            write:  ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments']
+        finance_manager: {
+            access: ['payments','invoices','quotations','expenses','reports','clients','sales','installments','car_costs','cars','chat','lpo','payroll','attendance','inventory','suppliers','parts_requests'],
+            write:  ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo']
         },
         accountant: {
             access: ['payments','invoices','quotations','expenses','reports','clients','sales','installments','car_costs','cars','chat'],
             write:  ['payments','invoices','quotations','expenses','sales','installments']
         },
-        hr_manager: {
-            access: ['attendance','payroll','mechanics','drivers','expenses','reports','chat'],
-            write:  ['attendance','payroll']
+        cashier: {
+            access: ['payments','invoices','installments','clients','chat','sales'],
+            write:  ['payments','installments']
         },
-        inventory_manager: {
-            access: ['inventory','suppliers','lpo','parts_requests','cars','issues','car_documents','chat'],
-            write:  ['inventory','suppliers','lpo','parts_requests']
+        sales_manager: {
+            access: ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales','crm','installments','car_costs','car_documents','inspections','chat','reports','expenses','assessments'],
+            write:  ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses']
+        },
+        sales_officer: {
+            access: ['cars','clients','service_bookings','quotations','invoices','payments','quick_assessments','sales','crm','installments','car_costs','car_documents','inspections','chat'],
+            write:  ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments']
+        },
+        sales_person: {
+            access: ['cars','clients','service_bookings','quick_assessments','quotations','invoices','payments','sales','crm','installments','car_documents','inspections','chat'],
+            write:  ['service_bookings','quick_assessments','clients','payments','sales','crm','installments']
+        },
+        customer_relations: {
+            access: ['clients','crm','chat','cars'],
+            write:  ['clients','crm']
         },
         receptionist: {
             access: ['clients','service_bookings','quick_assessments','cars','chat'],
             write:  ['clients','service_bookings','quick_assessments']
+        },
+        workshop_manager: {
+            access: ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','chat','reports'],
+            write:  ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','car_documents','inspections','attendance','payroll']
         },
         mechanic: {
             access: ['jobs','assessments','parts_requests','issues','car_documents','inspections','chat'],
@@ -492,6 +532,18 @@ function permDesc(string $key): string {
         driver: {
             access: ['cars','assessments'],
             write:  []
+        },
+        inventory_manager: {
+            access: ['inventory','suppliers','lpo','parts_requests','cars','issues','car_documents','chat'],
+            write:  ['inventory','suppliers','lpo','parts_requests']
+        },
+        procurement_officer: {
+            access: ['inventory','suppliers','lpo','parts_requests','cars','issues','car_documents','chat','reports'],
+            write:  ['lpo','suppliers','inventory','parts_requests']
+        },
+        hr_manager: {
+            access: ['attendance','payroll','mechanics','drivers','expenses','reports','chat'],
+            write:  ['attendance','payroll']
         },
         manager: {
             access: ['cars','mechanics','drivers','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings','issues','chat','car_documents','crm','car_costs','installments','expenses','inspections','attendance','payroll','quick_assessments','sales'],

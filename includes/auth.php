@@ -60,6 +60,26 @@ function requireRole(string|array $roles): void {
     }
 }
 
+// One-time per-request migration: fix stale user_permissions rows where a role's
+// access was set to 0 for a module that was later added to the role's default map.
+// Runs at most once per PHP process (static flag).
+function _fixRolePermissions(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    try {
+        $db = getDB();
+        // customer_relations: cars access was added to role map but existing DB rows
+        // still have can_access=0 due to being saved before the default was configured.
+        $db->exec("
+            UPDATE user_permissions up
+            JOIN   users u ON u.id = up.user_id AND u.role = 'customer_relations'
+            SET    up.can_access = 1
+            WHERE  up.module = 'cars' AND up.can_access = 0
+        ");
+    } catch (\Throwable $_) {}
+}
+
 // Load per-user permission rows from DB (cached per request via static)
 function getUserPermissions(): array {
     static $cache = null;
@@ -82,6 +102,7 @@ function getUserPermissions(): array {
 
 // Module access map (non-admin roles)
 function canAccess(string $module): bool {
+    _fixRolePermissions();
     $user = authUser();
     if (!$user) return false;
     if ($user['role'] === 'admin' || $user['role'] === 'super_admin') return true;
