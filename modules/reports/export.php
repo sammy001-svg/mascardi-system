@@ -187,6 +187,86 @@ switch ($type) {
         $rows = $stmt->fetchAll(PDO::FETCH_NUM);
         break;
 
+    case 'inventory_aging':
+        $filename = 'inventory_aging_' . date('Y-m-d');
+        $headers  = ['Vehicle','Year','Color','Status','Location','Asking Price (KES)','Days in Stock','Age Band','Date Added'];
+        $stmt = $db->query("
+            SELECT CONCAT(c.make,' ',c.model), c.year, c.color, c.status, l.name,
+                   c.asking_price,
+                   DATEDIFF(NOW(), c.created_at) AS days_in_stock,
+                   CASE
+                       WHEN DATEDIFF(NOW(), c.created_at) <= 30 THEN '0-30 days'
+                       WHEN DATEDIFF(NOW(), c.created_at) <= 60 THEN '31-60 days'
+                       WHEN DATEDIFF(NOW(), c.created_at) <= 90 THEN '61-90 days'
+                       ELSE '90+ days'
+                   END AS age_band,
+                   DATE(c.created_at)
+            FROM cars c
+            LEFT JOIN locations l ON l.id = c.location_id
+            WHERE c.car_type = 'inventory'
+              AND c.status NOT IN ('sold','cancelled','delivered')
+            ORDER BY days_in_stock DESC
+        ");
+        $rows = $stmt->fetchAll(PDO::FETCH_NUM);
+        break;
+
+    case 'lead_conversion':
+        $filename = 'lead_conversion_' . $dateFrom . '_to_' . $dateTo;
+        $headers  = ['Lead Name','Phone','Source','Campaign','Agent','Interested In','Created','Converted','Days to Close','Stage'];
+        try {
+            $stmt = $db->prepare("
+                SELECT l.name, l.phone, l.source, l.campaign,
+                       u.name AS agent, l.interested_in,
+                       DATE(l.created_at), DATE(l.converted_at),
+                       CASE WHEN l.converted_at IS NOT NULL
+                           THEN DATEDIFF(l.converted_at, l.created_at) ELSE NULL END,
+                       l.stage
+                FROM crm_leads l
+                LEFT JOIN users u ON u.id = l.assigned_to
+                WHERE DATE(l.created_at) BETWEEN ? AND ?
+                ORDER BY l.converted_at DESC, l.created_at DESC
+            ");
+            $stmt->execute([$dateFrom, $dateTo]);
+            $rows = $stmt->fetchAll(PDO::FETCH_NUM);
+        } catch (\Throwable $e) { $rows = []; }
+        break;
+
+    case 'crm_leads':
+        $filename = 'crm_leads_' . $dateFrom . '_to_' . $dateTo;
+        $headers  = ['Name','Phone','Email','Source','Campaign','Stage','Budget (KES)','Assigned To','Created','Follow-up Date'];
+        try {
+            $stmt = $db->prepare("
+                SELECT l.name, l.phone, l.email, l.source, l.campaign, l.stage,
+                       l.budget, u.name AS agent,
+                       DATE(l.created_at), l.follow_up_date
+                FROM crm_leads l
+                LEFT JOIN users u ON u.id = l.assigned_to
+                WHERE DATE(l.created_at) BETWEEN ? AND ?
+                ORDER BY l.created_at DESC
+            ");
+            $stmt->execute([$dateFrom, $dateTo]);
+            $rows = $stmt->fetchAll(PDO::FETCH_NUM);
+        } catch (\Throwable $e) { $rows = []; }
+        break;
+
+    case 'stock_rotation':
+        $filename = 'stock_rotation_' . date('Y-m-d');
+        $headers  = ['Make','Model','Year','Color','Status','Location','Asking Price (KES)','Days at Location','Transfer Count'];
+        $stmt = $db->query("
+            SELECT c.make, c.model, c.year, c.color, c.status, l.name,
+                   c.asking_price,
+                   DATEDIFF(NOW(), COALESCE(c.last_rotated_at, c.created_at)) AS days_at_location,
+                   (SELECT COUNT(st.id) FROM showroom_transfers st
+                    WHERE st.car_id = c.id AND st.status NOT IN ('cancelled')) AS transfer_count
+            FROM cars c
+            LEFT JOIN locations l ON l.id = c.location_id
+            WHERE c.car_type = 'inventory'
+              AND c.status NOT IN ('delivered','in_transit')
+            ORDER BY days_at_location DESC
+        ");
+        $rows = $stmt->fetchAll(PDO::FETCH_NUM);
+        break;
+
     default:
         die('Unknown export type.');
 }

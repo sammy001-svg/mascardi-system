@@ -156,9 +156,12 @@ include __DIR__ . '/../../includes/header.php';
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fa fa-tag me-2 text-success"></i>Sales</h5>
-    <?php if (canWrite('sales')): ?>
-    <a href="add.php" class="btn btn-sm btn-success"><i class="fa fa-plus me-1"></i>Record Sale</a>
-    <?php endif; ?>
+    <div class="d-flex gap-2">
+        <a href="followups.php" class="btn btn-sm btn-outline-primary"><i class="fa fa-clipboard-check me-1"></i>Follow-ups</a>
+        <?php if (canWrite('sales')): ?>
+        <a href="add.php" class="btn btn-sm btn-success"><i class="fa fa-plus me-1"></i>Record Sale</a>
+        <?php endif; ?>
+    </div>
 </div>
 
 <!-- ── Stats ──────────────────────────────────────────────────────────────── -->

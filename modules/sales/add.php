@@ -10,8 +10,22 @@ $user = authUser();
 $preCarId = (int)($_GET['car_id'] ?? 0);
 $errors   = [];
 
-// Inline migration
+// Inline migrations
 try { $db->exec("ALTER TABLE car_sales ADD COLUMN cost_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE car_sales ADD COLUMN client_id INT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("CREATE TABLE IF NOT EXISTS sale_followups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    sale_id INT NOT NULL,
+    assigned_to INT NULL,
+    type VARCHAR(20) DEFAULT 'custom',
+    title VARCHAR(255) NOT NULL,
+    scheduled_date DATE NOT NULL,
+    status ENUM('pending','done','skipped') DEFAULT 'pending',
+    notes TEXT,
+    completed_by INT NULL,
+    completed_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $_) {}
 
 $canSeeProfit = hasRole(['admin','super_admin','general_manager','sales_manager','finance_manager','finance_officer']);
 
@@ -85,6 +99,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $saleId = (int)$db->lastInsertId();
             $db->prepare("UPDATE cars SET status='sold' WHERE id=?")->execute([$d['car_id']]);
             $db->commit();
+            // Auto-link buyer to existing client account by phone/email
+            try {
+                $clOr = []; $clP = [];
+                if ($d['buyer_phone']) { $clOr[] = 'phone = ?'; $clP[] = $d['buyer_phone']; }
+                if ($d['buyer_email']) { $clOr[] = 'email = ?'; $clP[] = $d['buyer_email']; }
+                if ($clOr) {
+                    $clStmt = $db->prepare("SELECT id FROM clients WHERE (" . implode(' OR ', $clOr) . ") AND status='active' LIMIT 1");
+                    $clStmt->execute($clP);
+                    $matchedClientId = $clStmt->fetchColumn();
+                    if ($matchedClientId) {
+                        $db->prepare("UPDATE car_sales SET client_id=? WHERE id=?")->execute([$matchedClientId, $saleId]);
+                    }
+                }
+            } catch (\Throwable $_) {}
+            // Create post-sale follow-up tasks (7-day and 30-day check-ins)
+            try {
+                $db->prepare("INSERT INTO sale_followups (sale_id,assigned_to,type,title,scheduled_date) VALUES (?,?,?,?,?)")
+                   ->execute([$saleId, $user['id'], 'week_1', '1-Week Check-in: ' . $d['buyer_name'], date('Y-m-d', strtotime($d['sale_date'] . ' +7 days'))]);
+                $db->prepare("INSERT INTO sale_followups (sale_id,assigned_to,type,title,scheduled_date) VALUES (?,?,?,?,?)")
+                   ->execute([$saleId, $user['id'], 'month_1', '1-Month Satisfaction Check: ' . $d['buyer_name'], date('Y-m-d', strtotime($d['sale_date'] . ' +30 days'))]);
+            } catch (\Throwable $_) {}
             logActivity('create', 'sales', $saleId, "Recorded sale {$saleNum} — {$d['buyer_name']} — " . money((float)$d['sale_price']));
             require_once __DIR__ . '/../../includes/notifications.php';
             $soldCar = $db->prepare("SELECT make, model, year FROM cars WHERE id=?");

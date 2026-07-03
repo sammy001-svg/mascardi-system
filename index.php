@@ -66,6 +66,24 @@ if ($role === 'mechanic') {
     try { $stats['cars_sold_month'] = (int)$db->query("SELECT COUNT(*) FROM car_sales WHERE status='active' AND MONTH(sale_date)=MONTH(NOW()) AND YEAR(sale_date)=YEAR(NOW())")->fetchColumn(); }
     catch (\Throwable $e) { $stats['cars_sold_month'] = 0; }
 
+    try {
+        $stats['docs_expired']      = (int)$db->query("SELECT COUNT(*) FROM car_documents WHERE expiry_date IS NOT NULL AND expiry_date < CURDATE()")->fetchColumn();
+        $stats['docs_expiring_soon']= (int)$db->query("SELECT COUNT(*) FROM car_documents WHERE expiry_date IS NOT NULL AND expiry_date >= CURDATE() AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)")->fetchColumn();
+    } catch (\Throwable $_) { $stats['docs_expired'] = 0; $stats['docs_expiring_soon'] = 0; }
+
+    if ($role === 'super_admin') {
+        $__lm = date('Y-m', strtotime('-1 month'));
+        $stats['revenue_last_month'] = (float)$db->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid' AND DATE_FORMAT(created_at,'%Y-%m')='{$__lm}'")->fetchColumn();
+        $stats['revenue_ytd']        = (float)$db->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid' AND YEAR(created_at)=YEAR(NOW())")->fetchColumn();
+        $stats['total_clients']      = (int)$db->query("SELECT COUNT(*) FROM clients")->fetchColumn();
+        try { $stats['cars_sold_last_month'] = (int)$db->query("SELECT COUNT(*) FROM car_sales WHERE status='active' AND DATE_FORMAT(sale_date,'%Y-%m')='{$__lm}'")->fetchColumn(); } catch (\Throwable $_) { $stats['cars_sold_last_month'] = 0; }
+        try { $stats['cars_sold_ytd']        = (int)$db->query("SELECT COUNT(*) FROM car_sales WHERE status='active' AND YEAR(sale_date)=YEAR(NOW())")->fetchColumn(); } catch (\Throwable $_) { $stats['cars_sold_ytd'] = 0; }
+        try {
+            $stats['crm_open_leads'] = (int)$db->query("SELECT COUNT(*) FROM crm_leads WHERE stage NOT IN ('closed_won','closed_lost')")->fetchColumn();
+            $stats['crm_new_month']  = (int)$db->query("SELECT COUNT(*) FROM crm_leads WHERE MONTH(created_at)=MONTH(NOW()) AND YEAR(created_at)=YEAR(NOW())")->fetchColumn();
+        } catch (\Throwable $_) { $stats['crm_open_leads'] = 0; $stats['crm_new_month'] = 0; }
+    }
+
 } elseif ($role === 'sales_person') {
     $stats['total_clients']    = (int)$db->query("SELECT COUNT(*) FROM clients")->fetchColumn();
     $stats['qa_today']         = (int)$db->query("SELECT COUNT(*) FROM quick_assessments WHERE assessment_date=CURDATE()")->fetchColumn();
@@ -144,6 +162,17 @@ if ($role !== 'mechanic') {
             ")->fetchAll();
         } catch (\Throwable $e) { $criticalIssuesList = []; }
     }
+}
+
+// ── Trend helpers (super_admin only) ─────────────────────────────────
+$revTrend = $soldTrend = null;
+if ($role === 'super_admin') {
+    $revTrend  = ($stats['revenue_last_month'] ?? 0) > 0
+        ? round((($stats['revenue_month'] - $stats['revenue_last_month']) / $stats['revenue_last_month']) * 100, 1)
+        : null;
+    $soldTrend = ($stats['cars_sold_last_month'] ?? 0) > 0
+        ? round((($stats['cars_sold_month'] - ($stats['cars_sold_last_month'] ?? 0)) / $stats['cars_sold_last_month']) * 100, 1)
+        : null;
 }
 
 $extraJs = <<<SCRIPT
@@ -243,7 +272,11 @@ include __DIR__ . '/includes/header.php';
             <div class="vr welcome-divider"></div>
             <div class="text-center"><div class="welcome-stat-val"><?= $stats['open_jobs'] ?></div><div class="welcome-stat-lbl">Open Jobs</div></div>
             <div class="vr welcome-divider"></div>
-            <div class="text-center"><div class="welcome-stat-val text-success" style="font-size:1rem"><?= money($stats['revenue_month']) ?></div><div class="welcome-stat-lbl">Revenue (MTD)</div></div>
+            <div class="text-center"><div class="welcome-stat-val" style="font-size:1rem"><?= money($stats['revenue_month']) ?></div><div class="welcome-stat-lbl">Revenue (MTD)</div></div>
+            <?php if ($role === 'super_admin'): ?>
+            <div class="vr welcome-divider"></div>
+            <div class="text-center"><div class="welcome-stat-val text-warning"><?= $stats['cars_sold_month'] ?? 0 ?></div><div class="welcome-stat-lbl">Cars Sold (MTD)</div></div>
+            <?php endif; ?>
         <?php elseif ($role === 'sales_officer'): ?>
             <div class="text-center"><div class="welcome-stat-val text-success" style="font-size:1rem"><?= money($stats['revenue_month']) ?></div><div class="welcome-stat-lbl">Revenue (Month)</div></div>
         <?php else: ?>
@@ -253,6 +286,12 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <!-- ── Stat Cards Row 1 ───────────────────────────────────────────────────── -->
+<?php if ($role === 'super_admin'): ?>
+<div class="dash-section">
+    <span class="dash-section-label">Business Overview</span>
+    <div class="dash-section-line"></div>
+</div>
+<?php endif; ?>
 <div class="row g-3 mb-3">
 <?php if ($role === 'mechanic'): ?>
     <div class="col-sm-6 col-xl-3">
@@ -366,13 +405,31 @@ include __DIR__ . '/includes/header.php';
     <div class="col-sm-6 col-xl-3">
         <a href="<?= BASE_URL ?>/modules/invoices/index.php?status=paid" class="stat-card stat-card-link" style="border-left:4px solid #16a34a">
             <div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="fa fa-money-bill-wave"></i></div>
-            <div class="stat-info"><div class="stat-label">Revenue (MTD)</div><div class="stat-value stat-value-sm"><?= money($stats['revenue_month']) ?></div></div>
+            <div class="stat-info">
+                <div class="stat-label">Revenue (MTD)</div>
+                <div class="stat-value stat-value-sm"><?= money($stats['revenue_month']) ?></div>
+                <?php if ($revTrend !== null): ?>
+                <span class="trend-badge trend-<?= $revTrend > 0 ? 'up' : ($revTrend < 0 ? 'down' : 'flat') ?>">
+                    <i class="fa fa-arrow-<?= $revTrend > 0 ? 'trend-up' : ($revTrend < 0 ? 'trend-down' : 'right') ?> fa-xs"></i>
+                    <?= abs($revTrend) ?>% vs last mo.
+                </span>
+                <?php endif; ?>
+            </div>
         </a>
     </div>
     <div class="col-sm-6 col-xl-3">
         <a href="<?= BASE_URL ?>/modules/sales/index.php" class="stat-card stat-card-link" style="border-left:4px solid #0f172a">
             <div class="stat-icon" style="background:#f1f5f9;color:#0f172a"><i class="fa fa-tag"></i></div>
-            <div class="stat-info"><div class="stat-label">Cars Sold (MTD)</div><div class="stat-value"><?= $stats['cars_sold_month'] ?></div></div>
+            <div class="stat-info">
+                <div class="stat-label">Cars Sold (MTD)</div>
+                <div class="stat-value"><?= $stats['cars_sold_month'] ?></div>
+                <?php if ($soldTrend !== null): ?>
+                <span class="trend-badge trend-<?= $soldTrend > 0 ? 'up' : ($soldTrend < 0 ? 'down' : 'flat') ?>">
+                    <i class="fa fa-arrow-<?= $soldTrend > 0 ? 'trend-up' : ($soldTrend < 0 ? 'trend-down' : 'right') ?> fa-xs"></i>
+                    <?= abs($soldTrend) ?>% vs last mo.
+                </span>
+                <?php endif; ?>
+            </div>
         </a>
     </div>
     <div class="col-sm-6 col-xl-3">
@@ -390,6 +447,46 @@ include __DIR__ . '/includes/header.php';
 </div>
 <?php else: ?>
 <div class="mb-4"></div>
+<?php endif; ?>
+
+<!-- ── Stat Cards Row 3 — Super Admin: Sales & CRM Pipeline ──────────────── -->
+<?php if ($role === 'super_admin' && isset($stats['revenue_ytd'])): ?>
+<div class="dash-section">
+    <span class="dash-section-label">Sales &amp; CRM Pipeline</span>
+    <div class="dash-section-line"></div>
+</div>
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <a href="<?= BASE_URL ?>/modules/reports/index.php" class="stat-card stat-card-link" style="border-left:4px solid #059669">
+            <div class="stat-icon" style="background:#ecfdf5;color:#059669"><i class="fa fa-chart-line"></i></div>
+            <div class="stat-info"><div class="stat-label">Revenue (YTD)</div><div class="stat-value stat-value-sm"><?= money($stats['revenue_ytd']) ?></div></div>
+        </a>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <a href="<?= BASE_URL ?>/modules/clients/index.php" class="stat-card stat-card-link" style="border-left:4px solid #0284c7">
+            <div class="stat-icon" style="background:#e0f2fe;color:#0284c7"><i class="fa fa-users"></i></div>
+            <div class="stat-info"><div class="stat-label">Total Clients</div><div class="stat-value"><?= number_format($stats['total_clients']) ?></div></div>
+        </a>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <a href="<?= BASE_URL ?>/modules/crm/index.php" class="stat-card stat-card-link" style="border-left:4px solid #8b5cf6">
+            <div class="stat-icon" style="background:#f5f3ff;color:#8b5cf6"><i class="fa fa-user-group"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">CRM Pipeline</div>
+                <div class="stat-value"><?= $stats['crm_open_leads'] ?></div>
+                <?php if (($stats['crm_new_month'] ?? 0) > 0): ?>
+                <span class="trend-badge trend-up"><i class="fa fa-plus fa-xs"></i><?= $stats['crm_new_month'] ?> new this month</span>
+                <?php endif; ?>
+            </div>
+        </a>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <a href="<?= BASE_URL ?>/modules/sales/index.php" class="stat-card stat-card-link" style="border-left:4px solid #1d4ed8">
+            <div class="stat-icon" style="background:#dbeafe;color:#1d4ed8"><i class="fa fa-car-side"></i></div>
+            <div class="stat-info"><div class="stat-label">Cars Sold (YTD)</div><div class="stat-value"><?= $stats['cars_sold_ytd'] ?? 0 ?></div></div>
+        </a>
+    </div>
+</div>
 <?php endif; ?>
 
 <!-- ── Quick Actions ──────────────────────────────────────────────────────── -->
@@ -552,6 +649,12 @@ include __DIR__ . '/includes/header.php';
 
 <!-- Charts Row -->
 <?php if (in_array($role, ['super_admin','admin','workshop_manager','sales_officer'])): ?>
+<?php if ($role === 'super_admin'): ?>
+<div class="dash-section">
+    <span class="dash-section-label">Financial Performance</span>
+    <div class="dash-section-line"></div>
+</div>
+<?php endif; ?>
 <div class="row g-4 mb-4">
     <div class="col-lg-8">
         <div class="card h-100">
@@ -576,6 +679,12 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <!-- Tables Row -->
+<?php if ($role === 'super_admin'): ?>
+<div class="dash-section">
+    <span class="dash-section-label">Operations Overview</span>
+    <div class="dash-section-line"></div>
+</div>
+<?php endif; ?>
 <div class="row g-4 mb-4">
     <!-- Recent Cars -->
     <div class="col-lg-<?= in_array($role, ['super_admin','admin','workshop_manager']) ? '5' : '7' ?>">
@@ -669,7 +778,22 @@ include __DIR__ . '/includes/header.php';
                 </a>
                 <?php endif; ?>
 
-                <?php if (empty($overdueJobsList) && empty($criticalIssuesList) && $stats['low_stock'] === 0): ?>
+                <?php if (($stats['docs_expired'] ?? 0) > 0): ?>
+                <div class="list-group-item bg-danger bg-opacity-10 py-1 px-3 text-danger fw-semibold" style="font-size:11px">EXPIRED DOCS (<?= $stats['docs_expired'] ?>)</div>
+                <a href="<?= BASE_URL ?>/modules/car_documents/index.php?expiry=expired" class="list-group-item list-group-item-action py-2">
+                    <div class="fw-medium" style="font-size:12.5px"><i class="fa fa-circle-xmark text-danger me-1"></i><?= $stats['docs_expired'] ?> document<?= $stats['docs_expired'] > 1 ? 's' : '' ?> expired</div>
+                    <div class="text-muted" style="font-size:11px">Click to review expired car documents</div>
+                </a>
+                <?php endif; ?>
+
+                <?php if (($stats['docs_expiring_soon'] ?? 0) > 0): ?>
+                <div class="list-group-item bg-warning bg-opacity-25 py-1 px-3 text-warning-emphasis fw-semibold" style="font-size:11px">DOCS EXPIRING SOON (<?= $stats['docs_expiring_soon'] ?>)</div>
+                <a href="<?= BASE_URL ?>/modules/car_documents/index.php?expiry=soon" class="list-group-item list-group-item-action py-2">
+                    <div class="fw-medium" style="font-size:12.5px"><i class="fa fa-triangle-exclamation text-warning me-1"></i><?= $stats['docs_expiring_soon'] ?> document<?= $stats['docs_expiring_soon'] > 1 ? 's' : '' ?> expiring within 30 days</div>
+                </a>
+                <?php endif; ?>
+
+                <?php if (empty($overdueJobsList) && empty($criticalIssuesList) && $stats['low_stock'] === 0 && ($stats['docs_expired'] ?? 0) === 0 && ($stats['docs_expiring_soon'] ?? 0) === 0): ?>
                 <div class="list-group-item text-center text-success py-4 small">
                     <i class="fa fa-circle-check fa-lg mb-1 d-block"></i>No alerts right now
                 </div>
@@ -682,6 +806,12 @@ include __DIR__ . '/includes/header.php';
 
 <!-- Recent Payments Row -->
 <?php if (in_array($role, ['super_admin','admin','workshop_manager','sales_officer']) && !empty($recentPayments)): ?>
+<?php if ($role === 'super_admin'): ?>
+<div class="dash-section">
+    <span class="dash-section-label">Recent Payments</span>
+    <div class="dash-section-line"></div>
+</div>
+<?php endif; ?>
 <div class="row g-4 mb-4">
     <div class="col-12">
         <div class="card">

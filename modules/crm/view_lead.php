@@ -368,6 +368,20 @@ try {
 $isOverdue = $lead['follow_up_date'] && $lead['follow_up_date'] < date('Y-m-d')
              && !in_array($lead['stage'],['lost','delivered']);
 
+// Repeat buyer check — does this lead's phone/email match a previous buyer?
+$repeatBuyer = false; $repeatBuyerCount = 0;
+try {
+    $rbOr = []; $rbP = [];
+    if (!empty($lead['phone'])) { $rbOr[] = 'cs.buyer_phone = ?'; $rbP[] = $lead['phone']; }
+    if (!empty($lead['email'])) { $rbOr[] = 'cs.buyer_email = ?'; $rbP[] = $lead['email']; }
+    if ($rbOr) {
+        $rbStmt = $db->prepare("SELECT COUNT(*) FROM car_sales cs WHERE cs.status='active' AND (" . implode(' OR ', $rbOr) . ")");
+        $rbStmt->execute($rbP);
+        $repeatBuyerCount = (int)$rbStmt->fetchColumn();
+        $repeatBuyer = $repeatBuyerCount > 0;
+    }
+} catch (\Throwable $_) {}
+
 include __DIR__ . '/../../includes/header.php';
 ?>
 
@@ -381,6 +395,11 @@ include __DIR__ . '/../../includes/header.php';
         <span class="badge bg-<?= scoreColor($score) ?> ms-1" title="Lead Score">
             <i class="fa fa-star me-1"></i>Score: <?= $score ?>/100
         </span>
+        <?php if ($repeatBuyer): ?>
+        <span class="badge ms-1" style="background:#6d28d9;color:#fff" title="This contact has bought from us before">
+            <i class="fa fa-rotate me-1"></i>Repeat Buyer (<?= $repeatBuyerCount ?> prev. purchase<?= $repeatBuyerCount > 1 ? 's' : '' ?>)
+        </span>
+        <?php endif; ?>
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <?php if ($lead['client_id']): ?>

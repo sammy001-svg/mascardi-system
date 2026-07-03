@@ -55,6 +55,12 @@ body { background: #f1f5f9; }
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link <?= str_contains($__uri, '/portal/my_purchase') ? 'pactive' : '' ?>"
+                       href="<?= BASE_URL ?>/portal/my_purchase.php">
+                        <i class="fa fa-tag me-1"></i>My Purchase
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link <?= str_contains($__uri, '/portal/booking') ? 'pactive' : '' ?>"
                        href="<?= BASE_URL ?>/portal/bookings.php">
                         <i class="fa fa-calendar-check me-1"></i>Bookings

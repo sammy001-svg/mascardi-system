@@ -39,6 +39,19 @@ $recentBk = $db->prepare("
 ");
 $recentBk->execute([$cid]); $recentBk = $recentBk->fetchAll();
 
+// Car purchases linked to this client
+try {
+    $purchaseStmt = $db->prepare("
+        SELECT cs.id, cs.sale_number, cs.sale_date, cs.sale_price, cs.payment_status, cs.balance_amount,
+               c.make, c.model, c.year
+        FROM car_sales cs JOIN cars c ON c.id = cs.car_id
+        WHERE cs.client_id = ? AND cs.status = 'active'
+        ORDER BY cs.sale_date DESC
+    ");
+    $purchaseStmt->execute([$cid]);
+    $myPurchases = $purchaseStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $_) { $myPurchases = []; }
+
 include __DIR__ . '/header.php';
 ?>
 
@@ -89,6 +102,18 @@ include __DIR__ . '/header.php';
             </div>
         </div>
     </div>
+    <?php if (!empty($myPurchases)): ?>
+    <div class="col-6 col-lg-3">
+        <div class="p-stat" style="cursor:pointer" onclick="location.href='<?= BASE_URL ?>/portal/my_purchase.php'">
+            <div class="p-stat-icon" style="background:#ede9fe;color:#6d28d9"><i class="fa fa-tag"></i></div>
+            <div>
+                <div class="p-stat-label">My Purchase<?= count($myPurchases) > 1 ? 's' : '' ?></div>
+                <div class="p-stat-value"><?= count($myPurchases) ?></div>
+                <div style="font-size:11px;color:#64748b"><?= e($myPurchases[0]['year'].' '.$myPurchases[0]['make'].' '.$myPurchases[0]['model']) ?></div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <div class="row g-4">
@@ -183,5 +208,46 @@ include __DIR__ . '/header.php';
         <?php endif; ?>
     </div>
 </div>
+
+<!-- My Purchases Card -->
+<?php if (!empty($myPurchases)): ?>
+<div class="p-card mb-4">
+    <div class="p-card-header">
+        <span><i class="fa fa-tag me-2" style="color:#6d28d9"></i>My Car Purchase<?= count($myPurchases) > 1 ? 's' : '' ?></span>
+        <a href="<?= BASE_URL ?>/portal/my_purchase.php" class="btn btn-sm btn-outline-primary" style="font-size:12px">
+            <i class="fa fa-eye me-1"></i>View Details
+        </a>
+    </div>
+    <div class="p-card-body p-0">
+        <table class="table table-hover mb-0" style="font-size:13px">
+            <thead style="font-size:11.5px;color:#64748b;text-transform:uppercase;letter-spacing:.04em;background:#f8fafc">
+                <tr>
+                    <th class="ps-4 py-3">Sale #</th>
+                    <th class="py-3">Vehicle</th>
+                    <th class="py-3">Date</th>
+                    <th class="py-3 text-end">Price</th>
+                    <th class="py-3 text-end pe-4">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($myPurchases as $p):
+                $pBal = (float)$p['balance_amount'];
+                $pBadge = match($p['payment_status'] ?? '') {
+                    'paid_full' => 'success', 'partial' => 'warning', 'financed' => 'primary', default => 'secondary',
+                };
+            ?>
+            <tr onclick="location.href='<?= BASE_URL ?>/portal/my_purchase.php'" style="cursor:pointer">
+                <td class="ps-4 py-3 fw-bold"><?= e($p['sale_number']) ?></td>
+                <td class="py-3 fw-medium"><?= e($p['year'] . ' ' . $p['make'] . ' ' . $p['model']) ?></td>
+                <td class="py-3 text-muted small"><?= fmtDate($p['sale_date'], 'd M Y') ?></td>
+                <td class="py-3 text-end fw-semibold text-success"><?= money((float)$p['sale_price']) ?></td>
+                <td class="py-3 text-end pe-4 fw-semibold <?= $pBal > 0 ? 'text-danger' : 'text-muted' ?>"><?= money($pBal) ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php include __DIR__ . '/footer.php'; ?>

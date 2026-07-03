@@ -312,12 +312,22 @@ include __DIR__ . '/_nav.php';
 </div>
 
 <!-- ── Sales Rep Performance Table ───────────────────────────────────────── -->
+<?php
+$crmExportQs = 'type=crm_leads&period=' . urlencode($period)
+             . '&date_from=' . urlencode($dateFrom) . '&date_to=' . urlencode($dateTo);
+?>
 <?php if (!empty($repStats)): ?>
 <div class="card border-0 shadow-sm mb-4" style="border-radius:12px">
     <div class="card-body p-0">
-        <div class="p-4 pb-3 border-bottom">
-            <h6 class="fw-bold mb-0"><i class="fa fa-trophy me-2 text-warning"></i>Sales Rep Performance</h6>
-            <div class="text-muted small">Leads assigned in period — sorted by wins</div>
+        <div class="p-4 pb-3 border-bottom d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+                <h6 class="fw-bold mb-0"><i class="fa fa-trophy me-2 text-warning"></i>Sales Rep Performance</h6>
+                <div class="text-muted small">Leads assigned in period — sorted by wins</div>
+            </div>
+            <a href="<?= BASE_URL ?>/modules/reports/export.php?<?= htmlspecialchars($crmExportQs) ?>"
+               class="btn btn-xs btn-outline-secondary">
+                <i class="fa fa-file-csv me-1"></i>Export CRM CSV
+            </a>
         </div>
         <div class="table-responsive">
             <table class="table table-hover mb-0" style="font-size:13px">

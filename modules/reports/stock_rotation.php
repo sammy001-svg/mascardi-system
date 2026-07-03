@@ -54,11 +54,17 @@ include __DIR__ . '/../../includes/header.php';
         <h5 class="mb-1"><i class="fa fa-rotate me-2 text-primary"></i>Stock Rotation Report</h5>
         <div class="text-muted small">Cars ranked by days at current location — rotate those over <?= $ROTATION_DAYS ?> days</div>
     </div>
-    <?php if (canAccess('showroom_transfers') && canWrite('showroom_transfers')): ?>
-    <a href="<?= BASE_URL ?>/modules/showroom_transfers/add.php?type=stock_rotation" class="btn btn-success btn-sm">
-        <i class="fa fa-right-left me-1"></i>New Rotation Transfer
-    </a>
-    <?php endif; ?>
+    <div class="d-flex gap-2">
+        <a href="<?= BASE_URL ?>/modules/reports/export.php?type=stock_rotation"
+           class="btn btn-outline-secondary btn-sm">
+            <i class="fa fa-file-csv me-1"></i>Export CSV
+        </a>
+        <?php if (canAccess('showroom_transfers') && canWrite('showroom_transfers')): ?>
+        <a href="<?= BASE_URL ?>/modules/showroom_transfers/add.php?type=stock_rotation" class="btn btn-success btn-sm">
+            <i class="fa fa-right-left me-1"></i>New Rotation Transfer
+        </a>
+        <?php endif; ?>
+    </div>
 </div>
 
 <!-- Stats -->

@@ -40,6 +40,15 @@ foreach($images as $img) if($img['is_primary']) $primaryImage = $img;
 $existingSale = $db->prepare("SELECT id, sale_number FROM car_sales WHERE car_id=? AND status='active' LIMIT 1");
 $existingSale->execute([$id]); $existingSale = $existingSale->fetch();
 
+$docCount = 0;
+if (canAccess('car_documents')) {
+    try {
+        $dcS = $db->prepare("SELECT COUNT(*) FROM car_documents WHERE car_id=?");
+        $dcS->execute([$id]);
+        $docCount = (int)$dcS->fetchColumn();
+    } catch (\Throwable $_) {}
+}
+
 $pageTitle = $car['make'] . ' ' . $car['model'];
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -47,6 +56,11 @@ include __DIR__ . '/../../includes/header.php';
     <h5 class="mb-0"><?= e($car['make'].' '.$car['model']) ?> <code class="ms-2"><?= e($car['chassis_number']) ?></code></h5>
     <div class="d-flex gap-2 flex-wrap">
         <a href="media.php?id=<?= $id ?>" class="btn btn-sm btn-outline-primary"><i class="fa fa-camera me-1"></i>Photos (<?= count($images) ?>)</a>
+        <?php if (canAccess('car_documents')): ?>
+        <a href="#documents" class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-folder-open me-1"></i>Docs<?= $docCount > 0 ? " ({$docCount})" : '' ?>
+        </a>
+        <?php endif; ?>
         <?php if ($car['car_type'] === 'inventory' && canWrite('sales')): ?>
             <?php if ($existingSale): ?>
             <a href="<?= BASE_URL ?>/modules/sales/view.php?id=<?= $existingSale['id'] ?>" class="btn btn-sm btn-success">
