@@ -158,8 +158,9 @@ body > .modal-backdrop,
     transition: background .12s;
     user-select: none;
 }
-.conv-item:hover  { background: #f5f6f6; }
+.conv-item:hover  { background: #eef2f7; }
 .conv-item.active { background: #eff6ff; border-left: 3px solid #2563eb; }
+.conv-item:not(.active):hover .cv-name { color: #2563eb; }
 .cv-av {
     width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
@@ -709,6 +710,21 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
 .ch-online { color:#22c55e; font-size:12px; font-weight:600; }
 .ch-lastseen { font-size:12px; color:#667781; }
 
+/* ── New conversation button (always-visible in left panel) ──────────────── */
+.cp-new-btn-wrap {
+    padding: 6px 12px 4px;
+    flex-shrink: 0;
+}
+.cp-new-btn {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 9px 16px; border-radius: 8px; border: none; cursor: pointer;
+    background: #2563eb; color: #fff; font-size: 13.5px; font-weight: 600;
+    font-family: inherit; transition: background .15s, transform .1s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.25);
+}
+.cp-new-btn:hover  { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,.35); }
+.cp-new-btn:active { transform: scale(.98); }
+
 /* ── Conversation section headers ─────────────────────────────────────────── */
 .conv-section-hdr {
     padding: 12px 16px 4px;
@@ -763,8 +779,15 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
         <div class="cp-search">
             <div class="cp-si">
                 <i class="fa fa-magnifying-glass"></i>
-                <input type="text" id="convSearch" placeholder="Search or start a conversation…" autocomplete="off">
+                <input type="text" id="convSearch" placeholder="Search conversations…" autocomplete="off">
             </div>
+        </div>
+        <!-- Always-visible new conversation button -->
+        <div class="cp-new-btn-wrap">
+            <button class="cp-new-btn" id="btnNewChatBar">
+                <i class="fa fa-pen-to-square"></i>
+                New Conversation
+            </button>
         </div>
         <div class="conv-list" id="convList"></div>
         <!-- Logged-in user strip -->
@@ -792,8 +815,7 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
             <h6>Mascardi Team Chat</h6>
             <p>Message your colleagues directly or create group conversations to collaborate with your team.</p>
             <div class=”cw-actions”>
-                <button class=”cw-btn cw-btn-primary”
-                        onclick=”bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).show()”>
+                <button class=”cw-btn cw-btn-primary” id=”btnWelcomeNewChat”>
                     <i class=”fa fa-pen-to-square”></i>New Conversation
                 </button>
             </div>
@@ -1142,11 +1164,9 @@ const Chat = window.Chat = {
                 list.innerHTML = `<div class="conv-empty">
                     <div class="ce-icon"><i class="fa fa-comments"></i></div>
                     No conversations yet.<br>
-                    <small style="display:block;margin:8px 0 12px">Click the compose button above to message a colleague.</small>
-                    <button class="btn btn-primary btn-sm px-4"
-                        onclick="bootstrap.Modal.getOrCreateInstance(document.getElementById('newChatModal')).show()">
-                        <i class="fa fa-pen-to-square me-1"></i> New Conversation
-                    </button>
+                    <small style="display:block;margin:8px 0 14px;line-height:1.6">
+                        Click <strong>New Conversation</strong> above to message a colleague or create a group.
+                    </small>
                 </div>`;
                 return;
             }
@@ -2181,8 +2201,11 @@ const Chat = window.Chat = {
                 { online: item.dataset.online==='1', lastSeenDiff: item.dataset.lsd ? parseInt(item.dataset.lsd) : null });
         });
 
-        // New chat
-        el('btnNewChat').addEventListener('click',()=>bootstrap.Modal.getOrCreateInstance(el('newChatModal')).show());
+        // New chat — header icon, left-panel bar button, and welcome-screen button all open the modal
+        const _openNewChat = () => bootstrap.Modal.getOrCreateInstance(el('newChatModal')).show();
+        el('btnNewChat').addEventListener('click', _openNewChat);
+        el('btnNewChatBar').addEventListener('click', _openNewChat);
+        el('btnWelcomeNewChat').addEventListener('click', _openNewChat);
 
         // User picker — handled via inline onclick on each .up-item (see _chatStartDirect below)
 
