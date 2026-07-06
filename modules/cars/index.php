@@ -57,15 +57,9 @@ $extraJs = '<script>
                 }
             }
         },
-        columns: [
-            { orderable: true  },
-            { orderable: true  },
-            { orderable: true  },
-            { orderable: true  },
-            { orderable: true  },
-            { orderable: true  },
-            { orderable: false }
-        ],
+        columns: <?= $section === 'inventory'
+            ? '[{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:false}]'
+            : '[{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:false}]' ?>,
         order      : [[0, "asc"]],
         pageLength : 25,
         dom        : \'<"d-flex justify-content-between align-items-center mb-3"lf>t<"d-flex justify-content-between align-items-center mt-3"ip>\',
@@ -175,9 +169,14 @@ include __DIR__ . '/../../includes/header.php';
                 <tr>
                     <th class="ps-3">Vehicle</th>
                     <th>Chassis</th>
+                    <?php if ($section === 'inventory'): ?>
                     <th>Location</th>
                     <th>Price</th>
                     <th>Offer / Sale Price</th>
+                    <?php else: ?>
+                    <th>Owner</th>
+                    <th>Owner's Number</th>
+                    <?php endif; ?>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>

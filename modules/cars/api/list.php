@@ -38,15 +38,26 @@ $filterLocation = (int)($_GET['filter_location'] ?? 0);
 $supLocId = supervisorLocationId();
 if ($supLocId) $filterLocation = $supLocId;
 
-// Map column index → SQL expression (only orderable columns)
-$colMap = [
-    0 => 'c.make',
-    1 => 'c.chassis_number',
-    2 => 'l.name',
-    3 => 'c.asking_price',
-    4 => 'c.offer_price',
-    5 => 'c.status',
-];
+// Map column index → SQL expression — differs by section
+if ($section === 'inventory') {
+    $colMap = [
+        0 => 'c.make',
+        1 => 'c.chassis_number',
+        2 => 'l.name',
+        3 => 'c.asking_price',
+        4 => 'c.offer_price',
+        5 => 'c.status',
+    ];
+} else {
+    // client / workshop: Vehicle, Chassis, Owner, Owner's Number, Status
+    $colMap = [
+        0 => 'c.make',
+        1 => 'c.chassis_number',
+        2 => 'c.owner_name',
+        3 => 'c.owner_phone',
+        4 => 'c.status',
+    ];
+}
 $orderSQL = isset($colMap[$oCol]) ? "{$colMap[$oCol]} {$oDir}" : 'c.created_at DESC';
 
 // ── Base WHERE (section filter) ───────────────────────────────────────────────
@@ -101,23 +112,38 @@ if ($allFilterParams) {
 // ── Data query ───────────────────────────────────────────────────────────────
 // Uses a correlated subquery for primary image (indexed on car_id + is_primary)
 // and LEFT JOIN for location. Only fetches columns actually needed.
-$sql = "
-    SELECT c.id,
-           c.make, c.model, c.year, c.color,
-           c.registration_number, c.chassis_number,
-           c.owner_name,
-           IFNULL(c.asking_price, 0) AS asking_price,
-           c.offer_price,
-           c.status,
-           IFNULL(l.name, '') AS location_name,
-           (SELECT ci.file_path FROM car_images ci
-            WHERE ci.car_id = c.id AND ci.is_primary = 1 LIMIT 1) AS primary_image
-    FROM cars c
-    LEFT JOIN locations l ON l.id = c.location_id
-    WHERE {$fullWhere}
-    ORDER BY {$orderSQL}
-    LIMIT ? OFFSET ?
-";
+if ($section === 'inventory') {
+    $sql = "
+        SELECT c.id,
+               c.make, c.model, c.year, c.color,
+               c.registration_number, c.chassis_number,
+               IFNULL(c.asking_price, 0) AS asking_price,
+               c.offer_price,
+               c.status,
+               IFNULL(l.name, '') AS location_name,
+               (SELECT ci.file_path FROM car_images ci
+                WHERE ci.car_id = c.id AND ci.is_primary = 1 LIMIT 1) AS primary_image
+        FROM cars c
+        LEFT JOIN locations l ON l.id = c.location_id
+        WHERE {$fullWhere}
+        ORDER BY {$orderSQL}
+        LIMIT ? OFFSET ?
+    ";
+} else {
+    $sql = "
+        SELECT c.id,
+               c.make, c.model, c.year, c.color,
+               c.registration_number, c.chassis_number,
+               c.owner_name, c.owner_phone,
+               c.status,
+               (SELECT ci.file_path FROM car_images ci
+                WHERE ci.car_id = c.id AND ci.is_primary = 1 LIMIT 1) AS primary_image
+        FROM cars c
+        WHERE {$fullWhere}
+        ORDER BY {$orderSQL}
+        LIMIT ? OFFSET ?
+    ";
+}
 
 $stmt = $db->prepare($sql);
 $stmt->execute(array_merge($allFilterParams, [$length, $start]));
@@ -152,23 +178,6 @@ foreach ($rows as $car) {
     // Chassis
     $chassis = '<code class="small">' . e($car['chassis_number'] ?? '') . '</code>';
 
-    // Location
-    $location = '<span class="small text-muted">'
-              . '<i class="fa fa-location-dot me-1"></i>'
-              . e($car['location_name'] ?: '—') . '</span>';
-
-    // Price
-    $p     = (float)$car['asking_price'];
-    $price = $p > 0
-           ? '<span class="fw-semibold text-nowrap">KES ' . number_format($p, 2) . '</span>'
-           : '<span class="text-muted">—</span>';
-
-    // Offer / Sale Price
-    $op    = $car['offer_price'] !== null ? (float)$car['offer_price'] : null;
-    $offer = $op !== null && $op > 0
-           ? '<span class="fw-semibold text-nowrap text-success">KES ' . number_format($op, 2) . '</span>'
-           : '<span class="text-muted">—</span>';
-
     // Status
     $status = statusBadge($car['status']);
 
@@ -195,7 +204,26 @@ foreach ($rows as $car) {
     }
     $acts .= '</div>';
 
-    $data[] = [$vehicle, $chassis, $location, $price, $offer, $status, $acts];
+    if ($section === 'inventory') {
+        $location = '<span class="small text-muted"><i class="fa fa-location-dot me-1"></i>'
+                  . e($car['location_name'] ?: '—') . '</span>';
+        $p     = (float)$car['asking_price'];
+        $price = $p > 0
+               ? '<span class="fw-semibold text-nowrap">KES ' . number_format($p, 2) . '</span>'
+               : '<span class="text-muted">—</span>';
+        $op    = $car['offer_price'] !== null ? (float)$car['offer_price'] : null;
+        $offer = $op !== null && $op > 0
+               ? '<span class="fw-semibold text-nowrap text-success">KES ' . number_format($op, 2) . '</span>'
+               : '<span class="text-muted">—</span>';
+        $data[] = [$vehicle, $chassis, $location, $price, $offer, $status, $acts];
+    } else {
+        $owner = e($car['owner_name'] ?: '—');
+        $phone = $car['owner_phone']
+               ? '<a href="tel:' . e($car['owner_phone']) . '" class="small text-nowrap">'
+                 . e($car['owner_phone']) . '</a>'
+               : '<span class="text-muted">—</span>';
+        $data[] = [$vehicle, $chassis, $owner, $phone, $status, $acts];
+    }
 }
 
 echo json_encode([
