@@ -3,6 +3,11 @@ require_once __DIR__ . '/../../includes/functions.php';
 requireRole('admin');
 $pageTitle = 'Users';
 $db = getDB();
+
+// Auto-migrate columns that may not exist on older installations
+try { $db->exec("ALTER TABLE users ADD COLUMN location_id INT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE users ADD COLUMN profile_image VARCHAR(255) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+
 $users = $db->query("SELECT u.*,
     CASE u.linked_type WHEN 'mechanic' THEN m.name ELSE NULL END AS linked_name,
     l.name AS location_name
