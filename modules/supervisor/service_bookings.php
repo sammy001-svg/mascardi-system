@@ -14,7 +14,7 @@ $locName = $location->fetchColumn() ?: 'Location';
 $fStatus = $_GET['status'] ?? '';
 $fSearch  = trim($_GET['q'] ?? '');
 
-$where  = "(c.location_id=? OR sb.location_id=?)";
+$where  = "(c.location_id=? OR sb.intake_location_id=?)";
 $params = [$locId, $locId];
 
 if ($fStatus) { $where .= " AND sb.status=?"; $params[] = $fStatus; }

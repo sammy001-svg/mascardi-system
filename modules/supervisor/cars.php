@@ -15,8 +15,9 @@ $locName = $location->fetchColumn() ?: 'Location';
 $fStatus = $_GET['status'] ?? '';
 $fSearch = trim($_GET['q'] ?? '');
 
-$where  = "WHERE c.location_id = ?";
-$params = [$locId];
+// Include cars at the supervisor's main location AND all its sub-locations
+$where  = "WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?)";
+$params = [$locId, $locId];
 
 if ($fStatus) { $where .= " AND c.status = ?"; $params[] = $fStatus; }
 if ($fSearch) {
@@ -35,9 +36,9 @@ $stmt = $db->prepare("
 $stmt->execute($params);
 $cars = $stmt->fetchAll();
 
-// Distinct statuses at this location for filter
-$statuses = $db->prepare("SELECT DISTINCT status FROM cars WHERE location_id=? ORDER BY status");
-$statuses->execute([$locId]);
+// Distinct statuses across location + sub-locations for filter dropdown
+$statuses = $db->prepare("SELECT DISTINCT status FROM cars WHERE location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) ORDER BY status");
+$statuses->execute([$locId, $locId]);
 $statuses = array_column($statuses->fetchAll(), 'status');
 
 include __DIR__ . '/../../includes/header.php';
@@ -80,6 +81,7 @@ include __DIR__ . '/../../includes/header.php';
                     <tr>
                         <th class="ps-3">Vehicle</th>
                         <th>Chassis / Reg</th>
+                        <th>Location</th>
                         <th>Status</th>
                         <th>Body Type</th>
                         <th>Year</th>
@@ -97,6 +99,7 @@ include __DIR__ . '/../../includes/header.php';
                             <?php if ($car['registration_number']): ?><code style="font-size:11px"><?= e($car['registration_number']) ?></code><br><?php endif; ?>
                             <span class="text-muted" style="font-size:10px"><?= e($car['chassis_number'] ?: '—') ?></span>
                         </td>
+                        <td class="small text-muted"><?= e($car['loc_name'] ?? '—') ?></td>
                         <td><?= statusBadge($car['status']) ?></td>
                         <td class="text-muted small"><?= e($car['body_type'] ?? '—') ?></td>
                         <td class="text-muted small"><?= e($car['year'] ?? '—') ?></td>
@@ -108,7 +111,7 @@ include __DIR__ . '/../../includes/header.php';
                     </tr>
                     <?php endforeach; ?>
                     <?php if (empty($cars)): ?>
-                    <tr><td colspan="6" class="text-center py-5 text-muted">
+                    <tr><td colspan="7" class="text-center py-5 text-muted">
                         <i class="fa fa-car fa-2x mb-2 d-block opacity-25"></i>No cars found at this location.
                     </td></tr>
                     <?php endif; ?>

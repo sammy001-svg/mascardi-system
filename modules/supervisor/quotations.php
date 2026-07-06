@@ -14,8 +14,8 @@ $locName = $location->fetchColumn() ?: 'Location';
 $fStatus = $_GET['status'] ?? '';
 $fSearch  = trim($_GET['q'] ?? '');
 
-$where  = "(c.location_id=? OR q.location_id=?)";
-$params = [$locId, $locId];
+$where  = "c.location_id=?";
+$params = [$locId];
 if ($fStatus) { $where .= " AND q.status=?"; $params[] = $fStatus; }
 if ($fSearch) {
     $where .= " AND (q.quote_number LIKE ? OR q.client_name LIKE ?)";

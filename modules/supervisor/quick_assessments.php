@@ -12,7 +12,7 @@ $location->execute([$locId]);
 $locName = $location->fetchColumn() ?: 'Location';
 
 $fSearch = trim($_GET['q'] ?? '');
-$params  = [$locId, $locId];
+$params  = [$locId];
 $searchSql = '';
 if ($fSearch) {
     $searchSql = " AND (qa.assessment_number LIKE ? OR c.make LIKE ? OR c.model LIKE ? OR c.chassis_number LIKE ?)";
@@ -25,7 +25,7 @@ try {
         SELECT qa.*, c.make, c.model, c.chassis_number, c.registration_number
         FROM quick_assessments qa
         LEFT JOIN cars c ON c.id = qa.car_id
-        WHERE (c.location_id=? OR qa.location_id=?)
+        WHERE c.location_id=?
         {$searchSql}
         ORDER BY qa.created_at DESC
     ");

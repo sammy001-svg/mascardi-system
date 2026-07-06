@@ -18,15 +18,15 @@ for ($i = 11; $i >= 0; $i--) {
     $ym = date('Y-m', strtotime("-{$i} months"));
     $revLabels[] = date('M Y', strtotime($ym . '-01'));
     try {
-        $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE (c.location_id=? OR i.location_id=?) AND i.status='paid' AND DATE_FORMAT(i.created_at,'%Y-%m')=?");
-        $s->execute([$locId, $locId, $ym]);
+        $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id=? AND i.status='paid' AND DATE_FORMAT(i.created_at,'%Y-%m')=?");
+        $s->execute([$locId, $ym]);
         $revData[] = (float)$s->fetchColumn();
     } catch (\Throwable $_) { $revData[] = 0; }
 }
 
-// ── Fleet by status ───────────────────────────────────────────────────────
-$carsStmt = $db->prepare("SELECT status, COUNT(*) AS cnt FROM cars WHERE location_id=? GROUP BY status ORDER BY cnt DESC");
-$carsStmt->execute([$locId]);
+// ── Fleet by status (location + sub-locations) ────────────────────────────
+$carsStmt = $db->prepare("SELECT status, COUNT(*) AS cnt FROM cars WHERE location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) GROUP BY status ORDER BY cnt DESC");
+$carsStmt->execute([$locId, $locId]);
 $carsByStatus = $carsStmt->fetchAll();
 
 // ── Bookings per week (last 8 weeks) ──────────────────────────────────────
@@ -36,7 +36,7 @@ try {
         $weekStart = date('Y-m-d', strtotime("monday -{$i} week"));
         $weekEnd   = date('Y-m-d', strtotime("sunday -{$i} week"));
         $bkLabels[] = date('d M', strtotime($weekStart));
-        $s = $db->prepare("SELECT COUNT(*) FROM service_bookings sb LEFT JOIN cars c ON c.id=sb.car_id WHERE (c.location_id=? OR sb.location_id=?) AND sb.preferred_date BETWEEN ? AND ?");
+        $s = $db->prepare("SELECT COUNT(*) FROM service_bookings sb LEFT JOIN cars c ON c.id=sb.car_id WHERE (c.location_id=? OR sb.intake_location_id=?) AND sb.preferred_date BETWEEN ? AND ?");
         $s->execute([$locId, $locId, $weekStart, $weekEnd]);
         $bkData[] = (int)$s->fetchColumn();
     }
@@ -45,27 +45,35 @@ try {
 // ── Quotation conversion ──────────────────────────────────────────────────
 $quotStats = ['total' => 0, 'accepted' => 0, 'sent' => 0, 'draft' => 0, 'rejected' => 0, 'expired' => 0];
 try {
-    $s = $db->prepare("SELECT status, COUNT(*) AS cnt FROM quotations q LEFT JOIN cars c ON c.id=q.car_id WHERE (c.location_id=? OR q.location_id=?) GROUP BY status");
-    $s->execute([$locId, $locId]);
+    $s = $db->prepare("SELECT status, COUNT(*) AS cnt FROM quotations q LEFT JOIN cars c ON c.id=q.car_id WHERE c.location_id=? GROUP BY status");
+    $s->execute([$locId]);
     foreach ($s->fetchAll() as $r) { $quotStats[$r['status']] = (int)$r['cnt']; $quotStats['total'] += (int)$r['cnt']; }
 } catch (\Throwable $_) {}
 $convRate = $quotStats['total'] > 0 ? round($quotStats['accepted'] / $quotStats['total'] * 100, 1) : 0;
 
 // ── Revenue summary ───────────────────────────────────────────────────────
 try {
-    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE (c.location_id=? OR i.location_id=?) AND i.status='paid' AND MONTH(i.created_at)=MONTH(NOW()) AND YEAR(i.created_at)=YEAR(NOW())");
-    $s->execute([$locId, $locId]); $revMTD = (float)$s->fetchColumn();
+    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id=? AND i.status='paid' AND MONTH(i.created_at)=MONTH(NOW()) AND YEAR(i.created_at)=YEAR(NOW())");
+    $s->execute([$locId]); $revMTD = (float)$s->fetchColumn();
 
-    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE (c.location_id=? OR i.location_id=?) AND i.status='paid' AND YEAR(i.created_at)=YEAR(NOW())");
-    $s->execute([$locId, $locId]); $revYTD = (float)$s->fetchColumn();
+    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id=? AND i.status='paid' AND YEAR(i.created_at)=YEAR(NOW())");
+    $s->execute([$locId]); $revYTD = (float)$s->fetchColumn();
 
     $lm = date('Y-m', strtotime('-1 month'));
-    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE (c.location_id=? OR i.location_id=?) AND i.status='paid' AND DATE_FORMAT(i.created_at,'%Y-%m')=?");
-    $s->execute([$locId, $locId, $lm]); $revLastMonth = (float)$s->fetchColumn();
+    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id=? AND i.status='paid' AND DATE_FORMAT(i.created_at,'%Y-%m')=?");
+    $s->execute([$locId, $lm]); $revLastMonth = (float)$s->fetchColumn();
     $revTrend = $revLastMonth > 0 ? round((($revMTD - $revLastMonth) / $revLastMonth) * 100, 1) : null;
 } catch (\Throwable $_) { $revMTD = $revYTD = $revLastMonth = 0; $revTrend = null; }
 
 $statusColors = ['in_transit'=>'#d97706','arrived'=>'#0284c7','in_assessment'=>'#7c3aed','in_workshop'=>'#db2777','completed'=>'#16a34a','sold'=>'#0f172a','delivered'=>'#475569','reserved'=>'#8b5cf6'];
+
+$chartRevLabels    = json_encode($revLabels);
+$chartRevData      = json_encode($revData);
+$chartStatusLabels = json_encode(array_map(fn($r) => ucwords(str_replace('_', ' ', $r['status'])), $carsByStatus));
+$chartStatusData   = json_encode(array_column($carsByStatus, 'cnt'));
+$chartStatusColors = json_encode(array_map(fn($r) => $statusColors[$r['status']] ?? '#94a3b8', $carsByStatus));
+$chartBkLabels     = json_encode($bkLabels);
+$chartBkData       = json_encode($bkData);
 
 $extraJs = <<<JS
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -73,18 +81,15 @@ $extraJs = <<<JS
 (function(){
     var rc = document.getElementById('rptRevChart');
     if(rc){
-        new Chart(rc,{type:'bar',data:{labels:<?= json_encode($revLabels) ?>,datasets:[{label:'Revenue (KES)',data:<?= json_encode($revData) ?>,backgroundColor:'rgba(34,211,238,.65)',borderColor:'#22d3ee',borderWidth:1,borderRadius:5}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){var v=c.raw;return' KES '+(v>=1e6?(v/1e6).toFixed(2)+'M':v>=1e3?(v/1e3).toFixed(1)+'K':v.toFixed(0));}}}},scales:{y:{beginAtZero:true,ticks:{callback:function(v){return v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'K':v;}}}}}});
+        new Chart(rc,{type:'bar',data:{labels:{$chartRevLabels},datasets:[{label:'Revenue (KES)',data:{$chartRevData},backgroundColor:'rgba(34,211,238,.65)',borderColor:'#22d3ee',borderWidth:1,borderRadius:5}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){var v=c.raw;return' KES '+(v>=1e6?(v/1e6).toFixed(2)+'M':v>=1e3?(v/1e3).toFixed(1)+'K':v.toFixed(0));}}}},scales:{y:{beginAtZero:true,ticks:{callback:function(v){return v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'K':v;}}}}}});
     }
     var sc = document.getElementById('rptStatusChart');
     if(sc){
-        var labels=<?= json_encode(array_map(fn($r)=>ucwords(str_replace('_',' ',$r['status'])), $carsByStatus)) ?>;
-        var data=<?= json_encode(array_column($carsByStatus,'cnt')) ?>;
-        var colors=<?= json_encode(array_map(fn($r)=>$statusColors[$r['status']]??'#94a3b8', $carsByStatus)) ?>;
-        new Chart(sc,{type:'doughnut',data:{labels:labels,datasets:[{data:data,backgroundColor:colors,borderWidth:2,borderColor:'#fff'}]},options:{cutout:'60%',plugins:{legend:{position:'right',labels:{font:{size:11},padding:10,boxWidth:12}}}}});
+        new Chart(sc,{type:'doughnut',data:{labels:{$chartStatusLabels},datasets:[{data:{$chartStatusData},backgroundColor:{$chartStatusColors},borderWidth:2,borderColor:'#fff'}]},options:{cutout:'60%',plugins:{legend:{position:'right',labels:{font:{size:11},padding:10,boxWidth:12}}}}});
     }
     var bc = document.getElementById('rptBkChart');
     if(bc){
-        new Chart(bc,{type:'line',data:{labels:<?= json_encode($bkLabels) ?>,datasets:[{label:'Bookings',data:<?= json_encode($bkData) ?>,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.1)',tension:.35,fill:true,pointRadius:4,pointBackgroundColor:'#8b5cf6'}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+        new Chart(bc,{type:'line',data:{labels:{$chartBkLabels},datasets:[{label:'Bookings',data:{$chartBkData},borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.1)',tension:.35,fill:true,pointRadius:4,pointBackgroundColor:'#8b5cf6'}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
     }
 }());
 </script>
