@@ -71,9 +71,8 @@ try {
             try {
                 $__locId = supervisorLocationId();
                 if ($__locId) {
-                    $__carCount = (int)getDB()->prepare("SELECT COUNT(*) FROM cars WHERE location_id=?")->execute([$__locId]) ? null : 0;
-                    $__s = getDB()->prepare("SELECT COUNT(*) FROM cars WHERE location_id=? AND status NOT IN ('sold','delivered')");
-                    $__s->execute([$__locId]);
+                    $__s = getDB()->prepare("SELECT COUNT(*) FROM cars WHERE location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND status NOT IN ('sold','delivered')");
+                    $__s->execute([$__locId, $__locId]);
                     $__carCount = (int)$__s->fetchColumn();
                     if ($__carCount > 0): ?>
                 <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
@@ -94,7 +93,7 @@ try {
             try {
                 $__locId = supervisorLocationId();
                 if ($__locId) {
-                    $__s = getDB()->prepare("SELECT COUNT(*) FROM service_bookings sb LEFT JOIN cars c ON c.id=sb.car_id WHERE (c.location_id=? OR sb.location_id=?) AND sb.status='pending'");
+                    $__s = getDB()->prepare("SELECT COUNT(*) FROM service_bookings sb LEFT JOIN cars c ON c.id=sb.car_id WHERE (c.location_id=? OR sb.intake_location_id=?) AND sb.status='pending'");
                     $__s->execute([$__locId, $__locId]);
                     $__sbCount = (int)$__s->fetchColumn();
                     if ($__sbCount > 0): ?>
@@ -124,6 +123,47 @@ try {
            data-label="Invoices">
             <i class="fa fa-file-invoice-dollar"></i><span>Invoices</span>
         </a>
+
+        <!-- ══ CRM (shown when admin grants crm permission) ════════ -->
+        <?php if (canAccess('crm')): ?>
+        <div class="nav-section">CRM</div>
+
+        <a href="<?= BASE_URL ?>/modules/crm/leads.php"
+           class="nav-item <?= (str_contains($__uri, '/modules/crm/leads') || str_contains($__uri, '/modules/crm/view_lead') || str_contains($__uri, '/modules/crm/add_lead') || str_contains($__uri, '/modules/crm/convert_lead')) ? 'active' : '' ?>"
+           data-label="Leads"
+           style="position:relative">
+            <i class="fa fa-user-plus"></i><span>Leads</span>
+            <?php
+            try {
+                $__locId2 = supervisorLocationId();
+                if ($__locId2) {
+                    $__s = getDB()->prepare("SELECT COUNT(*) FROM leads l LEFT JOIN users u ON u.id=l.assigned_to WHERE u.location_id=? AND l.status NOT IN ('converted','lost','dead')");
+                    $__s->execute([$__locId2]);
+                    $__leadCount = (int)$__s->fetchColumn();
+                    if ($__leadCount > 0): ?>
+                <span style="position:absolute;top:6px;right:8px;background:#8b5cf6;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                    <?= $__leadCount > 99 ? '99+' : $__leadCount ?>
+                </span>
+            <?php endif; }} catch (\Throwable $_) {} ?>
+        </a>
+
+        <a href="<?= BASE_URL ?>/modules/crm/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/crm/index') ? 'active' : '' ?>"
+           data-label="CRM Dashboard">
+            <i class="fa fa-chart-pie"></i><span>CRM Dashboard</span>
+        </a>
+        <?php endif; ?>
+
+        <!-- ══ SALES PIPELINE (shown when admin grants sales permission) ═ -->
+        <?php if (canAccess('sales')): ?>
+        <div class="nav-section">Sales</div>
+
+        <a href="<?= BASE_URL ?>/modules/sales/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/sales/') ? 'active' : '' ?>"
+           data-label="Sales Pipeline">
+            <i class="fa fa-chart-line"></i><span>Sales Pipeline</span>
+        </a>
+        <?php endif; ?>
 
         <!-- ══ TEAM ═══════════════════════════════════════════════ -->
         <div class="nav-section">Team</div>
