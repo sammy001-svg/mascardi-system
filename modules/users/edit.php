@@ -101,7 +101,7 @@ $roleWriteDefaults = [
     'sales_manager'      => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses'],
     'sales_officer'      => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments'],
     'sales_person'       => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments'],
-    'customer_relations' => ['clients','crm'],
+    'customer_relations' => ['clients','crm','cars'],
     'receptionist'       => ['clients','service_bookings','quick_assessments'],
     'workshop_manager'   => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','car_documents','inspections','attendance','payroll'],
     'mechanic'           => ['assessments','parts_requests'],
@@ -549,7 +549,7 @@ function permDesc(string $key): string {
         },
         customer_relations: {
             access: ['clients','crm','chat','cars'],
-            write:  ['clients','crm']
+            write:  ['clients','crm','cars']
         },
         receptionist: {
             access: ['clients','service_bookings','quick_assessments','cars','chat'],

@@ -221,7 +221,7 @@ function canWrite(string $module): bool {
         'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team','imports'],
         'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','dispatch','team'],
         'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team'],
-        'customer_relations' => ['clients','crm'],
+        'customer_relations' => ['clients','crm','cars'],
         'receptionist'      => ['clients','service_bookings','quick_assessments','team'],
         'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','dispatch','team','imports'],
         'mechanic'          => ['assessments','parts_requests','team'],
