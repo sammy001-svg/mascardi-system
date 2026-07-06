@@ -7,6 +7,8 @@ $db = getDB();
 // Auto-migrate columns that may not exist on older installations
 try { $db->exec("ALTER TABLE users ADD COLUMN location_id INT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE users ADD COLUMN profile_image VARCHAR(255) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+// Convert role from ENUM to VARCHAR so new roles (supervisor, etc.) are never silently dropped
+try { $db->exec("ALTER TABLE users MODIFY COLUMN role VARCHAR(50) NOT NULL DEFAULT 'mechanic'"); } catch (\Throwable $_) {}
 
 $users = $db->query("SELECT u.*,
     CASE u.linked_type WHEN 'mechanic' THEN m.name ELSE NULL END AS linked_name,

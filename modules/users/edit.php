@@ -6,6 +6,7 @@ if (!$id) redirect(BASE_URL . '/modules/users/index.php');
 $db = getDB();
 try { $db->exec("ALTER TABLE users ADD COLUMN location_id INT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE users ADD COLUMN profile_image VARCHAR(255) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE users MODIFY COLUMN role VARCHAR(50) NOT NULL DEFAULT 'mechanic'"); } catch (\Throwable $_) {}
 $stmt = $db->prepare("SELECT * FROM users WHERE id=?"); $stmt->execute([$id]); $user = $stmt->fetch();
 if (!$user) { setFlash('error', 'User not found.'); redirect(BASE_URL . '/modules/users/index.php'); }
 
