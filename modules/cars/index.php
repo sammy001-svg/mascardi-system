@@ -6,27 +6,35 @@ $db = getDB();
 $section = $_GET['section'] ?? 'inventory';
 if (!in_array($section, ['inventory', 'client', 'workshop'])) $section = 'inventory';
 
-// Three lightweight COUNT queries for tab badges — fast with indexes on car_type / status
-$cntInv  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='inventory'")->fetchColumn();
-$cntCli  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='client'")->fetchColumn();
-$cntWork = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status='in_workshop'")->fetchColumn();
+// Location scope for supervisors
+$supLocId  = supervisorLocationId();
+$locFilter = $supLocId ? " AND location_id = $supLocId" : '';
 
-// Filter dropdowns — only needed on inventory tab
+// Three lightweight COUNT queries for tab badges — scoped for supervisors
+$cntInv  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='inventory'$locFilter")->fetchColumn();
+$cntCli  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='client'$locFilter")->fetchColumn();
+$cntWork = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status='in_workshop'$locFilter")->fetchColumn();
+
+// Filter dropdowns — only needed on inventory tab, scoped for supervisors
 $invMakes     = [];
 $invLocations = [];
 if ($section === 'inventory') {
     $invMakes = $db->query(
-        "SELECT DISTINCT make FROM cars WHERE car_type='inventory' AND make != '' ORDER BY make ASC"
+        "SELECT DISTINCT make FROM cars WHERE car_type='inventory' AND make != ''$locFilter ORDER BY make ASC"
     )->fetchAll(PDO::FETCH_COLUMN);
-    $invLocations = $db->query(
-        "SELECT l.id, l.name FROM locations l
-         INNER JOIN cars c ON c.location_id = l.id AND c.car_type = 'inventory'
-         GROUP BY l.id, l.name ORDER BY l.name ASC"
-    )->fetchAll();
+    if (!$supLocId) {
+        $invLocations = $db->query(
+            "SELECT l.id, l.name FROM locations l
+             INNER JOIN cars c ON c.location_id = l.id AND c.car_type = 'inventory'
+             GROUP BY l.id, l.name ORDER BY l.name ASC"
+        )->fetchAll();
+    }
 }
 
-// All locations for stock take modal
-$allLocations = $db->query("SELECT id, name FROM locations ORDER BY name ASC")->fetchAll();
+// All locations for stock take modal (supervisors only see their own location)
+$allLocations = $supLocId
+    ? $db->query("SELECT id, name FROM locations WHERE id = $supLocId")->fetchAll()
+    : $db->query("SELECT id, name FROM locations ORDER BY name ASC")->fetchAll();
 
 $extraJs = '<script>
 (function () {

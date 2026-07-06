@@ -34,6 +34,10 @@ $oDir           = (($_GET['order'][0]['dir'] ?? 'desc') === 'asc') ? 'ASC' : 'DE
 $filterMake     = trim($_GET['filter_make']     ?? '');
 $filterLocation = (int)($_GET['filter_location'] ?? 0);
 
+// Supervisor location scope — overrides any filter_location param
+$supLocId = supervisorLocationId();
+if ($supLocId) $filterLocation = $supLocId;
+
 // Map column index → SQL expression (only orderable columns)
 $colMap = [
     0 => 'c.make',

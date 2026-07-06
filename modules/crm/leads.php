@@ -7,9 +7,11 @@ $db  = getDB();
 $me  = authUser();
 $uid = (int)$me['id'];
 
-// Data isolation: CRM agents see only their own leads
-$isCrmAgent = ($me['role'] === 'customer_relations');
-$pageTitle  = $isCrmAgent ? 'My Leads' : 'All Leads';
+// Data isolation: CRM agents see only their own leads; supervisors see leads for their location
+$isCrmAgent   = ($me['role'] === 'customer_relations');
+$isSupervisor = ($me['role'] === 'supervisor');
+$supLocId     = $isSupervisor ? supervisorLocationId() : null;
+$pageTitle    = $isCrmAgent ? 'My Leads' : ($isSupervisor ? 'Location Leads' : 'All Leads');
 
 // ─── SINGLE LEAD DELETE (super_admin only) ───────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_lead') {
@@ -47,8 +49,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_action'])) {
     // Build per-ID placeholders
     $placeholders = implode(',', array_fill(0, count($leadIds), '?'));
 
-    // For CRM agents, restrict updates to their own leads only
-    $ownerClause = $isCrmAgent ? " AND assigned_to = $uid" : '';
+    // Restrict bulk updates to owned/location-scoped leads
+    if ($isCrmAgent) {
+        $ownerClause = " AND assigned_to = $uid";
+    } elseif ($isSupervisor && $supLocId) {
+        $ownerClause = " AND assigned_to IN (SELECT id FROM users WHERE location_id = $supLocId)";
+    } else {
+        $ownerClause = '';
+    }
 
     if ($bulkAction === 'bulk_reassign') {
         if ($isCrmAgent) {
@@ -177,6 +185,12 @@ if ($isCrmAgent) {
     $params[] = $uid;
 }
 
+// Supervisors see only leads assigned to users at their location
+if ($isSupervisor && $supLocId) {
+    $where[] = 'l.assigned_to IN (SELECT id FROM users WHERE location_id = ?)';
+    $params[] = $supLocId;
+}
+
 if ($filterStage)                { $where[] = 'l.stage = ?';       $params[] = $filterStage; }
 if ($filterSource)               { $where[] = 'l.source = ?';      $params[] = $filterSource; }
 if ($filterCampaign)             { $where[] = 'l.campaign = ?';    $params[] = $filterCampaign; }
@@ -206,13 +220,25 @@ try {
     $leads->execute($params);
     $leads = $leads->fetchAll();
 
-    // Managers see all staff in filter; CRM agents don't get the staff filter
-    $salesUsers = $isCrmAgent ? [] : $db->query("SELECT id, name FROM users WHERE status='active' ORDER BY name")->fetchAll();
+    // Staff filter: CRM agents see none; supervisors see only their location's users; managers see all
+    if ($isCrmAgent) {
+        $salesUsers = [];
+    } elseif ($isSupervisor && $supLocId) {
+        $salesUsers = $db->query("SELECT id, name FROM users WHERE status='active' AND location_id = $supLocId ORDER BY name")->fetchAll();
+    } else {
+        $salesUsers = $db->query("SELECT id, name FROM users WHERE status='active' ORDER BY name")->fetchAll();
+    }
 
     // Distinct campaigns for the campaign filter dropdown
     $campaignOptions = [];
     try {
-        $campaignScope = $isCrmAgent ? "AND assigned_to = $uid" : '';
+        if ($isCrmAgent) {
+            $campaignScope = "AND assigned_to = $uid";
+        } elseif ($isSupervisor && $supLocId) {
+            $campaignScope = "AND assigned_to IN (SELECT id FROM users WHERE location_id = $supLocId)";
+        } else {
+            $campaignScope = '';
+        }
         $campaignOptions = $db->query("
             SELECT DISTINCT campaign FROM crm_leads
             WHERE campaign IS NOT NULL AND campaign <> '' $campaignScope
