@@ -280,13 +280,18 @@ function supervisorLocationId(): ?int {
     if (!$user || $user['role'] !== 'supervisor') return null;
     // Try from session first (populated at login)
     if (!empty($user['location_id'])) return (int)$user['location_id'];
-    // Fallback: query DB
+    // Fallback: query DB (runs when session predates location_id being assigned)
     try {
         $db   = getDB();
         $stmt = $db->prepare("SELECT location_id FROM users WHERE id=?");
         $stmt->execute([$user['id']]);
         $locId = $stmt->fetchColumn();
-        return $locId ? (int)$locId : null;
+        if ($locId) {
+            // Backfill session so subsequent requests skip the DB query
+            $_SESSION['auth_user']['location_id'] = (int)$locId;
+            return (int)$locId;
+        }
+        return null;
     } catch (\Throwable $_) {
         return null;
     }

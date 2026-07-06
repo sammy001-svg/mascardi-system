@@ -140,6 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'role'        => $user['role'],
                             'linked_id'   => $user['linked_id'],
                             'linked_type' => $user['linked_type'],
+                            'location_id' => $user['location_id'] ?? null,
                         ];
                         $_SESSION['last_activity']    = time();
                         $_SESSION['sess_regenerated'] = time();
@@ -172,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user = $stmt->fetch();
                 if ($user && password_verify($pass, $user['password'])) {
                     session_regenerate_id(true);
-                    $_SESSION['auth_user'] = ['id' => $user['id'], 'name' => $user['name'], 'username' => $user['username'], 'role' => $user['role'], 'linked_id' => $user['linked_id'], 'linked_type' => $user['linked_type']];
+                    $_SESSION['auth_user'] = ['id' => $user['id'], 'name' => $user['name'], 'username' => $user['username'], 'role' => $user['role'], 'linked_id' => $user['linked_id'], 'linked_type' => $user['linked_type'], 'location_id' => $user['location_id'] ?? null];
                     $_SESSION['last_activity'] = time();
                     $db->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
                     if (!empty($_POST['remember_me'])) {

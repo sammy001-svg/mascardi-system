@@ -52,8 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_action'])) {
     // Restrict bulk updates to owned/location-scoped leads
     if ($isCrmAgent) {
         $ownerClause = " AND assigned_to = $uid";
-    } elseif ($isSupervisor && $supLocId) {
-        $ownerClause = " AND assigned_to IN (SELECT id FROM users WHERE location_id = $supLocId)";
+    } elseif ($isSupervisor) {
+        $ownerClause = $supLocId
+            ? " AND assigned_to IN (SELECT id FROM users WHERE location_id = $supLocId)"
+            : " AND 1 = 0";
     } else {
         $ownerClause = '';
     }
@@ -186,9 +188,13 @@ if ($isCrmAgent) {
 }
 
 // Supervisors see only leads assigned to users at their location
-if ($isSupervisor && $supLocId) {
-    $where[] = 'l.assigned_to IN (SELECT id FROM users WHERE location_id = ?)';
-    $params[] = $supLocId;
+if ($isSupervisor) {
+    if ($supLocId) {
+        $where[] = 'l.assigned_to IN (SELECT id FROM users WHERE location_id = ?)';
+        $params[] = $supLocId;
+    } else {
+        $where[] = '1 = 0'; // no location assigned — show nothing until admin assigns one
+    }
 }
 
 if ($filterStage)                { $where[] = 'l.stage = ?';       $params[] = $filterStage; }
