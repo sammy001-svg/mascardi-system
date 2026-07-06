@@ -81,7 +81,10 @@ include __DIR__ . '/../../includes/header.php';
                     <td class="text-muted small"><?= $u['last_login'] ? fmtDate($u['last_login'], 'd M Y H:i') : 'Never' ?></td>
                     <td>
                         <div class="d-flex gap-1">
-                            <a href="edit.php?id=<?= $u['id'] ?>" class="btn btn-xs btn-outline-primary">
+                            <a href="view.php?id=<?= $u['id'] ?>" class="btn btn-xs btn-outline-secondary" title="View account">
+                                <i class="fa fa-eye"></i>
+                            </a>
+                            <a href="edit.php?id=<?= $u['id'] ?>" class="btn btn-xs btn-outline-primary" title="Edit">
                                 <i class="fa fa-pen"></i>
                             </a>
                             <?php if ($u['id'] !== authUser()['id']): ?>
