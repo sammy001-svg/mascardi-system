@@ -57,9 +57,9 @@ $extraJs = '<script>
                 }
             }
         },
-        columns: <?= $section === 'inventory'
+        columns: ' . ($section === 'inventory'
             ? '[{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:false}]'
-            : '[{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:false}]' ?>,
+            : '[{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:false}]') . ',
         order      : [[0, "asc"]],
         pageLength : 25,
         dom        : \'<"d-flex justify-content-between align-items-center mb-3"lf>t<"d-flex justify-content-between align-items-center mt-3"ip>\',
