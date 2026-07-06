@@ -137,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $linkedType = $_POST['linked_type'] ?? '';
     $linkedId   = (int)($_POST['linked_id'] ?? 0);
     $status     = $isSelf ? 'active' : ($_POST['status'] ?? 'active');
-    $locationId = ($role === 'supervisor') ? (int)($_POST['location_id'] ?? 0) : null;
+    $locationId = (int)($_POST['location_id'] ?? 0) ?: null;
 
     if (!$name)                $errors[] = 'Full name is required.';
     if (!$username)            $errors[] = 'Username is required.';
@@ -294,22 +294,22 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<!-- Supervisor Location Assignment -->
-<div class="card mb-4" id="supervisorLocationCard" style="display:none">
+<!-- Location Assignment -->
+<div class="card mb-4" id="supervisorLocationCard">
     <div class="card-header fw-semibold" style="background:#ecfeff;border-color:#22d3ee44">
-        <i class="fa fa-location-dot me-2" style="color:#0891b2"></i>Supervisor Location Assignment
+        <i class="fa fa-location-dot me-2" style="color:#0891b2"></i>Location Assignment
     </div>
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-6">
-                <label class="form-label fw-semibold">Assigned Location <span class="text-danger">*</span></label>
+                <label class="form-label fw-semibold">Assigned Location</label>
                 <select name="location_id" id="locationIdSelect" class="form-select">
-                    <option value="">— Select a location —</option>
+                    <option value="">— No location assigned —</option>
                     <?php foreach ($locations as $loc): ?>
                     <option value="<?= $loc['id'] ?>" <?= (int)($user['location_id'] ?? 0) === (int)$loc['id'] ? 'selected' : '' ?>><?= e($loc['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <div class="form-text">The supervisor will only see data from this location.</div>
+                <div class="form-text">Assigns the user to a work location. Supervisors will only see data from their assigned location.</div>
             </div>
         </div>
     </div>
@@ -591,23 +591,6 @@ function permDesc(string $key): string {
 
     function syncAdminState(role) {
         descEl.textContent = roleDesc[role] || '';
-
-        // Show/hide supervisor location assignment card
-        var locCard = document.getElementById('supervisorLocationCard');
-        var locSelect = document.getElementById('locationIdSelect');
-        if (locCard && locSelect) {
-            if (role === 'supervisor') {
-                locCard.style.display = 'block';
-                locSelect.required = true;
-            } else {
-                locCard.style.display = 'none';
-                locSelect.required = false;
-                // Only clear if the user wasn't originally a supervisor
-                if (roleSelect.dataset.originalRole !== 'supervisor') {
-                    locSelect.value = '';
-                }
-            }
-        }
 
         if (role === 'admin') {
             permCard.style.opacity = '.45';

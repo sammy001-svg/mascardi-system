@@ -76,7 +76,7 @@ include __DIR__ . '/../../includes/header.php';
                             <i class="fa fa-link me-1"></i><?= e($u['linked_name']) ?>
                             <span class="badge bg-light text-dark border"><?= e($u['linked_type']) ?></span>
                         </span>
-                        <?php elseif ($u['role'] === 'supervisor' && $u['location_name']): ?>
+                        <?php elseif ($u['location_name']): ?>
                         <span class="text-muted small fw-medium">
                             <i class="fa fa-location-dot me-1 text-primary"></i><?= e($u['location_name']) ?>
                         </span>
