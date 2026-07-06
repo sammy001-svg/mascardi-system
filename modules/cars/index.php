@@ -82,7 +82,7 @@ $extraJs = '<script>
         },
     });
 
-    $(document).on("change", "#filterMake, #filterLocation", function () { table.ajax.reload(); });
+    $(document).on("click",  "#filterApply", function () { table.ajax.reload(); });
     $(document).on("click",  "#filterReset", function () {
         $("#filterMake, #filterLocation").val("").trigger("change");
     });
@@ -154,7 +154,10 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-auto">
+            <div class="col-auto d-flex gap-2">
+                <button id="filterApply" class="btn btn-sm btn-primary">
+                    <i class="fa fa-filter me-1"></i>Filter
+                </button>
                 <button id="filterReset" class="btn btn-sm btn-outline-secondary">
                     <i class="fa fa-xmark me-1"></i>Reset
                 </button>
