@@ -76,7 +76,9 @@ if ($filterMake !== '') {
     $filterParams[] = $filterMake;
 }
 if ($filterLocation > 0) {
-    $filterWhere   .= ' AND c.location_id = ?';
+    // Match cars at the selected location OR any of its sub-locations
+    $filterWhere   .= ' AND (c.location_id = ? OR c.location_id IN (SELECT id FROM locations WHERE parent_id = ?))';
+    $filterParams[] = $filterLocation;
     $filterParams[] = $filterLocation;
 }
 
@@ -108,11 +110,12 @@ $sql = "
            c.car_type, c.owner_name,
            IFNULL(c.asking_price, 0) AS asking_price,
            c.status,
-           IFNULL(l.name, '') AS location_name,
+           IFNULL(pl.name, IFNULL(l.name, '')) AS location_name,
            (SELECT ci.file_path FROM car_images ci
             WHERE ci.car_id = c.id AND ci.is_primary = 1 LIMIT 1) AS primary_image
     FROM cars c
-    LEFT JOIN locations l ON l.id = c.location_id
+    LEFT JOIN locations l  ON l.id  = c.location_id
+    LEFT JOIN locations pl ON pl.id = l.parent_id
     WHERE {$fullWhere}
     ORDER BY {$orderSQL}
     LIMIT ? OFFSET ?

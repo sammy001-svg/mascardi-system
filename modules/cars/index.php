@@ -23,10 +23,17 @@ if ($section === 'inventory') {
         "SELECT DISTINCT make FROM cars WHERE car_type='inventory' AND make != ''$locFilter ORDER BY make ASC"
     )->fetchAll(PDO::FETCH_COLUMN);
     if (!$supLocId) {
+        // Only show main (parent) locations — sub-location cars are grouped under their parent
         $invLocations = $db->query(
             "SELECT l.id, l.name FROM locations l
-             INNER JOIN cars c ON c.location_id = l.id AND c.car_type = 'inventory'
-             GROUP BY l.id, l.name ORDER BY l.name ASC"
+             WHERE l.parent_id IS NULL
+               AND (
+                   EXISTS (SELECT 1 FROM cars c WHERE c.location_id = l.id AND c.car_type='inventory')
+                   OR EXISTS (SELECT 1 FROM cars c
+                              INNER JOIN locations sl ON sl.id = c.location_id AND sl.parent_id = l.id
+                              WHERE c.car_type='inventory')
+               )
+             ORDER BY l.name ASC"
         )->fetchAll();
     }
 }
