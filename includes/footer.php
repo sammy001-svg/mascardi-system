@@ -226,6 +226,22 @@ if ($__wa): ?>
     var deferredPrompt = null;
     var modalOpen  = false;
 
+    // ── Persistence: remember installs and dismissals across page loads ───
+    var INSTALLED_KEY = 'pwa_app_installed';
+    var SNOOZED_KEY   = 'pwa_snoozed_until';
+    function isInstalled() {
+        try { return localStorage.getItem(INSTALLED_KEY) === '1'; } catch(e) { return false; }
+    }
+    function isSnoozed() {
+        try { return Date.now() < parseInt(localStorage.getItem(SNOOZED_KEY) || '0', 10); } catch(e) { return false; }
+    }
+    function markInstalled() {
+        try { localStorage.setItem(INSTALLED_KEY, '1'); localStorage.removeItem(SNOOZED_KEY); } catch(e) {}
+    }
+    function snooze(days) {
+        try { localStorage.setItem(SNOOZED_KEY, String(Date.now() + days * 86400000)); } catch(e) {}
+    }
+
     function isStandalone() {
         return window.matchMedia('(display-mode: standalone)').matches
             || window.navigator.standalone === true;
@@ -284,7 +300,9 @@ if ($__wa): ?>
             deferredPrompt.prompt();
             deferredPrompt.userChoice.then(function (r) {
                 if (r.outcome === 'accepted') {
+                    markInstalled();
                     closeModal();
+                    if (topbarBtn) topbarBtn.classList.add('d-none');
                     if (typeof window.showToast === 'function') {
                         window.showToast('success', 'App Installed',
                             'Launch it from your home screen anytime.');
@@ -318,28 +336,29 @@ if ($__wa): ?>
 
     // ── Wire up buttons ───────────────────────────────────────────────────
     document.getElementById('pwaInstallBtn').addEventListener('click', doInstall);
-    document.getElementById('pwaClose').addEventListener('click', closeModal);
-    document.getElementById('pwaDismissBtn').addEventListener('click', closeModal);
-    document.getElementById('pwaIosOk').addEventListener('click', closeModal);
-    document.getElementById('pwaHintOk').addEventListener('click', closeModal);
+    document.getElementById('pwaClose').addEventListener('click', function () { snooze(30); closeModal(); });
+    document.getElementById('pwaDismissBtn').addEventListener('click', function () { snooze(30); closeModal(); });
+    document.getElementById('pwaIosOk').addEventListener('click', function () { snooze(30); closeModal(); });
+    document.getElementById('pwaHintOk').addEventListener('click', function () { snooze(30); closeModal(); });
 
     // Close on backdrop click
     overlay && overlay.addEventListener('click', function (e) {
         if (e.target === overlay) closeModal();
     });
 
-    // Topbar shortcut button re-opens the modal
+    // Topbar shortcut button re-opens the modal (hide if already installed)
     var topbarBtn = document.getElementById('pwaInstallTopbarBtn');
     if (topbarBtn) {
-        if (isIOSSaf || deferredPrompt) topbarBtn.classList.remove('d-none');
+        if (!isInstalled() && (isIOSSaf || deferredPrompt)) topbarBtn.classList.remove('d-none');
         topbarBtn.addEventListener('click', function () { showPanel('main'); openModal(); });
         window.addEventListener('beforeinstallprompt', function () {
-            topbarBtn.classList.remove('d-none');
+            if (!isInstalled()) topbarBtn.classList.remove('d-none');
         });
     }
 
-    // Hide everything once installed
+    // Hide everything once installed and persist so modal never shows again
     window.addEventListener('appinstalled', function () {
+        markInstalled();
         closeModal();
         if (topbarBtn) topbarBtn.classList.add('d-none');
         deferredPrompt = null;
@@ -348,8 +367,8 @@ if ($__wa): ?>
         }
     });
 
-    // ── Show modal on every page load (unless already installed) ──────────
-    if (!isStandalone()) {
+    // ── Show modal only if not installed and not recently dismissed ───────
+    if (!isStandalone() && !isInstalled() && !isSnoozed()) {
         setTimeout(function () { showPanel('main'); openModal(); }, 800);
     }
 
