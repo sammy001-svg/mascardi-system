@@ -1252,7 +1252,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                             <div class="input-group">
                                 <span class="input-group-text text-muted small">KES</span>
                                 <input type="number" name="deposit_amount" id="reserveDepositAmt"
-                                       class="form-control" min="0" step="1" required
+                                       class="form-control" min="0" step="any" required
                                        value="<?= (float)($lead['deposit_amount'] ?? 0) ?: '' ?>"
                                        placeholder="e.g. 200000">
                             </div>
