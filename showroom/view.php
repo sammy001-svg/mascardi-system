@@ -11,9 +11,10 @@ $id = (int)($_GET['id'] ?? 0);
 if (!$id) { header('Location: ' . BASE_URL . '/showroom/'); exit; }
 
 $stmt = $db->prepare("
-    SELECT c.*, l.name AS location_name
+    SELECT c.*, IFNULL(pl.name, l.name) AS location_name
     FROM cars c
-    LEFT JOIN locations l ON l.id = c.location_id
+    LEFT JOIN locations l  ON l.id  = c.location_id
+    LEFT JOIN locations pl ON pl.id = l.parent_id
     WHERE c.id = ? AND c.car_type = 'inventory' AND c.show_on_website = 1
 ");
 $stmt->execute([$id]);

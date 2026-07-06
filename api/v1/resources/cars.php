@@ -4,7 +4,7 @@
 $db = getDB();
 
 if ($id) {
-    $stmt = $db->prepare("SELECT c.*, l.name AS location_name FROM cars c LEFT JOIN locations l ON l.id = c.location_id WHERE c.id = ?");
+    $stmt = $db->prepare("SELECT c.*, IFNULL(pl.name, l.name) AS location_name FROM cars c LEFT JOIN locations l ON l.id = c.location_id LEFT JOIN locations pl ON pl.id = l.parent_id WHERE c.id = ?");
     $stmt->execute([$id]);
     $car = $stmt->fetch();
     if (!$car) apiError(404, "Car #{$id} not found.");
@@ -44,8 +44,10 @@ $total = (int)$totalStmt->fetchColumn();
 
 $stmt = $db->prepare("SELECT c.id, c.chassis_number, c.registration_number, c.make, c.model, c.year, c.color,
                              c.transmission, c.fuel_type, c.car_type, c.status, c.created_at,
-                             l.name AS location
-                      FROM cars c LEFT JOIN locations l ON l.id = c.location_id
+                             IFNULL(pl.name, l.name) AS location
+                      FROM cars c
+                      LEFT JOIN locations l  ON l.id  = c.location_id
+                      LEFT JOIN locations pl ON pl.id = l.parent_id
                       WHERE {$whereStr} ORDER BY c.created_at DESC LIMIT {$limit} OFFSET {$offset}");
 $stmt->execute($params);
 $cars = $stmt->fetchAll();
