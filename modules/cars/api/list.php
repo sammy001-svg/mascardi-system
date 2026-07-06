@@ -41,10 +41,10 @@ if ($supLocId) $filterLocation = $supLocId;
 // Map column index → SQL expression (only orderable columns)
 $colMap = [
     0 => 'c.make',
-    1 => 'c.car_type',
-    2 => 'c.chassis_number',
-    3 => 'l.name',
-    4 => 'c.asking_price',
+    1 => 'c.chassis_number',
+    2 => 'IFNULL(pl.name, l.name)',
+    3 => 'c.asking_price',
+    4 => 'c.offer_price',
     5 => 'c.status',
 ];
 $orderSQL = isset($colMap[$oCol]) ? "{$colMap[$oCol]} {$oDir}" : 'c.created_at DESC';
@@ -107,8 +107,9 @@ $sql = "
     SELECT c.id,
            c.make, c.model, c.year, c.color,
            c.registration_number, c.chassis_number,
-           c.car_type, c.owner_name,
+           c.owner_name,
            IFNULL(c.asking_price, 0) AS asking_price,
+           c.offer_price,
            c.status,
            IFNULL(pl.name, IFNULL(l.name, '')) AS location_name,
            (SELECT ci.file_path FROM car_images ci
@@ -151,16 +152,6 @@ foreach ($rows as $car) {
              . e($car['registration_number'] ?: 'No Reg') . '</div>'
              . '</div></div>';
 
-    // Type / owner badge
-    if ($car['car_type'] === 'client') {
-        $type = '<span class="badge bg-info text-dark">CLIENT</span>';
-        if (!empty($car['owner_name'])) {
-            $type .= '<div class="small text-muted">' . e($car['owner_name']) . '</div>';
-        }
-    } else {
-        $type = '<span class="badge bg-primary">INVENTORY</span>';
-    }
-
     // Chassis
     $chassis = '<code class="small">' . e($car['chassis_number'] ?? '') . '</code>';
 
@@ -173,6 +164,12 @@ foreach ($rows as $car) {
     $p     = (float)$car['asking_price'];
     $price = $p > 0
            ? '<span class="fw-semibold text-nowrap">KES ' . number_format($p, 2) . '</span>'
+           : '<span class="text-muted">—</span>';
+
+    // Offer / Sale Price
+    $op    = $car['offer_price'] !== null ? (float)$car['offer_price'] : null;
+    $offer = $op !== null && $op > 0
+           ? '<span class="fw-semibold text-nowrap text-success">KES ' . number_format($op, 2) . '</span>'
            : '<span class="text-muted">—</span>';
 
     // Status
@@ -201,7 +198,7 @@ foreach ($rows as $car) {
     }
     $acts .= '</div>';
 
-    $data[] = [$vehicle, $type, $chassis, $location, $price, $status, $acts];
+    $data[] = [$vehicle, $chassis, $location, $price, $offer, $status, $acts];
 }
 
 echo json_encode([

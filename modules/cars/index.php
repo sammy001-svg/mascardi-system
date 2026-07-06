@@ -181,10 +181,10 @@ include __DIR__ . '/../../includes/header.php';
             <thead>
                 <tr>
                     <th class="ps-3">Vehicle</th>
-                    <th><?= $section === 'workshop' ? 'Owner / Type' : 'Type' ?></th>
                     <th>Chassis</th>
                     <th>Location</th>
                     <th>Price</th>
+                    <th>Offer / Sale Price</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
