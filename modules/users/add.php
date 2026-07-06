@@ -6,6 +6,7 @@ $db = getDB();
 $errors = [];
 
 $freeMechanics = $db->query("SELECT m.id, m.name FROM mechanics m WHERE m.status='active' AND NOT EXISTS (SELECT 1 FROM users u WHERE u.linked_type='mechanic' AND u.linked_id=m.id) ORDER BY m.name")->fetchAll();
+$locations = $db->query("SELECT id, name FROM locations WHERE status='active' ORDER BY name ASC")->fetchAll();
 
 $moduleGroups = [
     'Fleet' => [
@@ -65,6 +66,7 @@ foreach ($moduleGroups as $group) {
 
 $validRoles = [
     'admin','general_manager',
+    'supervisor',
     'finance_manager','accountant','cashier',
     'sales_manager','sales_officer','sales_person','customer_relations','receptionist',
     'workshop_manager','mechanic','driver',
@@ -82,6 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $linkedType = $_POST['linked_type'] ?? '';
     $linkedId   = (int)($_POST['linked_id'] ?? 0);
     $status     = $_POST['status'] ?? 'active';
+    $locationId = ($role === 'supervisor') ? (int)($_POST['location_id'] ?? 0) : null;
 
     if (!$name)                $errors[] = 'Full name is required.';
     if (!$username)            $errors[] = 'Username is required.';
@@ -96,8 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $lt = ($linkedType && $linkedId) ? $linkedType : null;
             $li = ($linkedType && $linkedId) ? $linkedId   : null;
-            $db->prepare("INSERT INTO users (name,username,email,password,role,linked_id,linked_type,status) VALUES (?,?,?,?,?,?,?,?)")
-               ->execute([$name, $username, $email, password_hash($pass, PASSWORD_DEFAULT), $role, $li, $lt, $status]);
+            $db->prepare("INSERT INTO users (name,username,email,password,role,linked_id,linked_type,status,location_id) VALUES (?,?,?,?,?,?,?,?,?)")
+               ->execute([$name, $username, $email, password_hash($pass, PASSWORD_DEFAULT), $role, $li, $lt, $status, $locationId]);
             $newId = (int)$db->lastInsertId();
 
             if ($role !== 'admin') {
@@ -181,6 +184,7 @@ include __DIR__ . '/../../includes/header.php';
                     <optgroup label="Administration">
                         <option value="admin"              <?= ($_POST['role'] ?? '') === 'admin'              ? 'selected' : '' ?>>Admin — Full unrestricted access</option>
                         <option value="general_manager"    <?= ($_POST['role'] ?? '') === 'general_manager'    ? 'selected' : '' ?>>General Manager</option>
+                        <option value="supervisor"         <?= ($_POST['role'] ?? '') === 'supervisor'         ? 'selected' : '' ?>>Supervisor (Location-scoped)</option>
                     </optgroup>
                     <optgroup label="Finance">
                         <option value="finance_manager"    <?= ($_POST['role'] ?? '') === 'finance_manager'    ? 'selected' : '' ?>>Finance Manager</option>
@@ -218,6 +222,27 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endforeach; ?>
                 </select>
                 <input type="hidden" name="linked_type" value="mechanic">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Supervisor Location Assignment -->
+<div class="card mb-4" id="supervisorLocationCard" style="display:none">
+    <div class="card-header fw-semibold" style="background:#ecfeff;border-color:#22d3ee44">
+        <i class="fa fa-location-dot me-2" style="color:#0891b2"></i>Supervisor Location Assignment
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Assigned Location <span class="text-danger">*</span></label>
+                <select name="location_id" id="locationIdSelect" class="form-select">
+                    <option value="">— Select a location —</option>
+                    <?php foreach ($locations as $loc): ?>
+                    <option value="<?= $loc['id'] ?>" <?= ($_POST['location_id'] ?? '') == $loc['id'] ? 'selected' : '' ?>><?= e($loc['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="form-text">The supervisor will only see data from this location.</div>
             </div>
         </div>
     </div>
@@ -381,9 +406,14 @@ function permDesc(string $key): string {
         inventory_manager:   'Manages parts stock levels, supplier relationships and purchase requisitions.',
         procurement_officer: 'Purchasing specialist — LPO management, supplier orders and inventory replenishment.',
         hr_manager:          'HR administration — staff attendance tracking and monthly payroll processing.',
+        supervisor:          'Supervisor — Oversees a specific location: cars, staff, service bookings, quick assessments, quotations, and invoices.',
     };
 
     var roleDefaults = {
+        supervisor: {
+            access: ['cars','service_bookings','quick_assessments','quotations','invoices','reports'],
+            write:  []
+        },
         general_manager: {
             access: ['cars','mechanics','drivers','intake','assessments','jobs','parts_requests','issues',
                      'quick_assessments','lpo','inventory','suppliers','car_documents','car_costs',
@@ -469,6 +499,21 @@ function permDesc(string $key): string {
 
     function applyRole(role) {
         descEl.textContent = roleDesc[role] || '';
+        
+        // Show/hide supervisor location selection
+        var locCard = document.getElementById('supervisorLocationCard');
+        var locSelect = document.getElementById('locationIdSelect');
+        if (locCard && locSelect) {
+            if (role === 'supervisor') {
+                locCard.style.display = 'block';
+                locSelect.required = true;
+            } else {
+                locCard.style.display = 'none';
+                locSelect.required = false;
+                locSelect.value = '';
+            }
+        }
+
         if (role === 'admin') {
             permCard.style.opacity = '.45';
             permCard.style.pointerEvents = 'none';

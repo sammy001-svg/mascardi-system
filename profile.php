@@ -320,7 +320,7 @@ $flash = getFlash();
                                 <div style="height:4px;background:#e5e7eb;border-radius:2px;overflow:hidden">
                                     <div class="strength-bar" id="strengthBar" style="width:0;background:#ef4444"></div>
                                 </div>
-                                <div class="form-text" id="strengthLabel" style="font-size:11px"></div>
+                                 <div class="form-text" id="strengthLabel" style="font-size:11px"></div>
                             </div>
                         </div>
                         <div class="col-12 col-sm-6 col-lg-12 col-xl-6">

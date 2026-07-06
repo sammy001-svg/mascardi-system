@@ -4,9 +4,11 @@ requireRole('admin');
 $pageTitle = 'Users';
 $db = getDB();
 $users = $db->query("SELECT u.*,
-    CASE u.linked_type WHEN 'mechanic' THEN m.name ELSE NULL END AS linked_name
+    CASE u.linked_type WHEN 'mechanic' THEN m.name ELSE NULL END AS linked_name,
+    l.name AS location_name
     FROM users u
     LEFT JOIN mechanics m ON m.id = u.linked_id AND u.linked_type = 'mechanic'
+    LEFT JOIN locations l ON l.id = u.location_id
     ORDER BY u.created_at DESC")->fetchAll();
 
 include __DIR__ . '/../../includes/header.php';
@@ -40,6 +42,7 @@ include __DIR__ . '/../../includes/header.php';
                         $roleColors = [
                             'admin'               => ['danger',    'Admin'],
                             'general_manager'     => ['dark',      'General Manager'],
+                            'supervisor'          => ['info',      'Supervisor'],
                             'finance_manager'     => ['warning',   'Finance Manager'],
                             'accountant'          => ['warning',   'Accountant'],
                             'cashier'             => ['warning',   'Cashier'],
@@ -65,6 +68,10 @@ include __DIR__ . '/../../includes/header.php';
                         <span class="text-muted small">
                             <i class="fa fa-link me-1"></i><?= e($u['linked_name']) ?>
                             <span class="badge bg-light text-dark border"><?= e($u['linked_type']) ?></span>
+                        </span>
+                        <?php elseif ($u['role'] === 'supervisor' && $u['location_name']): ?>
+                        <span class="text-muted small fw-medium">
+                            <i class="fa fa-location-dot me-1 text-primary"></i><?= e($u['location_name']) ?>
                         </span>
                         <?php else: ?>
                         <span class="text-muted">—</span>

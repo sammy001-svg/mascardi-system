@@ -31,6 +31,12 @@ if ($role === 'customer_relations') {
     exit;
 }
 
+// Supervisors get their location-scoped portal
+if ($role === 'supervisor') {
+    header('Location: ' . BASE_URL . '/modules/supervisor/dashboard.php');
+    exit;
+}
+
 // ── Role-specific stats ───────────────────────────────────────────────────
 $stats = [];
 if ($role === 'mechanic') {

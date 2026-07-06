@@ -154,6 +154,11 @@ function canAccess(string $module): bool {
         'customer_relations' => [
             'clients','crm','chat','cars',
         ],
+
+        // ── Supervisor role ────────────────────────────────────────────────────
+        'supervisor'        => [
+            'cars','service_bookings','quick_assessments','quotations','invoices','reports',
+        ],
         'receptionist'      => [
             'clients','service_bookings','quick_assessments','cars','chat','showroom',
             'showroom_transfers','key_handovers','dispatch','team',
@@ -209,6 +214,7 @@ function canWrite(string $module): bool {
     }
     $map = [
         'general_manager'   => ['quotations','invoices','sales','imports'],
+        'supervisor'        => [], // read-only by default
         'finance_manager'   => ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo','imports'],
         'accountant'        => ['payments','invoices','quotations','expenses','sales','installments'],
         'cashier'           => ['payments','installments'],
@@ -263,4 +269,25 @@ function requireWrite(string $module): void {
 // Only admins may delete records
 function canEditDelete(): bool {
     return hasRole('admin');
+}
+
+/**
+ * Returns the location ID assigned to the current supervisor user.
+ * Returns null if the user is not a supervisor or has no location assigned.
+ */
+function supervisorLocationId(): ?int {
+    $user = authUser();
+    if (!$user || $user['role'] !== 'supervisor') return null;
+    // Try from session first (populated at login)
+    if (!empty($user['location_id'])) return (int)$user['location_id'];
+    // Fallback: query DB
+    try {
+        $db   = getDB();
+        $stmt = $db->prepare("SELECT location_id FROM users WHERE id=?");
+        $stmt->execute([$user['id']]);
+        $locId = $stmt->fetchColumn();
+        return $locId ? (int)$locId : null;
+    } catch (\Throwable $_) {
+        return null;
+    }
 }

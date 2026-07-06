@@ -12,6 +12,7 @@ $errors = [];
 $isSelf = ($id === authUser()['id']);
 
 $freeMechanics = $db->query("SELECT m.id, m.name FROM mechanics m WHERE m.status='active' AND (NOT EXISTS (SELECT 1 FROM users u WHERE u.linked_type='mechanic' AND u.linked_id=m.id) OR m.id=" . (int)($user['linked_id'] ?? 0) . ") ORDER BY m.name")->fetchAll();
+$locations = $db->query("SELECT id, name FROM locations WHERE status='active' ORDER BY name ASC")->fetchAll();
 
 // Module groups definition
 $moduleGroups = [
@@ -71,6 +72,7 @@ foreach ($moduleGroups as $group) {
 
 // Role defaults (mirrors auth.php fallback maps exactly — keep in sync)
 $roleAccessDefaults = [
+    'supervisor'         => ['cars','service_bookings','quick_assessments','quotations','invoices','reports'],
     'general_manager'    => ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','chat','reports','clients','service_bookings','crm','payments','invoices','quotations','sales','installments','expenses'],
     'finance_manager'    => ['payments','invoices','quotations','expenses','reports','clients','sales','installments','car_costs','cars','chat','lpo','payroll','attendance','inventory','suppliers','parts_requests'],
     'accountant'         => ['payments','invoices','quotations','expenses','reports','clients','sales','installments','car_costs','cars','chat'],
@@ -88,6 +90,7 @@ $roleAccessDefaults = [
     'hr_manager'         => ['attendance','payroll','mechanics','drivers','expenses','reports','chat'],
 ];
 $roleWriteDefaults = [
+    'supervisor'         => [],
     'general_manager'    => ['quotations','invoices','sales'],
     'finance_manager'    => ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo'],
     'accountant'         => ['payments','invoices','quotations','expenses','sales','installments'],
@@ -131,6 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $linkedType = $_POST['linked_type'] ?? '';
     $linkedId   = (int)($_POST['linked_id'] ?? 0);
     $status     = $isSelf ? 'active' : ($_POST['status'] ?? 'active');
+    $locationId = ($role === 'supervisor') ? (int)($_POST['location_id'] ?? 0) : null;
 
     if (!$name)                $errors[] = 'Full name is required.';
     if (!$username)            $errors[] = 'Username is required.';
@@ -143,11 +147,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $li = ($linkedType && $linkedId) ? $linkedId   : null;
 
             if ($pass !== '') {
-                $db->prepare("UPDATE users SET name=?,username=?,email=?,password=?,role=?,linked_id=?,linked_type=?,status=? WHERE id=?")
-                   ->execute([$name, $username, $email, password_hash($pass, PASSWORD_DEFAULT), $role, $li, $lt, $status, $id]);
+                $db->prepare("UPDATE users SET name=?,username=?,email=?,password=?,role=?,linked_id=?,linked_type=?,status=?,location_id=? WHERE id=?")
+                   ->execute([$name, $username, $email, password_hash($pass, PASSWORD_DEFAULT), $role, $li, $lt, $status, $locationId, $id]);
             } else {
-                $db->prepare("UPDATE users SET name=?,username=?,email=?,role=?,linked_id=?,linked_type=?,status=? WHERE id=?")
-                   ->execute([$name, $username, $email, $role, $li, $lt, $status, $id]);
+                $db->prepare("UPDATE users SET name=?,username=?,email=?,role=?,linked_id=?,linked_type=?,status=?,location_id=? WHERE id=?")
+                   ->execute([$name, $username, $email, $role, $li, $lt, $status, $locationId, $id]);
             }
 
             // Save permissions
@@ -227,11 +231,12 @@ include __DIR__ . '/../../includes/header.php';
         <div class="row g-3">
             <div class="col-md-6">
                 <label class="form-label">System Role <span class="text-danger">*</span></label>
-                <select name="role" id="roleSelect" class="form-select" <?= $isSelf ? 'disabled' : '' ?>>
+                <select name="role" id="roleSelect" class="form-select" data-original-role="<?= e($user['role']) ?>" <?= $isSelf ? 'disabled' : '' ?>>
                     <optgroup label="Administration">
                         <option value="admin"              <?= $user['role']==='admin'              ?'selected':'' ?>>Admin — Full unrestricted access</option>
                         <option value="super_admin"        <?= $user['role']==='super_admin'        ?'selected':'' ?>>Super Admin</option>
                         <option value="general_manager"    <?= $user['role']==='general_manager'    ?'selected':'' ?>>General Manager</option>
+                        <option value="supervisor"         <?= $user['role']==='supervisor'         ?'selected':'' ?>>Supervisor (Location-scoped)</option>
                     </optgroup>
                     <optgroup label="Sales & Client Relations">
                         <option value="sales_manager"      <?= $user['role']==='sales_manager'      ?'selected':'' ?>>Sales Manager</option>
@@ -281,6 +286,27 @@ include __DIR__ . '/../../includes/header.php';
             <div class="col-md-4">
                 <label class="form-label">Confirm New Password</label>
                 <input type="password" name="password_confirm" class="form-control" autocomplete="new-password">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Supervisor Location Assignment -->
+<div class="card mb-4" id="supervisorLocationCard" style="display:none">
+    <div class="card-header fw-semibold" style="background:#ecfeff;border-color:#22d3ee44">
+        <i class="fa fa-location-dot me-2" style="color:#0891b2"></i>Supervisor Location Assignment
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Assigned Location <span class="text-danger">*</span></label>
+                <select name="location_id" id="locationIdSelect" class="form-select">
+                    <option value="">— Select a location —</option>
+                    <?php foreach ($locations as $loc): ?>
+                    <option value="<?= $loc['id'] ?>" <?= (int)($user['location_id'] ?? 0) === (int)$loc['id'] ? 'selected' : '' ?>><?= e($loc['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="form-text">The supervisor will only see data from this location.</div>
             </div>
         </div>
     </div>
@@ -481,10 +507,15 @@ function permDesc(string $key): string {
         inventory_manager:  'Manages parts stock, supplier orders and purchase requisitions.',
         procurement_officer:'Handles purchasing — LPOs, suppliers, parts requests and stock.',
         hr_manager:         'Manages staff attendance and processes monthly payroll.',
+        supervisor:         'Supervisor — Oversees a specific location: cars, staff, service bookings, quick assessments, quotations, and invoices.',
         manager:            'Legacy broad-access role. Consider migrating to a specific role.',
     };
 
     var roleDefaults = {
+        supervisor: {
+            access: ['cars','service_bookings','quick_assessments','quotations','invoices','reports'],
+            write:  []
+        },
         general_manager: {
             access: ['cars','mechanics','drivers','assessments','jobs','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','chat','reports','clients','service_bookings','crm','payments','invoices','quotations','sales','installments','expenses'],
             write:  ['quotations','invoices','sales']
@@ -557,6 +588,24 @@ function permDesc(string $key): string {
 
     function syncAdminState(role) {
         descEl.textContent = roleDesc[role] || '';
+
+        // Show/hide supervisor location assignment card
+        var locCard = document.getElementById('supervisorLocationCard');
+        var locSelect = document.getElementById('locationIdSelect');
+        if (locCard && locSelect) {
+            if (role === 'supervisor') {
+                locCard.style.display = 'block';
+                locSelect.required = true;
+            } else {
+                locCard.style.display = 'none';
+                locSelect.required = false;
+                // Only clear if the user wasn't originally a supervisor
+                if (roleSelect.dataset.originalRole !== 'supervisor') {
+                    locSelect.value = '';
+                }
+            }
+        }
+
         if (role === 'admin') {
             permCard.style.opacity = '.45';
             permCard.style.pointerEvents = 'none';

@@ -19,6 +19,12 @@ if (authRole() === 'customer_relations') {
     include __DIR__ . '/sidebar_crm.php';
     return;
 }
+
+// Supervisors get their own location-scoped sidebar
+if (authRole() === 'supervisor') {
+    include __DIR__ . '/sidebar_supervisor.php';
+    return;
+}
 ?>
 <div class="app-sidebar" id="sidebar">
 
