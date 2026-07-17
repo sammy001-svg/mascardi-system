@@ -11,6 +11,7 @@ try { $db->exec("ALTER TABLE crm_leads ADD COLUMN lead_score TINYINT UNSIGNED DE
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_amount DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_notes TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN agreed_sale_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 // Test drive & car extended fields
 try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars MODIFY COLUMN status ENUM('in_transit','arrived','in_assessment','in_workshop','completed','sold','delivered','reserved') DEFAULT 'in_transit'"); } catch (\Throwable $_) {}
@@ -216,19 +217,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'reserve_lead' && canWrite('crm')) {
-        $reserveCarId = (int)($_POST['reserve_car_id'] ?? 0) ?: null;
-        $depositAmt   = (float)($_POST['deposit_amount'] ?? 0);
-        $depositNotes = trim($_POST['deposit_notes'] ?? '') ?: null;
+        $reserveCarId    = (int)($_POST['reserve_car_id'] ?? 0) ?: null;
+        $depositAmt      = (float)($_POST['deposit_amount'] ?? 0);
+        $depositNotes    = trim($_POST['deposit_notes'] ?? '') ?: null;
+        $agreedSalePrice = (float)($_POST['agreed_sale_price'] ?? 0) ?: null;
         $db->prepare("
             UPDATE crm_leads
             SET stage='reserved',
-                pinned_car_id   = COALESCE(?, pinned_car_id),
-                deposit_amount  = ?,
-                deposit_date    = CURDATE(),
-                deposit_notes   = ?,
-                updated_at      = NOW()
+                pinned_car_id     = COALESCE(?, pinned_car_id),
+                deposit_amount    = ?,
+                deposit_date      = CURDATE(),
+                deposit_notes     = ?,
+                agreed_sale_price = ?,
+                updated_at        = NOW()
             WHERE id = ?
-        ")->execute([$reserveCarId, $depositAmt, $depositNotes, $id]);
+        ")->execute([$reserveCarId, $depositAmt, $depositNotes, $agreedSalePrice, $id]);
         require_once __DIR__ . '/../../includes/notifications.php';
         notifyRoles(['admin','sales_manager','general_manager'], 'sale',
             "Vehicle Reserved: {$lead['name']}",
@@ -352,7 +355,8 @@ $availCarsForModal = [];
 try {
     $availCarsForModal = $db->query("
         SELECT id, make, model, year, color, registration_number,
-               IFNULL(asking_price, 0) AS sale_price
+               IFNULL(asking_price, 0)  AS asking_price,
+               offer_price
         FROM cars WHERE car_type = 'inventory'
         ORDER BY make, model LIMIT 300
     ")->fetchAll();
@@ -1055,16 +1059,25 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
         <!-- Reservation Documents (shown only when stage = reserved) -->
         <?php if ($lead['stage'] === 'reserved'): ?>
         <?php
-        $depAmt   = (float)($lead['deposit_amount'] ?? 0);
-        $depDate  = $lead['deposit_date'] ?? date('Y-m-d');
-        $carPrice = $pinnedCar ? (float)($pinnedCar['asking_price'] ?? $pinnedCar['selling_price'] ?? 0) : 0;
-        $balance  = max(0, $carPrice - $depAmt);
+        $depAmt        = (float)($lead['deposit_amount']    ?? 0);
+        $depDate       = $lead['deposit_date']               ?? date('Y-m-d');
+        $agreedPrice   = (float)($lead['agreed_sale_price']  ?? 0);
+        $carIsOffer    = $pinnedCar && !empty($pinnedCar['offer_price']) && (float)$pinnedCar['offer_price'] > 0;
+        $carListPrice  = $pinnedCar
+            ? ($carIsOffer ? (float)$pinnedCar['offer_price'] : (float)($pinnedCar['asking_price'] ?? 0))
+            : 0;
+        $effectivePrice = $agreedPrice > 0 ? $agreedPrice : $carListPrice;
+        $resDiscount    = ($carListPrice > 0 && $agreedPrice > 0 && $agreedPrice < $carListPrice)
+            ? ($carListPrice - $agreedPrice) : 0;
+        $resDiscPct     = ($carListPrice > 0 && $resDiscount > 0)
+            ? round(($resDiscount / $carListPrice) * 100, 1) : 0;
+        $balance        = max(0, $effectivePrice - $depAmt);
         ?>
         <div class="card mb-4" style="border-color:#16a34a;border-width:2px">
             <div class="card-header fw-semibold d-flex justify-content-between align-items-center"
                  style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-bottom-color:#bbf7d0">
                 <span style="color:#15803d">
-                    <i class="fa fa-bookmark me-2"></i>Reservation Documents
+                    <i class="fa fa-bookmark me-2"></i>Reservation Summary
                 </span>
                 <div class="d-flex gap-2">
                     <a href="proforma.php?lead_id=<?= $id ?>" target="_blank"
@@ -1079,27 +1092,55 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
             </div>
             <div class="card-body">
                 <div class="row g-3 mb-3">
-                    <!-- Deposit summary -->
-                    <div class="col-md-4">
+                    <!-- Agreed Sale Price -->
+                    <div class="col-md-3">
+                        <div class="rounded-3 p-3 text-center" style="background:#eff6ff;border:1px solid #bfdbfe">
+                            <div class="text-muted small mb-1">
+                                <?= $agreedPrice > 0 ? 'Agreed Sale Price' : 'List Price' ?>
+                                <?php if ($carIsOffer): ?>
+                                <span class="badge bg-danger ms-1" style="font-size:9px">OFFER</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="fw-bold" style="font-size:20px;color:#1d4ed8">
+                                <?= $effectivePrice > 0 ? money($effectivePrice) : '—' ?>
+                            </div>
+                            <?php if ($carListPrice > 0 && $agreedPrice > 0 && $agreedPrice != $carListPrice): ?>
+                            <div class="text-muted" style="font-size:11px"><s><?= money($carListPrice) ?></s></div>
+                            <?php else: ?>
+                            <div class="text-muted" style="font-size:11px">
+                                <?= $pinnedCar ? e(trim(($pinnedCar['year']??'').' '.($pinnedCar['make']??'').' '.($pinnedCar['model']??''))) : '—' ?>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <!-- Discount -->
+                    <div class="col-md-3">
+                        <div class="rounded-3 p-3 text-center" style="background:<?= $resDiscount > 0 ? '#f0fdf4' : '#f8fafc' ?>;border:1px solid <?= $resDiscount > 0 ? '#bbf7d0' : '#e2e8f0' ?>">
+                            <div class="text-muted small mb-1">Discount Given</div>
+                            <?php if ($resDiscount > 0): ?>
+                            <div class="fw-bold text-success" style="font-size:20px"><?= money($resDiscount) ?></div>
+                            <div class="text-muted" style="font-size:11px"><?= $resDiscPct ?>% off list price</div>
+                            <?php else: ?>
+                            <div class="fw-bold text-muted" style="font-size:20px">—</div>
+                            <div class="text-muted" style="font-size:11px">No discount</div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <!-- Deposit -->
+                    <div class="col-md-3">
                         <div class="rounded-3 p-3 text-center" style="background:#f0fdf4;border:1px solid #bbf7d0">
                             <div class="text-muted small mb-1">Deposit Paid</div>
-                            <div class="fw-bold text-success" style="font-size:22px"><?= money($depAmt) ?></div>
+                            <div class="fw-bold text-success" style="font-size:20px"><?= money($depAmt) ?></div>
                             <div class="text-muted" style="font-size:11px"><?= fmtDate($depDate,'d M Y') ?></div>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="rounded-3 p-3 text-center" style="background:#f8fafc;border:1px solid #e2e8f0">
-                            <div class="text-muted small mb-1">Vehicle Price</div>
-                            <div class="fw-bold" style="font-size:22px;color:#0f172a"><?= $carPrice > 0 ? money($carPrice) : '—' ?></div>
-                            <div class="text-muted" style="font-size:11px">
-                                <?= $pinnedCar ? e(trim(($pinnedCar['year']??'').' '.($pinnedCar['make']??'').' '.($pinnedCar['model']??''))) : 'No vehicle linked' ?>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
+                    <!-- Balance -->
+                    <div class="col-md-3">
                         <div class="rounded-3 p-3 text-center" style="background:#fff7ed;border:1px solid #fed7aa">
                             <div class="text-muted small mb-1">Balance Due</div>
-                            <div class="fw-bold text-warning" style="font-size:22px;color:#c2410c"><?= $carPrice > 0 ? money($balance) : '—' ?></div>
+                            <div class="fw-bold" style="font-size:20px;color:#c2410c">
+                                <?= $effectivePrice > 0 ? money($balance) : '—' ?>
+                            </div>
                             <div class="text-muted" style="font-size:11px">Remaining to complete sale</div>
                         </div>
                     </div>
@@ -1109,7 +1150,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                     <i class="fa fa-note-sticky me-1"></i><?= e($lead['deposit_notes']) ?>
                 </div>
                 <?php endif; ?>
-                <div class="border-top pt-3 mt-1 d-flex gap-2 flex-wrap">
+                <div class="border-top pt-3 mt-2 d-flex gap-2 flex-wrap">
                     <a href="proforma.php?lead_id=<?= $id ?>" target="_blank"
                        class="btn btn-outline-primary btn-sm">
                         <i class="fa fa-print me-1"></i>Print Proforma Invoice
@@ -1178,6 +1219,29 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
     </div>
 </div>
 
+<?php
+// Pre-compute prices for the modal
+$_modalListPrice    = 0;
+$_modalAskingPrice  = 0;
+$_modalIsOffer      = false;
+$_modalAgreedPrice  = (float)($lead['agreed_sale_price'] ?? 0);
+if ($lead['pinned_car_id'] && !empty($availCarsForModal)) {
+    foreach ($availCarsForModal as $_rc) {
+        if ($_rc['id'] == $lead['pinned_car_id']) {
+            $_modalIsOffer    = !empty($_rc['offer_price']) && (float)$_rc['offer_price'] > 0;
+            $_modalAskingPrice= (float)$_rc['asking_price'];
+            $_modalListPrice  = $_modalIsOffer ? (float)$_rc['offer_price'] : $_modalAskingPrice;
+            break;
+        }
+    }
+}
+$_modalEffectiveSale = $_modalAgreedPrice > 0 ? $_modalAgreedPrice : $_modalListPrice;
+$_modalDiscount      = ($_modalListPrice > 0 && $_modalAgreedPrice > 0 && $_modalAgreedPrice < $_modalListPrice)
+    ? ($_modalListPrice - $_modalAgreedPrice) : 0;
+$_modalBalance       = max(0, $_modalEffectiveSale - (float)($lead['deposit_amount'] ?? 0));
+$_modalDiscPct       = ($_modalListPrice > 0 && $_modalDiscount > 0)
+    ? number_format(($_modalDiscount / $_modalListPrice) * 100, 1) : 0;
+?>
 <!-- Reserve Vehicle Modal -->
 <div class="modal fade" id="reserveModal" tabindex="-1" aria-labelledby="reserveModalLabel">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -1202,17 +1266,22 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                             <select name="reserve_car_id" id="reserveCarSelect" class="form-select" required>
                                 <option value="">— Choose vehicle from inventory —</option>
                                 <?php foreach ($availCarsForModal as $rc):
-                                    $rcLabel = trim(($rc['year'] ?? '') . ' ' . ($rc['make'] ?? '') . ' ' . ($rc['model'] ?? ''));
+                                    $rcLabel    = trim(($rc['year'] ?? '') . ' ' . ($rc['make'] ?? '') . ' ' . ($rc['model'] ?? ''));
                                     if ($rc['registration_number']) $rcLabel .= ' (' . $rc['registration_number'] . ')';
-                                    $isPreSelected = ($lead['pinned_car_id'] == $rc['id']);
+                                    $rcIsOffer  = !empty($rc['offer_price']) && (float)$rc['offer_price'] > 0;
+                                    $rcListP    = $rcIsOffer ? (float)$rc['offer_price'] : (float)$rc['asking_price'];
+                                    $rcAskingP  = (float)$rc['asking_price'];
+                                    $isPinned   = ($lead['pinned_car_id'] == $rc['id']);
                                 ?>
                                 <option value="<?= $rc['id'] ?>"
-                                        data-price="<?= (float)$rc['sale_price'] ?>"
+                                        data-list-price="<?= $rcListP ?>"
+                                        data-asking-price="<?= $rcAskingP ?>"
+                                        data-is-offer="<?= $rcIsOffer ? '1' : '0' ?>"
                                         data-label="<?= e($rcLabel) ?>"
-                                        <?= $isPreSelected ? 'selected' : '' ?>>
+                                        <?= $isPinned ? 'selected' : '' ?>>
                                     <?= e($rcLabel) ?>
-                                    <?php if ($rc['sale_price'] > 0): ?>
-                                    — KES <?= number_format((float)$rc['sale_price']) ?>
+                                    <?php if ($rcListP > 0): ?>
+                                    — KES <?= number_format($rcListP) ?><?= $rcIsOffer ? ' [OFFER]' : '' ?>
                                     <?php endif; ?>
                                 </option>
                                 <?php endforeach; ?>
@@ -1225,27 +1294,58 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                             <?php endif; ?>
                         </div>
 
-                        <!-- Vehicle price display (auto-filled) -->
+                        <!-- Divider -->
+                        <div class="col-12"><hr class="my-1"><small class="text-muted fw-semibold text-uppercase" style="letter-spacing:.06em">Pricing</small></div>
+
+                        <!-- List Price (read-only, from inventory) -->
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Vehicle Price</label>
+                            <label class="form-label fw-semibold">
+                                List Price
+                                <span id="offerBadge" class="badge bg-danger ms-1" style="font-size:10px;<?= $_modalIsOffer ? '' : 'display:none' ?>">OFFER</span>
+                            </label>
                             <div class="input-group">
                                 <span class="input-group-text text-muted small">KES</span>
-                                <input type="text" id="reserveVehiclePrice" class="form-control bg-light"
-                                       readonly placeholder="Auto-filled" value="<?php
-                                    if ($lead['pinned_car_id'] && !empty($availCarsForModal)) {
-                                        foreach ($availCarsForModal as $rc) {
-                                            if ($rc['id'] == $lead['pinned_car_id'] && $rc['sale_price'] > 0) {
-                                                echo number_format((float)$rc['sale_price']);
-                                                break;
-                                            }
-                                        }
-                                    }
-                                ?>">
+                                <input type="text" id="reserveListPrice" class="form-control bg-light"
+                                       readonly placeholder="Select vehicle"
+                                       data-raw="<?= $_modalListPrice ?>"
+                                       value="<?= $_modalListPrice > 0 ? number_format($_modalListPrice) : '' ?>">
+                            </div>
+                            <div class="form-text" id="askingPriceNote" style="<?= ($_modalIsOffer && $_modalAskingPrice > 0) ? '' : 'display:none' ?>">
+                                <s class="text-muted">KES <?= number_format($_modalAskingPrice) ?></s>
+                                <span class="text-danger ms-1">Offer price active</span>
                             </div>
                         </div>
 
-                        <!-- Deposit amount -->
+                        <!-- Agreed Sale Price (editable) -->
                         <div class="col-md-4">
+                            <label class="form-label fw-semibold">
+                                Agreed Sale Price
+                                <span class="text-muted fw-normal small">(client's negotiated price)</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text text-muted small">KES</span>
+                                <input type="number" name="agreed_sale_price" id="reserveSalePrice"
+                                       class="form-control" min="0" step="any"
+                                       value="<?= $_modalAgreedPrice > 0 ? $_modalAgreedPrice : ($_modalListPrice > 0 ? $_modalListPrice : '') ?>"
+                                       placeholder="Enter agreed price">
+                            </div>
+                            <div class="form-text text-muted">Leave blank to use list price.</div>
+                        </div>
+
+                        <!-- Discount (computed) -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Discount Given</label>
+                            <input type="text" id="reserveDiscount" class="form-control bg-light fw-semibold"
+                                   readonly placeholder="Auto-calculated"
+                                   value="<?= $_modalDiscount > 0 ? 'KES ' . number_format($_modalDiscount) . ' (' . $_modalDiscPct . '%)' : '—' ?>"
+                                   style="color:<?= $_modalDiscount > 0 ? '#16a34a' : '' ?>">
+                        </div>
+
+                        <!-- Divider -->
+                        <div class="col-12"><hr class="my-1"><small class="text-muted fw-semibold text-uppercase" style="letter-spacing:.06em">Payment</small></div>
+
+                        <!-- Deposit amount -->
+                        <div class="col-md-6">
                             <label class="form-label fw-semibold">
                                 Deposit Amount <span class="text-danger">*</span>
                             </label>
@@ -1254,18 +1354,21 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                                 <input type="number" name="deposit_amount" id="reserveDepositAmt"
                                        class="form-control" min="0" step="any" required
                                        value="<?= (float)($lead['deposit_amount'] ?? 0) ?: '' ?>"
-                                       placeholder="e.g. 200000">
+                                       placeholder="e.g. 200,000">
                             </div>
                         </div>
 
-                        <!-- Balance (computed) -->
-                        <div class="col-md-4">
+                        <!-- Balance (computed from Sale Price - Deposit) -->
+                        <div class="col-md-6">
                             <label class="form-label fw-semibold">Balance Due</label>
                             <div class="input-group">
                                 <span class="input-group-text text-muted small">KES</span>
                                 <input type="text" id="reserveBalance" class="form-control bg-light fw-bold"
-                                       readonly placeholder="Auto-calculated" style="color:#c2410c">
+                                       readonly placeholder="Auto-calculated"
+                                       value="<?= $_modalBalance > 0 ? number_format($_modalBalance) : '' ?>"
+                                       style="color:#c2410c">
                             </div>
+                            <div class="form-text text-muted">Agreed price minus deposit.</div>
                         </div>
 
                         <!-- Notes -->
@@ -1283,7 +1386,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                                 <i class="fa fa-circle-info text-primary mt-1 flex-shrink-0"></i>
                                 <div>
                                     Saving this will mark the lead as <strong>Reserved</strong> and generate a
-                                    <strong>Proforma Invoice</strong> and <strong>Sales Agreement</strong> for the client to sign.
+                                    <strong>Proforma Invoice</strong> and <strong>Sales Agreement</strong> based on the agreed sale price.
                                 </div>
                             </div>
                         </div>
@@ -1302,28 +1405,76 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
 
 <script>
 (function () {
-    var sel     = document.getElementById('reserveCarSelect');
-    var priceEl = document.getElementById('reserveVehiclePrice');
-    var depEl   = document.getElementById('reserveDepositAmt');
-    var balEl   = document.getElementById('reserveBalance');
+    var sel        = document.getElementById('reserveCarSelect');
+    var listEl     = document.getElementById('reserveListPrice');
+    var saleEl     = document.getElementById('reserveSalePrice');
+    var discEl     = document.getElementById('reserveDiscount');
+    var depEl      = document.getElementById('reserveDepositAmt');
+    var balEl      = document.getElementById('reserveBalance');
+    var offerBadge = document.getElementById('offerBadge');
+    var askNote    = document.getElementById('askingPriceNote');
     if (!sel) return;
 
-    function computeBalance() {
-        var price = parseFloat((priceEl.value || '0').replace(/,/g, '')) || 0;
-        var dep   = parseFloat(depEl.value) || 0;
-        var bal   = Math.max(0, price - dep);
-        balEl.value = bal > 0 ? bal.toLocaleString() : '';
+    function fmt(n) {
+        return n > 0 ? n.toLocaleString('en-KE', {minimumFractionDigits:0, maximumFractionDigits:0}) : '';
+    }
+
+    function recompute() {
+        var list = parseFloat(listEl.dataset.raw || 0) || 0;
+        var sale = parseFloat(saleEl.value)           || 0;
+        var dep  = parseFloat(depEl.value)            || 0;
+
+        // Effective sale = agreed price if entered, else fall back to list price
+        var effective = sale > 0 ? sale : list;
+
+        // Discount
+        var disc    = (list > 0 && sale > 0 && sale < list) ? (list - sale) : 0;
+        var discPct = (list > 0 && disc > 0) ? ((disc / list) * 100).toFixed(1) : 0;
+        if (disc > 0) {
+            discEl.value = 'KES ' + fmt(disc) + ' (' + discPct + '%)';
+            discEl.style.color = '#16a34a';
+        } else {
+            discEl.value = '—';
+            discEl.style.color = '';
+        }
+
+        // Balance = effective sale price - deposit
+        var bal = Math.max(0, effective - dep);
+        balEl.value = fmt(bal);
+        balEl.style.color = bal > 0 ? '#c2410c' : '#16a34a';
     }
 
     sel.addEventListener('change', function () {
-        var opt   = sel.options[sel.selectedIndex];
-        var price = parseFloat(opt.dataset.price || 0);
-        priceEl.value = price > 0 ? price.toLocaleString() : '';
-        computeBalance();
+        var opt      = sel.options[sel.selectedIndex];
+        var listP    = parseFloat(opt.dataset.listPrice   || 0);
+        var askingP  = parseFloat(opt.dataset.askingPrice || 0);
+        var isOffer  = opt.dataset.isOffer === '1';
+
+        listEl.dataset.raw = listP;
+        listEl.value       = listP > 0 ? fmt(listP) : '';
+
+        // Offer badge
+        if (offerBadge) offerBadge.style.display = isOffer ? '' : 'none';
+        if (askNote) {
+            if (isOffer && askingP > 0 && askingP !== listP) {
+                askNote.innerHTML = '<s class="text-muted">KES ' + fmt(askingP) + '</s> <span class="text-danger ms-1">Offer price active</span>';
+                askNote.style.display = '';
+            } else {
+                askNote.style.display = 'none';
+            }
+        }
+
+        // Auto-fill sale price with list price so balance calculates immediately
+        if (!saleEl.value || parseFloat(saleEl.value) === 0) {
+            saleEl.value = listP > 0 ? listP : '';
+        }
+
+        recompute();
     });
 
-    depEl.addEventListener('input', computeBalance);
-    computeBalance(); // init
+    saleEl.addEventListener('input', recompute);
+    depEl.addEventListener('input',  recompute);
+    recompute(); // init on page load
 }());
 </script>
 
