@@ -22,6 +22,30 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             BASE_URL . '/modules/jobs/view.php?id=' . $id
         );
     }
+    // ── SMS / WhatsApp owner notification on job complete ─────────────────────
+    if ($data['status'] === 'completed') {
+        try {
+            $ownerQ = $db->prepare("SELECT buyer_name, buyer_phone FROM car_sales WHERE car_id=? ORDER BY created_at DESC LIMIT 1");
+            $ownerQ->execute([$job['car_id']]);
+            $owner = $ownerQ->fetch();
+            if ($owner && !empty($owner['buyer_phone'])) {
+                $co      = getSetting('company_name', 'Mascardi');
+                $vehicle = "{$job['make']} {$job['model']} {$job['year']}";
+                if (getSetting('alert_sms_job_complete', '0') === '1') {
+                    require_once __DIR__ . '/../../includes/sms.php';
+                    sendSms($owner['buyer_phone'],
+                        "Hi {$owner['buyer_name']}, your {$vehicle} workshop job {$job['job_number']} is complete. Contact {$co} to arrange collection.",
+                        'job', $id);
+                }
+                if (getSetting('alert_whatsapp_job_complete', '0') === '1') {
+                    require_once __DIR__ . '/../../includes/whatsapp.php';
+                    sendWhatsApp($owner['buyer_phone'],
+                        "*Job Complete — {$co}*\n\nHi {$owner['buyer_name']},\n\nYour *{$vehicle}* (Job: {$job['job_number']}) has been completed and is ready for collection.\n\nContact us to arrange pickup.",
+                        'job', $id);
+                }
+            }
+        } catch (\Throwable $_) {}
+    }
     setFlash('success','Job updated.'); redirect(BASE_URL.'/modules/jobs/view.php?id='.$id);
 }
 $pageTitle='Edit Job';

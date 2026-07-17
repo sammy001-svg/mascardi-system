@@ -200,6 +200,9 @@ include __DIR__ . '/../../includes/header.php';
         <h5 class="mb-1">System Settings</h5>
         <div class="text-muted small">Configure company information, integrations, and system defaults</div>
     </div>
+    <a href="messaging.php" class="btn btn-sm btn-outline-primary">
+        <i class="fa fa-comment-sms me-1"></i>Messaging &amp; Alerts
+    </a>
 </div>
 
 <?php if ($errors): ?>

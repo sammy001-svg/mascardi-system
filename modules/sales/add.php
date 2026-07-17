@@ -129,6 +129,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ($soldCar ? "{$soldCar['make']} {$soldCar['model']} {$soldCar['year']}" : '') . " — " . money((float)$d['sale_price']) . " — " . $d['buyer_name'],
                 BASE_URL . '/modules/sales/view.php?id=' . $saleId
             );
+            // ── SMS / WhatsApp buyer notifications ────────────────────────────
+            if (!empty($d['buyer_phone'])) {
+                $co       = getSetting('company_name', 'Mascardi');
+                $vehicle  = $soldCar ? "{$soldCar['make']} {$soldCar['model']} {$soldCar['year']}" : 'vehicle';
+                $smsText  = "Hi {$d['buyer_name']}, your purchase of {$vehicle} (Ref: {$saleNum}) has been confirmed at {$co}. Thank you!";
+                if (getSetting('alert_sms_sale', '0') === '1') {
+                    require_once __DIR__ . '/../../includes/sms.php';
+                    sendSms($d['buyer_phone'], $smsText, 'sale', $saleId);
+                }
+                if (getSetting('alert_whatsapp_sale', '0') === '1') {
+                    require_once __DIR__ . '/../../includes/whatsapp.php';
+                    $waText = "*Vehicle Purchase Confirmed*\n\n"
+                        . "Hi {$d['buyer_name']},\n\n"
+                        . "Your purchase of *{$vehicle}* has been confirmed.\n"
+                        . "Reference: *{$saleNum}*\n"
+                        . "Amount: *" . money((float)$d['sale_price']) . "*\n\n"
+                        . "Thank you for choosing *{$co}*!";
+                    sendWhatsApp($d['buyer_phone'], $waText, 'sale', $saleId);
+                }
+            }
             setFlash('success', "Sale {$saleNum} recorded successfully.");
             redirect(BASE_URL . '/modules/sales/view.php?id=' . $saleId);
         } catch (\Throwable $e) {

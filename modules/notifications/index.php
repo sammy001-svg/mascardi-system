@@ -70,6 +70,7 @@ $typeMeta = [
     'job'       => ['icon' => 'fa-toolbox',               'color' => '#9333ea', 'bg' => '#faf5ff', 'label' => 'Job'],
     'sale'      => ['icon' => 'fa-tag',                   'color' => '#0f172a', 'bg' => '#f8fafc', 'label' => 'Sale'],
     'info'      => ['icon' => 'fa-info-circle',           'color' => '#64748b', 'bg' => '#f8fafc', 'label' => 'Info'],
+    'doc_expiry'=> ['icon' => 'fa-file-circle-exclamation','color' => '#d97706', 'bg' => '#fffbeb', 'label' => 'Document'],
 ];
 
 function notifMeta(string $type, array $typeMeta): array {
