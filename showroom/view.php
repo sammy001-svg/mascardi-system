@@ -81,14 +81,24 @@ include __DIR__ . '/header.php';
 
         <!-- Badges -->
         <div class="vh-badges">
+            <?php if (($car['status'] ?? '') === 'reserved'): ?>
+            <span class="vh-badge" style="background:#7c3aed;color:#fff"><i class="fa fa-bookmark me-1"></i>Reserved</span>
+            <?php else: ?>
             <?php if ($car['featured']): ?>
             <span class="vh-badge vh-badge-gold"><i class="fa fa-star me-1"></i>Featured</span>
             <?php endif; ?>
             <span class="vh-badge vh-badge-green"><i class="fa fa-circle-check me-1"></i>Available</span>
+            <?php endif; ?>
             <?php if ($car['body_type']): ?>
             <span class="vh-badge vh-badge-dark"><?= htmlspecialchars($car['body_type']) ?></span>
             <?php endif; ?>
         </div>
+        <?php if (($car['status'] ?? '') === 'reserved'): ?>
+        <div style="background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.4);border-radius:10px;padding:10px 18px;margin-top:12px;display:inline-flex;align-items:center;gap:10px;color:#ddd6fe;font-size:14px;font-weight:600">
+            <i class="fa fa-bookmark" style="color:#a78bfa"></i>
+            This vehicle has been reserved by a buyer. Contact us to join the waitlist or find a similar car.
+        </div>
+        <?php endif; ?>
 
         <!-- Title -->
         <h1 class="vh-title"><?= htmlspecialchars($carTitle) ?></h1>

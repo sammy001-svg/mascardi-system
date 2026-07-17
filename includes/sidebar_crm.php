@@ -147,6 +147,22 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
         }());
         </script>
 
+        <a href="<?= BASE_URL ?>/modules/reservations/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/reservations/') ? 'active' : '' ?>"
+           data-label="Reservations"
+           style="position:relative">
+            <i class="fa fa-bookmark"></i><span>Reservations</span>
+            <?php
+            try {
+                $__myUid = (int)(authUser()['id'] ?? 0);
+                $__myResCount = (int)getDB()->query("SELECT COUNT(*) FROM crm_leads WHERE stage='reserved' AND assigned_to={$__myUid}")->fetchColumn();
+                if ($__myResCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#7c3aed;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__myResCount > 99 ? '99+' : $__myResCount ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+
         <!-- ══ FLEET ═════════════════════════════════════════════ -->
         <div class="nav-section">Fleet</div>
 

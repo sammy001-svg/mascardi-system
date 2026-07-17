@@ -60,6 +60,21 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
             <i class="fa fa-filter-circle-dollar"></i><span>Sales Pipeline</span>
         </a>
 
+        <a href="<?= BASE_URL ?>/modules/reservations/index.php"
+           class="nav-item <?= isActive('/modules/reservations/') ?>"
+           data-label="Reservations"
+           style="position:relative">
+            <i class="fa fa-bookmark"></i><span>Reservations</span>
+            <?php
+            try {
+                $__resCount = (int)getDB()->query("SELECT COUNT(*) FROM crm_leads WHERE stage='reserved'")->fetchColumn();
+                if ($__resCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#7c3aed;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__resCount > 99 ? '99+' : $__resCount ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+
         <a href="<?= BASE_URL ?>/modules/quotations/index.php"
            class="nav-item <?= isActive('/modules/quotations/') ?>"
            data-label="Quotations">

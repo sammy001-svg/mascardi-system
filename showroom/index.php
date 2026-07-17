@@ -23,7 +23,7 @@ $search        = trim($_GET['q']        ?? '');
 $allCars = $db->query("
     SELECT c.id, c.make, c.model, c.year, c.color, c.body_type,
            c.transmission, c.fuel_type, c.asking_price, c.offer_price, c.mileage,
-           c.engine_cc, c.featured, c.notes, c.created_at,
+           c.engine_cc, c.featured, c.notes, c.created_at, c.status,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image,
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
     FROM cars c
@@ -84,7 +84,7 @@ $orderBy = match($sort) {
 $stmt = $db->prepare("
     SELECT c.id, c.make, c.model, c.year, c.color, c.body_type,
            c.transmission, c.fuel_type, c.asking_price, c.offer_price, c.mileage,
-           c.engine_cc, c.featured, c.notes, c.created_at,
+           c.engine_cc, c.featured, c.notes, c.created_at, c.status,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image,
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
     FROM cars c
@@ -586,11 +586,14 @@ include __DIR__ . '/header.php';
                     <?php foreach ($filteredCars as $car):
                         $img = $car['primary_image'] ? thumbUrl('cars', $car['primary_image']) : null;
                         $waMsg = urlencode("Hi, I'm interested in the {$car['year']} {$car['make']} {$car['model']} (KES " . number_format((float)$car['asking_price']) . ") listed on your showroom.");
-                        $isNew = strtotime($car['created_at']) > strtotime('-30 days');
+                        $isNew      = strtotime($car['created_at']) > strtotime('-30 days');
+                        $isReserved = ($car['status'] ?? '') === 'reserved';
                     ?>
-                    <div class="inv-card" data-car-id="<?= $car['id'] ?>" data-car-name="<?= htmlspecialchars($car['year'].' '.$car['make'].' '.$car['model']) ?>">
+                    <div class="inv-card<?= $isReserved ? ' inv-card-reserved' : '' ?>" data-car-id="<?= $car['id'] ?>" data-car-name="<?= htmlspecialchars($car['year'].' '.$car['make'].' '.$car['model']) ?>">
                         <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="inv-img-wrap">
-                            <?php if ($car['featured']): ?>
+                            <?php if ($isReserved): ?>
+                            <span class="inv-badge-reserved"><i class="fa fa-bookmark me-1"></i>Reserved</span>
+                            <?php elseif ($car['featured']): ?>
                             <span class="inv-badge-featured"><i class="fa fa-star me-1"></i>Featured</span>
                             <?php elseif ($isNew): ?>
                             <span class="inv-badge-new">New</span>
@@ -621,7 +624,14 @@ include __DIR__ . '/header.php';
                                 <?php if ($car['color']):     ?><span><?= htmlspecialchars($car['color']) ?></span><?php endif; ?>
                             </div>
                             <div class="inv-price">
-                                <?php if (!empty($car['offer_price']) && $car['offer_price'] > 0): ?>
+                                <?php if ($isReserved): ?>
+                                    <span style="font-size:12px;background:#7c3aed;color:#fff;padding:3px 10px;border-radius:10px;font-weight:700;display:inline-block">
+                                        <i class="fa fa-bookmark me-1"></i>Reserved
+                                    </span>
+                                    <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
+                                    <div style="font-size:13px;color:#94a3b8;font-weight:500;margin-top:3px">KES <?= number_format((float)$car['asking_price']) ?></div>
+                                    <?php endif; ?>
+                                <?php elseif (!empty($car['offer_price']) && $car['offer_price'] > 0): ?>
                                     <span style="font-size:10px;background:#dc2626;color:#fff;padding:2px 7px;border-radius:10px;vertical-align:middle;margin-right:5px;font-weight:700">SALE</span>
                                     KES <?= number_format((float)$car['offer_price']) ?>
                                     <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
@@ -637,7 +647,7 @@ include __DIR__ . '/header.php';
                                 <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="inv-btn-view">
                                     View Details
                                 </a>
-                                <?php if ($__waClean): ?>
+                                <?php if (!$isReserved && $__waClean): ?>
                                 <a href="https://wa.me/<?= $__waClean ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="inv-btn-wa" title="Enquire on WhatsApp">
                                     <i class="fa-brands fa-whatsapp"></i>
                                 </a>
@@ -883,6 +893,9 @@ select.qb-input { cursor:pointer; }
 .inv-badge-featured { position:absolute; top:10px; left:10px; background:#f59e0b; color:#fff; font-size:10.5px; font-weight:700; padding:3px 10px; border-radius:20px; }
 .inv-badge-new { position:absolute; top:10px; left:10px; background:#22c55e; color:#fff; font-size:10.5px; font-weight:700; padding:3px 10px; border-radius:20px; }
 .inv-badge-photos { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.5); color:#fff; font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px; }
+.inv-badge-reserved { position:absolute; top:10px; left:10px; background:#7c3aed; color:#fff; font-size:10.5px; font-weight:700; padding:3px 10px; border-radius:20px; }
+.inv-card-reserved { opacity:.85; }
+.inv-card-reserved .inv-img-wrap::after { content:''; position:absolute; inset:0; background:rgba(124,58,237,.08); pointer-events:none; }
 .inv-body { padding:16px 18px 18px; flex:1; display:flex; flex-direction:column; }
 .inv-meta { font-size:11px; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
 .inv-title { font-size:17px; font-weight:800; margin:0 0 8px; letter-spacing:-.3px; }
