@@ -277,6 +277,32 @@ include __DIR__ . '/../../includes/header.php';
         payment is received.
     </div>
 
+    <!-- ── Terms & Conditions ─────────────────────────────────────────────── -->
+    <div style="margin-top:16px;border:1px solid #e2e8f0;border-radius:4px;padding:12px 15px;font-size:11px;color:#374151;line-height:1.65">
+        <div style="font-weight:700;font-size:11.5px;color:#111;margin-bottom:8px;border-bottom:1px solid #e2e8f0;padding-bottom:5px">
+            Terms &amp; Conditions:
+        </div>
+        <ul style="margin:0;padding-left:16px;list-style:disc">
+            <li>This payment constitutes a reservation deposit for the above vehicle.</li>
+            <li>The vehicle will be held for <strong>30 days</strong> from the date of payment unless otherwise noted on special customer requirements notes above.</li>
+            <li>All deposits are <strong>non-refundable</strong> if the purchase is not completed within the reservation period.</li>
+            <li>All deposits are <strong>fully refundable</strong> without penalty or deduction in the following cases:
+                <ul style="margin:4px 0 4px 16px;list-style:circle">
+                    <li>Shall the vehicle have any major defect or issue.</li>
+                    <li>Shall we fail to deliver your car within the specified timeline on the Import Order Form. Applicable to Import Orders only.</li>
+                </ul>
+            </li>
+            <li>All deposits are <strong>partially refundable</strong> with penalty or deduction in the following cases:
+                <ul style="margin:4px 0 4px 16px;list-style:circle">
+                    <li>The buyer is unable to proceed with the purchase due to unexpected life events.</li>
+                </ul>
+            </li>
+            <li>All deposits received by Mascardi are <strong>fully transferable</strong> to a different Mascardi car if applied within 6 months and <strong>partially transferable</strong> if applied within 12 months.</li>
+            <li>Final sale is subject to full payment and completion of all required documentation.</li>
+            <li>All Mascardi T&amp;C apply: <span style="color:#2563eb">https://www.mascardi.co/terms-of-service</span></li>
+        </ul>
+    </div>
+
     <!-- ── Signatures ──────────────────────────────────────────────────────── -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:28px">
         <div>
