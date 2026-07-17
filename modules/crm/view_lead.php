@@ -280,6 +280,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
     }
 
+    if ($action === 'revoke_reservation' && $me['role'] === 'admin') {
+        $pinnedCarId = (int)($lead['pinned_car_id'] ?? 0);
+        // Free the car back to available
+        if ($pinnedCarId) {
+            try {
+                $db->prepare("UPDATE cars SET status = 'available', updated_at = NOW() WHERE id = ? AND status = 'reserved'")
+                   ->execute([$pinnedCarId]);
+            } catch (\Throwable $_) {}
+        }
+        $db->prepare("
+            UPDATE crm_leads
+            SET stage             = 'active',
+                pinned_car_id     = NULL,
+                deposit_amount    = NULL,
+                deposit_date      = NULL,
+                deposit_notes     = NULL,
+                agreed_sale_price = NULL,
+                due_date          = NULL,
+                updated_at        = NOW()
+            WHERE id = ?
+        ")->execute([$id]);
+        require_once __DIR__ . '/../../includes/notifications.php';
+        notifyRoles(['sales_manager','general_manager'], 'alert',
+            "Reservation Revoked: {$lead['name']}",
+            "Revoked by {$me['name']}. Lead returned to Active.",
+            BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+        );
+        logActivity('update', 'crm_leads', $id, "Reservation revoked by admin ({$me['name']}). Lead reset to active.");
+        setFlash('success', 'Reservation revoked. The lead has been returned to Active and the vehicle freed.');
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
     if ($action === 'schedule_test_drive' && canWrite('crm')) {
         $tdDate      = trim($_POST['td_date']         ?? '');
         $tdTime      = trim($_POST['td_time']         ?? '');
@@ -1222,6 +1254,15 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                             data-bs-toggle="modal" data-bs-target="#reserveModal">
                         <i class="fa fa-pen me-1"></i>Update Reservation
                     </button>
+                    <?php if ($me['role'] === 'admin'): ?>
+                    <form method="POST" class="ms-2"
+                          onsubmit="return confirm('Revoke this reservation?\n\nThis will:\n• Return the lead to Active stage\n• Free the vehicle back to Available\n• Clear all deposit and pricing data\n\nThis cannot be undone.')">
+                        <input type="hidden" name="action" value="revoke_reservation">
+                        <button type="submit" class="btn btn-danger btn-sm">
+                            <i class="fa fa-ban me-1"></i>Revoke Reservation
+                        </button>
+                    </form>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
