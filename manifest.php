@@ -56,12 +56,41 @@ echo json_encode([
     ],
 
     'shortcuts' => [
-        ['name' => 'Dashboard', 'url' => $base . '/index.php',
-         'icons' => [['src' => $icon192, 'sizes' => '192x192']]],
-        ['name' => 'Cars',      'url' => $base . '/modules/cars/index.php',
-         'icons' => [['src' => $icon192, 'sizes' => '192x192']]],
-        ['name' => 'Job Cards', 'url' => $base . '/modules/jobs/index.php',
-         'icons' => [['src' => $icon192, 'sizes' => '192x192']]],
+        [
+            'name'        => 'Dashboard',
+            'short_name'  => 'Home',
+            'description' => 'Main dashboard overview',
+            'url'         => $base . '/index.php',
+            'icons'       => [['src' => $icon192, 'sizes' => '192x192']],
+        ],
+        [
+            'name'        => 'New Job Card',
+            'short_name'  => 'Job Card',
+            'description' => 'Create a new workshop job card',
+            'url'         => $base . '/modules/jobs/add.php',
+            'icons'       => [['src' => $icon192, 'sizes' => '192x192']],
+        ],
+        [
+            'name'        => 'New Booking',
+            'short_name'  => 'Booking',
+            'description' => 'Add a new service booking',
+            'url'         => $base . '/modules/service_bookings/add.php',
+            'icons'       => [['src' => $icon192, 'sizes' => '192x192']],
+        ],
+        [
+            'name'        => 'Chat',
+            'short_name'  => 'Chat',
+            'description' => 'Internal team chat',
+            'url'         => $base . '/modules/chat/index.php',
+            'icons'       => [['src' => $icon192, 'sizes' => '192x192']],
+        ],
+        [
+            'name'        => 'Track Service',
+            'short_name'  => 'Tracker',
+            'description' => 'Client service tracking (public)',
+            'url'         => $base . '/portal/track.php',
+            'icons'       => [['src' => $icon192, 'sizes' => '192x192']],
+        ],
     ],
 
     'prefer_related_applications' => false,

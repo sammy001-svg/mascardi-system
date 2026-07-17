@@ -217,6 +217,41 @@ include __DIR__ . '/../../includes/header.php';
         </div>
         <?php endif; ?>
 
+        <!-- ── Tracking Link (Phase 9) ─────────────────────────────────── -->
+        <div class="card mb-4" style="border-top:3px solid #10b981">
+            <div class="card-header"><i class="fa fa-search-location me-2 text-success"></i>Client Tracking Link</div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">Share this link with the client so they can track their service status without logging in.</p>
+                <?php $trackUrl = BASE_URL . '/portal/track.php?q=' . urlencode($booking['booking_number']); ?>
+                <div class="input-group input-group-sm">
+                    <input type="text" id="trackingLinkInput" class="form-control" value="<?= e($trackUrl) ?>" readonly style="font-size:12px;font-family:monospace">
+                    <button class="btn btn-outline-success" onclick="copyTrackLink()" title="Copy link">
+                        <i class="fa fa-copy" id="copyIcon"></i>
+                    </button>
+                    <a href="<?= e($trackUrl) ?>" target="_blank" class="btn btn-outline-secondary" title="Open in new tab">
+                        <i class="fa fa-external-link-alt"></i>
+                    </a>
+                </div>
+                <?php if ($booking['client_phone']): ?>
+                <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $booking['client_phone']) ?>?text=<?= urlencode('Hi ' . $booking['client_name'] . ', you can track your service booking ' . $booking['booking_number'] . ' here: ' . $trackUrl) ?>"
+                   target="_blank" class="btn btn-sm btn-success mt-2" style="border-radius:8px">
+                    <i class="fa-brands fa-whatsapp me-1"></i>Send via WhatsApp
+                </a>
+                <?php endif; ?>
+            </div>
+        </div>
+        <script>
+        function copyTrackLink() {
+            var input = document.getElementById('trackingLinkInput');
+            input.select(); input.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(input.value).then(function() {
+                var icon = document.getElementById('copyIcon');
+                icon.className = 'fa fa-check text-success';
+                setTimeout(function() { icon.className = 'fa fa-copy'; }, 2000);
+            });
+        }
+        </script>
+
         <!-- Create Job Card -->
         <?php if (canAccess('jobs') && canWrite('jobs') && in_array($booking['status'], ['confirmed','in_progress'])): ?>
         <div class="card mb-4">

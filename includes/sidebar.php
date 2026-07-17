@@ -552,6 +552,11 @@ if (authRole() === 'supervisor') {
         <!-- ══ ADMIN ══════════════════════════════════════════════ -->
         <?php if (hasRole('admin')): ?>
         <div class="nav-section">Administration</div>
+        <a href="<?= BASE_URL ?>/modules/data_tools/import.php"
+           class="nav-item <?= isActive('/modules/data_tools/') ?>"
+           data-label="Data Tools">
+            <i class="fa fa-database"></i><span>Import &amp; Export</span>
+        </a>
         <a href="<?= BASE_URL ?>/modules/users/index.php"
            class="nav-item <?= isActive('/modules/users/') ?>"
            data-label="Users & Roles">

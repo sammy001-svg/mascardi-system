@@ -110,10 +110,17 @@ include __DIR__ . '/../../includes/header.php';
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h5 class="mb-0"><i class="fa fa-calendar-days me-2 text-primary"></i>Attendance Register</h5>
     <div class="d-flex gap-2">
+        <a href="<?= BASE_URL ?>/portal/staff_clock.php" target="_blank" class="btn btn-sm btn-outline-primary">
+            <i class="fa fa-tablet-screen-button me-1"></i>Open PIN Terminal
+        </a>
         <a href="report.php?month=<?= $month ?>&year=<?= $year ?>" class="btn btn-sm btn-outline-secondary">
             <i class="fa fa-chart-bar me-1"></i>Monthly Report
         </a>
     </div>
+</div>
+
+<div class="alert alert-info py-2 small mb-3">
+    <i class="fa fa-circle-info me-1"></i>Staff can now clock in/out using their 4-digit PIN on the <a href="<?= BASE_URL ?>/portal/staff_clock.php" target="_blank" class="alert-link">Staff Terminal</a>. You can set their PINs in the Mechanics & Drivers modules.
 </div>
 
 <!-- Month navigation -->

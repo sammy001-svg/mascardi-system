@@ -9,7 +9,7 @@
  *   API / POST    → Network-only (never cached)
  */
 
-const VERSION    = 'v7';
+const VERSION    = 'v8';
 const CACHE_NAME = 'mascardi-' + VERSION;
 const BASE       = self.location.pathname.replace(/\/sw\.js$/, '');
 const OFFLINE    = BASE + '/offline.php';
@@ -18,6 +18,7 @@ const OFFLINE    = BASE + '/offline.php';
 const PRECACHE = [
     BASE + '/assets/images/icons/icon-192.png',
     BASE + '/assets/images/icons/icon-512.png',
+    BASE + '/portal/track.php',   // public tracker available offline
 ];
 
 // ── Install ────────────────────────────────────────────────────────────────

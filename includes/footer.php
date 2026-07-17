@@ -76,6 +76,7 @@ if ($__wa): ?>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <!-- Custom -->
 <script src="<?= BASE_URL ?>/assets/js/main.js?v=<?= @filemtime(BASE_PATH . '/assets/js/main.js') ?: time() ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/install-prompt.js?v=9" defer></script>
 <?php if (isset($extraJs)) echo $extraJs; ?>
 <script>
 // Auto-inject CSRF token into all HTML forms that POST to this site
