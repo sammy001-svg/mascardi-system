@@ -122,10 +122,13 @@ include __DIR__ . '/../../includes/header.php';
     #pwaOverlay,#toastStack { display:none !important; }
     .main-wrap,.main-content,.page-body { margin:0 !important; padding:0 !important; }
     body { background:#fff !important; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     #salesDoc {
         box-shadow:none !important; border:none !important; border-radius:0 !important;
-        max-width:100% !important; padding:1.5cm 1.8cm !important;
+        max-width:100% !important; padding:0 !important;
     }
+    .sa-body { padding:18px 26px 24px !important; }
+    .sa-page-break { break-after: page; page-break-after: always; }
 }
 /* ── Document shell ──────────────────────────────────────────────────────── */
 #salesDoc {
@@ -194,7 +197,7 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 
     <!-- ══ DOCUMENT BODY ═══════════════════════════════════════════════════════ -->
-    <div style="padding:22px 30px 28px">
+    <div class="sa-body" style="padding:22px 30px 28px">
 
         <!-- Title -->
         <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111111">
@@ -329,6 +332,9 @@ include __DIR__ . '/../../includes/header.php';
             subject to standard company t&amp;c:
             https://www.mascardi.co/terms-of-service</p>
         </div>
+
+        <!-- ── Page break: clauses 4–9 + signatures on page 2 ──────────────── -->
+        <div class="sa-page-break"></div>
 
         <!-- ── 4. Delivery, Vehicle Insurance and Transfer of Risk ─────────── -->
         <div class="sa-clause">
