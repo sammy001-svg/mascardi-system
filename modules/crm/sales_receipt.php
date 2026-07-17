@@ -60,9 +60,7 @@ if (!empty($lead['assigned_to'])) {
     } catch (\Throwable $_) {}
 }
 
-// Company settings
-$companyPhone = getSetting('company_phone', '254 722 200018');
-$companyEmail = getSetting('company_email', 'mascardiventures@gmail.com');
+// Company contact (fixed — same as sales agreement)
 
 // Buyer details
 $buyerName   = trim($client['name']      ?? $lead['name']  ?? '');
@@ -165,9 +163,9 @@ include __DIR__ . '/../../includes/header.php';
                 MASCARDI<br>VENTURES LIMITED
             </div>
             <div style="font-size:11px;color:#444;margin-top:6px;line-height:1.7">
-                P O Box 1391, Nairobi 00606<br>
-                Tel: <?= e($companyPhone) ?><br>
-                Email: <?= e($companyEmail) ?>
+                291 Kabete Lane, Spring Valley<br>
+                P.O.Box 1391-00606, Nairobi Kenya<br>
+                Sales@mascardi.co
             </div>
         </div>
         <!-- Title + ref -->
