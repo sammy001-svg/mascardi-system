@@ -2121,7 +2121,7 @@ $companyWa = getSetting('company_name', 'us');
 <script>
 // Move modals to <body> so they escape the page-body animation compositing layer
 document.addEventListener('DOMContentLoaded', function () {
-    ['scheduleTdModal', 'waTemplateModal', 'lostModal', 'reserveModal'].forEach(function (id) {
+    ['scheduleTdModal', 'waTemplateModal', 'lostModal', 'reserveModal', 'importOrderModal'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el && el.parentNode !== document.body) document.body.appendChild(el);
     });
