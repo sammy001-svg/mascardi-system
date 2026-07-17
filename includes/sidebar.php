@@ -86,6 +86,11 @@ if (authRole() === 'supervisor') {
             </span>
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
+        <a href="<?= BASE_URL ?>/modules/delivered_cars/index.php"
+           class="nav-item <?= isActive('/modules/delivered_cars/') ?>"
+           data-label="Delivered Cars">
+            <i class="fa fa-truck"></i><span>Delivered Cars</span>
+        </a>
         <?php endif; ?>
 
         <?php if (canAccess('mechanics')): ?>

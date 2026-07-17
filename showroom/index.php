@@ -28,6 +28,7 @@ $allCars = $db->query("
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
     FROM cars c
     WHERE c.car_type='inventory' AND c.show_on_website = 1
+      AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
     ORDER BY c.featured DESC, c.created_at DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -55,7 +56,7 @@ $yearRange = $db->query("
 ")->fetch(PDO::FETCH_ASSOC) ?: ['min_yr' => 2000, 'max_yr' => date('Y')];
 
 // ── Filtered inventory ────────────────────────────────────────────────────────
-$where  = ["c.car_type='inventory'", "c.show_on_website = 1"];
+$where  = ["c.car_type='inventory'", "c.show_on_website = 1", "(c.status IS NULL OR c.status NOT IN ('delivered','sold'))"];
 $params = [];
 if ($filterMake)  { $where[] = 'c.make = ?';          $params[] = $filterMake; }
 if ($filterBody)  { $where[] = 'c.body_type = ?';     $params[] = $filterBody; }

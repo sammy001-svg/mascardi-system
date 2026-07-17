@@ -69,6 +69,12 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
 
+        <a href="<?= BASE_URL ?>/modules/delivered_cars/index.php"
+           class="nav-item <?= isActive('/modules/delivered_cars/') ?>"
+           data-label="Delivered Cars">
+            <i class="fa fa-truck"></i><span>Delivered Cars</span>
+        </a>
+
         <a href="<?= BASE_URL ?>/modules/crm/index.php"
            class="nav-item <?= isActive('/modules/crm/') ?>"
            data-label="Sales Pipeline">

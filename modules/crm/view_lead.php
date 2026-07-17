@@ -15,6 +15,7 @@ try { $db->exec("ALTER TABLE crm_leads ADD COLUMN agreed_sale_price DECIMAL(15,2
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN due_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN import_vehicle_details TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN expected_arrival_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN delivered_at DATETIME NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 // Test drive & car extended fields
 try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars MODIFY COLUMN status ENUM('in_transit','arrived','in_assessment','in_workshop','completed','sold','delivered','reserved') DEFAULT 'in_transit'"); } catch (\Throwable $_) {}
@@ -277,6 +278,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         logActivity('update', 'crm_leads', $id, "Import order created. Vehicle: " . ($importVehicle ?? '—') . ". Deposit: " . number_format($depositAmt, 2));
         setFlash('success', 'Import Order saved. Documents are ready below.');
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
+    if ($action === 'deliver_lead' && canWrite('crm')) {
+        $deliveryDate  = trim($_POST['delivery_date']  ?? '') ?: date('Y-m-d');
+        $deliveryNotes = trim($_POST['delivery_notes'] ?? '') ?: null;
+
+        $db->prepare("
+            UPDATE crm_leads
+            SET stage        = 'delivered',
+                delivered_at = ?,
+                converted_at = COALESCE(converted_at, NOW()),
+                updated_at   = NOW()
+            WHERE id = ?
+        ")->execute([$deliveryDate, $id]);
+
+        // Remove car from inventory: mark delivered and hide from website
+        $pinnedCarId = (int)($lead['pinned_car_id'] ?? 0);
+        if ($pinnedCarId) {
+            $db->prepare("UPDATE cars SET status='delivered', show_on_website=0, updated_at=NOW() WHERE id=?")
+               ->execute([$pinnedCarId]);
+        }
+
+        if ($deliveryNotes) {
+            $db->prepare("INSERT INTO crm_activities (lead_id, type, summary, created_by) VALUES (?,?,?,?)")
+               ->execute([$id, 'note', 'Delivery note: ' . $deliveryNotes, $me['id']]);
+        }
+
+        require_once __DIR__ . '/../../includes/notifications.php';
+        notifyRoles(['admin','sales_manager','general_manager'], 'sale',
+            "Vehicle Delivered: {$lead['name']}",
+            "Delivery confirmed on " . date('d M Y', strtotime($deliveryDate)),
+            BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+        );
+        logActivity('update', 'crm_leads', $id, "Vehicle delivered on $deliveryDate.");
+        setFlash('success', 'Delivery confirmed! Delivery Note is ready below.');
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
     }
 
@@ -611,6 +648,12 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         <button type="button"
                                 class="btn btn-sm <?= $lead['stage'] === $sk ? 'btn-'.$sc : 'btn-outline-'.$sc ?>"
                                 data-bs-toggle="modal" data-bs-target="#importOrderModal">
+                            <i class="fa <?= $si ?> me-1"></i><?= $sl ?>
+                        </button>
+                        <?php elseif ($sk === 'delivered'): ?>
+                        <button type="button"
+                                class="btn btn-sm <?= $lead['stage'] === $sk ? 'btn-'.$sc : 'btn-outline-'.$sc ?>"
+                                data-bs-toggle="modal" data-bs-target="#deliverModal">
                             <i class="fa <?= $si ?> me-1"></i><?= $sl ?>
                         </button>
                         <?php else: ?>
@@ -1382,6 +1425,110 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
         </div>
         <?php endif; ?>
 
+        <!-- Delivery Summary (shown only when stage = delivered) -->
+        <?php if ($lead['stage'] === 'delivered'): ?>
+        <?php
+        $dlvDate    = $lead['delivered_at']             ?? ($lead['converted_at'] ?? date('Y-m-d'));
+        $dlvAgreed  = (float)($lead['agreed_sale_price'] ?? 0);
+        $dlvVehicle = $lead['import_vehicle_details']   ?? '';
+        ?>
+        <div class="card mb-4" style="border-color:#16a34a;border-width:2px">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2"
+                 style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-bottom-color:#bbf7d0">
+                <span style="color:#15803d">
+                    <i class="fa fa-truck me-2"></i>Delivery Summary
+                    <span class="badge ms-2" style="background:#16a34a;font-size:10px;letter-spacing:.3px">DELIVERED</span>
+                </span>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="delivery_note.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-success">
+                        <i class="fa fa-truck me-1"></i>Delivery Note
+                    </a>
+                    <a href="sales_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-info">
+                        <i class="fa fa-file-invoice-dollar me-1"></i>Sales Receipt
+                    </a>
+                    <a href="proforma.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="fa fa-file-invoice me-1"></i>Proforma
+                    </a>
+                    <a href="sales_agreement.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-secondary">
+                        <i class="fa fa-file-signature me-1"></i>Agreement
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <?php if ($dlvVehicle): ?>
+                <div class="mb-3 p-3 rounded-3" style="background:#f0fdf4;border:1px solid #bbf7d0">
+                    <div class="text-muted small fw-semibold mb-1"><i class="fa fa-car me-1"></i>Vehicle Delivered</div>
+                    <div class="fw-bold" style="font-size:15px;color:#15803d"><?= e($dlvVehicle) ?></div>
+                </div>
+                <?php elseif ($pinnedCar): ?>
+                <div class="mb-3 p-3 rounded-3" style="background:#f0fdf4;border:1px solid #bbf7d0">
+                    <div class="text-muted small fw-semibold mb-1"><i class="fa fa-car me-1"></i>Vehicle Delivered</div>
+                    <div class="fw-bold" style="font-size:15px;color:#15803d">
+                        <?= e(trim(($pinnedCar['year']??'').' '.($pinnedCar['make']??'').' '.($pinnedCar['model']??''))) ?>
+                        <?php if ($pinnedCar['registration_number']): ?>
+                        <span class="text-muted fw-normal" style="font-size:13px"> — <?= e($pinnedCar['registration_number']) ?></span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <div class="rounded-3 p-3 text-center" style="background:#eff6ff;border:1px solid #bfdbfe">
+                            <div class="text-muted small mb-1">Total Sale Price</div>
+                            <div class="fw-bold" style="font-size:20px;color:#1d4ed8">
+                                <?= $dlvAgreed > 0 ? money($dlvAgreed) : '—' ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="rounded-3 p-3 text-center" style="background:#f0fdf4;border:1px solid #bbf7d0">
+                            <div class="text-muted small mb-1"><i class="fa fa-calendar-check me-1"></i>Delivery Date</div>
+                            <div class="fw-bold text-success" style="font-size:18px">
+                                <?= $dlvDate ? fmtDate(substr($dlvDate,0,10),'d M Y') : '—' ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="rounded-3 p-3 text-center" style="background:#f0fdf4;border:1px solid #bbf7d0">
+                            <div class="text-muted small mb-1">Deposit Paid</div>
+                            <div class="fw-bold text-success" style="font-size:18px">
+                                <?= money((float)($lead['deposit_amount'] ?? 0)) ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-top pt-3 mt-2 d-flex gap-2 flex-wrap align-items-center">
+                    <a href="delivery_note.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-success btn-sm">
+                        <i class="fa fa-truck me-1"></i>Print Delivery Note
+                    </a>
+                    <a href="sales_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-info btn-sm text-white">
+                        <i class="fa fa-file-invoice-dollar me-1"></i>Sales Receipt
+                    </a>
+                    <a href="proforma.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="fa fa-file-invoice me-1"></i>Proforma Invoice
+                    </a>
+                    <a href="sales_agreement.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-outline-secondary btn-sm">
+                        <i class="fa fa-file-signature me-1"></i>Sales Agreement
+                    </a>
+                    <button type="button" class="btn btn-outline-success btn-sm ms-auto"
+                            data-bs-toggle="modal" data-bs-target="#deliverModal">
+                        <i class="fa fa-pen me-1"></i>Update Delivery
+                    </button>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Activity Timeline -->
         <div class="card">
             <div class="card-header fw-semibold">
@@ -1853,6 +2000,69 @@ $_modalDiscPct       = ($_modalListPrice > 0 && $_modalDiscount > 0)
 }());
 </script>
 
+<!-- Deliver Modal -->
+<div class="modal fade" id="deliverModal" tabindex="-1" aria-labelledby="deliverModalLabel">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(135deg,#14532d,#16a34a);color:#fff">
+                <h6 class="modal-title fw-bold" id="deliverModalLabel">
+                    <i class="fa fa-truck me-2"></i>Confirm Vehicle Delivery — <?= e($lead['name']) ?>
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="deliver_lead">
+                <div class="modal-body">
+                    <?php
+                    $dlvModalCar = $pinnedCar
+                        ? trim(($pinnedCar['year']??'').' '.($pinnedCar['make']??'').' '.($pinnedCar['model']??''))
+                        : ($lead['import_vehicle_details'] ?? ($lead['interested_in'] ?? ''));
+                    ?>
+                    <?php if ($dlvModalCar): ?>
+                    <div class="mb-3 p-3 rounded-3 fw-semibold" style="background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:14px">
+                        <i class="fa fa-car me-2"></i><?= e($dlvModalCar) ?>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">
+                                <i class="fa fa-calendar-check me-1 text-success"></i>Delivery Date
+                                <span class="text-danger">*</span>
+                            </label>
+                            <input type="date" name="delivery_date" class="form-control" required
+                                   value="<?= e($lead['delivered_at'] ? substr($lead['delivered_at'],0,10) : date('Y-m-d')) ?>">
+                            <div class="form-text text-muted">Date the vehicle is physically handed over to the buyer.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Delivery Notes <span class="text-muted fw-normal small">(optional)</span></label>
+                            <input type="text" name="delivery_notes" class="form-control"
+                                   placeholder="e.g. All keys handed over, full tank, spare tyre included…">
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex align-items-start gap-2 p-3 rounded-3"
+                                 style="background:#fef9c3;border:1px solid #fde047;font-size:13px">
+                                <i class="fa fa-triangle-exclamation text-warning mt-1 flex-shrink-0"></i>
+                                <div>
+                                    Confirming delivery will <strong>remove this vehicle from active inventory</strong>
+                                    and the website. A printable <strong>Delivery Note</strong> will be available
+                                    immediately after saving.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fa fa-truck me-1"></i>Confirm Delivery &amp; Generate Note
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Lost Reason Modal -->
 <div class="modal fade" id="lostModal" tabindex="-1">
     <div class="modal-dialog modal-sm">
@@ -2121,7 +2331,7 @@ $companyWa = getSetting('company_name', 'us');
 <script>
 // Move modals to <body> so they escape the page-body animation compositing layer
 document.addEventListener('DOMContentLoaded', function () {
-    ['scheduleTdModal', 'waTemplateModal', 'lostModal', 'reserveModal', 'importOrderModal'].forEach(function (id) {
+    ['scheduleTdModal', 'waTemplateModal', 'lostModal', 'reserveModal', 'importOrderModal', 'deliverModal'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el && el.parentNode !== document.body) document.body.appendChild(el);
     });

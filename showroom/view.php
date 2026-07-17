@@ -16,6 +16,7 @@ $stmt = $db->prepare("
     LEFT JOIN locations l  ON l.id  = c.location_id
     LEFT JOIN locations pl ON pl.id = l.parent_id
     WHERE c.id = ? AND c.car_type = 'inventory' AND c.show_on_website = 1
+      AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
 ");
 $stmt->execute([$id]);
 $car = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -33,6 +34,7 @@ $similar = $db->prepare("
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image
     FROM cars c
     WHERE c.car_type='inventory' AND c.show_on_website = 1 AND c.id != ?
+      AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
       AND (c.make = ? OR c.body_type = ?)
     ORDER BY c.featured DESC, c.created_at DESC LIMIT 3
 ");

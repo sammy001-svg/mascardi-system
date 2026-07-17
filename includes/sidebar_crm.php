@@ -171,6 +171,11 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
             </span>
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
+        <a href="<?= BASE_URL ?>/modules/delivered_cars/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/delivered_cars/') ? 'active' : '' ?>"
+           data-label="Delivered Cars">
+            <i class="fa fa-truck"></i><span>Delivered Cars</span>
+        </a>
 
         <!-- ══ COMMUNICATION ══════════════════════════════════════ -->
         <div class="nav-section">Communication</div>
