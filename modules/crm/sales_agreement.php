@@ -14,6 +14,7 @@ foreach ([
     "ALTER TABLE crm_leads ADD COLUMN deposit_date      DATE          NULL DEFAULT NULL",
     "ALTER TABLE crm_leads ADD COLUMN deposit_notes     TEXT          NULL DEFAULT NULL",
     "ALTER TABLE crm_leads ADD COLUMN agreed_sale_price DECIMAL(15,2) NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN due_date          DATE          NULL DEFAULT NULL",
     "ALTER TABLE clients   ADD COLUMN kra_pin           VARCHAR(20)   NULL",
 ] as $_sql) { try { $db->exec($_sql); } catch (\Throwable $_) {} }
 
@@ -100,7 +101,11 @@ function numWords(float $amt): string {
 $dateObj  = new DateTime($depDate ?: 'now');
 $day      = (int)$dateObj->format('j');
 $agmtDate = $day . _ordSuffix($day) . ' day of ' . $dateObj->format('F Y');
-$dueDate  = (clone $dateObj)->modify('+30 days')->format('d/m/Y');
+
+// Due date from manually entered value; fall back to blank if not yet set
+$dueDateRaw = $lead['due_date'] ?? '';
+$dueDate    = $dueDateRaw ? (new DateTime($dueDateRaw))->format('d/m/Y') : '';
+
 $agmtRef  = 'AGR-' . str_pad($leadId, 4, '0', STR_PAD_LEFT) . '-' . date('ymd');
 
 $pageTitle = 'Sales Agreement — ' . ($buyerName ?: 'Lead #' . $leadId);
@@ -285,8 +290,32 @@ include __DIR__ . '/../../includes/header.php';
                     <td><?= $agreedPrice > 0 ? 'KSH ' . number_format($agreedPrice, 0) . '/-' : '—' ?></td>
                 </tr>
                 <tr>
+                    <th>Deposit Paid</th>
+                    <td>
+                        <?php if ($deposit > 0): ?>
+                            KSH <?= number_format($deposit, 0) ?>/-
+                            <?php if ($depDate): ?>
+                                <span style="color:#555;font-size:11.5px">
+                                    (received <?= (new DateTime($depDate))->format('d M Y') ?>)
+                                </span>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            —
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Balance</th>
+                    <td style="font-weight:700">
+                        <?php
+                            $saBalance = max(0, $agreedPrice - $deposit);
+                            echo $agreedPrice > 0 ? 'KSH ' . number_format($saBalance, 0) . '/-' : '—';
+                        ?>
+                    </td>
+                </tr>
+                <tr>
                     <th>Due Date</th>
-                    <td><?= e($dueDate) ?></td>
+                    <td><?= $dueDate ? e($dueDate) : '<span style="color:#999">—</span>' ?></td>
                 </tr>
             </table>
             <p>The Buyer agrees to pay the full Purchase Price to the Seller as per the schedule above.

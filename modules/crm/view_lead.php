@@ -12,6 +12,7 @@ try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_amount DECIMAL(15,2) N
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_notes TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN agreed_sale_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN due_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 // Test drive & car extended fields
 try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars MODIFY COLUMN status ENUM('in_transit','arrived','in_assessment','in_workshop','completed','sold','delivered','reserved') DEFAULT 'in_transit'"); } catch (\Throwable $_) {}
@@ -221,6 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $depositAmt      = (float)($_POST['deposit_amount'] ?? 0);
         $depositNotes    = trim($_POST['deposit_notes'] ?? '') ?: null;
         $agreedSalePrice = (float)($_POST['agreed_sale_price'] ?? 0) ?: null;
+        $dueDate         = trim($_POST['due_date'] ?? '') ?: null;
         $db->prepare("
             UPDATE crm_leads
             SET stage='reserved',
@@ -229,9 +231,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 deposit_date      = CURDATE(),
                 deposit_notes     = ?,
                 agreed_sale_price = ?,
+                due_date          = ?,
                 updated_at        = NOW()
             WHERE id = ?
-        ")->execute([$reserveCarId, $depositAmt, $depositNotes, $agreedSalePrice, $id]);
+        ")->execute([$reserveCarId, $depositAmt, $depositNotes, $agreedSalePrice, $dueDate, $id]);
         require_once __DIR__ . '/../../includes/notifications.php';
         notifyRoles(['admin','sales_manager','general_manager'], 'sale',
             "Vehicle Reserved: {$lead['name']}",
@@ -1371,8 +1374,18 @@ $_modalDiscPct       = ($_modalListPrice > 0 && $_modalDiscount > 0)
                             <div class="form-text text-muted">Agreed price minus deposit.</div>
                         </div>
 
+                        <!-- Balance Due Date (manual entry) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                                Balance Due Date
+                                <span class="text-muted fw-normal small">(deadline for full payment)</span>
+                            </label>
+                            <input type="date" name="due_date" class="form-control"
+                                   value="<?= e($lead['due_date'] ?? '') ?>">
+                        </div>
+
                         <!-- Notes -->
-                        <div class="col-12">
+                        <div class="col-md-6">
                             <label class="form-label fw-semibold">Deposit Notes <span class="text-muted fw-normal small">(optional)</span></label>
                             <input type="text" name="deposit_notes" class="form-control"
                                    placeholder="e.g. Cash deposit received, M-Pesa ref #…"
