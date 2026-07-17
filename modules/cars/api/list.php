@@ -64,7 +64,7 @@ $orderSQL = isset($colMap[$oCol]) ? "{$colMap[$oCol]} {$oDir}" : 'c.created_at D
 if ($section === 'workshop') {
     $baseWhere = "c.status = 'in_workshop'";
 } elseif ($section === 'inventory') {
-    $baseWhere = "c.car_type = 'inventory'";
+    $baseWhere = "c.car_type = 'inventory' AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))";
 } else {
     $baseWhere = "c.car_type = 'client'";
 }

@@ -11,7 +11,7 @@ $supLocId  = supervisorLocationId();
 $locFilter = $supLocId ? " AND location_id = $supLocId" : '';
 
 // Three lightweight COUNT queries for tab badges — scoped for supervisors
-$cntInv  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='inventory'$locFilter")->fetchColumn();
+$cntInv  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='inventory' AND (status IS NULL OR status NOT IN ('delivered','sold'))$locFilter")->fetchColumn();
 $cntCli  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='client'$locFilter")->fetchColumn();
 $cntWork = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status='in_workshop'$locFilter")->fetchColumn();
 
