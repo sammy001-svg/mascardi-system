@@ -344,7 +344,6 @@ if (authRole() === 'supervisor') {
             <i class="fa fa-bullseye"></i><span>CRM Targets</span>
         </a>
         <?php endif; ?>
-        <?php if (canAccess('crm')): ?>
         <a href="<?= BASE_URL ?>/modules/reservations/index.php"
            class="nav-item <?= isActive('/modules/reservations/') ?>"
            data-label="Reservations"
