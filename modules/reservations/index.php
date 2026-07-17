@@ -447,11 +447,10 @@ include __DIR__ . '/../../includes/header.php';
             <div class="res-car-meta">
                 <?php
                 $meta = [];
-                if ($r['color'])               $meta[] = ucfirst($r['color']);
-                if ($r['registration_number']) $meta[] = $r['registration_number'];
-                if ($r['chassis_number'])      $meta[] = '<i class="fa fa-barcode" style="font-size:10px"></i> '.$r['chassis_number'];
-                echo implode(' &bull; ', array_map('e_html', $meta));
-                function e_html($s){ return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+                if ($r['color'])               $meta[] = e(ucfirst($r['color']));
+                if ($r['registration_number']) $meta[] = e($r['registration_number']);
+                if ($r['chassis_number'])      $meta[] = '<i class="fa fa-barcode" style="font-size:10px"></i> '.e($r['chassis_number']);
+                echo implode(' &bull; ', $meta);
                 ?>
             </div>
             <?php if ($agreed > 0): ?>
