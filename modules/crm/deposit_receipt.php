@@ -8,13 +8,15 @@ $me  = authUser();
 $uid = (int)$me['id'];
 
 foreach ([
-    "ALTER TABLE crm_leads ADD COLUMN pinned_car_id     INT           NULL DEFAULT NULL",
-    "ALTER TABLE crm_leads ADD COLUMN deposit_amount    DECIMAL(15,2) NULL DEFAULT NULL",
-    "ALTER TABLE crm_leads ADD COLUMN deposit_date      DATE          NULL DEFAULT NULL",
-    "ALTER TABLE crm_leads ADD COLUMN deposit_notes     TEXT          NULL DEFAULT NULL",
-    "ALTER TABLE crm_leads ADD COLUMN agreed_sale_price DECIMAL(15,2) NULL DEFAULT NULL",
-    "ALTER TABLE crm_leads ADD COLUMN due_date          DATE          NULL DEFAULT NULL",
-    "ALTER TABLE clients   ADD COLUMN kra_pin           VARCHAR(20)   NULL",
+    "ALTER TABLE crm_leads ADD COLUMN pinned_car_id          INT           NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN deposit_amount         DECIMAL(15,2) NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN deposit_date           DATE          NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN deposit_notes          TEXT          NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN agreed_sale_price      DECIMAL(15,2) NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN due_date               DATE          NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN import_vehicle_details TEXT          NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN expected_arrival_date  DATE          NULL DEFAULT NULL",
+    "ALTER TABLE clients   ADD COLUMN kra_pin                VARCHAR(20)   NULL",
 ] as $_sql) { try { $db->exec($_sql); } catch (\Throwable $_) {} }
 
 $leadId = (int)($_GET['lead_id'] ?? 0);
@@ -94,9 +96,13 @@ function drNumWords(float $amt): string {
 
 $receiptNo = 'DR-' . str_pad($leadId, 4, '0', STR_PAD_LEFT) . '-' . date('ymd');
 $today     = date('d/m/Y');
-$carDesc   = $car
-    ? trim(($car['year'] ?? '') . ' ' . ($car['make'] ?? '') . ' ' . ($car['model'] ?? ''))
-    : ($lead['interested_in'] ?? '');
+if (!empty($lead['import_vehicle_details'])) {
+    $carDesc = $lead['import_vehicle_details'];
+} elseif ($car) {
+    $carDesc = trim(($car['year'] ?? '') . ' ' . ($car['make'] ?? '') . ' ' . ($car['model'] ?? ''));
+} else {
+    $carDesc = $lead['interested_in'] ?? '';
+}
 
 $pageTitle = 'Deposit Receipt — ' . $buyerName;
 include __DIR__ . '/../../includes/header.php';
@@ -206,9 +212,13 @@ include __DIR__ . '/../../includes/header.php';
         <tr>
             <th>Being Payment For</th>
             <td>
-                Reservation deposit for <strong><?= e($carDesc) ?></strong>
+                <?= ($lead['stage'] ?? '') === 'import_order' ? 'Import Order deposit for' : 'Reservation deposit for' ?>
+                <strong><?= e($carDesc) ?></strong>
                 <?php if ($car && !empty($car['chassis_number'])): ?>
                 <br><span style="font-size:11.5px;color:#444">Chassis: <?= e($car['chassis_number']) ?></span>
+                <?php endif; ?>
+                <?php if (!empty($lead['expected_arrival_date'])): ?>
+                <br><span style="font-size:11.5px;color:#444">Expected Arrival: <?= (new DateTime($lead['expected_arrival_date']))->format('d M Y') ?></span>
                 <?php endif; ?>
                 <?php if (!empty($lead['deposit_notes'])): ?>
                 <br><span style="font-size:11.5px;color:#444">Ref: <?= e($lead['deposit_notes']) ?></span>

@@ -13,6 +13,8 @@ try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_date DATE NULL DEFAULT
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_notes TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN agreed_sale_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN due_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN import_vehicle_details TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN expected_arrival_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 // Test drive & car extended fields
 try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars MODIFY COLUMN status ENUM('in_transit','arrived','in_assessment','in_workshop','completed','sold','delivered','reserved') DEFAULT 'in_transit'"); } catch (\Throwable $_) {}
@@ -51,8 +53,9 @@ $stages = [
     'lukewarm'  => ['Lukewarm',  'warning',   'fa-temperature-half'],
     'cold'      => ['Cold',      'info',      'fa-snowflake'],
     'lost'      => ['Lost',      'secondary', 'fa-circle-xmark'],
-    'reserved'  => ['Reserved',  'purple',    'fa-bookmark'],
-    'delivered' => ['Delivered', 'success',   'fa-truck'],
+    'reserved'     => ['Reserved',     'purple',  'fa-bookmark'],
+    'import_order' => ['Import Order', 'warning', 'fa-ship'],
+    'delivered'    => ['Delivered',    'success', 'fa-truck'],
 ];
 
 $activityTypes = [
@@ -243,6 +246,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         logActivity('update', 'crm_leads', $id, "Lead reserved. Deposit: " . number_format($depositAmt, 2));
         setFlash('success', 'Vehicle reserved. Proforma Invoice and Sales Agreement are ready below.');
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
+    if ($action === 'import_order_lead' && canWrite('crm')) {
+        $importVehicle = trim($_POST['import_vehicle_details'] ?? '') ?: null;
+        $expectedArr   = trim($_POST['expected_arrival_date'] ?? '') ?: null;
+        $depositAmt    = (float)($_POST['deposit_amount'] ?? 0);
+        $depositNotes  = trim($_POST['deposit_notes'] ?? '') ?: null;
+        $agreedPrice   = (float)($_POST['agreed_sale_price'] ?? 0) ?: null;
+        $dueDate       = trim($_POST['due_date'] ?? '') ?: null;
+        $db->prepare("
+            UPDATE crm_leads
+            SET stage                  = 'import_order',
+                import_vehicle_details = ?,
+                expected_arrival_date  = ?,
+                deposit_amount         = ?,
+                deposit_date           = CURDATE(),
+                deposit_notes          = ?,
+                agreed_sale_price      = ?,
+                due_date               = ?,
+                updated_at             = NOW()
+            WHERE id = ?
+        ")->execute([$importVehicle, $expectedArr, $depositAmt, $depositNotes, $agreedPrice, $dueDate, $id]);
+        require_once __DIR__ . '/../../includes/notifications.php';
+        notifyRoles(['admin','sales_manager','general_manager'], 'sale',
+            "Import Order: {$lead['name']}",
+            ($importVehicle ? $importVehicle . ' — ' : '') . "Deposit: " . money($depositAmt),
+            BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+        );
+        logActivity('update', 'crm_leads', $id, "Import order created. Vehicle: " . ($importVehicle ?? '—') . ". Deposit: " . number_format($depositAmt, 2));
+        setFlash('success', 'Import Order saved. Documents are ready below.');
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
     }
 
@@ -539,6 +573,12 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         <button type="button"
                                 class="btn btn-sm <?= $lead['stage'] === $sk ? 'btn-'.$sc : 'btn-outline-'.$sc ?>"
                                 data-bs-toggle="modal" data-bs-target="#reserveModal">
+                            <i class="fa <?= $si ?> me-1"></i><?= $sl ?>
+                        </button>
+                        <?php elseif ($sk === 'import_order'): ?>
+                        <button type="button"
+                                class="btn btn-sm <?= $lead['stage'] === $sk ? 'btn-'.$sc : 'btn-outline-'.$sc ?>"
+                                data-bs-toggle="modal" data-bs-target="#importOrderModal">
                             <i class="fa <?= $si ?> me-1"></i><?= $sl ?>
                         </button>
                         <?php else: ?>
@@ -1187,6 +1227,120 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
         </div>
         <?php endif; ?>
 
+        <!-- Import Order Summary (shown only when stage = import_order) -->
+        <?php if ($lead['stage'] === 'import_order'): ?>
+        <?php
+        $ioDepAmt   = (float)($lead['deposit_amount']       ?? 0);
+        $ioDepDate  = $lead['deposit_date']                  ?? date('Y-m-d');
+        $ioAgreed   = (float)($lead['agreed_sale_price']     ?? 0);
+        $ioBalance  = max(0, $ioAgreed - $ioDepAmt);
+        $ioVehicle  = $lead['import_vehicle_details']        ?? '';
+        $ioArrival  = $lead['expected_arrival_date']         ?? '';
+        $ioDueDate  = $lead['due_date']                      ?? '';
+        ?>
+        <div class="card mb-4" style="border-color:#d97706;border-width:2px">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2"
+                 style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-bottom-color:#fde68a">
+                <span style="color:#92400e">
+                    <i class="fa fa-ship me-2"></i>Import Order Summary
+                </span>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="proforma.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="fa fa-file-invoice me-1"></i>Proforma
+                    </a>
+                    <a href="sales_agreement.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-success">
+                        <i class="fa fa-file-signature me-1"></i>Agreement
+                    </a>
+                    <a href="deposit_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-warning">
+                        <i class="fa fa-receipt me-1"></i>Deposit Receipt
+                    </a>
+                    <a href="sales_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-info">
+                        <i class="fa fa-file-invoice-dollar me-1"></i>Sales Receipt
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <?php if ($ioVehicle): ?>
+                <div class="mb-3 p-3 rounded-3" style="background:#fffbeb;border:1px solid #fde68a">
+                    <div class="text-muted small fw-semibold mb-1">
+                        <i class="fa fa-car me-1"></i>Vehicle on Order
+                    </div>
+                    <div class="fw-bold" style="font-size:15px;color:#92400e"><?= e($ioVehicle) ?></div>
+                </div>
+                <?php endif; ?>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <div class="rounded-3 p-3 text-center" style="background:#eff6ff;border:1px solid #bfdbfe">
+                            <div class="text-muted small mb-1">Agreed Sale Price</div>
+                            <div class="fw-bold" style="font-size:20px;color:#1d4ed8">
+                                <?= $ioAgreed > 0 ? money($ioAgreed) : '—' ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="rounded-3 p-3 text-center" style="background:#f0fdf4;border:1px solid #bbf7d0">
+                            <div class="text-muted small mb-1">Deposit Paid</div>
+                            <div class="fw-bold text-success" style="font-size:20px"><?= money($ioDepAmt) ?></div>
+                            <div class="text-muted" style="font-size:11px"><?= fmtDate($ioDepDate,'d M Y') ?></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="rounded-3 p-3 text-center" style="background:#fff7ed;border:1px solid #fed7aa">
+                            <div class="text-muted small mb-1">Balance Due</div>
+                            <div class="fw-bold" style="font-size:20px;color:#c2410c">
+                                <?= $ioAgreed > 0 ? money($ioBalance) : '—' ?>
+                            </div>
+                            <?php if ($ioDueDate): ?>
+                            <div class="text-muted" style="font-size:11px">by <?= fmtDate($ioDueDate,'d M Y') ?></div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="rounded-3 p-3 text-center" style="background:#fffbeb;border:1px solid #fde68a">
+                            <div class="text-muted small mb-1">
+                                <i class="fa fa-calendar-check me-1"></i>Expected Arrival
+                            </div>
+                            <div class="fw-bold" style="font-size:16px;color:#92400e">
+                                <?= $ioArrival ? fmtDate($ioArrival,'d M Y') : '—' ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php if ($lead['deposit_notes']): ?>
+                <div class="text-muted small fst-italic border-top pt-2 mb-3">
+                    <i class="fa fa-note-sticky me-1"></i><?= e($lead['deposit_notes']) ?>
+                </div>
+                <?php endif; ?>
+                <div class="border-top pt-3 mt-2 d-flex gap-2 flex-wrap align-items-center">
+                    <a href="proforma.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="fa fa-file-invoice me-1"></i>Proforma Invoice
+                    </a>
+                    <a href="sales_agreement.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-outline-success btn-sm">
+                        <i class="fa fa-file-signature me-1"></i>Sales Agreement
+                    </a>
+                    <a href="deposit_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-warning btn-sm">
+                        <i class="fa fa-receipt me-1"></i>Deposit Receipt
+                    </a>
+                    <a href="sales_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-info btn-sm text-white">
+                        <i class="fa fa-file-invoice-dollar me-1"></i>Sales Receipt
+                    </a>
+                    <button type="button" class="btn btn-outline-secondary btn-sm ms-auto"
+                            data-bs-toggle="modal" data-bs-target="#importOrderModal">
+                        <i class="fa fa-pen me-1"></i>Update Import Order
+                    </button>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Activity Timeline -->
         <div class="card">
             <div class="card-header fw-semibold">
@@ -1504,6 +1658,157 @@ $_modalDiscPct       = ($_modalListPrice > 0 && $_modalDiscount > 0)
     saleEl.addEventListener('input', recompute);
     depEl.addEventListener('input',  recompute);
     recompute(); // init on page load
+}());
+</script>
+
+<!-- Import Order Modal -->
+<div class="modal fade" id="importOrderModal" tabindex="-1" aria-labelledby="importOrderModalLabel">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(135deg,#78350f,#d97706);color:#fff">
+                <h6 class="modal-title fw-bold" id="importOrderModalLabel">
+                    <i class="fa fa-ship me-2"></i>Import Order — <?= e($lead['name']) ?>
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="import_order_lead">
+                <div class="modal-body">
+                    <div class="row g-3">
+
+                        <!-- Vehicle Description -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">
+                                <i class="fa fa-car me-1 text-warning"></i>Vehicle Details
+                                <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="import_vehicle_details" id="ioVehicleDetails"
+                                      class="form-control" rows="2" required
+                                      placeholder="e.g. 2024 Toyota Land Cruiser 300 GR Sport, White, Petrol, 3.5L Twin Turbo"><?= e($lead['import_vehicle_details'] ?? '') ?></textarea>
+                            <div class="form-text text-muted">Describe the vehicle being ordered — make, model, year, specs, colour.</div>
+                        </div>
+
+                        <!-- Divider -->
+                        <div class="col-12"><hr class="my-1"><small class="text-muted fw-semibold text-uppercase" style="letter-spacing:.06em">Pricing</small></div>
+
+                        <!-- Agreed Sale Price -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                                Agreed Sale Price <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text text-muted small">KES</span>
+                                <input type="number" name="agreed_sale_price" id="ioSalePrice"
+                                       class="form-control" min="0" step="any" required
+                                       value="<?= (float)($lead['agreed_sale_price'] ?? 0) ?: '' ?>"
+                                       placeholder="e.g. 8,500,000">
+                            </div>
+                        </div>
+
+                        <!-- Deposit Amount -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                                Deposit Amount <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text text-muted small">KES</span>
+                                <input type="number" name="deposit_amount" id="ioDepositAmt"
+                                       class="form-control" min="0" step="any" required
+                                       value="<?= (float)($lead['deposit_amount'] ?? 0) ?: '' ?>"
+                                       placeholder="e.g. 500,000">
+                            </div>
+                        </div>
+
+                        <!-- Balance (computed) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Balance Due</label>
+                            <div class="input-group">
+                                <span class="input-group-text text-muted small">KES</span>
+                                <input type="text" id="ioBalance" class="form-control bg-light fw-bold"
+                                       readonly placeholder="Auto-calculated" style="color:#c2410c">
+                            </div>
+                            <div class="form-text text-muted">Agreed price minus deposit.</div>
+                        </div>
+
+                        <!-- Balance Due Date -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                                Balance Due Date
+                                <span class="text-muted fw-normal small">(deadline for full payment)</span>
+                            </label>
+                            <input type="date" name="due_date" class="form-control"
+                                   value="<?= e($lead['due_date'] ?? '') ?>">
+                        </div>
+
+                        <!-- Divider -->
+                        <div class="col-12"><hr class="my-1"><small class="text-muted fw-semibold text-uppercase" style="letter-spacing:.06em">Import Details</small></div>
+
+                        <!-- Expected Arrival Date -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                                <i class="fa fa-calendar-check me-1 text-warning"></i>Expected Arrival Date
+                                <span class="text-danger">*</span>
+                            </label>
+                            <input type="date" name="expected_arrival_date" class="form-control" required
+                                   value="<?= e($lead['expected_arrival_date'] ?? '') ?>">
+                            <div class="form-text text-muted">Estimated date the vehicle arrives in the country.</div>
+                        </div>
+
+                        <!-- Deposit Notes -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Payment Notes <span class="text-muted fw-normal small">(optional)</span></label>
+                            <input type="text" name="deposit_notes" class="form-control"
+                                   placeholder="e.g. M-Pesa ref #, bank transfer ref…"
+                                   value="<?= e($lead['deposit_notes'] ?? '') ?>">
+                        </div>
+
+                        <!-- Info banner -->
+                        <div class="col-12">
+                            <div class="d-flex align-items-start gap-2 p-3 rounded-3"
+                                 style="background:#fffbeb;border:1px solid #fde68a;font-size:13px">
+                                <i class="fa fa-circle-info text-warning mt-1 flex-shrink-0"></i>
+                                <div>
+                                    Saving this will mark the lead as <strong>Import Order</strong> and
+                                    make the deposit receipt, proforma, and sales agreement available
+                                    with the vehicle and pricing details entered above.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fa fa-ship me-1"></i>Save Import Order
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var saleEl = document.getElementById('ioSalePrice');
+    var depEl  = document.getElementById('ioDepositAmt');
+    var balEl  = document.getElementById('ioBalance');
+    if (!saleEl || !depEl || !balEl) return;
+
+    function fmt(n) {
+        return n > 0 ? n.toLocaleString('en-KE', {minimumFractionDigits:0, maximumFractionDigits:0}) : '';
+    }
+
+    function recompute() {
+        var sale = parseFloat(saleEl.value) || 0;
+        var dep  = parseFloat(depEl.value)  || 0;
+        var bal  = Math.max(0, sale - dep);
+        balEl.value = fmt(bal);
+        balEl.style.color = bal > 0 ? '#c2410c' : '#16a34a';
+    }
+
+    saleEl.addEventListener('input', recompute);
+    depEl.addEventListener('input',  recompute);
+    recompute();
 }());
 </script>
 
