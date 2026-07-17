@@ -109,6 +109,20 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
 function _logEmail(string $to, string $toName, string $subject, string $status, string $error, string $refType, int $refId): void {
     try {
         $db   = getDB();
+        $db->exec("CREATE TABLE IF NOT EXISTS email_logs (
+            id             INT AUTO_INCREMENT PRIMARY KEY,
+            to_email       VARCHAR(255) NOT NULL,
+            to_name        VARCHAR(255),
+            subject        VARCHAR(500),
+            status         VARCHAR(20) DEFAULT 'sent',
+            error_message  TEXT,
+            reference_type VARCHAR(50),
+            reference_id   INT,
+            sent_by        VARCHAR(100),
+            created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_ref    (reference_type, reference_id),
+            INDEX idx_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         $auth = authUser();
         $by   = $auth ? $auth['name'] : 'system';
         $db->prepare("INSERT INTO email_logs (to_email,to_name,subject,status,error_message,reference_type,reference_id,sent_by) VALUES (?,?,?,?,?,?,?,?)")

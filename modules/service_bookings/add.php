@@ -128,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 BASE_URL . '/modules/service_bookings/view.php?id=' . $newId
             );
             // Confirmation email to client
-            if ($d['client_email'] && filter_var($d['client_email'], FILTER_VALIDATE_EMAIL)) {
+            if (getSetting('alert_email_booking', '1') === '1' && $d['client_email'] && filter_var($d['client_email'], FILTER_VALIDATE_EMAIL)) {
                 $company = getSetting('company_name', 'Mascardi System');
                 $subj    = "Booking Confirmation — {$bNum}";
                 $dateStr = $d['preferred_date'] ? date('d M Y', strtotime($d['preferred_date'])) : 'To be confirmed';

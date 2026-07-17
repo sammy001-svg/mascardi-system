@@ -25,23 +25,40 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     // ── SMS / WhatsApp owner notification on job complete ─────────────────────
     if ($data['status'] === 'completed') {
         try {
-            $ownerQ = $db->prepare("SELECT buyer_name, buyer_phone FROM car_sales WHERE car_id=? ORDER BY created_at DESC LIMIT 1");
+            $ownerQ = $db->prepare("SELECT buyer_name, buyer_phone, buyer_email FROM car_sales WHERE car_id=? ORDER BY created_at DESC LIMIT 1");
             $ownerQ->execute([$job['car_id']]);
             $owner = $ownerQ->fetch();
-            if ($owner && !empty($owner['buyer_phone'])) {
+            if ($owner) {
                 $co      = getSetting('company_name', 'Mascardi');
                 $vehicle = "{$job['make']} {$job['model']} {$job['year']}";
-                if (getSetting('alert_sms_job_complete', '0') === '1') {
-                    require_once __DIR__ . '/../../includes/sms.php';
-                    sendSms($owner['buyer_phone'],
-                        "Hi {$owner['buyer_name']}, your {$vehicle} workshop job {$job['job_number']} is complete. Contact {$co} to arrange collection.",
-                        'job', $id);
+                if (!empty($owner['buyer_phone'])) {
+                    if (getSetting('alert_sms_job_complete', '0') === '1') {
+                        require_once __DIR__ . '/../../includes/sms.php';
+                        sendSms($owner['buyer_phone'],
+                            "Hi {$owner['buyer_name']}, your {$vehicle} workshop job {$job['job_number']} is complete. Contact {$co} to arrange collection.",
+                            'job', $id);
+                    }
+                    if (getSetting('alert_whatsapp_job_complete', '0') === '1') {
+                        require_once __DIR__ . '/../../includes/whatsapp.php';
+                        sendWhatsApp($owner['buyer_phone'],
+                            "*Job Complete — {$co}*\n\nHi {$owner['buyer_name']},\n\nYour *{$vehicle}* (Job: {$job['job_number']}) has been completed and is ready for collection.\n\nContact us to arrange pickup.",
+                            'job', $id);
+                    }
                 }
-                if (getSetting('alert_whatsapp_job_complete', '0') === '1') {
-                    require_once __DIR__ . '/../../includes/whatsapp.php';
-                    sendWhatsApp($owner['buyer_phone'],
-                        "*Job Complete — {$co}*\n\nHi {$owner['buyer_name']},\n\nYour *{$vehicle}* (Job: {$job['job_number']}) has been completed and is ready for collection.\n\nContact us to arrange pickup.",
-                        'job', $id);
+                if (!empty($owner['buyer_email']) && filter_var($owner['buyer_email'], FILTER_VALIDATE_EMAIL)) {
+                    if (getSetting('alert_email_job_complete', '0') === '1') {
+                        require_once __DIR__ . '/../../includes/mailer.php';
+                        $subj = "Workshop Job Complete — {$job['job_number']}";
+                        $body = "<p>Dear " . htmlspecialchars($owner['buyer_name']) . ",</p>
+                                 <p>Great news — your vehicle is ready for collection. Here are the details:</p>
+                                 <table class='data'>
+                                   <tr><th>Job No.</th><td><strong>" . htmlspecialchars($job['job_number']) . "</strong></td></tr>
+                                   <tr><th>Vehicle</th><td>" . htmlspecialchars($vehicle) . "</td></tr>
+                                   <tr><th>Status</th><td><strong style='color:#16a34a'>Completed</strong></td></tr>
+                                 </table>
+                                 <p>Please contact us to arrange collection at your convenience. Thank you for choosing <strong>" . htmlspecialchars($co) . "</strong>.</p>";
+                        sendMail($owner['buyer_email'], $owner['buyer_name'], $subj, mailTemplate($subj, $body), 'job', $id);
+                    }
                 }
             }
         } catch (\Throwable $_) {}

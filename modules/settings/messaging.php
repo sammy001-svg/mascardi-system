@@ -6,7 +6,7 @@ requireRole('admin');
 $pageTitle = 'Messaging & Alerts';
 $db        = getDB();
 
-// ── Inline sms_log migration ──────────────────────────────────────────────────
+// ── Table migrations ──────────────────────────────────────────────────────────
 try { $db->exec("CREATE TABLE IF NOT EXISTS sms_log (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     channel    VARCHAR(20) DEFAULT 'sms',
@@ -18,6 +18,21 @@ try { $db->exec("CREATE TABLE IF NOT EXISTS sms_log (
     response   TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_ref (ref_type, ref_id),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $_) {}
+
+try { $db->exec("CREATE TABLE IF NOT EXISTS email_logs (
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    to_email       VARCHAR(255) NOT NULL,
+    to_name        VARCHAR(255),
+    subject        VARCHAR(500),
+    status         VARCHAR(20) DEFAULT 'sent',
+    error_message  TEXT,
+    reference_type VARCHAR(50),
+    reference_id   INT,
+    sent_by        VARCHAR(100),
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ref    (reference_type, reference_id),
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $_) {}
 
@@ -36,7 +51,13 @@ $ruleEvents = [
     'payment'      => 'Payment Received',
     'booking'      => 'Service Booking Confirmed',
 ];
-$ruleChannels = ['sms', 'whatsapp'];
+$smsWaChannels = ['sms', 'whatsapp'];
+$emailDefaults = [
+    'alert_email_sale'         => '0',
+    'alert_email_job_complete' => '0',
+    'alert_email_payment'      => '1',
+    'alert_email_booking'      => '1',
+];
 
 $rows     = $db->query("SELECT setting_key, setting_value FROM settings")->fetchAll();
 $settings = array_column($rows, 'setting_value', 'setting_key');
@@ -46,10 +67,13 @@ foreach ($credKeys as $k => $v) {
     if (!array_key_exists($k, $settings)) { $stmt->execute([$k, $v]); $settings[$k] = $v; }
 }
 foreach ($ruleEvents as $ev => $_) {
-    foreach ($ruleChannels as $ch) {
+    foreach ($smsWaChannels as $ch) {
         $key = "alert_{$ch}_{$ev}";
         if (!array_key_exists($key, $settings)) { $stmt->execute([$key, '0']); $settings[$key] = '0'; }
     }
+}
+foreach ($emailDefaults as $k => $v) {
+    if (!array_key_exists($k, $settings)) { $stmt->execute([$k, $v]); $settings[$k] = $v; }
 }
 
 $activeTab = $_GET['tab'] ?? 'credentials';
@@ -63,7 +87,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
         'twilio_sid'     => trim($_POST['twilio_sid']     ?? ''),
         'twilio_wa_from' => trim($_POST['twilio_wa_from'] ?? ''),
     ];
-    // Never overwrite secrets with blank — only update if provided
     if (!empty($_POST['at_api_key']))    $updates['at_api_key']    = trim($_POST['at_api_key']);
     if (!empty($_POST['twilio_token'])) $updates['twilio_token'] = trim($_POST['twilio_token']);
     foreach ($updates as $k => $v) { $uStmt->execute([$k, $v]); $settings[$k] = $v; }
@@ -75,12 +98,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_rules') {
     $uStmt = $db->prepare("INSERT INTO settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
     foreach ($ruleEvents as $ev => $_) {
-        foreach ($ruleChannels as $ch) {
+        foreach ($smsWaChannels as $ch) {
             $key = "alert_{$ch}_{$ev}";
             $val = isset($_POST[$key]) ? '1' : '0';
             $uStmt->execute([$key, $val]);
             $settings[$key] = $val;
         }
+        $emailKey = "alert_email_{$ev}";
+        $emailVal = isset($_POST[$emailKey]) ? '1' : '0';
+        $uStmt->execute([$emailKey, $emailVal]);
+        $settings[$emailKey] = $emailVal;
     }
     setFlash('success', 'Alert rules saved.');
     redirect(BASE_URL . '/modules/settings/messaging.php?tab=rules');
@@ -110,19 +137,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'test_
     exit;
 }
 
-// ── Recent SMS log ────────────────────────────────────────────────────────────
+// ── POST: test Email ──────────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'test_email') {
+    header('Content-Type: application/json');
+    require_once __DIR__ . '/../../includes/mailer.php';
+    $toEmail = trim($_POST['email'] ?? '');
+    if (!$toEmail || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+        echo json_encode(['ok' => false, 'error' => 'Valid email address required']); exit;
+    }
+    $co   = getSetting('company_name', 'Mascardi');
+    $subj = "Test Email from {$co}";
+    $body = "<p>This is a test email from the <strong>{$co}</strong> Management System.</p>
+             <p>If you received this, your SMTP email configuration is working correctly.</p>";
+    $result = sendMail($toEmail, $toEmail, $subj, mailTemplate($subj, $body), 'test', 0);
+    echo json_encode($result);
+    exit;
+}
+
+// ── Log data ──────────────────────────────────────────────────────────────────
 $logPage   = max(1, (int)($_GET['lpage'] ?? 1));
 $logPer    = 30;
 $logOffset = ($logPage - 1) * $logPer;
-try {
-    $logTotal = (int)$db->query("SELECT COUNT(*) FROM sms_log")->fetchColumn();
-    $logs     = $db->query("SELECT * FROM sms_log ORDER BY created_at DESC LIMIT $logPer OFFSET $logOffset")->fetchAll();
-} catch (\Throwable $_) {
-    $logTotal = 0; $logs = [];
-}
 
-$smsOk = !empty($settings['at_api_key']) && !empty($settings['at_username']);
-$waOk  = !empty($settings['twilio_sid']) && !empty($settings['twilio_token']) && !empty($settings['twilio_wa_from']);
+try {
+    $smsTotal   = (int)$db->query("SELECT COUNT(*) FROM sms_log")->fetchColumn();
+    $smsList    = $db->query("SELECT channel, phone AS recipient, message AS content, ref_type, ref_id, status, created_at FROM sms_log")->fetchAll();
+} catch (\Throwable $_) { $smsTotal = 0; $smsList = []; }
+
+try {
+    $emailTotal = (int)$db->query("SELECT COUNT(*) FROM email_logs")->fetchColumn();
+    $emailList  = $db->query("SELECT 'email' AS channel, to_email AS recipient, subject AS content, reference_type AS ref_type, reference_id AS ref_id, status, created_at FROM email_logs")->fetchAll();
+} catch (\Throwable $_) { $emailTotal = 0; $emailList = []; }
+
+$logTotal = $smsTotal + $emailTotal;
+$combined = array_merge($smsList, $emailList);
+usort($combined, fn($a, $b) => strtotime($b['created_at']) - strtotime($a['created_at']));
+$logs = array_slice($combined, $logOffset, $logPer);
+
+$smsOk   = !empty($settings['at_api_key']) && !empty($settings['at_username']);
+$waOk    = !empty($settings['twilio_sid']) && !empty($settings['twilio_token']) && !empty($settings['twilio_wa_from']);
+$emailOk = !empty($settings['smtp_from_email']) && !empty($settings['smtp_host']);
 
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -130,7 +184,7 @@ include __DIR__ . '/../../includes/header.php';
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h5 class="mb-1"><i class="fa fa-comment-sms me-2 text-primary"></i>Messaging & Alerts</h5>
-        <div class="text-muted small">Configure SMS and WhatsApp integrations and alert channel rules</div>
+        <div class="text-muted small">Configure SMS, WhatsApp, and Email integrations and alert channel rules</div>
     </div>
     <a href="index.php" class="btn btn-sm btn-outline-secondary">
         <i class="fa fa-arrow-left me-1"></i>Back to Settings
@@ -153,6 +207,14 @@ include __DIR__ . '/../../includes/header.php';
                 <?= $waOk ? 'Active' : 'Not Configured' ?>
             </span>
             <i class="fa fa-brands fa-whatsapp" style="color:#25d366"></i> WhatsApp via Twilio
+        </div>
+    </div>
+    <div class="col-auto">
+        <div class="d-flex align-items-center gap-2 px-3 py-2 rounded border" style="font-size:13px">
+            <span class="badge bg-<?= $emailOk ? 'success' : 'secondary' ?>" style="font-size:10px">
+                <?= $emailOk ? 'Active' : 'Not Configured' ?>
+            </span>
+            <i class="fa fa-envelope" style="color:#6366f1"></i> Email via SMTP
         </div>
     </div>
     <div class="col-auto">
@@ -202,7 +264,6 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="alert alert-info py-2 small mb-3">
                     <i class="fa fa-info-circle me-1"></i>
                     Get credentials at <strong>africastalking.com</strong> → Account → API Keys.
-                    Use a <strong>Sandbox</strong> account for testing first.
                 </div>
                 <div class="mb-3">
                     <label class="form-label">API Key <span class="text-danger">*</span></label>
@@ -210,7 +271,7 @@ include __DIR__ . '/../../includes/header.php';
                            placeholder="<?= $smsOk ? '•••••••• (unchanged if blank)' : 'atsk_xxxxxxxx' ?>"
                            autocomplete="new-password">
                     <?php if ($smsOk): ?>
-                    <div class="form-text text-success"><i class="fa fa-check-circle me-1"></i>API key is saved. Leave blank to keep current.</div>
+                    <div class="form-text text-success"><i class="fa fa-check-circle me-1"></i>API key is saved.</div>
                     <?php endif; ?>
                 </div>
                 <div class="mb-3">
@@ -218,20 +279,15 @@ include __DIR__ . '/../../includes/header.php';
                     <input type="text" name="at_username" class="form-control"
                            placeholder="sandbox or your AT username"
                            value="<?= e($settings['at_username'] ?? '') ?>">
-                    <div class="form-text">Use <code>sandbox</code> for testing.</div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Sender ID <span class="text-muted">(optional)</span></label>
                     <input type="text" name="at_sender_id" class="form-control"
-                           placeholder="MASCARDI or leave blank for shared"
+                           placeholder="MASCARDI or leave blank"
                            value="<?= e($settings['at_sender_id'] ?? '') ?>">
-                    <div class="form-text">Alphanumeric, max 11 chars. Must be registered with AT.</div>
                 </div>
-
-                <!-- Test SMS -->
                 <div class="border rounded p-3 bg-light">
                     <div class="fw-semibold small mb-2"><i class="fa fa-flask me-1"></i>Test SMS</div>
-                    <p class="text-muted small mb-2">Save credentials first, then test.</p>
                     <div class="input-group input-group-sm">
                         <input type="text" id="testSmsPhone" class="form-control" placeholder="+254712345678">
                         <button type="button" class="btn btn-outline-primary" id="btnTestSms">Send Test</button>
@@ -255,8 +311,7 @@ include __DIR__ . '/../../includes/header.php';
             <div class="card-body">
                 <div class="alert alert-info py-2 small mb-3">
                     <i class="fa fa-info-circle me-1"></i>
-                    Get credentials at <strong>twilio.com</strong> → Console → Account Info.
-                    Enable the <strong>WhatsApp Sandbox</strong> under Messaging for testing.
+                    Get credentials at <strong>twilio.com</strong> → Console.
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Account SID <span class="text-danger">*</span></label>
@@ -276,21 +331,17 @@ include __DIR__ . '/../../includes/header.php';
                         </button>
                     </div>
                     <?php if ($waOk): ?>
-                    <div class="form-text text-success"><i class="fa fa-check-circle me-1"></i>Token saved. Leave blank to keep current.</div>
+                    <div class="form-text text-success"><i class="fa fa-check-circle me-1"></i>Token saved.</div>
                     <?php endif; ?>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">WhatsApp From Number <span class="text-danger">*</span></label>
                     <input type="text" name="twilio_wa_from" class="form-control"
-                           placeholder="+14155238886 or whatsapp:+14155238886"
+                           placeholder="+14155238886"
                            value="<?= e($settings['twilio_wa_from'] ?? '') ?>">
-                    <div class="form-text">Twilio sandbox number or your approved WhatsApp Business number.</div>
                 </div>
-
-                <!-- Test WhatsApp -->
                 <div class="border rounded p-3 bg-light">
                     <div class="fw-semibold small mb-2"><i class="fa fa-flask me-1"></i>Test WhatsApp</div>
-                    <p class="text-muted small mb-2">Save credentials first, then test. For sandbox, the recipient must join first.</p>
                     <div class="input-group input-group-sm">
                         <input type="text" id="testWaPhone" class="form-control" placeholder="+254712345678">
                         <button type="button" class="btn btn-outline-success" id="btnTestWa">Send Test</button>
@@ -301,9 +352,53 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 
+    <!-- Email SMTP note -->
+    <div class="col-12">
+        <div class="card border-<?= $emailOk ? 'success' : 'warning' ?>">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="fa fa-envelope" style="color:#6366f1"></i>
+                <span class="fw-semibold">Email — SMTP</span>
+                <span class="badge bg-<?= $emailOk ? 'success' : 'warning text-dark' ?> ms-auto" style="font-size:10px">
+                    <?= $emailOk ? 'Configured' : 'Not Set' ?>
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-8">
+                        <?php if ($emailOk): ?>
+                        <p class="mb-1 text-success"><i class="fa fa-check-circle me-1"></i>
+                            SMTP is configured — sending from <strong><?= e($settings['smtp_from_email']) ?></strong> via <strong><?= e($settings['smtp_host']) ?></strong>.
+                        </p>
+                        <p class="text-muted small mb-0">Email alert rules are available. Go to the <strong>Alert Rules</strong> tab to enable email notifications per event.</p>
+                        <?php else: ?>
+                        <p class="mb-1 text-warning"><i class="fa fa-triangle-exclamation me-1"></i>
+                            SMTP is not yet configured. Email alert rules will be disabled until credentials are saved.
+                        </p>
+                        <p class="text-muted small mb-0">Configure your SMTP credentials in <strong>Settings → Email</strong> then return here to enable email alerts.</p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <a href="index.php?tab=email" class="btn btn-outline-primary btn-sm">
+                            <i class="fa fa-gear me-1"></i>Configure SMTP
+                        </a>
+                        <?php if ($emailOk): ?>
+                        <div class="mt-2">
+                            <div class="input-group input-group-sm">
+                                <input type="text" id="testEmailAddr" class="form-control" placeholder="test@example.com">
+                                <button type="button" class="btn btn-outline-primary" id="btnTestEmail">Test</button>
+                            </div>
+                            <div id="testEmailResult" class="mt-1 small"></div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 <div class="mt-4">
-    <button type="submit" class="btn btn-primary px-5"><i class="fa fa-save me-2"></i>Save Credentials</button>
+    <button type="submit" class="btn btn-primary px-5"><i class="fa fa-save me-2"></i>Save SMS & WhatsApp Credentials</button>
 </div>
 </form>
 
@@ -311,7 +406,7 @@ include __DIR__ . '/../../includes/header.php';
 <?php elseif ($activeTab === 'rules'): ?>
 
 <div class="row g-4">
-    <div class="col-lg-8">
+    <div class="col-lg-9">
         <form method="POST">
         <input type="hidden" name="action" value="save_rules">
         <div class="card">
@@ -323,17 +418,21 @@ include __DIR__ . '/../../includes/header.php';
                 <table class="table table-bordered align-middle mb-0" style="font-size:13.5px">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-3" style="width:40%">Event</th>
-                            <th class="text-center" style="width:20%">
+                            <th class="ps-3" style="width:35%">Event</th>
+                            <th class="text-center" style="width:13%">
                                 <i class="fa fa-bell me-1 text-primary"></i>In-App
                             </th>
-                            <th class="text-center" style="width:20%">
+                            <th class="text-center" style="width:13%">
                                 <i class="fa fa-comment-sms me-1 text-info"></i>SMS
                                 <?php if (!$smsOk): ?><span class="badge bg-secondary ms-1" style="font-size:9px">Not set</span><?php endif; ?>
                             </th>
-                            <th class="text-center" style="width:20%">
+                            <th class="text-center" style="width:13%">
                                 <i class="fa fa-brands fa-whatsapp me-1" style="color:#25d366"></i>WhatsApp
                                 <?php if (!$waOk): ?><span class="badge bg-secondary ms-1" style="font-size:9px">Not set</span><?php endif; ?>
+                            </th>
+                            <th class="text-center" style="width:13%">
+                                <i class="fa fa-envelope me-1" style="color:#6366f1"></i>Email
+                                <?php if (!$emailOk): ?><span class="badge bg-secondary ms-1" style="font-size:9px">Not set</span><?php endif; ?>
                             </th>
                         </tr>
                     </thead>
@@ -344,10 +443,10 @@ include __DIR__ . '/../../includes/header.php';
                                 <div class="fw-medium"><?= $label ?></div>
                                 <div class="text-muted small">
                                     <?php echo match($ev) {
-                                        'sale'         => 'Sends to buyer phone number',
-                                        'job_complete' => 'Sends to vehicle last known owner',
-                                        'payment'      => 'Sends to client on file',
-                                        'booking'      => 'Sends to client phone number',
+                                        'sale'         => 'Notifies buyer on purchase confirmation',
+                                        'job_complete' => 'Notifies vehicle owner when job is done',
+                                        'payment'      => 'Sends receipt to client on file',
+                                        'booking'      => 'Sends confirmation to client on booking',
                                         default        => '',
                                     }; ?>
                                 </div>
@@ -361,7 +460,6 @@ include __DIR__ . '/../../includes/header.php';
                                 <div class="form-check form-switch d-inline-block">
                                     <input class="form-check-input" type="checkbox"
                                            name="alert_sms_<?= $ev ?>"
-                                           id="sms_<?= $ev ?>"
                                            <?= !$smsOk ? 'disabled title="Configure SMS credentials first"' : '' ?>
                                            <?= ($settings["alert_sms_{$ev}"] ?? '0') === '1' ? 'checked' : '' ?>>
                                 </div>
@@ -370,9 +468,16 @@ include __DIR__ . '/../../includes/header.php';
                                 <div class="form-check form-switch d-inline-block">
                                     <input class="form-check-input" type="checkbox"
                                            name="alert_whatsapp_<?= $ev ?>"
-                                           id="wa_<?= $ev ?>"
                                            <?= !$waOk ? 'disabled title="Configure WhatsApp credentials first"' : '' ?>
                                            <?= ($settings["alert_whatsapp_{$ev}"] ?? '0') === '1' ? 'checked' : '' ?>>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="form-check form-switch d-inline-block">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="alert_email_<?= $ev ?>"
+                                           <?= !$emailOk ? 'disabled title="Configure SMTP email credentials first"' : '' ?>
+                                           <?= ($settings["alert_email_{$ev}"] ?? '0') === '1' ? 'checked' : '' ?>>
                                 </div>
                             </td>
                         </tr>
@@ -390,28 +495,29 @@ include __DIR__ . '/../../includes/header.php';
         </div>
         </form>
     </div>
-    <div class="col-lg-4">
+    <div class="col-lg-3">
         <div class="card">
             <div class="card-header fw-semibold"><i class="fa fa-circle-info me-2 text-primary"></i>How It Works</div>
             <div class="card-body" style="font-size:13px">
-                <p class="text-muted">When a key event occurs in the system:</p>
-                <ul class="text-muted ps-3" style="line-height:2">
-                    <li><strong>In-App</strong> — always fires; visible in the bell menu and notification centre</li>
-                    <li><strong>SMS</strong> — sends a text message to the customer's registered phone via Africa's Talking</li>
-                    <li><strong>WhatsApp</strong> — sends a WhatsApp message to the customer via Twilio</li>
+                <p class="text-muted mb-2">When a key event occurs in the system:</p>
+                <ul class="text-muted ps-3 mb-3" style="line-height:2">
+                    <li><strong>In-App</strong> — always fires; visible in the bell menu</li>
+                    <li><strong>SMS</strong> — text to customer's phone via Africa's Talking</li>
+                    <li><strong>WhatsApp</strong> — message via Twilio</li>
+                    <li><strong>Email</strong> — formatted email via your SMTP server</li>
                 </ul>
                 <div class="alert alert-warning py-2 small mb-0">
                     <i class="fa fa-triangle-exclamation me-1"></i>
-                    SMS and WhatsApp rules only fire if the customer's phone number is on file.
+                    SMS and WhatsApp require a phone number on file. Email requires an email address on file.
                 </div>
             </div>
         </div>
-        <?php if (!$smsOk || !$waOk): ?>
+        <?php if (!$smsOk || !$waOk || !$emailOk): ?>
         <div class="card mt-3">
             <div class="card-body py-3 small text-muted">
                 <i class="fa fa-lock me-1"></i>
-                SMS/WhatsApp toggles are disabled until you
-                <a href="?tab=credentials">configure the API credentials</a>.
+                <?= !$emailOk ? '<a href="index.php?tab=email">Configure SMTP</a> to enable email alerts.' : '' ?>
+                <?= (!$smsOk || !$waOk) ? ' <a href="?tab=credentials">Configure SMS/WhatsApp</a> to enable those channels.' : '' ?>
             </div>
         </div>
         <?php endif; ?>
@@ -422,10 +528,18 @@ include __DIR__ . '/../../includes/header.php';
 <?php elseif ($activeTab === 'log'): ?>
 
 <div class="card">
-    <div class="card-header d-flex align-items-center gap-2">
+    <div class="card-header d-flex align-items-center gap-2 flex-wrap">
         <i class="fa fa-list-check me-1 text-primary"></i>
         <span class="fw-semibold">Message Log</span>
         <span class="badge bg-secondary ms-auto"><?= number_format($logTotal) ?> total</span>
+        <div class="d-flex gap-2 ms-2 flex-wrap" style="font-size:12px">
+            <span class="badge bg-info-subtle text-info border border-info-subtle">
+                <i class="fa fa-comment-sms me-1"></i>SMS/WA: <?= number_format($smsTotal) ?>
+            </span>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                <i class="fa fa-envelope me-1"></i>Email: <?= number_format($emailTotal) ?>
+            </span>
+        </div>
     </div>
     <div class="card-body p-0">
     <?php if (empty($logs)): ?>
@@ -439,8 +553,8 @@ include __DIR__ . '/../../includes/header.php';
                 <tr>
                     <th class="ps-3">Date / Time</th>
                     <th>Channel</th>
-                    <th>Phone</th>
-                    <th>Message</th>
+                    <th>Recipient</th>
+                    <th>Message / Subject</th>
                     <th>Reference</th>
                     <th>Status</th>
                 </tr>
@@ -454,25 +568,29 @@ include __DIR__ . '/../../includes/header.php';
                         <span class="badge bg-success-subtle text-success border border-success-subtle">
                             <i class="fa fa-brands fa-whatsapp me-1"></i>WhatsApp
                         </span>
+                        <?php elseif ($l['channel'] === 'email'): ?>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                            <i class="fa fa-envelope me-1"></i>Email
+                        </span>
                         <?php else: ?>
                         <span class="badge bg-info-subtle text-info border border-info-subtle">
                             <i class="fa fa-comment-sms me-1"></i>SMS
                         </span>
                         <?php endif; ?>
                     </td>
-                    <td class="font-monospace small"><?= e($l['phone']) ?></td>
+                    <td class="font-monospace small"><?= e($l['recipient']) ?></td>
                     <td>
-                        <div style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-                             title="<?= e($l['message']) ?>">
-                            <?= e($l['message']) ?>
+                        <div style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                             title="<?= e($l['content']) ?>">
+                            <?= e($l['content']) ?>
                         </div>
                     </td>
                     <td class="text-muted small">
-                        <?= $l['ref_type'] ? e($l['ref_type']) . ($l['ref_id'] ? ' #' . $l['ref_id'] : '') : '—' ?>
+                        <?= ($l['ref_type'] ?? '') ? e($l['ref_type']) . (($l['ref_id'] ?? 0) ? ' #' . $l['ref_id'] : '') : '—' ?>
                     </td>
                     <td>
-                        <span class="badge bg-<?= $l['status'] === 'sent' ? 'success' : 'danger' ?>">
-                            <?= ucfirst($l['status']) ?>
+                        <span class="badge bg-<?= ($l['status'] ?? '') === 'sent' ? 'success' : 'danger' ?>">
+                            <?= ucfirst($l['status'] ?? 'unknown') ?>
                         </span>
                     </td>
                 </tr>
@@ -549,6 +667,28 @@ document.getElementById('btnTestWa')?.addEventListener('click', function() {
     .then(d => {
         result.innerHTML = d.ok
             ? '<span class="text-success"><i class="fa fa-check-circle me-1"></i>Sent successfully!</span>'
+            : '<span class="text-danger"><i class="fa fa-times-circle me-1"></i>' + (d.error || 'Failed') + '</span>';
+    })
+    .catch(() => { result.innerHTML = '<span class="text-danger">Request failed.</span>'; })
+    .finally(() => { this.disabled = false; });
+});
+
+// Test Email
+document.getElementById('btnTestEmail')?.addEventListener('click', function() {
+    const email  = document.getElementById('testEmailAddr').value.trim();
+    const result = document.getElementById('testEmailResult');
+    if (!email) { result.innerHTML = '<span class="text-danger">Enter an email address.</span>'; return; }
+    this.disabled = true;
+    result.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Sending...';
+    fetch('', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({action: 'test_email', email})
+    })
+    .then(r => r.json())
+    .then(d => {
+        result.innerHTML = d.ok
+            ? '<span class="text-success"><i class="fa fa-check-circle me-1"></i>Sent! Check your inbox.</span>'
             : '<span class="text-danger"><i class="fa fa-times-circle me-1"></i>' + (d.error || 'Failed') + '</span>';
     })
     .catch(() => { result.innerHTML = '<span class="text-danger">Request failed.</span>'; })

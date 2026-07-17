@@ -150,29 +150,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 BASE_URL . '/modules/payments/view.php?id=' . $newPayId
             );
             // Payment receipt email
-            $clientEmail = '';
-            if ($clientId) {
-                $es = $db->prepare("SELECT email FROM clients WHERE id=?");
-                $es->execute([$clientId]);
-                $clientEmail = (string)($es->fetchColumn() ?: '');
-            }
-            if ($clientEmail && filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
-                $subj    = "Payment Receipt — {$payNum}";
-                $methMap = ['mpesa'=>'M-Pesa','bank'=>'Bank Transfer','cheque'=>'Cheque','cash'=>'Cash'];
-                $methLabel = $methMap[$method] ?? strtoupper($method);
-                $refRow  = $ref ? "<tr><th>Reference</th><td>" . e($ref) . "</td></tr>" : '';
-                $body    = "<p>Dear " . e($clientName) . ",</p>
-                           <p>We have received your payment. Here is your receipt:</p>
-                           <table class='data'>
-                             <tr><th>Receipt No.</th><td><strong>" . e($payNum) . "</strong></td></tr>
-                             <tr><th>Date</th><td>" . date('d M Y', strtotime($payDate)) . "</td></tr>
-                             <tr><th>Amount</th><td><strong>" . money($amount) . "</strong></td></tr>
-                             <tr><th>Method</th><td>{$methLabel}</td></tr>
-                             {$refRow}
-                             " . ($description ? "<tr><th>For</th><td>" . e($description) . "</td></tr>" : '') . "
-                           </table>
-                           <p>Thank you for your payment!</p>";
-                sendMail($clientEmail, $clientName, $subj, mailTemplate($subj, $body), 'payment', $newPayId);
+            if (getSetting('alert_email_payment', '1') === '1') {
+                $clientEmail = '';
+                if ($clientId) {
+                    $es = $db->prepare("SELECT email FROM clients WHERE id=?");
+                    $es->execute([$clientId]);
+                    $clientEmail = (string)($es->fetchColumn() ?: '');
+                }
+                if ($clientEmail && filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+                    $subj      = "Payment Receipt — {$payNum}";
+                    $methMap   = ['mpesa'=>'M-Pesa','bank'=>'Bank Transfer','cheque'=>'Cheque','cash'=>'Cash'];
+                    $methLabel = $methMap[$method] ?? strtoupper($method);
+                    $refRow    = $ref ? "<tr><th>Reference</th><td>" . e($ref) . "</td></tr>" : '';
+                    $body      = "<p>Dear " . e($clientName) . ",</p>
+                                 <p>We have received your payment. Here is your receipt:</p>
+                                 <table class='data'>
+                                   <tr><th>Receipt No.</th><td><strong>" . e($payNum) . "</strong></td></tr>
+                                   <tr><th>Date</th><td>" . date('d M Y', strtotime($payDate)) . "</td></tr>
+                                   <tr><th>Amount</th><td><strong>" . money($amount) . "</strong></td></tr>
+                                   <tr><th>Method</th><td>{$methLabel}</td></tr>
+                                   {$refRow}
+                                   " . ($description ? "<tr><th>For</th><td>" . e($description) . "</td></tr>" : '') . "
+                                 </table>
+                                 <p>Thank you for your payment!</p>";
+                    sendMail($clientEmail, $clientName, $subj, mailTemplate($subj, $body), 'payment', $newPayId);
+                }
             }
             setFlash('success', "Payment {$payNum} recorded successfully.");
             redirect(BASE_URL . '/modules/payments/print.php?id=' . $newPayId . '&new=1');

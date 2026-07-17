@@ -129,11 +129,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ($soldCar ? "{$soldCar['make']} {$soldCar['model']} {$soldCar['year']}" : '') . " — " . money((float)$d['sale_price']) . " — " . $d['buyer_name'],
                 BASE_URL . '/modules/sales/view.php?id=' . $saleId
             );
-            // ── SMS / WhatsApp buyer notifications ────────────────────────────
+            // ── SMS / WhatsApp / Email buyer notifications ─────────────────
+            $co      = getSetting('company_name', 'Mascardi');
+            $vehicle = $soldCar ? "{$soldCar['make']} {$soldCar['model']} {$soldCar['year']}" : 'vehicle';
             if (!empty($d['buyer_phone'])) {
-                $co       = getSetting('company_name', 'Mascardi');
-                $vehicle  = $soldCar ? "{$soldCar['make']} {$soldCar['model']} {$soldCar['year']}" : 'vehicle';
-                $smsText  = "Hi {$d['buyer_name']}, your purchase of {$vehicle} (Ref: {$saleNum}) has been confirmed at {$co}. Thank you!";
+                $smsText = "Hi {$d['buyer_name']}, your purchase of {$vehicle} (Ref: {$saleNum}) has been confirmed at {$co}. Thank you!";
                 if (getSetting('alert_sms_sale', '0') === '1') {
                     require_once __DIR__ . '/../../includes/sms.php';
                     sendSms($d['buyer_phone'], $smsText, 'sale', $saleId);
@@ -147,6 +147,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         . "Amount: *" . money((float)$d['sale_price']) . "*\n\n"
                         . "Thank you for choosing *{$co}*!";
                     sendWhatsApp($d['buyer_phone'], $waText, 'sale', $saleId);
+                }
+            }
+            if (!empty($d['buyer_email']) && filter_var($d['buyer_email'], FILTER_VALIDATE_EMAIL)) {
+                if (getSetting('alert_email_sale', '0') === '1') {
+                    require_once __DIR__ . '/../../includes/mailer.php';
+                    $subj = "Vehicle Purchase Confirmed — {$saleNum}";
+                    $body = "<p>Dear " . htmlspecialchars($d['buyer_name']) . ",</p>
+                             <p>Thank you for your purchase! Here are the confirmed details:</p>
+                             <table class='data'>
+                               <tr><th>Reference</th><td><strong>" . htmlspecialchars($saleNum) . "</strong></td></tr>
+                               <tr><th>Vehicle</th><td>" . htmlspecialchars($vehicle) . "</td></tr>
+                               <tr><th>Sale Date</th><td>" . date('d M Y', strtotime($d['sale_date'])) . "</td></tr>
+                               <tr><th>Amount</th><td><strong>" . money((float)$d['sale_price']) . "</strong></td></tr>
+                               <tr><th>Payment</th><td>" . ucwords(str_replace('_', ' ', $d['payment_method'])) . " — " . ucwords(str_replace('_', ' ', $d['payment_status'])) . "</td></tr>
+                             </table>
+                             <p>We look forward to serving you. Please don't hesitate to reach out if you have any questions.</p>";
+                    sendMail($d['buyer_email'], $d['buyer_name'], $subj, mailTemplate($subj, $body), 'sale', $saleId);
                 }
             }
             setFlash('success', "Sale {$saleNum} recorded successfully.");
