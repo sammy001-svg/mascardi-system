@@ -54,12 +54,6 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
             <i class="fa fa-car"></i><span>All Cars</span>
         </a>
 
-        <a href="<?= BASE_URL ?>/modules/crm/index.php"
-           class="nav-item <?= isActive('/modules/crm/') ?>"
-           data-label="Sales Pipeline">
-            <i class="fa fa-filter-circle-dollar"></i><span>Sales Pipeline</span>
-        </a>
-
         <a href="<?= BASE_URL ?>/modules/reservations/index.php"
            class="nav-item <?= isActive('/modules/reservations/') ?>"
            data-label="Reservations"
@@ -73,6 +67,12 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
                 <?= $__resCount > 99 ? '99+' : $__resCount ?>
             </span>
             <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+
+        <a href="<?= BASE_URL ?>/modules/crm/index.php"
+           class="nav-item <?= isActive('/modules/crm/') ?>"
+           data-label="Sales Pipeline">
+            <i class="fa fa-filter-circle-dollar"></i><span>Sales Pipeline</span>
         </a>
 
         <a href="<?= BASE_URL ?>/modules/quotations/index.php"

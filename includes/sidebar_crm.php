@@ -147,6 +147,15 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
         }());
         </script>
 
+        <!-- ══ FLEET ═════════════════════════════════════════════ -->
+        <div class="nav-section">Fleet</div>
+
+        <a href="<?= BASE_URL ?>/modules/cars/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/cars/') ? 'active' : '' ?>"
+           data-label="All Cars">
+            <i class="fa fa-car"></i><span>All Cars</span>
+        </a>
+
         <a href="<?= BASE_URL ?>/modules/reservations/index.php"
            class="nav-item <?= str_contains($__uri, '/modules/reservations/') ? 'active' : '' ?>"
            data-label="Reservations"
@@ -161,15 +170,6 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
                 <?= $__myResCount > 99 ? '99+' : $__myResCount ?>
             </span>
             <?php endif; } catch (\Throwable $e) {} ?>
-        </a>
-
-        <!-- ══ FLEET ═════════════════════════════════════════════ -->
-        <div class="nav-section">Fleet</div>
-
-        <a href="<?= BASE_URL ?>/modules/cars/index.php"
-           class="nav-item <?= str_contains($__uri, '/modules/cars/') ? 'active' : '' ?>"
-           data-label="All Cars">
-            <i class="fa fa-car"></i><span>All Cars</span>
         </a>
 
         <!-- ══ COMMUNICATION ══════════════════════════════════════ -->

@@ -71,6 +71,23 @@ if (authRole() === 'supervisor') {
         </a>
         <?php endif; ?>
 
+        <?php if (canAccess('crm')): ?>
+        <a href="<?= BASE_URL ?>/modules/reservations/index.php"
+           class="nav-item <?= isActive('/modules/reservations/') ?>"
+           data-label="Reservations"
+           style="position:relative">
+            <i class="fa fa-bookmark"></i><span>Reservations</span>
+            <?php
+            try {
+                $__resCount = (int)getDB()->query("SELECT COUNT(*) FROM crm_leads WHERE stage='reserved'")->fetchColumn();
+                if ($__resCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#7c3aed;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__resCount > 99 ? '99+' : $__resCount ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+        <?php endif; ?>
+
         <?php if (canAccess('mechanics')): ?>
         <a href="<?= BASE_URL ?>/modules/mechanics/index.php"
            class="nav-item <?= isActive('/modules/mechanics/') ?>"
@@ -344,20 +361,6 @@ if (authRole() === 'supervisor') {
             <i class="fa fa-bullseye"></i><span>CRM Targets</span>
         </a>
         <?php endif; ?>
-        <a href="<?= BASE_URL ?>/modules/reservations/index.php"
-           class="nav-item <?= isActive('/modules/reservations/') ?>"
-           data-label="Reservations"
-           style="position:relative">
-            <i class="fa fa-bookmark"></i><span>Reservations</span>
-            <?php
-            try {
-                $__resCount = (int)getDB()->query("SELECT COUNT(*) FROM crm_leads WHERE stage='reserved'")->fetchColumn();
-                if ($__resCount > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#7c3aed;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
-                <?= $__resCount > 99 ? '99+' : $__resCount ?>
-            </span>
-            <?php endif; } catch (\Throwable $e) {} ?>
-        </a>
         <?php endif; ?>
 
         <?php if (hasRole(['admin','general_manager','sales_manager','sales_officer','sales_person','customer_relations','receptionist'])): ?>
