@@ -1082,14 +1082,22 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                 <span style="color:#15803d">
                     <i class="fa fa-bookmark me-2"></i>Reservation Summary
                 </span>
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 flex-wrap">
                     <a href="proforma.php?lead_id=<?= $id ?>" target="_blank"
                        class="btn btn-sm btn-outline-primary">
-                        <i class="fa fa-file-invoice me-1"></i>Proforma Invoice
+                        <i class="fa fa-file-invoice me-1"></i>Proforma
                     </a>
                     <a href="sales_agreement.php?lead_id=<?= $id ?>" target="_blank"
-                       class="btn btn-sm btn-success">
-                        <i class="fa fa-file-signature me-1"></i>Sales Agreement
+                       class="btn btn-sm btn-outline-success">
+                        <i class="fa fa-file-signature me-1"></i>Agreement
+                    </a>
+                    <a href="deposit_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-warning">
+                        <i class="fa fa-receipt me-1"></i>Deposit Receipt
+                    </a>
+                    <a href="sales_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-info">
+                        <i class="fa fa-file-invoice-dollar me-1"></i>Sales Receipt
                     </a>
                 </div>
             </div>
@@ -1153,16 +1161,24 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                     <i class="fa fa-note-sticky me-1"></i><?= e($lead['deposit_notes']) ?>
                 </div>
                 <?php endif; ?>
-                <div class="border-top pt-3 mt-2 d-flex gap-2 flex-wrap">
+                <div class="border-top pt-3 mt-2 d-flex gap-2 flex-wrap align-items-center">
                     <a href="proforma.php?lead_id=<?= $id ?>" target="_blank"
                        class="btn btn-outline-primary btn-sm">
-                        <i class="fa fa-print me-1"></i>Print Proforma Invoice
+                        <i class="fa fa-file-invoice me-1"></i>Proforma Invoice
                     </a>
                     <a href="sales_agreement.php?lead_id=<?= $id ?>" target="_blank"
                        class="btn btn-outline-success btn-sm">
-                        <i class="fa fa-print me-1"></i>Print Sales Agreement
+                        <i class="fa fa-file-signature me-1"></i>Sales Agreement
                     </a>
-                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                    <a href="deposit_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-warning btn-sm">
+                        <i class="fa fa-receipt me-1"></i>Deposit Receipt
+                    </a>
+                    <a href="sales_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-info btn-sm text-white">
+                        <i class="fa fa-file-invoice-dollar me-1"></i>Sales Receipt
+                    </a>
+                    <button type="button" class="btn btn-outline-secondary btn-sm ms-auto"
                             data-bs-toggle="modal" data-bs-target="#reserveModal">
                         <i class="fa fa-pen me-1"></i>Update Reservation
                     </button>
