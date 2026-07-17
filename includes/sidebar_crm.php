@@ -251,6 +251,7 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
 </div>
 
 <!-- Walk-in Quick Capture FAB -->
+<style>@media print{#walkInFab,#walkInLabel{display:none!important}}</style>
 <?php if (canWrite('crm')): ?>
 <button type="button" id="walkInFab"
         title="Walk-in Quick Capture"
