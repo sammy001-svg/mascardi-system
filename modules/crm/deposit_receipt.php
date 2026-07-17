@@ -108,6 +108,7 @@ $pageTitle = 'Deposit Receipt — ' . $buyerName;
 include __DIR__ . '/../../includes/header.php';
 ?>
 <style>
+@page { size: A4; margin: 0; }
 @media print {
     .d-print-none { display:none !important; }
     .app-sidebar,.topbar,.sidebar-overlay,.app-topbar,
@@ -115,8 +116,10 @@ include __DIR__ . '/../../includes/header.php';
     #pwaOverlay,#toastStack { display:none !important; }
     .main-wrap,.main-content,.page-body { margin:0 !important; padding:0 !important; }
     body { background:#fff !important; margin:0 !important; }
-    @page { size: A4; margin: 1.2cm; }
-    #drDoc { box-shadow:none !important; border:none !important; border-radius:0 !important; }
+    #drDoc {
+        box-shadow:none !important; border:none !important; border-radius:0 !important;
+        max-width:100% !important; padding:1.5cm 1.8cm !important;
+    }
 }
 #drDoc {
     max-width:700px; margin:0 auto;

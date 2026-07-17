@@ -113,6 +113,7 @@ $pageTitle = 'Sales Agreement — ' . ($buyerName ?: 'Lead #' . $leadId);
 include __DIR__ . '/../../includes/header.php';
 ?>
 <style>
+@page { size: A4; margin: 0; }
 /* ── Print suppression ───────────────────────────────────────────────────── */
 @media print {
     .d-print-none { display:none !important; }
@@ -121,8 +122,10 @@ include __DIR__ . '/../../includes/header.php';
     #pwaOverlay,#toastStack { display:none !important; }
     .main-wrap,.main-content,.page-body { margin:0 !important; padding:0 !important; }
     body { background:#fff !important; }
-    #salesDoc { box-shadow:none !important; border:none !important; border-radius:0 !important; }
-    @page { margin:1cm; size:A4; }
+    #salesDoc {
+        box-shadow:none !important; border:none !important; border-radius:0 !important;
+        max-width:100% !important; padding:1.5cm 1.8cm !important;
+    }
 }
 /* ── Document shell ──────────────────────────────────────────────────────── */
 #salesDoc {

@@ -113,6 +113,7 @@ $pageTitle = 'Proforma Invoice — ' . ($customerName ?: 'Lead #' . $leadId);
 include __DIR__ . '/../../includes/header.php';
 ?>
 <style>
+@page { size: A4; margin: 0; }
 /* ── Print: force exactly one A4 page ───────────────────────────────────── */
 @media print {
     .d-print-none { display:none !important; }
@@ -122,13 +123,12 @@ include __DIR__ . '/../../includes/header.php';
     .main-wrap,.main-content,.page-body { margin:0 !important; padding:0 !important; }
     body { background:#fff !important; margin:0 !important; }
 
-    @page { size: A4; margin: 1cm; }
-
     #proformaDoc {
         max-width: none !important;
-        width: 190mm !important;        /* 210mm – 2 × 1cm margin */
-        height: 277mm !important;       /* 297mm – 2 × 1cm margin */
+        width: 210mm !important;
+        height: 297mm !important;
         margin: 0 !important;
+        padding: 1cm !important;
         box-shadow: none !important;
         border: none !important;
         overflow: hidden;
