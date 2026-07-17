@@ -96,7 +96,7 @@ if ($car) {
 $today       = date('d/m/y');
 $proformaNum = date('y/m/') . str_pad($leadId, 2, '0', STR_PAD_LEFT);
 
-// Vehicle description line: "TO SUPPLY 1 MAKE MODEL [notes]"
+// Vehicle description: "TO SUPPLY 1 MAKE MODEL [notes]"
 $carMakeModel = $car ? trim(($car['make'] ?? '') . ' ' . ($car['model'] ?? '')) : trim($lead['interested_in'] ?? '');
 $carNotes     = $car ? trim($car['notes'] ?? '') : '';
 $carFullDesc  = 'TO SUPPLY 1 ' . strtoupper($carMakeModel) . ($carNotes ? ' ' . $carNotes : '');
@@ -113,30 +113,91 @@ $pageTitle = 'Proforma Invoice — ' . ($customerName ?: 'Lead #' . $leadId);
 include __DIR__ . '/../../includes/header.php';
 ?>
 <style>
-/* ── Print suppression ───────────────────────────────────────────────────── */
+/* ── Print: force exactly one A4 page ───────────────────────────────────── */
 @media print {
     .d-print-none { display:none !important; }
     .app-sidebar,.topbar,.sidebar-overlay,.app-topbar,
     header.app-topbar,#sidebarBackdrop,.fab-wa,.fab-chat,
     #pwaOverlay,#toastStack { display:none !important; }
     .main-wrap,.main-content,.page-body { margin:0 !important; padding:0 !important; }
-    body { background:#fff !important; }
-    #proformaDoc { box-shadow:none !important; border:none !important; }
-    @page { margin:1cm; size:A4; }
+    body { background:#fff !important; margin:0 !important; }
+
+    @page { size: A4; margin: 1cm; }
+
+    #proformaDoc {
+        max-width: none !important;
+        width: 190mm !important;        /* 210mm – 2 × 1cm margin */
+        height: 277mm !important;       /* 297mm – 2 × 1cm margin */
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        overflow: hidden;
+    }
+    #pf-desc {
+        flex: 1 !important;
+        min-height: 0 !important;
+        overflow: hidden;
+    }
+    .pf-spacer { min-height: 0 !important; }
 }
-/* ── Document shell ──────────────────────────────────────────────────────── */
+
+/* ── Screen base ─────────────────────────────────────────────────────────── */
 #proformaDoc {
-    max-width:760px; margin:0 auto;
-    background:#fff; border:1px solid #999;
-    font-family:Arial,Helvetica,sans-serif;
-    font-size:12.5px; color:#000; line-height:1.4;
-    box-shadow:0 4px 20px rgba(0,0,0,.1);
+    max-width: 760px;
+    margin: 0 auto;
+    background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12.5px;
+    color: #000;
+    line-height: 1.4;
+    box-shadow: 0 4px 20px rgba(0,0,0,.1);
+    border: 1px solid #999;
+    /* Flex column — lets #pf-desc grow to fill A4 on print */
+    display: flex;
+    flex-direction: column;
 }
-/* ── All table cells with grid-line borders ──────────────────────────────── */
-#proformaDoc table { border-collapse:collapse; width:100%; }
-#proformaDoc td, #proformaDoc th {
-    border:1px solid #000; padding:4px 8px; vertical-align:top;
+
+/* ── Top header table ────────────────────────────────────────────────────── */
+#pf-top { flex-shrink: 0; border-collapse: collapse; width: 100%; }
+#pf-top td, #pf-top th { border: 1px solid #000; padding: 4px 8px; vertical-align: top; }
+
+/* ── Description flex section ────────────────────────────────────────────── */
+#pf-desc {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #000;
+    border-top: none;        /* top table's bottom border serves as the top */
+    min-height: 320px;       /* screen minimum so it looks reasonable */
 }
+
+/* Shared row layout */
+.pf-row {
+    display: flex;
+    flex-shrink: 0;
+    border-bottom: 1px solid #000;
+}
+.pf-col-d {            /* Description column */
+    flex: 1;
+    padding: 4px 10px;
+    border-right: 1px solid #000;
+    font-size: 12.5px;
+}
+.pf-col-a {            /* Amount column */
+    width: 130px;
+    flex-shrink: 0;
+    padding: 4px 10px;
+    font-size: 12.5px;
+    text-align: right;
+}
+/* Elastic spacer — absorbs remaining height, keeping TOTAL pinned to bottom */
+.pf-spacer {
+    flex: 1;
+    display: flex;
+    min-height: 50px;   /* screen: at least visible */
+}
+.pf-spacer-d { flex: 1; border-right: 1px solid #000; }
+.pf-spacer-a { width: 130px; flex-shrink: 0; }
 </style>
 
 <!-- ── Action bar (screen only) ──────────────────────────────────────────── -->
@@ -173,56 +234,58 @@ include __DIR__ . '/../../includes/header.php';
 ════════════════════════════════════════════════════════════════════════ -->
 <div id="proformaDoc">
 
-    <!-- ══ TOP SECTION: client info (left) + company branding (right) ══════════ -->
-    <table>
+    <!-- ══ TOP: client info (left) + MASCARDI branding (right) ════════════════ -->
+    <table id="pf-top">
         <tr>
             <!-- LEFT: client box + invoice meta -->
-            <td style="width:42%;border:1px solid #000;padding:0">
+            <td style="width:42%;padding:0;vertical-align:top">
 
-                <!-- Client info -->
+                <!-- Client info box -->
                 <div style="border-bottom:1px solid #000;padding:8px 10px">
                     <strong>Client Name: <?= e($customerName) ?></strong><br>
                     I.D No: <?= e($customerIdNo ?: '&nbsp;') ?><br>
                     P.O Box: _____, Nairobi
                 </div>
 
-                <!-- Invoice meta rows (no outer wrapper — cells form the grid) -->
-                <table style="margin:0">
+                <!-- Invoice meta table (shares cell-border grid) -->
+                <table style="border-collapse:collapse;width:100%;margin:0">
                     <tr>
-                        <td style="font-weight:bold;white-space:nowrap">Proforma Invoice:</td>
-                        <td><?= e($proformaNum) ?></td>
+                        <td style="border:1px solid #000;padding:4px 8px;font-weight:bold;white-space:nowrap">
+                            Proforma Invoice:
+                        </td>
+                        <td style="border:1px solid #000;padding:4px 8px"><?= e($proformaNum) ?></td>
                     </tr>
                     <tr>
-                        <td style="font-weight:bold">Vehicle Make</td>
-                        <td><?= e($carMakeModel ?: '—') ?></td>
+                        <td style="border:1px solid #000;padding:4px 8px;font-weight:bold">Vehicle Make</td>
+                        <td style="border:1px solid #000;padding:4px 8px"><?= e($carMakeModel ?: '—') ?></td>
                     </tr>
                     <tr>
-                        <td style="font-weight:bold">Registration No</td>
-                        <td><?= $car ? e($car['registration_number'] ?: 'New') : '—' ?></td>
+                        <td style="border:1px solid #000;padding:4px 8px;font-weight:bold">Registration No</td>
+                        <td style="border:1px solid #000;padding:4px 8px">
+                            <?= $car ? e($car['registration_number'] ?: 'New') : '—' ?>
+                        </td>
                     </tr>
                     <tr>
-                        <td style="font-weight:bold">Date:</td>
-                        <td><?= e($today) ?></td>
+                        <td style="border:1px solid #000;padding:4px 8px;font-weight:bold">Date:</td>
+                        <td style="border:1px solid #000;padding:4px 8px"><?= e($today) ?></td>
                     </tr>
                     <tr>
-                        <td style="font-weight:bold">Order Number:</td>
-                        <td><?= $leadId ?></td>
+                        <td style="border:1px solid #000;padding:4px 8px;font-weight:bold">Order Number:</td>
+                        <td style="border:1px solid #000;padding:4px 8px"><?= $leadId ?></td>
                     </tr>
                 </table>
-
             </td>
 
-            <!-- RIGHT: MASCARDI VENTURES LIMITED (large italic serif) + contact -->
-            <td style="width:58%;border:1px solid #000;padding:10px 16px">
+            <!-- RIGHT: large italic serif company name + contact -->
+            <td style="width:58%;padding:10px 16px;border-left:1px solid #000">
                 <div style="font-family:'Times New Roman',Times,Georgia,serif;
-                            font-style:italic; font-size:50px; font-weight:normal;
-                            line-height:1.05; color:#000; letter-spacing:-1px">
+                            font-style:italic;font-size:50px;font-weight:normal;
+                            line-height:1.05;color:#000;letter-spacing:-1px">
                     MASCARDI<br>
                     VENTURES<br>
                     LIMITED
                 </div>
-                <div style="text-align:right; font-size:11.5px; margin-top:6px;
-                            line-height:1.7; color:#000">
+                <div style="text-align:right;font-size:11.5px;margin-top:6px;line-height:1.7;color:#000">
                     P O Box 1391<br>
                     Nairobi<br>
                     00606<br>
@@ -233,129 +296,139 @@ include __DIR__ . '/../../includes/header.php';
         </tr>
     </table>
 
-    <!-- ══ DESCRIPTION TABLE ═══════════════════════════════════════════════════ -->
-    <table>
-        <!-- Column header row -->
-        <tr>
-            <th style="text-align:center;font-weight:bold;padding:7px 10px">Description</th>
-            <th style="text-align:center;font-weight:bold;padding:7px 10px;width:130px;
-                       white-space:nowrap">KENYA SHILLINGS</th>
-        </tr>
+    <!-- ══ DESCRIPTION: flex column fills remaining page height ═══════════════ -->
+    <div id="pf-desc">
 
-        <!-- Spacer rows -->
-        <tr>
-            <td style="padding:6px 10px">&nbsp;</td>
-            <td>&nbsp;</td>
-        </tr>
-        <tr>
-            <td style="padding:6px 10px">&nbsp;</td>
-            <td>&nbsp;</td>
-        </tr>
+        <!-- Column headers -->
+        <div class="pf-row">
+            <div class="pf-col-d" style="font-weight:bold;text-align:center">Description</div>
+            <div class="pf-col-a" style="font-weight:bold;text-align:center;white-space:nowrap">
+                KENYA SHILLINGS
+            </div>
+        </div>
+
+        <!-- Two short gap rows before main description -->
+        <div class="pf-row" style="min-height:14px">
+            <div class="pf-col-d"></div><div class="pf-col-a"></div>
+        </div>
+        <div class="pf-row" style="min-height:14px">
+            <div class="pf-col-d"></div><div class="pf-col-a"></div>
+        </div>
 
         <!-- Vehicle description line -->
-        <tr>
-            <td style="padding:4px 10px 4px 28px;font-weight:bold">
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">
                 <?= e($carFullDesc) ?>
-            </td>
-            <td style="text-align:right;font-weight:bold;padding:4px 10px">
+            </div>
+            <div class="pf-col-a" style="font-weight:bold">
                 <?= $price > 0 ? number_format((int)$price, 0) . '/-' : '' ?>
-            </td>
-        </tr>
+            </div>
+        </div>
 
-        <!-- Spec line (cc, fuel, transmission) -->
+        <!-- Spec line (cc / fuel / transmission) -->
         <?php if ($carSpecLine): ?>
-        <tr>
-            <td style="padding:2px 10px 4px 28px;font-weight:bold"><?= e($carSpecLine) ?></td>
-            <td>&nbsp;</td>
-        </tr>
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold"><?= e($carSpecLine) ?></div>
+            <div class="pf-col-a"></div>
+        </div>
         <?php endif; ?>
 
-        <!-- Gap before vehicle specifics -->
-        <tr><td style="padding:6px 10px">&nbsp;</td><td>&nbsp;</td></tr>
+        <!-- Small gap before vehicle specifics -->
+        <div class="pf-row" style="min-height:14px">
+            <div class="pf-col-d"></div><div class="pf-col-a"></div>
+        </div>
 
         <!-- Vehicle specifics -->
         <?php if ($car): ?>
-        <tr>
-            <td style="padding:2px 10px 2px 28px;font-weight:bold">
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">
                 ENGINE NUMBER: <?= e($car['engine_number'] ?? 'TBC') ?>
-            </td>
-            <td>&nbsp;</td>
-        </tr>
-        <tr>
-            <td style="padding:2px 10px 2px 28px;font-weight:bold">
+            </div>
+            <div class="pf-col-a"></div>
+        </div>
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">
                 CHASSIS NUMBER: <?= e($car['chassis_number'] ?? '—') ?>
-            </td>
-            <td>&nbsp;</td>
-        </tr>
-        <tr>
-            <td style="padding:2px 10px 2px 28px;font-weight:bold">
+            </div>
+            <div class="pf-col-a"></div>
+        </div>
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">
                 COLOR: <?= e(strtoupper($car['color'] ?? '—')) ?>
-            </td>
-            <td>&nbsp;</td>
-        </tr>
-        <tr>
-            <td style="padding:2px 10px 2px 28px;font-weight:bold">
+            </div>
+            <div class="pf-col-a"></div>
+        </div>
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">
                 REGISTRATION: <?= e($car['registration_number'] ?: 'New') ?>
-            </td>
-            <td>&nbsp;</td>
-        </tr>
-        <tr>
-            <td style="padding:2px 10px 4px 28px;font-weight:bold">
+            </div>
+            <div class="pf-col-a"></div>
+        </div>
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">
                 YEAR: <?= e($car['year'] ?? '—') ?>
-            </td>
-            <td>&nbsp;</td>
-        </tr>
+            </div>
+            <div class="pf-col-a"></div>
+        </div>
         <?php endif; ?>
 
-        <!-- Spacer rows before payment terms -->
-        <?php for ($i = 0; $i < 6; $i++): ?>
-        <tr><td style="padding:8px 10px">&nbsp;</td><td>&nbsp;</td></tr>
-        <?php endfor; ?>
+        <!-- ── ELASTIC SPACER 1 — fills gap before payment terms ────────────── -->
+        <div class="pf-spacer">
+            <div class="pf-spacer-d"></div>
+            <div class="pf-spacer-a"></div>
+        </div>
 
         <!-- Payment terms -->
-        <tr>
-            <td style="padding:2px 10px 2px 28px;font-weight:bold">PAYMENT TERMS</td>
-            <td>&nbsp;</td>
-        </tr>
-        <tr>
-            <td style="padding:2px 10px 2px 28px;font-weight:bold">Deposit 20%</td>
-            <td>&nbsp;</td>
-        </tr>
-        <tr>
-            <td style="padding:2px 10px 4px 28px;font-weight:bold">Balance to be paid before delivery</td>
-            <td>&nbsp;</td>
-        </tr>
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">PAYMENT TERMS</div>
+            <div class="pf-col-a"></div>
+        </div>
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">Deposit 20%</div>
+            <div class="pf-col-a"></div>
+        </div>
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">
+                Balance to be paid before delivery
+            </div>
+            <div class="pf-col-a"></div>
+        </div>
 
-        <!-- Spacer rows before sales person -->
-        <?php for ($i = 0; $i < 8; $i++): ?>
-        <tr><td style="padding:8px 10px">&nbsp;</td><td>&nbsp;</td></tr>
-        <?php endfor; ?>
+        <!-- ── ELASTIC SPACER 2 — fills gap before sales person ─────────────── -->
+        <div class="pf-spacer">
+            <div class="pf-spacer-d"></div>
+            <div class="pf-spacer-a"></div>
+        </div>
 
         <!-- Sales person -->
-        <tr>
-            <td style="padding:2px 10px 2px 28px;font-weight:bold">
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">
                 Sales person-<?= e($agentUser['name'] ?? $me['name']) ?>
-            </td>
-            <td>&nbsp;</td>
-        </tr>
-        <tr>
-            <td style="padding:2px 10px 6px 28px;font-weight:bold">
+            </div>
+            <div class="pf-col-a"></div>
+        </div>
+        <div class="pf-row">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">
                 Contact-<?= e($agentUser['phone'] ?? $me['phone'] ?? '') ?>
-            </td>
-            <td>&nbsp;</td>
-        </tr>
+            </div>
+            <div class="pf-col-a"></div>
+        </div>
 
-        <!-- TOTAL row -->
-        <tr>
-            <td style="text-align:right;font-weight:bold;padding:6px 10px">TOTAL</td>
-            <td style="text-align:right;font-weight:bold;padding:6px 10px">
+        <!-- TOTAL row — pinned at the bottom of #pf-desc -->
+        <div style="display:flex;flex-shrink:0;border-top:1px solid #000">
+            <div style="flex:1;padding:6px 10px;font-weight:bold;text-align:right;
+                        border-right:1px solid #000">TOTAL</div>
+            <div style="width:130px;flex-shrink:0;padding:6px 10px;font-weight:bold;text-align:right">
                 <?= $price > 0 ? number_format((int)$price, 0) . '/-' : '' ?>
-            </td>
-        </tr>
-    </table>
+            </div>
+        </div>
 
-    <!-- ══ FOOTER NOTE ══════════════════════════════════════════════════════════ -->
-    <div style="padding:8px 10px;font-weight:bold;font-size:12px;border-top:1px solid #000">
+    </div><!-- /#pf-desc -->
+
+    <!-- ══ FOOTER NOTE ═════════════════════════════════════════════════════════ -->
+    <div id="pf-footer"
+         style="flex-shrink:0;padding:7px 10px;font-weight:bold;font-size:12px;
+                border:1px solid #000;border-top:none">
         The vehicle belongs to Mascardi Ventures Limited until payment is received in full.
     </div>
 
