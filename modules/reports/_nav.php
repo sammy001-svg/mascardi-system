@@ -50,6 +50,7 @@ function reportUrl(string $page, string $qs): string {
         'inventory_aging.php'  => ['fa-boxes-stacked',       'Inv. Aging'],
         'lead_conversion.php'  => ['fa-arrow-trend-up',      'Conversions'],
         'weekly_digest.php'    => ['fa-envelope-open-text',  'Digest'],
+        'kpi.php'              => ['fa-bullseye',            'KPI Targets'],
     ];
     foreach ($tabs as $file => [$icon, $label2]):
         $active = $__reportPage === $file ? 'active' : '';
