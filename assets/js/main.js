@@ -5,7 +5,8 @@
    ───────────────────────────────────────────────────────── */
 (function () {
     var saved = localStorage.getItem('mascardiTheme');
-    if (saved === 'dark') {
+    if (saved === 'dark' ||
+        (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
         document.documentElement.setAttribute('data-theme', 'dark');
     }
 }());

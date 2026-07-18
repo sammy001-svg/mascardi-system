@@ -1136,7 +1136,9 @@ html[data-theme="dark"] { color-scheme: dark; }
 }
 
 /* ── Dark mode: sidebar active glow stays visible ────────── */
-[data-theme="dark"] .nav-item.active { background: rgba(59,130,246,.18); }
+[data-theme="dark"] .nav-item.active {
+    background: linear-gradient(90deg, rgba(59,130,246,.24), rgba(59,130,246,.07));
+}
 
 /* ── Dark mode: stat card left-border colors are unchanged ─ */
 /* (those inline border-left styles are fine on dark bg)     */
@@ -1473,5 +1475,343 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
     .page-body { padding: 0 !important; animation: none !important; }
     .card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
     body { background: #fff !important; }
+}
+
+/* ═════════════════════════════════════════════════════════
+   DARK MODE v2 — NEON
+   3D cards with animated tri-colour (green / blue / red)
+   neon glow, deep-space palette, animated sidebar.
+   ═════════════════════════════════════════════════════════ */
+
+/* Registered custom property → lets the conic-gradient angle
+   animate smoothly (Chrome 85+, Edge, Safari 16.4+, FF 128+).
+   Older browsers gracefully fall back to a static glow. */
+@property --neon-angle {
+    syntax: '<angle>';
+    initial-value: 115deg;
+    inherits: true;
+}
+
+:root {
+    --neon-g: #22c55e;
+    --neon-b: #3b82f6;
+    --neon-r: #ef4444;
+}
+
+/* ── Deep-space dark palette (richer than v1) ───────────── */
+[data-theme="dark"] {
+    --body-bg:     #0a0f1e;
+    --surface:     #101a30;
+    --surface-alt: #182541;
+    --border:      #24365a;
+    --sidebar-bg:  #070b16;
+    --text:        #e6edf7;
+    --text-2:      #9fb0c8;
+    --text-3:      #64748b;
+}
+[data-theme="dark"] body {
+    background:
+        radial-gradient(ellipse 80% 50% at 20% -10%, rgba(59,130,246,.08), transparent),
+        radial-gradient(ellipse 60% 40% at 90% 110%, rgba(34,197,94,.05), transparent),
+        var(--body-bg);
+    background-attachment: fixed;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #2c3e60; }
+
+/* ── 3D neon cards ───────────────────────────────────────── */
+[data-theme="dark"] .card,
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .quick-action-card,
+[data-theme="dark"] .modal-content {
+    position: relative;
+    border-color: transparent;
+    --neon-angle: 115deg;
+    box-shadow:
+        0 12px 32px rgba(0,0,0,.5),
+        0 3px 10px rgba(0,0,0,.35),
+        inset 0 1px 0 rgba(255,255,255,.04);
+    transition:
+        transform .35s cubic-bezier(.22,.61,.36,1),
+        box-shadow .35s cubic-bezier(.22,.61,.36,1),
+        background .25s;
+    will-change: transform;
+}
+
+/* Crisp neon rim — masked conic gradient painted only on the
+   1.5px border ring so it never covers card content.       */
+[data-theme="dark"] .card::before,
+[data-theme="dark"] .stat-card::before,
+[data-theme="dark"] .quick-action-card::before,
+[data-theme="dark"] .modal-content::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: conic-gradient(from var(--neon-angle),
+        var(--neon-g), var(--neon-b) 32%, var(--neon-r) 66%, var(--neon-g));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+    opacity: .45;
+    pointer-events: none;
+    transition: opacity .35s;
+}
+
+/* Soft outer glow — blurred copy of the same ring. */
+[data-theme="dark"] .card::after,
+[data-theme="dark"] .stat-card::after,
+[data-theme="dark"] .quick-action-card::after,
+[data-theme="dark"] .modal-content::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2.5px;
+    background: conic-gradient(from var(--neon-angle),
+        var(--neon-g), var(--neon-b) 32%, var(--neon-r) 66%, var(--neon-g));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+    filter: blur(10px);
+    opacity: .28;
+    pointer-events: none;
+    transition: opacity .35s;
+}
+
+/* Hover — lift into 3D and set the light in motion. */
+@keyframes neonSpin {
+    to { --neon-angle: 475deg; }
+}
+[data-theme="dark"] .card:hover,
+[data-theme="dark"] .stat-card:hover {
+    transform: perspective(1200px) rotateX(1.2deg) translateY(-5px);
+    box-shadow:
+        0 24px 56px rgba(0,0,0,.6),
+        0 0 32px rgba(59,130,246,.12),
+        0 0 24px rgba(34,197,94,.08),
+        inset 0 1px 0 rgba(255,255,255,.06);
+}
+[data-theme="dark"] .quick-action-card:hover {
+    transform: perspective(1000px) rotateX(2deg) translateY(-4px) scale(1.02);
+    box-shadow: 0 18px 40px rgba(0,0,0,.55), 0 0 24px rgba(59,130,246,.14);
+}
+[data-theme="dark"] .card:hover::before,
+[data-theme="dark"] .stat-card:hover::before,
+[data-theme="dark"] .quick-action-card:hover::before {
+    opacity: .95;
+    animation: neonSpin 3.2s linear infinite;
+}
+[data-theme="dark"] .card:hover::after,
+[data-theme="dark"] .stat-card:hover::after,
+[data-theme="dark"] .quick-action-card:hover::after {
+    opacity: .6;
+    animation: neonSpin 3.2s linear infinite;
+}
+
+/* Welcome banner — neon underglow, no lift (it is a hero). */
+[data-theme="dark"] .welcome-banner {
+    box-shadow:
+        0 12px 40px rgba(0,0,0,.55),
+        0 4px 24px rgba(59,130,246,.22),
+        0 2px 16px rgba(34,197,94,.10);
+}
+
+/* ── Topbar — align with deep palette + neon hairline ───── */
+[data-theme="dark"] .app-topbar {
+    background: rgba(13,20,38,.92);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(59,130,246,.18);
+    box-shadow: 0 1px 12px rgba(59,130,246,.08);
+}
+[data-theme="dark"] .topbar-icon-btn:hover,
+[data-theme="dark"] .toggle-btn:hover {
+    border-color: rgba(59,130,246,.5);
+    box-shadow: 0 0 10px rgba(59,130,246,.25);
+}
+#themeToggle i { transition: transform .4s cubic-bezier(.22,.61,.36,1); }
+#themeToggle:hover i { transform: rotate(40deg) scale(1.12); }
+
+/* ── Neon focus rings for inputs ────────────────────────── */
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+    box-shadow:
+        0 0 0 3px rgba(59,130,246,.22),
+        0 0 14px rgba(59,130,246,.18);
+}
+[data-theme="dark"] .btn-primary {
+    box-shadow: 0 2px 12px rgba(59,130,246,.35);
+}
+[data-theme="dark"] .btn-primary:hover {
+    box-shadow: 0 4px 20px rgba(59,130,246,.5);
+}
+
+/* ─────────────────────────────────────────────────────────
+   SIDEBAR v2 — animated (all role sidebars share these
+   classes, and the sidebar is always dark-surfaced)
+   ───────────────────────────────────────────────────────── */
+.app-sidebar {
+    background: linear-gradient(180deg, #0d1424 0%, #070b16 100%);
+    border-right: 1px solid rgba(59,130,246,.10);
+}
+
+/* Brand logo — slow tri-colour breathing glow */
+@keyframes brandBreathe {
+    0%, 100% { box-shadow: 0 4px 16px rgba(59,130,246,.45); }
+    33%      { box-shadow: 0 4px 16px rgba(34,197,94,.40); }
+    66%      { box-shadow: 0 4px 16px rgba(239,68,68,.38); }
+}
+.brand-logo { animation: brandBreathe 9s ease-in-out infinite; }
+
+/* Staggered entrance for nav entries */
+@keyframes navSlideIn {
+    from { opacity: 0; transform: translateX(-14px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+.sidebar-nav > * { animation: navSlideIn .38s ease backwards; }
+.sidebar-nav > *:nth-child(1)  { animation-delay: .02s; }
+.sidebar-nav > *:nth-child(2)  { animation-delay: .05s; }
+.sidebar-nav > *:nth-child(3)  { animation-delay: .08s; }
+.sidebar-nav > *:nth-child(4)  { animation-delay: .11s; }
+.sidebar-nav > *:nth-child(5)  { animation-delay: .14s; }
+.sidebar-nav > *:nth-child(6)  { animation-delay: .17s; }
+.sidebar-nav > *:nth-child(7)  { animation-delay: .20s; }
+.sidebar-nav > *:nth-child(8)  { animation-delay: .23s; }
+.sidebar-nav > *:nth-child(9)  { animation-delay: .26s; }
+.sidebar-nav > *:nth-child(10) { animation-delay: .29s; }
+.sidebar-nav > *:nth-child(11) { animation-delay: .32s; }
+.sidebar-nav > *:nth-child(12) { animation-delay: .35s; }
+.sidebar-nav > *:nth-child(13) { animation-delay: .38s; }
+.sidebar-nav > *:nth-child(14) { animation-delay: .41s; }
+.sidebar-nav > *:nth-child(n+15) { animation-delay: .44s; }
+
+/* Nav items — slide + icon pop on hover */
+.nav-item {
+    transition: background .15s, color .15s, transform .18s ease,
+                border-color .15s, box-shadow .2s;
+}
+.nav-item i { transition: transform .18s ease; }
+.nav-item:hover { transform: translateX(4px); }
+.nav-item:hover i { transform: scale(1.18); }
+
+/* Active item — neon accent with a gentle pulse */
+@keyframes activePulse {
+    0%, 100% { box-shadow: inset 0 0 18px rgba(59,130,246,.10), 0 0 10px rgba(59,130,246,.10); }
+    50%      { box-shadow: inset 0 0 18px rgba(59,130,246,.22), 0 0 16px rgba(59,130,246,.22); }
+}
+.nav-item.active {
+    background: linear-gradient(90deg, rgba(59,130,246,.22), rgba(59,130,246,.06));
+    border-left-color: #3b82f6;
+    animation: activePulse 3.6s ease-in-out infinite;
+}
+.app-sidebar.collapsed .nav-item:hover { transform: none; }
+.app-sidebar.collapsed .nav-item:hover i { transform: scale(1.22); }
+
+/* ─────────────────────────────────────────────────────────
+   DARK MODE v2 — coverage completeness
+   ───────────────────────────────────────────────────────── */
+
+/* Bootstrap subtle backgrounds (badges on documents, CRM…) */
+[data-theme="dark"] .bg-primary-subtle   { background-color: rgba(59,130,246,.16) !important; }
+[data-theme="dark"] .bg-success-subtle   { background-color: rgba(34,197,94,.14)  !important; }
+[data-theme="dark"] .bg-danger-subtle    { background-color: rgba(239,68,68,.14)  !important; }
+[data-theme="dark"] .bg-warning-subtle   { background-color: rgba(245,158,11,.14) !important; }
+[data-theme="dark"] .bg-info-subtle      { background-color: rgba(14,165,233,.14) !important; }
+[data-theme="dark"] .bg-secondary-subtle { background-color: rgba(100,116,139,.18)!important; }
+[data-theme="dark"] .bg-dark-subtle      { background-color: rgba(148,163,184,.14)!important; }
+[data-theme="dark"] .text-primary   { color: #7cabf8 !important; }
+[data-theme="dark"] .text-success   { color: #4ade80 !important; }
+[data-theme="dark"] .text-danger    { color: #f87171 !important; }
+[data-theme="dark"] .text-warning   { color: #fbbf24 !important; }
+[data-theme="dark"] .text-info      { color: #38bdf8 !important; }
+[data-theme="dark"] .text-secondary { color: #94a3b8 !important; }
+[data-theme="dark"] .border-primary-subtle,
+[data-theme="dark"] .border-success-subtle,
+[data-theme="dark"] .border-danger-subtle,
+[data-theme="dark"] .border-warning-subtle,
+[data-theme="dark"] .border-info-subtle,
+[data-theme="dark"] .border-secondary-subtle { border-color: var(--border) !important; }
+
+/* Nav tabs (settings, messaging pages) */
+[data-theme="dark"] .nav-tabs { border-color: var(--border); }
+[data-theme="dark"] .nav-tabs .nav-link { color: var(--text-2); }
+[data-theme="dark"] .nav-tabs .nav-link:hover {
+    color: var(--text);
+    border-color: var(--border) var(--border) transparent;
+}
+[data-theme="dark"] .nav-tabs .nav-link.active {
+    background: var(--surface);
+    border-color: var(--border) var(--border) var(--surface);
+    color: #7cabf8;
+    box-shadow: 0 -2px 10px rgba(59,130,246,.12);
+}
+
+/* Pagination / breadcrumbs */
+[data-theme="dark"] .pagination .page-link {
+    background: var(--surface); border-color: var(--border); color: var(--text-2);
+}
+[data-theme="dark"] .pagination .page-link:hover { background: var(--surface-alt); color: var(--text); }
+[data-theme="dark"] .pagination .active > .page-link { background: var(--brand); border-color: var(--brand); color: #fff; }
+[data-theme="dark"] .breadcrumb-item,
+[data-theme="dark"] .breadcrumb-item a { color: var(--text-2); }
+
+/* Light-variant components */
+[data-theme="dark"] .btn-light {
+    background: var(--surface-alt); border-color: var(--border); color: var(--text);
+}
+[data-theme="dark"] .btn-light:hover { background: #22314f; color: var(--text); }
+[data-theme="dark"] .btn-outline-secondary { color: var(--text-2); border-color: var(--border); }
+[data-theme="dark"] .btn-outline-secondary:hover { background: var(--surface-alt); color: var(--text); border-color: #3b4f76; }
+[data-theme="dark"] .btn-outline-dark { color: var(--text); border-color: var(--text-3); }
+[data-theme="dark"] .btn-outline-dark:hover { background: var(--surface-alt); color: var(--text); }
+[data-theme="dark"] .table-light > tr > th,
+[data-theme="dark"] .table > thead.table-light > tr > th,
+[data-theme="dark"] thead.table-light th { background: #0d1526 !important; color: #9fb0c8 !important; border-color: var(--border) !important; }
+[data-theme="dark"] .btn-close { filter: invert(1) grayscale(100%) brightness(180%); }
+
+/* Accordion / offcanvas / popover / tooltip */
+[data-theme="dark"] .accordion-item   { background: var(--surface); border-color: var(--border); }
+[data-theme="dark"] .accordion-button { background: var(--surface); color: var(--text); }
+[data-theme="dark"] .accordion-button:not(.collapsed) { background: var(--surface-alt); color: #7cabf8; }
+[data-theme="dark"] .accordion-body   { color: var(--text-2); }
+[data-theme="dark"] .offcanvas        { background: var(--surface); color: var(--text); }
+[data-theme="dark"] .popover          { background: var(--surface); border-color: var(--border); }
+[data-theme="dark"] .popover-body     { color: var(--text); }
+
+/* Notification panel + dropdowns get a static neon rim */
+[data-theme="dark"] .notif-panel,
+[data-theme="dark"] .topbar-dropdown,
+[data-theme="dark"] .dropdown-menu {
+    border: 1px solid rgba(59,130,246,.28) !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,.6), 0 0 24px rgba(59,130,246,.10);
+}
+[data-theme="dark"] .notif-icon { background: var(--surface-alt); }
+
+/* ── Accessibility + print guards ───────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    [data-theme="dark"] .card::before, [data-theme="dark"] .card::after,
+    [data-theme="dark"] .stat-card::before, [data-theme="dark"] .stat-card::after,
+    [data-theme="dark"] .quick-action-card::before, [data-theme="dark"] .quick-action-card::after {
+        animation: none !important;
+    }
+    [data-theme="dark"] .card:hover,
+    [data-theme="dark"] .stat-card:hover,
+    [data-theme="dark"] .quick-action-card:hover { transform: none; }
+    .sidebar-nav > * { animation: none; }
+    .brand-logo { animation: none; }
+    .nav-item.active { animation: none; }
+    .nav-item:hover { transform: none; }
+}
+@media (max-width: 768px) {
+    /* No hover on touch — skip the heavier 3D transforms */
+    [data-theme="dark"] .card:hover,
+    [data-theme="dark"] .stat-card:hover { transform: none; }
+}
+@media print {
+    .card::before, .card::after,
+    .stat-card::before, .stat-card::after { display: none !important; }
 }
 

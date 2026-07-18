@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title><?= isset($pageTitle) ? e($pageTitle) . ' — ' : '' ?><?= e(getSetting('company_name', APP_NAME)) ?></title>
 
+<!-- Theme — applied before first paint to prevent light-mode flash -->
+<script>
+(function () {
+    try {
+        var t = localStorage.getItem('mascardiTheme');
+        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    } catch (e) {}
+}());
+</script>
+
 <!-- PWA — Web App Manifest -->
 <link rel="manifest" href="<?= BASE_URL ?>/manifest.php">
 
