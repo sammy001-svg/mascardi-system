@@ -5,6 +5,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= isset($pageTitle) ? e($pageTitle) . ' — ' : '' ?><?= e(getSetting('company_name', APP_NAME)) ?> Portal</title>
+
+<!-- Theme — dark by default, applied before first paint -->
+<script>
+(function () {
+    var dark = true;
+    try { dark = localStorage.getItem('mascardiTheme') !== 'light'; } catch (e) {}
+    if (dark) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.setAttribute('data-bs-theme', 'dark');
+    }
+}());
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -32,7 +45,23 @@ body { background: #f1f5f9; }
 .page-hero h4 { margin: 0; font-weight: 700; font-size: 18px; }
 .page-hero .breadcrumb-item, .page-hero .breadcrumb-item a { color: rgba(255,255,255,.65); font-size: 13px; }
 .page-hero .breadcrumb-item.active { color: rgba(255,255,255,.9); }
-@media print { .portal-nav, .no-print { display: none !important; } body { background: #fff; } }
+/* ── Dark mode (default) ─────────────────────────────────── */
+[data-theme="dark"] body { background: #0a0f1e; }
+[data-theme="dark"] .portal-nav { background: #070b16; border-bottom: 1px solid rgba(59,130,246,.15); }
+[data-theme="dark"] .p-stat,
+[data-theme="dark"] .p-card {
+    background: #101a30;
+    border: 1px solid #24365a;
+    box-shadow: 0 12px 32px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04);
+}
+[data-theme="dark"] .p-card-header { border-bottom-color: #24365a; }
+[data-theme="dark"] .p-stat-label { color: #9fb0c8; }
+[data-theme="dark"] .page-hero { background: #0d1424; }
+@media print {
+    .portal-nav, .no-print { display: none !important; }
+    body { background: #fff !important; }
+    [data-theme="dark"] .p-card, [data-theme="dark"] .p-stat { background: #fff; border-color: #e2e8f0; box-shadow: none; }
+}
 </style>
 </head>
 <body>

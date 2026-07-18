@@ -44,8 +44,8 @@ echo json_encode([
     'id'               => $base . '/',
     'display'          => 'standalone',
     'orientation'      => 'portrait-primary',
-    'theme_color'      => '#2563eb',
-    'background_color' => '#1e3a8a',
+    'theme_color'      => '#0a0f1e',
+    'background_color' => '#0a0f1e',
     'lang'             => 'en',
 
     'icons' => [

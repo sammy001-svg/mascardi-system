@@ -22,10 +22,9 @@
 <!-- PWA — Web App Manifest -->
 <link rel="manifest" href="<?= BASE_URL ?>/manifest.php">
 
-<!-- PWA — Theme & status bar -->
-<meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1e3a8a" media="(prefers-color-scheme: dark)">
-<meta name="color-scheme" content="light dark">
+<!-- PWA — Theme & status bar (dark is the app default) -->
+<meta name="theme-color" content="#0a0f1e">
+<meta name="color-scheme" content="dark light">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="application-name" content="<?= e(getSetting('company_name', APP_NAME)) ?>">
 
