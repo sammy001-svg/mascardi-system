@@ -1516,6 +1516,45 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
         var(--body-bg);
     background-attachment: fixed;
 }
+
+/* Main content wrap — light keeps its tint, dark lets the
+   body's deep-space gradient show through on every page.   */
+.main-wrap { background: #edf0f7; transition: background .25s; }
+[data-theme="dark"] .main-wrap { background: transparent; }
+
+/* Inline light-background neutralizer — many module pages
+   use inline style accents (filter bars, section headers,
+   sticky table heads). Inline styles outrank normal CSS,
+   so match the style attribute and force the dark surface.
+   Pure #fff is intentionally excluded: in-app document
+   previews (agreements, receipts) must stay paper-white.  */
+[data-theme="dark"] [style*="background:#f8fafc"],
+[data-theme="dark"] [style*="background: #f8fafc"],
+[data-theme="dark"] [style*="background:#f1f5f9"],
+[data-theme="dark"] [style*="background: #f1f5f9"],
+[data-theme="dark"] [style*="background:#edf0f7"],
+[data-theme="dark"] [style*="background: #edf0f7"],
+[data-theme="dark"] [style*="background:#eff6ff"],
+[data-theme="dark"] [style*="background: #eff6ff"],
+[data-theme="dark"] [style*="background-color:#f8fafc"],
+[data-theme="dark"] [style*="background-color: #f8fafc"],
+[data-theme="dark"] [style*="background-color:#f1f5f9"],
+[data-theme="dark"] [style*="background-color: #f1f5f9"] {
+    background: var(--surface-alt) !important;
+}
+
+/* Inline dark-text neutralizer — same trick for hardcoded
+   near-black text that would vanish on dark surfaces.      */
+[data-theme="dark"] [style*="color:#0f172a"],
+[data-theme="dark"] [style*="color: #0f172a"],
+[data-theme="dark"] [style*="color:#1e293b"],
+[data-theme="dark"] [style*="color: #1e293b"],
+[data-theme="dark"] [style*="color:#334155"],
+[data-theme="dark"] [style*="color: #334155"],
+[data-theme="dark"] [style*="color:#475569"],
+[data-theme="dark"] [style*="color: #475569"] {
+    color: var(--text) !important;
+}
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #2c3e60; }
 
 /* ── 3D neon cards ───────────────────────────────────────── */

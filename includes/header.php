@@ -96,7 +96,7 @@ window.addEventListener('beforeinstallprompt', function(e) {
 <?php include __DIR__ . '/sidebar.php'; ?>
 <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
-<div class="main-wrap" style="flex:1;min-width:0;display:flex;flex-direction:column;background:#edf0f7">
+<div class="main-wrap" style="flex:1;min-width:0;display:flex;flex-direction:column">
 
 <!-- ── Top Navbar ─────────────────────────────────────── -->
 <header class="app-topbar">
