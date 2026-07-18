@@ -1719,6 +1719,15 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
     [data-theme="dark"] [style*="color: #000"],
     [data-theme="dark"] [style*="color:black"],
     [data-theme="dark"] [style*="color: black"] { color: #000 !important; }
+    [data-theme="dark"] [style*="background:#fff"],
+    [data-theme="dark"] [style*="background: #fff"] { background: #fff !important; border-color: #e2e8f0 !important; }
+    [data-theme="dark"] [style*="background:#f0fdf4"] { background: #f0fdf4 !important; }
+    [data-theme="dark"] [style*="background:#fff7ed"] { background: #fff7ed !important; }
+    [data-theme="dark"] [style*="background:#fffbeb"] { background: #fffbeb !important; }
+    [data-theme="dark"] [style*="color:#15803d"] { color: #15803d !important; }
+    [data-theme="dark"] [style*="color:#c2410c"] { color: #c2410c !important; }
+    [data-theme="dark"] [style*="color:#92400e"] { color: #92400e !important; }
+    [data-theme="dark"] [style*="color:#1d4ed8"] { color: #1d4ed8 !important; }
 }
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #2c3e60; }
 
@@ -2016,6 +2025,145 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
     box-shadow: 0 12px 40px rgba(0,0,0,.6), 0 0 24px rgba(59,130,246,.10);
 }
 [data-theme="dark"] .notif-icon { background: var(--surface-alt); }
+
+/* ─────────────────────────────────────────────────────────
+   DARK MODE v3 — deep readability pass
+   Remaps Bootstrap's own CSS variables plus the inline
+   pastel tiles / accent text used across CRM pages.
+   ───────────────────────────────────────────────────────── */
+
+/* Bootstrap variable remap — fixes black text in any component
+   that reads Bootstrap defaults (tables, alerts, lists…).    */
+[data-theme="dark"] body {
+    --bs-body-color:        var(--text);
+    --bs-body-bg:           var(--body-bg);
+    --bs-emphasis-color:    var(--text);
+    --bs-secondary-color:   var(--text-2);
+    --bs-tertiary-color:    var(--text-3);
+    --bs-tertiary-bg:       var(--surface-alt);
+    --bs-secondary-bg:      var(--surface-alt);
+    --bs-border-color:      var(--border);
+    --bs-heading-color:     var(--text);
+    --bs-link-color:        #7cabf8;
+    --bs-link-hover-color:  #a5c4fa;
+}
+
+/* Bootstrap contextual table rows (overdue leads use
+   .table-danger — light red + black text by default).       */
+[data-theme="dark"] .table-danger {
+    --bs-table-bg: rgba(220,38,38,.14);
+    --bs-table-color: var(--text);
+    --bs-table-border-color: rgba(220,38,38,.3);
+}
+[data-theme="dark"] .table-warning {
+    --bs-table-bg: rgba(245,158,11,.14);
+    --bs-table-color: var(--text);
+    --bs-table-border-color: rgba(245,158,11,.3);
+}
+[data-theme="dark"] .table-success {
+    --bs-table-bg: rgba(34,197,94,.12);
+    --bs-table-color: var(--text);
+    --bs-table-border-color: rgba(34,197,94,.3);
+}
+[data-theme="dark"] .table-info {
+    --bs-table-bg: rgba(14,165,233,.12);
+    --bs-table-color: var(--text);
+    --bs-table-border-color: rgba(14,165,233,.3);
+}
+[data-theme="dark"] .table > tbody > tr.table-danger > td,
+[data-theme="dark"] .table > tbody > tr.table-warning > td,
+[data-theme="dark"] .table > tbody > tr.table-success > td,
+[data-theme="dark"] .table > tbody > tr.table-info > td {
+    background-color: var(--bs-table-bg) !important;
+    color: var(--text) !important;
+}
+
+/* Inline white backgrounds (search dropdowns, embedded
+   tables…). Order matters: this generic rule comes first so
+   the pastel-tint rules below beat it for #fff7ed/#fffbeb.  */
+[data-theme="dark"] [style*="background:#fff"],
+[data-theme="dark"] [style*="background: #fff"],
+[data-theme="dark"] [style*="background:#eee"],
+[data-theme="dark"] [style*="background: #eee"],
+[data-theme="dark"] [style*="background:#f0f0f0"],
+[data-theme="dark"] [style*="background:#e9ecef"],
+[data-theme="dark"] [style*="background:#fafafa"],
+[data-theme="dark"] [style*="background: #fafafa"] {
+    background: var(--surface) !important;
+    border-color: var(--border) !important;
+}
+
+/* Inline pastel tint tiles → translucent dark equivalents.  */
+[data-theme="dark"] [style*="background:#f0fdf4"],
+[data-theme="dark"] [style*="background: #f0fdf4"],
+[data-theme="dark"] [style*="background:#dcfce7"] { background: rgba(34,197,94,.12) !important; border-color: rgba(34,197,94,.3) !important; }
+[data-theme="dark"] [style*="background:#fff7ed"],
+[data-theme="dark"] [style*="background: #fff7ed"] { background: rgba(249,115,22,.12) !important; border-color: rgba(249,115,22,.3) !important; }
+[data-theme="dark"] [style*="background:#fffbeb"],
+[data-theme="dark"] [style*="background: #fffbeb"],
+[data-theme="dark"] [style*="background:#fef3c7"] { background: rgba(245,158,11,.12) !important; border-color: rgba(245,158,11,.3) !important; }
+[data-theme="dark"] [style*="background:#fef9c3"] { background: rgba(234,179,8,.14) !important; border-color: rgba(234,179,8,.3) !important; }
+[data-theme="dark"] [style*="background:#fef2f2"],
+[data-theme="dark"] [style*="background:#fee2e2"] { background: rgba(239,68,68,.12) !important; border-color: rgba(239,68,68,.3) !important; }
+[data-theme="dark"] [style*="background:#f0f9ff"] { background: rgba(14,165,233,.10) !important; border-color: rgba(14,165,233,.3) !important; }
+[data-theme="dark"] [style*="background:#ede9fe"] { background: rgba(124,58,237,.14) !important; border-color: rgba(124,58,237,.3) !important; }
+
+/* Inline pastel gradient headers (view_lead reserved /
+   invoiced / delivered panels).                             */
+[data-theme="dark"] [style*="linear-gradient(135deg,#f0fdf4"] {
+    background: linear-gradient(135deg, rgba(34,197,94,.16), rgba(34,197,94,.05)) !important;
+    border-color: rgba(34,197,94,.3) !important;
+}
+[data-theme="dark"] [style*="linear-gradient(135deg,#fffbeb"] {
+    background: linear-gradient(135deg, rgba(245,158,11,.16), rgba(245,158,11,.05)) !important;
+    border-color: rgba(245,158,11,.3) !important;
+}
+[data-theme="dark"] [style*="linear-gradient(135deg,#eff6ff"],
+[data-theme="dark"] [style*="linear-gradient(135deg,#dbeafe"] {
+    background: linear-gradient(135deg, rgba(59,130,246,.16), rgba(59,130,246,.05)) !important;
+    border-color: rgba(59,130,246,.3) !important;
+}
+
+/* Inline accent text on tinted tiles → bright variants.     */
+[data-theme="dark"] [style*="color:#15803d"],
+[data-theme="dark"] [style*="color: #15803d"],
+[data-theme="dark"] [style*="color:#166534"],
+[data-theme="dark"] [style*="color:#198754"],
+[data-theme="dark"] [style*="color:#14532d"] { color: #4ade80 !important; }
+[data-theme="dark"] [style*="color:#c2410c"],
+[data-theme="dark"] [style*="color: #c2410c"],
+[data-theme="dark"] [style*="color:#9a3412"] { color: #fb923c !important; }
+[data-theme="dark"] [style*="color:#92400e"],
+[data-theme="dark"] [style*="color: #92400e"],
+[data-theme="dark"] [style*="color:#78350f"],
+[data-theme="dark"] [style*="color:#b45309"] { color: #fbbf24 !important; }
+[data-theme="dark"] [style*="color:#1d4ed8"],
+[data-theme="dark"] [style*="color: #1d4ed8"],
+[data-theme="dark"] [style*="color:#1e40af"],
+[data-theme="dark"] [style*="color:#2563eb"] { color: #7cabf8 !important; }
+[data-theme="dark"] [style*="color:#5b21b6"],
+[data-theme="dark"] [style*="color: #5b21b6"],
+[data-theme="dark"] [style*="color:#6d28d9"] { color: #c4b5fd !important; }
+[data-theme="dark"] [style*="color:#0369a1"],
+[data-theme="dark"] [style*="color:#075985"] { color: #38bdf8 !important; }
+[data-theme="dark"] [style*="color:#6c757d"],
+[data-theme="dark"] [style*="color: #6c757d"],
+[data-theme="dark"] [style*="color:#495057"] { color: var(--text-2) !important; }
+[data-theme="dark"] [style*="color:#b91c1c"],
+[data-theme="dark"] [style*="color:#991b1b"] { color: #f87171 !important; }
+
+/* Paper-doc exemption for the generic white rule.           */
+[data-theme="dark"] .print-wrapper [style*="background:#fff"],
+[data-theme="dark"] .print-wrapper [style*="background: #fff"],
+[data-theme="dark"] .sheet         [style*="background:#fff"],
+[data-theme="dark"] #dnDoc        [style*="background:#fff"],
+[data-theme="dark"] #srDoc        [style*="background:#fff"],
+[data-theme="dark"] #salesDoc     [style*="background:#fff"],
+[data-theme="dark"] #proformaDoc  [style*="background:#fff"],
+[data-theme="dark"] #drDoc        [style*="background:#fff"] {
+    background: #fff !important;
+    border-color: #e2e8f0 !important;
+}
 
 /* ── Accessibility + print guards ───────────────────────── */
 @media (prefers-reduced-motion: reduce) {
