@@ -3,10 +3,13 @@
 /* ─────────────────────────────────────────────────────────
    DARK MODE
    ───────────────────────────────────────────────────────── */
+/* Dark is the default theme; light only if explicitly chosen. */
 (function () {
-    var saved = localStorage.getItem('mascardiTheme');
-    if (saved === 'dark' ||
-        (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    try {
+        if (localStorage.getItem('mascardiTheme') !== 'light') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    } catch (e) {
         document.documentElement.setAttribute('data-theme', 'dark');
     }
 }());
@@ -23,6 +26,82 @@ function applyTheme(theme) {
         if (icon) icon.className = 'fa fa-moon';
     }
 }
+
+/* ─────────────────────────────────────────────────────────
+   TOP LOADING BAR — instant feedback while next page loads
+   ───────────────────────────────────────────────────────── */
+(function () {
+    var bar, trickleTimer, progress = 0;
+
+    function ensureBar() {
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'topLoadBar';
+            document.body.appendChild(bar);
+        }
+        return bar;
+    }
+
+    var safetyTimer;
+    function start() {
+        var b = ensureBar();
+        clearInterval(trickleTimer);
+        clearTimeout(safetyTimer);
+        progress = 12;
+        b.style.width = progress + '%';
+        b.classList.add('active');
+        // Trickle towards 90% while the next page is loading
+        trickleTimer = setInterval(function () {
+            progress += (90 - progress) * 0.08;
+            b.style.width = progress + '%';
+        }, 200);
+        // Safety: if navigation never happens (cancelled confirm,
+        // AJAX-intercepted form…), hide the bar again.
+        safetyTimer = setTimeout(done, 12000);
+    }
+
+    function done() {
+        if (!bar) return;
+        clearInterval(trickleTimer);
+        clearTimeout(safetyTimer);
+        bar.style.width = '100%';
+        var b = bar;
+        setTimeout(function () {
+            b.classList.remove('active');
+            setTimeout(function () { b.style.width = '0%'; }, 400);
+        }, 150);
+    }
+
+    window.topLoadBar = { start: start, done: done };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        ensureBar();
+
+        // Any same-tab navigation link
+        document.addEventListener('click', function (e) {
+            var a = e.target.closest && e.target.closest('a[href]');
+            if (!a) return;
+            var href = a.getAttribute('href') || '';
+            if (a.target === '_blank' || a.hasAttribute('download') ||
+                href.indexOf('#') === 0 || href.indexOf('javascript:') === 0 ||
+                href.indexOf('mailto:') === 0 || href.indexOf('tel:') === 0 ||
+                e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+            start();
+        }, true);
+
+        // Form submissions (filters, saves…)
+        document.addEventListener('submit', function (e) {
+            if (e.defaultPrevented) return;
+            var f = e.target;
+            if (f.target === '_blank') return;
+            start();
+        }, true);
+    });
+
+    // Finished loading (also fires on back/forward bfcache restore)
+    window.addEventListener('pageshow', done);
+    window.addEventListener('load', done);
+}());
 
 /* ─────────────────────────────────────────────────────────
    TOAST SYSTEM

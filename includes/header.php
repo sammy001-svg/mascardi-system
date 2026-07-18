@@ -5,15 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title><?= isset($pageTitle) ? e($pageTitle) . ' — ' : '' ?><?= e(getSetting('company_name', APP_NAME)) ?></title>
 
-<!-- Theme — applied before first paint to prevent light-mode flash -->
+<!-- Theme — applied before first paint. Dark is the default;
+     light only when the user explicitly switched to it. -->
 <script>
 (function () {
     try {
-        var t = localStorage.getItem('mascardiTheme');
-        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        if (localStorage.getItem('mascardiTheme') !== 'light') {
             document.documentElement.setAttribute('data-theme', 'dark');
         }
-    } catch (e) {}
+    } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    }
 }());
 </script>
 

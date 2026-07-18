@@ -247,6 +247,38 @@ include __DIR__ . '/../../includes/header.php';
     background:#f8fafc;
     margin-top:auto;
 }
+
+/* ── Dark mode ────────────────────────────────────────────────────────────── */
+[data-theme="dark"] .filter-bar { background: var(--surface); border-color: var(--border); }
+[data-theme="dark"] .filter-bar label { color: var(--text-3); }
+[data-theme="dark"] .filter-bar select,
+[data-theme="dark"] .filter-bar input[type=text] {
+    background: var(--surface-alt); border-color: var(--border); color: var(--text);
+}
+[data-theme="dark"] .filter-bar select:focus,
+[data-theme="dark"] .filter-bar input[type=text]:focus { background: var(--surface); border-color:#16a34a; }
+[data-theme="dark"] .results-count { color: var(--text); }
+[data-theme="dark"] .active-filter-chip { background: rgba(34,197,94,.16); color:#4ade80; }
+[data-theme="dark"] .dlv-card {
+    background: var(--surface);
+    border-color: var(--border);
+    box-shadow: 0 12px 32px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04);
+}
+[data-theme="dark"] .dlv-card:hover {
+    box-shadow:
+        0 24px 56px rgba(0,0,0,.6),
+        0 0 44px rgba(34,197,94,.32),
+        0 0 34px rgba(59,130,246,.20),
+        0 0 28px rgba(239,68,68,.14);
+}
+[data-theme="dark"] .dlv-img-wrap { background: var(--surface-alt); }
+[data-theme="dark"] .dlv-img-wrap .no-img { color: #3b4f76; }
+[data-theme="dark"] .dlv-car-name { color: var(--text); }
+[data-theme="dark"] .dlv-delivery-date { background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.3); color:#4ade80; }
+[data-theme="dark"] .dlv-price { color: #7cabf8; }
+[data-theme="dark"] .dlv-divider { background: var(--border); }
+[data-theme="dark"] .dlv-field-val { color: var(--text); }
+[data-theme="dark"] .dlv-actions { background: var(--surface-alt); border-top-color: var(--border); }
 </style>
 
 <!-- ── Dashboard banner ─────────────────────────────────────────────────────── -->

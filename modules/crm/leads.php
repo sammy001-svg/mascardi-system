@@ -176,6 +176,8 @@ $filterSource   = $_GET['source']   ?? '';
 $filterCampaign = trim($_GET['campaign'] ?? '');
 $filterUser     = $isCrmAgent ? $uid : (int)($_GET['assigned'] ?? 0);
 $search         = trim($_GET['q'] ?? '');
+$filterFrom     = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_from'] ?? '') ? $_GET['date_from'] : '';
+$filterTo       = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_to']   ?? '') ? $_GET['date_to']   : '';
 $sortBy         = in_array($_GET['sort'] ?? '', ['score_desc','score_asc','updated','overdue']) ? $_GET['sort'] : 'overdue';
 
 $where  = ['1=1'];
@@ -201,6 +203,8 @@ if ($filterStage)                { $where[] = 'l.stage = ?';       $params[] = $
 if ($filterSource)               { $where[] = 'l.source = ?';      $params[] = $filterSource; }
 if ($filterCampaign)             { $where[] = 'l.campaign = ?';    $params[] = $filterCampaign; }
 if (!$isCrmAgent && $filterUser) { $where[] = 'l.assigned_to = ?'; $params[] = $filterUser; }
+if ($filterFrom)                 { $where[] = 'DATE(l.created_at) >= ?'; $params[] = $filterFrom; }
+if ($filterTo)                   { $where[] = 'DATE(l.created_at) <= ?'; $params[] = $filterTo; }
 if ($search) {
     $where[]  = '(l.name LIKE ? OR l.phone LIKE ? OR l.email LIKE ? OR l.interested_in LIKE ? OR l.campaign LIKE ?)';
     $params   = array_merge($params, ["%$search%","%$search%","%$search%","%$search%","%$search%"]);
@@ -455,11 +459,36 @@ include __DIR__ . '/../../includes/header.php';
                     <option value="updated"    <?= $sortBy === 'updated'    ? 'selected' : '' ?>>Recently Updated</option>
                 </select>
             </div>
+            <div class="col-sm-2">
+                <label class="form-label mb-1 text-muted" style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Entered From</label>
+                <input type="date" name="date_from" class="form-control form-control-sm"
+                       value="<?= e($filterFrom) ?>" max="<?= date('Y-m-d') ?>">
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label mb-1 text-muted" style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Entered To</label>
+                <input type="date" name="date_to" class="form-control form-control-sm"
+                       value="<?= e($filterTo) ?>" max="<?= date('Y-m-d') ?>">
+            </div>
             <div class="col-auto d-flex gap-2">
                 <button class="btn btn-sm btn-primary"><i class="fa fa-filter me-1"></i>Filter</button>
                 <a href="leads.php" class="btn btn-sm btn-outline-secondary">Clear</a>
             </div>
         </form>
+        <?php if ($filterFrom || $filterTo): ?>
+        <div class="mt-2 d-flex align-items-center gap-2" style="font-size:12px">
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                <i class="fa fa-calendar-days me-1"></i>
+                <?php if ($filterFrom && $filterTo): ?>
+                    Entered <?= fmtDate($filterFrom) ?> — <?= fmtDate($filterTo) ?>
+                <?php elseif ($filterFrom): ?>
+                    Entered from <?= fmtDate($filterFrom) ?>
+                <?php else: ?>
+                    Entered up to <?= fmtDate($filterTo) ?>
+                <?php endif; ?>
+            </span>
+            <span class="text-muted"><?= count($leads) ?> lead<?= count($leads) === 1 ? '' : 's' ?> found</span>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 

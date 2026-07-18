@@ -78,6 +78,29 @@ a:hover { text-decoration: underline; }
 ::-webkit-scrollbar-thumb { background: #c1c9d4; border-radius: 4px; }
 
 /* ─────────────────────────────────────────────────────────
+   TOP LOADING BAR — instant feedback on navigation
+   ───────────────────────────────────────────────────────── */
+#topLoadBar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 3px;
+    width: 0%;
+    z-index: 99999;
+    background: linear-gradient(90deg, var(--neon-g, #22c55e), var(--neon-b, #3b82f6), var(--neon-r, #ef4444));
+    background-size: 200% 100%;
+    box-shadow: 0 0 10px rgba(59,130,246,.7), 0 0 4px rgba(59,130,246,.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: width .25s ease, opacity .4s ease;
+    animation: loadBarShimmer 1.2s linear infinite;
+}
+#topLoadBar.active { opacity: 1; }
+@keyframes loadBarShimmer {
+    0%   { background-position: 0% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ─────────────────────────────────────────────────────────
    PAGE ENTRANCE ANIMATION
    ───────────────────────────────────────────────────────── */
 @keyframes pageFadeIn {
@@ -1552,9 +1575,41 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
 [data-theme="dark"] [style*="color:#334155"],
 [data-theme="dark"] [style*="color: #334155"],
 [data-theme="dark"] [style*="color:#475569"],
-[data-theme="dark"] [style*="color: #475569"] {
+[data-theme="dark"] [style*="color: #475569"],
+[data-theme="dark"] [style*="color:#111827"],
+[data-theme="dark"] [style*="color: #111827"],
+[data-theme="dark"] [style*="color:#1f2937"],
+[data-theme="dark"] [style*="color: #1f2937"],
+[data-theme="dark"] [style*="color:#212529"],
+[data-theme="dark"] [style*="color: #212529"],
+[data-theme="dark"] [style*="color:#374151"],
+[data-theme="dark"] [style*="color: #374151"],
+[data-theme="dark"] [style*="color:#000"],
+[data-theme="dark"] [style*="color: #000"],
+[data-theme="dark"] [style*="color:black"],
+[data-theme="dark"] [style*="color: black"] {
     color: var(--text) !important;
 }
+
+/* Readability guarantees — anything typically near-black in
+   light mode renders light in dark mode.                    */
+[data-theme="dark"] h1, [data-theme="dark"] h2, [data-theme="dark"] h3,
+[data-theme="dark"] h4, [data-theme="dark"] h5, [data-theme="dark"] h6,
+[data-theme="dark"] label,
+[data-theme="dark"] .form-check-label,
+[data-theme="dark"] .fw-bold, [data-theme="dark"] .fw-semibold,
+[data-theme="dark"] .fw-medium,
+[data-theme="dark"] strong, [data-theme="dark"] b,
+[data-theme="dark"] dt {
+    color: var(--text);
+}
+[data-theme="dark"] .text-body           { color: var(--text)   !important; }
+[data-theme="dark"] .text-body-secondary { color: var(--text-2) !important; }
+[data-theme="dark"] .link-dark           { color: var(--text)   !important; }
+[data-theme="dark"] .table > tbody > tr > td .fw-semibold,
+[data-theme="dark"] .table > tbody > tr > td .fw-bold,
+[data-theme="dark"] .table > tbody > tr > td a.fw-semibold { color: var(--text); }
+[data-theme="dark"] .table > tbody > tr > td a.fw-semibold:hover { color: #7cabf8; }
 
 /* Paper-document exemption — printable documents (agreements,
    receipts, delivery notes, handovers…) render as white paper
@@ -1603,6 +1658,39 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
 [data-theme="dark"] #salesDoc     [style*="color:#475569"] {
     color: #475569 !important;
 }
+[data-theme="dark"] .print-wrapper [style*="color:#374151"],
+[data-theme="dark"] .print-wrapper [style*="color: #374151"],
+[data-theme="dark"] .sheet         [style*="color:#374151"],
+[data-theme="dark"] #dnDoc        [style*="color:#374151"],
+[data-theme="dark"] #srDoc        [style*="color:#374151"],
+[data-theme="dark"] #salesDoc     [style*="color:#374151"],
+[data-theme="dark"] #proformaDoc  [style*="color:#374151"],
+[data-theme="dark"] #drDoc        [style*="color:#374151"] {
+    color: #374151 !important;
+}
+/* Paper docs: headings, labels, bold text stay ink-on-paper */
+[data-theme="dark"] .print-wrapper h1, [data-theme="dark"] .print-wrapper h2,
+[data-theme="dark"] .print-wrapper h3, [data-theme="dark"] .print-wrapper h4,
+[data-theme="dark"] .print-wrapper h5, [data-theme="dark"] .print-wrapper h6,
+[data-theme="dark"] .print-wrapper strong, [data-theme="dark"] .print-wrapper b,
+[data-theme="dark"] .print-wrapper label,
+[data-theme="dark"] .sheet h1, [data-theme="dark"] .sheet h2, [data-theme="dark"] .sheet h3,
+[data-theme="dark"] .sheet h4, [data-theme="dark"] .sheet h5, [data-theme="dark"] .sheet h6,
+[data-theme="dark"] .sheet strong, [data-theme="dark"] .sheet b,
+[data-theme="dark"] #dnDoc h1, [data-theme="dark"] #dnDoc h2, [data-theme="dark"] #dnDoc h3,
+[data-theme="dark"] #dnDoc h4, [data-theme="dark"] #dnDoc strong, [data-theme="dark"] #dnDoc b,
+[data-theme="dark"] #dnDoc [style*="color:black"], [data-theme="dark"] #dnDoc [style*="color:#000"],
+[data-theme="dark"] #srDoc h1, [data-theme="dark"] #srDoc h2, [data-theme="dark"] #srDoc strong, [data-theme="dark"] #srDoc b,
+[data-theme="dark"] #salesDoc h1, [data-theme="dark"] #salesDoc h2, [data-theme="dark"] #salesDoc strong, [data-theme="dark"] #salesDoc b,
+[data-theme="dark"] #proformaDoc h1, [data-theme="dark"] #proformaDoc h2, [data-theme="dark"] #proformaDoc strong, [data-theme="dark"] #proformaDoc b,
+[data-theme="dark"] #drDoc h1, [data-theme="dark"] #drDoc h2, [data-theme="dark"] #drDoc strong, [data-theme="dark"] #drDoc b,
+[data-theme="dark"] .print-wrapper [style*="color:black"],
+[data-theme="dark"] .print-wrapper [style*="color:#000"],
+[data-theme="dark"] .print-wrapper [style*="color:#111827"],
+[data-theme="dark"] .print-wrapper [style*="color:#1f2937"],
+[data-theme="dark"] .print-wrapper [style*="color:#212529"] {
+    color: inherit !important;
+}
 
 /* Print safety net — whatever the on-screen theme, printed
    pages always restore the original light-token values.    */
@@ -1619,6 +1707,18 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
     [data-theme="dark"] [style*="color: #334155"] { color: #334155 !important; }
     [data-theme="dark"] [style*="color:#475569"],
     [data-theme="dark"] [style*="color: #475569"] { color: #475569 !important; }
+    [data-theme="dark"] [style*="color:#374151"],
+    [data-theme="dark"] [style*="color: #374151"] { color: #374151 !important; }
+    [data-theme="dark"] [style*="color:#111827"],
+    [data-theme="dark"] [style*="color: #111827"] { color: #111827 !important; }
+    [data-theme="dark"] [style*="color:#1f2937"],
+    [data-theme="dark"] [style*="color: #1f2937"] { color: #1f2937 !important; }
+    [data-theme="dark"] [style*="color:#212529"],
+    [data-theme="dark"] [style*="color: #212529"] { color: #212529 !important; }
+    [data-theme="dark"] [style*="color:#000"],
+    [data-theme="dark"] [style*="color: #000"],
+    [data-theme="dark"] [style*="color:black"],
+    [data-theme="dark"] [style*="color: black"] { color: #000 !important; }
 }
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #2c3e60; }
 
@@ -1626,6 +1726,8 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
 [data-theme="dark"] .card,
 [data-theme="dark"] .stat-card,
 [data-theme="dark"] .quick-action-card,
+[data-theme="dark"] .res-card,
+[data-theme="dark"] .dlv-card,
 [data-theme="dark"] .modal-content {
     position: relative;
     border-color: transparent;
@@ -1646,6 +1748,8 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
 [data-theme="dark"] .card::before,
 [data-theme="dark"] .stat-card::before,
 [data-theme="dark"] .quick-action-card::before,
+[data-theme="dark"] .res-card::before,
+[data-theme="dark"] .dlv-card::before,
 [data-theme="dark"] .modal-content::before {
     content: '';
     position: absolute;
@@ -1667,6 +1771,8 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
 [data-theme="dark"] .card::after,
 [data-theme="dark"] .stat-card::after,
 [data-theme="dark"] .quick-action-card::after,
+[data-theme="dark"] .res-card::after,
+[data-theme="dark"] .dlv-card::after,
 [data-theme="dark"] .modal-content::after {
     content: '';
     position: absolute;
@@ -1704,15 +1810,32 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
 }
 [data-theme="dark"] .card:hover::before,
 [data-theme="dark"] .stat-card:hover::before,
-[data-theme="dark"] .quick-action-card:hover::before {
-    opacity: .95;
+[data-theme="dark"] .quick-action-card:hover::before,
+[data-theme="dark"] .res-card:hover::before,
+[data-theme="dark"] .dlv-card:hover::before {
+    opacity: 1;
     animation: neonSpin 3.2s linear infinite;
 }
 [data-theme="dark"] .card:hover::after,
 [data-theme="dark"] .stat-card:hover::after,
-[data-theme="dark"] .quick-action-card:hover::after {
-    opacity: .6;
+[data-theme="dark"] .quick-action-card:hover::after,
+[data-theme="dark"] .res-card:hover::after,
+[data-theme="dark"] .dlv-card:hover::after {
+    opacity: .95;
+    filter: blur(16px);
     animation: neonSpin 3.2s linear infinite;
+}
+/* Bright ambient halo behind the hovered card */
+[data-theme="dark"] .card:hover,
+[data-theme="dark"] .stat-card:hover,
+[data-theme="dark"] .res-card:hover,
+[data-theme="dark"] .dlv-card:hover {
+    box-shadow:
+        0 24px 56px rgba(0,0,0,.6),
+        0 0 44px rgba(59,130,246,.30),
+        0 0 34px rgba(34,197,94,.20),
+        0 0 28px rgba(239,68,68,.16),
+        inset 0 1px 0 rgba(255,255,255,.06);
 }
 
 /* Welcome banner — neon underglow, no lift (it is a hero). */
