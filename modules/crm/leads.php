@@ -566,6 +566,9 @@ include __DIR__ . '/../../includes/header.php';
                 [$stageLabel, $stageColor] = $stages[$l['stage']] ?? ['Unknown','secondary'];
                 $isOverdue = $l['follow_up_date'] && $l['follow_up_date'] < date('Y-m-d')
                              && !in_array($l['stage'], ['lost','delivered']);
+                // Due for follow-up (today or overdue) — highlighted light green
+                $isDue = $l['follow_up_date'] && $l['follow_up_date'] <= date('Y-m-d')
+                         && !in_array($l['stage'], ['lost','delivered']);
 
                 // ── Lead Score — use stored DB value (updated when lead is viewed) ──
                 $score = (int)($l['lead_score'] ?? 0);
@@ -586,7 +589,7 @@ include __DIR__ . '/../../includes/header.php';
                     );
                 }
             ?>
-            <tr class="<?= $isOverdue ? 'table-danger' : '' ?>">
+            <tr class="<?= $isDue ? 'table-success' : '' ?>">
                 <td class="ps-3">
                     <input type="checkbox" class="lead-check" value="<?= $l['id'] ?>">
                 </td>
