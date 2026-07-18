@@ -1555,6 +1555,71 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
 [data-theme="dark"] [style*="color: #475569"] {
     color: var(--text) !important;
 }
+
+/* Paper-document exemption — printable documents (agreements,
+   receipts, delivery notes, handovers…) render as white paper
+   even in dark mode, so restore the original inline values
+   inside their wrappers. Covers screen preview AND printing
+   from a dark-mode session.                                 */
+[data-theme="dark"] .print-wrapper [style*="background:#f8fafc"],
+[data-theme="dark"] .print-wrapper [style*="background: #f8fafc"],
+[data-theme="dark"] .sheet         [style*="background:#f8fafc"],
+[data-theme="dark"] .sheet         [style*="background: #f8fafc"],
+[data-theme="dark"] #dnDoc        [style*="background:#f8fafc"],
+[data-theme="dark"] #srDoc        [style*="background:#f8fafc"],
+[data-theme="dark"] #salesDoc     [style*="background:#f8fafc"],
+[data-theme="dark"] #proformaDoc  [style*="background:#f8fafc"],
+[data-theme="dark"] #drDoc        [style*="background:#f8fafc"] {
+    background: #f8fafc !important;
+}
+[data-theme="dark"] .print-wrapper [style*="color:#0f172a"],
+[data-theme="dark"] .print-wrapper [style*="color: #0f172a"],
+[data-theme="dark"] .sheet         [style*="color:#0f172a"],
+[data-theme="dark"] #dnDoc        [style*="color:#0f172a"],
+[data-theme="dark"] #srDoc        [style*="color:#0f172a"],
+[data-theme="dark"] #salesDoc     [style*="color:#0f172a"],
+[data-theme="dark"] #proformaDoc  [style*="color:#0f172a"],
+[data-theme="dark"] #drDoc        [style*="color:#0f172a"] {
+    color: #0f172a !important;
+}
+[data-theme="dark"] .print-wrapper [style*="color:#1e293b"],
+[data-theme="dark"] .print-wrapper [style*="color: #1e293b"],
+[data-theme="dark"] .sheet         [style*="color:#1e293b"],
+[data-theme="dark"] #dnDoc        [style*="color:#1e293b"],
+[data-theme="dark"] #salesDoc     [style*="color:#1e293b"] {
+    color: #1e293b !important;
+}
+[data-theme="dark"] .print-wrapper [style*="color:#334155"],
+[data-theme="dark"] .print-wrapper [style*="color: #334155"],
+[data-theme="dark"] .sheet         [style*="color:#334155"],
+[data-theme="dark"] #dnDoc        [style*="color:#334155"],
+[data-theme="dark"] #salesDoc     [style*="color:#334155"] {
+    color: #334155 !important;
+}
+[data-theme="dark"] .print-wrapper [style*="color:#475569"],
+[data-theme="dark"] .print-wrapper [style*="color: #475569"],
+[data-theme="dark"] .sheet         [style*="color:#475569"],
+[data-theme="dark"] #dnDoc        [style*="color:#475569"],
+[data-theme="dark"] #salesDoc     [style*="color:#475569"] {
+    color: #475569 !important;
+}
+
+/* Print safety net — whatever the on-screen theme, printed
+   pages always restore the original light-token values.    */
+@media print {
+    [data-theme="dark"] [style*="background:#f8fafc"],
+    [data-theme="dark"] [style*="background: #f8fafc"] { background: #f8fafc !important; }
+    [data-theme="dark"] [style*="background:#f1f5f9"],
+    [data-theme="dark"] [style*="background: #f1f5f9"] { background: #f1f5f9 !important; }
+    [data-theme="dark"] [style*="color:#0f172a"],
+    [data-theme="dark"] [style*="color: #0f172a"] { color: #0f172a !important; }
+    [data-theme="dark"] [style*="color:#1e293b"],
+    [data-theme="dark"] [style*="color: #1e293b"] { color: #1e293b !important; }
+    [data-theme="dark"] [style*="color:#334155"],
+    [data-theme="dark"] [style*="color: #334155"] { color: #334155 !important; }
+    [data-theme="dark"] [style*="color:#475569"],
+    [data-theme="dark"] [style*="color: #475569"] { color: #475569 !important; }
+}
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #2c3e60; }
 
 /* ── 3D neon cards ───────────────────────────────────────── */
