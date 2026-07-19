@@ -361,12 +361,10 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
     position:fixed; inset:0; z-index:9999;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     gap:26px; padding:24px; overflow:hidden;
-    background:
-        radial-gradient(1200px 700px at 12% -5%, rgba(59,130,246,.22), transparent 60%),
-        radial-gradient(1000px 700px at 92% 108%, rgba(34,197,94,.16), transparent 60%),
-        linear-gradient(160deg,#05070f 0%,#0a0f1e 55%,#0b1226 100%);
+    background:#0a1a4d;   /* solid navy blue */
     transition:opacity .9s ease, transform .9s ease, visibility .9s;
 }
+.intro-orbs{ display:none; }   /* keep the navy clean */
 #introOverlay.done{ opacity:0; transform:scale(1.08); visibility:hidden; pointer-events:none; }
 
 .intro-orbs{ position:absolute; inset:0; overflow:hidden; pointer-events:none; }
@@ -401,30 +399,27 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 .brand-name span{
     display:inline-block; opacity:0;
     transform:translateY(-160%) rotateX(-90deg); filter:blur(8px);
-    background:linear-gradient(100deg,#4ade80,#38bdf8 32%,#818cf8 55%,#f472b6 75%,#fbbf24);
-    background-size:280% 100%;
-    -webkit-background-clip:text; background-clip:text;
-    -webkit-text-fill-color:transparent; color:transparent;
-    animation:hueShift 7s linear infinite;
+    color:#ffffff;
+    text-shadow:0 0 26px rgba(255,255,255,.35), 0 6px 20px rgba(0,0,0,.45);
     will-change:transform,opacity;
 }
-.brand-name span.in{ animation:dropIn .72s cubic-bezier(.18,.9,.24,1.25) forwards, hueShift 7s linear infinite; }
-.brand-name span.pulse{ filter:drop-shadow(0 0 26px rgba(96,165,250,.85)); }
+.brand-name span.in{ animation:dropIn 1s cubic-bezier(.18,.9,.24,1.25) forwards; }
+/* Splash flash as a letter lands */
+.brand-name span.pulse{ text-shadow:0 0 40px rgba(180,220,255,.95), 0 0 18px rgba(255,255,255,.9); }
 @keyframes dropIn{
     0%{ opacity:0; transform:translateY(-160%) rotateX(-90deg); filter:blur(8px); }
-    55%{ opacity:1; transform:translateY(10%) rotateX(0); filter:blur(0); }
-    72%{ transform:translateY(-4%); }
-    100%{ opacity:1; transform:translateY(0) rotateX(0);
-          filter:drop-shadow(0 6px 22px rgba(59,130,246,.45)); }
+    58%{ opacity:1; transform:translateY(12%) rotateX(0); filter:blur(0); }
+    74%{ transform:translateY(-5%); }
+    88%{ transform:translateY(3%); }
+    100%{ opacity:1; transform:translateY(0) rotateX(0); filter:blur(0); }
 }
-@keyframes hueShift{ to{ background-position:280% 0; } }
 
 .brand-underline{
-    position:relative; z-index:2; height:3px; width:0;
+    position:relative; z-index:2; height:2px; width:0;
     border-radius:3px; margin-top:-6px;
-    background:linear-gradient(90deg, transparent, var(--neon-b), var(--neon-g), var(--neon-r), transparent);
-    box-shadow:0 0 18px rgba(59,130,246,.6);
-    transition:width 1s ease .2s;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
+    box-shadow:0 0 16px rgba(255,255,255,.4);
+    transition:width 1.1s ease .2s;
 }
 #introOverlay.reveal .brand-underline{ width:min(560px,80vw); }
 
@@ -434,7 +429,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
     font-family:'Inter',sans-serif; font-weight:600;
     font-size:clamp(13px, 2.4vw, 21px); letter-spacing:.16em;
     text-transform:uppercase; text-align:center;
-    color:#cfe0f7; text-shadow:0 0 18px rgba(59,130,246,.35);
+    color:#eaf1ff; text-shadow:0 0 18px rgba(255,255,255,.28);
     padding:0 12px;
 }
 .tagline.typing::after{
@@ -465,7 +460,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 
 @media (prefers-reduced-motion: reduce){
     .brand-name span, .brand-name span.in{ animation:none; opacity:1; transform:none; filter:none;
-        -webkit-text-fill-color:transparent; }
+        color:#fff; -webkit-text-fill-color:#fff; }
     .orb{ animation:none; }
     #introOverlay, .login-stage{ transition:opacity .3s ease; }
 }
@@ -498,7 +493,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
         <i class="fa fa-forward"></i> Skip
     </button>
     <div id="soundHint" class="sound-hint">
-        <i class="fa fa-volume-high"></i> Tap anywhere to enable sound
+        <i class="fa fa-volume-high"></i> Click anywhere to hear the welcome
     </div>
 </div>
 <?php endif; ?>
@@ -667,37 +662,54 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
         if (actx && actx.state === 'suspended') { try { actx.resume(); } catch (e) {} }
         return actx;
     }
+    // A water SPLASH for each falling letter: bright splish + wash + droplet plonk
     function playWave(idx) {
         var ctx = audioCtx();
         if (!ctx || ctx.state !== 'running') return;
         try {
-            var now = ctx.currentTime, dur = 0.55;
-            // decaying filtered noise → the "wash" of a wave
-            var buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
-            var d = buf.getChannelData(0);
-            for (var i = 0; i < d.length; i++) {
-                d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 1.7);
-            }
-            var src = ctx.createBufferSource(); src.buffer = buf;
+            var now = ctx.currentTime;
+
+            // 1) Bright splish — short high-passed noise burst (the impact)
+            var sDur = 0.26;
+            var sBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * sDur), ctx.sampleRate);
+            var sd = sBuf.getChannelData(0);
+            for (var i = 0; i < sd.length; i++) sd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / sd.length, 2.3);
+            var sSrc = ctx.createBufferSource(); sSrc.buffer = sBuf;
+            var hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.setValueAtTime(1900, now);
+            var sg = ctx.createGain();
+            sg.gain.setValueAtTime(0.0001, now);
+            sg.gain.exponentialRampToValueAtTime(0.24, now + 0.008);
+            sg.gain.exponentialRampToValueAtTime(0.0001, now + sDur);
+            sSrc.connect(hp); hp.connect(sg); sg.connect(ctx.destination);
+            sSrc.start(now); sSrc.stop(now + sDur);
+
+            // 2) Water wash — low-passed noise decay (the "sploosh")
+            var wDur = 0.5;
+            var wBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * wDur), ctx.sampleRate);
+            var wd = wBuf.getChannelData(0);
+            for (var j = 0; j < wd.length; j++) wd[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / wd.length, 1.5);
+            var wSrc = ctx.createBufferSource(); wSrc.buffer = wBuf;
             var lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
-            lp.frequency.setValueAtTime(1500 - idx * 55, now);
-            lp.frequency.exponentialRampToValueAtTime(280, now + dur);
-            var g = ctx.createGain();
-            g.gain.setValueAtTime(0.0001, now);
-            g.gain.exponentialRampToValueAtTime(0.26, now + 0.05);
-            g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-            src.connect(lp); lp.connect(g); g.connect(ctx.destination);
-            src.start(now); src.stop(now + dur);
-            // soft droplet tone on top
+            lp.frequency.setValueAtTime(1300, now);
+            lp.frequency.exponentialRampToValueAtTime(300, now + wDur);
+            var wg = ctx.createGain();
+            wg.gain.setValueAtTime(0.0001, now);
+            wg.gain.exponentialRampToValueAtTime(0.28, now + 0.04);
+            wg.gain.exponentialRampToValueAtTime(0.0001, now + wDur);
+            wSrc.connect(lp); lp.connect(wg); wg.connect(ctx.destination);
+            wSrc.start(now); wSrc.stop(now + wDur);
+
+            // 3) Droplet plonk — quick descending sine
             var o = ctx.createOscillator(); o.type = 'sine';
-            o.frequency.setValueAtTime(300 + idx * 26, now);
-            o.frequency.exponentialRampToValueAtTime(180 + idx * 20, now + 0.3);
+            var f0 = 540 - idx * 16;
+            o.frequency.setValueAtTime(f0, now);
+            o.frequency.exponentialRampToValueAtTime(f0 * 0.42, now + 0.19);
             var og = ctx.createGain();
             og.gain.setValueAtTime(0.0001, now);
-            og.gain.exponentialRampToValueAtTime(0.1, now + 0.03);
-            og.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+            og.gain.exponentialRampToValueAtTime(0.17, now + 0.02);
+            og.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
             o.connect(og); og.connect(ctx.destination);
-            o.start(now); o.stop(now + 0.36);
+            o.start(now); o.stop(now + 0.32);
         } catch (e) {}
     }
 
@@ -730,35 +742,51 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
     }
 
     var currentLine = '';
+    // Chrome pauses/cuts speech after a while — nudge it while it's talking.
+    var resumeTimer = null;
+    function keepAlive() {
+        if (resumeTimer) clearInterval(resumeTimer);
+        resumeTimer = setInterval(function () {
+            if (!window.speechSynthesis || !speechSynthesis.speaking) {
+                clearInterval(resumeTimer); resumeTimer = null; return;
+            }
+            try { speechSynthesis.resume(); } catch (e) {}
+        }, 3000);
+    }
+    function makeUtterance(text) {
+        var u = new SpeechSynthesisUtterance(text);
+        var v = pickVoice();
+        if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'en-GB'; }
+        u.rate = 0.9; u.pitch = 1.05; u.volume = 1;   // slower, calmer delivery
+        return u;
+    }
     function speak(text) {
         if (!('speechSynthesis' in window)) return;
         try {
             currentLine = text;
-            var u = new SpeechSynthesisUtterance(text);
-            var v = pickVoice();
-            if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'en-GB'; }
-            u.rate = 0.95; u.pitch = 1.05; u.volume = 1;
-            speechSynthesis.cancel();
+            var u = makeUtterance(text);
+            try { speechSynthesis.cancel(); } catch (e) {}
+            try { speechSynthesis.resume(); } catch (e) {}
             speechSynthesis.speak(u);
+            keepAlive();
         } catch (e) {}
     }
     // Speak + guaranteed callback (fallback timer if onend never fires / audio blocked)
     function speakThen(text, cb) {
         var done = false, fire = function () { if (!done) { done = true; cb && cb(); } };
-        var fallback = setTimeout(fire, Math.max(2600, text.length * 68));
-        if ('speechSynthesis' in window) {
-            try {
-                currentLine = text;
-                var u = new SpeechSynthesisUtterance(text);
-                var v = pickVoice();
-                if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'en-GB'; }
-                u.rate = 0.95; u.pitch = 1.05; u.volume = 1;
-                u.onend = function () { clearTimeout(fallback); fire(); };
-                u.onerror = function () { clearTimeout(fallback); fire(); };
-                speechSynthesis.cancel();
-                speechSynthesis.speak(u);
-            } catch (e) { clearTimeout(fallback); fire(); }
-        }
+        // Wait generously so the voice has a real chance to finish before we move on.
+        var fallback = setTimeout(fire, Math.max(4200, text.length * 95));
+        if (!('speechSynthesis' in window)) return;
+        try {
+            currentLine = text;
+            var u = makeUtterance(text);
+            u.onend = function () { clearTimeout(fallback); fire(); };
+            u.onerror = function () { clearTimeout(fallback); fire(); };
+            try { speechSynthesis.cancel(); } catch (e) {}
+            try { speechSynthesis.resume(); } catch (e) {}
+            speechSynthesis.speak(u);
+            keepAlive();
+        } catch (e) { clearTimeout(fallback); fire(); }
     }
 
     /* ── Unlock audio on first user gesture (autoplay policy) ─── */
@@ -840,21 +868,21 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
             return;
         }
 
-        var step = 150;
+        var step = 340;   // slower — each letter gets room to "splash"
         spans.forEach(function (s, i) {
             setTimeout(function () {
                 s.classList.add('in', 'pulse');
                 playWave(i);
-                setTimeout(function () { s.classList.remove('pulse'); }, 420);
+                setTimeout(function () { s.classList.remove('pulse'); }, 520);
             }, i * step);
         });
 
-        var afterName = spans.length * step + 450;
-        setTimeout(function () { overlay.classList.add('reveal'); }, afterName - 250);
+        var afterName = spans.length * step + 800;   // hold on the finished name
+        setTimeout(function () { overlay.classList.add('reveal'); }, afterName - 400);
 
         setTimeout(function () {
-            typeText(taglineEl, LINE1, 45);
-            speakThen(LINE1, function () { setTimeout(revealLogin, 650); });
+            typeText(taglineEl, LINE1, 72);           // slower typing
+            speakThen(LINE1, function () { setTimeout(revealLogin, 1100); });
         }, afterName);
     }
 
