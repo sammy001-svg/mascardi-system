@@ -297,6 +297,7 @@ body::before {
 <style>
 :root{
     --neon-g:#22c55e; --neon-b:#3b82f6; --neon-r:#ef4444; --neon-y:#f59e0b;
+    --brand-blue-light:#60a5fa;
     --ink:#0a0f1e;
 }
 body{
@@ -382,20 +383,8 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
     background:#0a1a4d;   /* solid navy blue */
     transition:opacity .9s ease, transform .9s ease, visibility .9s;
 }
-.intro-orbs{ display:none; }   /* keep the navy clean */
 #introOverlay.done{ opacity:0; transform:scale(1.08); visibility:hidden; pointer-events:none; }
 
-.intro-orbs{ position:absolute; inset:0; overflow:hidden; pointer-events:none; }
-.intro-orbs .orb{ position:absolute; border-radius:50%; filter:blur(70px); opacity:.5; animation:orbFloat 16s ease-in-out infinite; }
-.orb.g{ width:340px;height:340px; background:var(--neon-g); top:-60px; left:-40px; }
-.orb.b{ width:420px;height:420px; background:var(--neon-b); bottom:-120px; right:-60px; animation-delay:-4s; }
-.orb.r{ width:260px;height:260px; background:var(--neon-r); top:20%; right:14%; opacity:.35; animation-delay:-8s; }
-.orb.y{ width:220px;height:220px; background:var(--neon-y); bottom:16%; left:12%; opacity:.32; animation-delay:-11s; }
-@keyframes orbFloat{
-    0%,100%{ transform:translate(0,0) scale(1); }
-    33%{ transform:translate(40px,-30px) scale(1.08); }
-    66%{ transform:translate(-30px,26px) scale(.95); }
-}
 #introOverlay .intro-grid{
     position:absolute; inset:0; pointer-events:none;
     background-image:
@@ -408,64 +397,64 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 
 /* Brand name — Mokoto-style nameplate. Guaranteed to stay centered and
    inside the viewport: fixed width cap, centered flex row, wraps as a
-   last resort instead of ever spilling past the screen edge. */
+   last resort instead of ever spilling past the screen edge.
+
+   The letters themselves are deliberately PLAIN — a single text node,
+   nothing nested inside. Splash effects live in a completely separate
+   #splashLayer overlay, positioned by JS-computed coordinates rather
+   than as children of the letter. This is the fix for two prior bugs
+   (letters exploding to ~900px tall, and letters going invisible):
+   an absolutely-positioned element nested inside an auto-sized flex
+   item is fragile across browsers. Decoupling it removes the whole
+   class of failure permanently. */
 .brand-name{
     position:relative; z-index:2; margin:0 auto;
     font-family:<?= $mokotoFile ? "'Mokoto'," : '' ?>'Orbitron','Inter',sans-serif; font-weight:900;
-    font-size:clamp(36px, 9.5vw, 108px);
-    letter-spacing:.06em; line-height:1;
+    font-size:clamp(38px, 9.5vw, 112px);
+    letter-spacing:.05em; line-height:1;
     display:flex; flex-wrap:wrap; justify-content:center; align-items:baseline;
-    gap:.02em; row-gap:.08em;
+    gap:.03em; row-gap:.1em;
     width:100%; max-width:94vw;
     text-align:center;
 }
 .brand-name span{
-    position:relative; display:inline-block; opacity:0;
-    /* Explicit height — without it, the absolutely-positioned .letter-splash
-       rig nested inside forces the browser to blow this box up to nearly
-       the full viewport height (auto-height + abs-positioned descendant
-       interaction), which is what was pinning the whole nameplate to the
-       bottom of the screen instead of the vertical middle. */
-    height:1em;
-    /* Fixed, modest pixel offset — not viewport- or font-relative — so the
-       fall never travels far enough to visually leave the screen. */
-    transform:translateY(-64px) scale(.8); filter:blur(6px);
+    display:inline-block; opacity:0;
     color:#ffffff;
-    text-shadow:0 0 26px rgba(255,255,255,.35), 0 6px 20px rgba(0,0,0,.45);
+    text-shadow:0 0 30px rgba(96,165,250,.4), 0 8px 22px rgba(0,0,0,.5);
+    /* Fixed, modest pixel offset — not viewport- or font-relative — so the
+       fall never travels far enough to visually leave the screen. Plain
+       opacity + translateY only: no filter, no scale, nothing that can
+       interact unpredictably with compositing. */
+    transform:translateY(-46px);
     will-change:transform,opacity;
 }
-.brand-name span.in{ animation:dropIn 1s cubic-bezier(.18,.9,.24,1.25) forwards; }
-/* Splash flash as a letter lands */
-.brand-name span.pulse{ text-shadow:0 0 40px rgba(180,220,255,.95), 0 0 18px rgba(255,255,255,.9); }
+.brand-name span.in{ animation:dropIn .85s cubic-bezier(.2,.85,.25,1.2) forwards; }
+/* Brighten as a letter lands, in sync with the splash */
+.brand-name span.pulse{ text-shadow:0 0 48px rgba(147,197,253,.95), 0 0 20px rgba(255,255,255,.95); }
 @keyframes dropIn{
-    0%{ opacity:0; transform:translateY(-64px) scale(.8); filter:blur(6px); }
-    58%{ opacity:1; transform:translateY(6px) scale(1.04); filter:blur(0); }
-    74%{ transform:translateY(-3px) scale(.99); }
-    88%{ transform:translateY(1px) scale(1.005); }
-    100%{ opacity:1; transform:translateY(0) scale(1); filter:blur(0); }
+    0%{ opacity:0; transform:translateY(-46px); }
+    62%{ opacity:1; transform:translateY(5px); }
+    80%{ transform:translateY(-2px); }
+    100%{ opacity:1; transform:translateY(0); }
 }
 
-/* ── Water ripple + droplets — fires the instant a letter lands ───── */
-.letter-splash{
-    position:absolute; left:50%; bottom:-4px; width:0; height:0;
-    pointer-events:none; z-index:1;
-}
+/* ── Water ripple + droplets — an independent overlay layer, positioned
+   by JS at each letter's landing point. Never nested inside a letter. ── */
+#splashLayer{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
 .splash-ring{
     position:absolute; left:0; top:0;
-    width:16px; height:16px; margin:-8px 0 0 -8px;
+    width:18px; height:18px; margin:-9px 0 0 -9px;
     border:2px solid rgba(255,255,255,.85);
     border-radius:50%;
     opacity:0; transform:scale(.15);
     box-sizing:border-box;
 }
-.splash-ring.ring2{ border-color:rgba(200,225,255,.6); }
-.splash-ring.ring3{ border-color:rgba(160,205,255,.4); }
-.letter-splash.go .splash-ring{ animation:splashRing .7s cubic-bezier(.15,.6,.3,1) forwards; }
-.letter-splash.go .splash-ring.ring2{ animation-delay:.07s; }
-.letter-splash.go .splash-ring.ring3{ animation-delay:.15s; }
+.splash-ring.r2{ border-color:rgba(147,197,253,.6); }
+.splash-ring.r3{ border-color:rgba(96,165,250,.4); }
+.splash-ring.go{ animation:splashRing .7s cubic-bezier(.15,.6,.3,1) forwards; }
 @keyframes splashRing{
     0%{ opacity:.9; transform:scale(.15) scaleY(.5); }
-    100%{ opacity:0; transform:scale(3.1) scaleY(.7); }
+    100%{ opacity:0; transform:scale(3.2) scaleY(.7); }
 }
 .splash-drop{
     position:absolute; left:0; top:0;
@@ -474,33 +463,33 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
     opacity:0;
     box-shadow:0 0 6px rgba(255,255,255,.85);
 }
-.letter-splash.go .splash-drop{ animation:splashDrop .55s cubic-bezier(.1,.7,.25,1) forwards; }
+.splash-drop.go{ animation:splashDrop .5s cubic-bezier(.1,.7,.25,1) forwards; }
 @keyframes splashDrop{
     0%{ opacity:1; transform:translate(0,0) scale(1); }
     100%{ opacity:0; transform:translate(var(--dx,0), var(--dy,-14px)) scale(.25); }
 }
-@media (prefers-reduced-motion: reduce){ .letter-splash{ display:none !important; } }
+@media (prefers-reduced-motion: reduce){ #splashLayer{ display:none !important; } }
 
 .brand-underline{
     position:relative; z-index:2; height:2px; width:0;
-    border-radius:3px; margin-top:-6px;
-    background:linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
-    box-shadow:0 0 16px rgba(255,255,255,.4);
-    transition:width 1.1s ease .2s;
+    border-radius:3px; margin-top:-4px;
+    background:linear-gradient(90deg, transparent, rgba(147,197,253,.9), transparent);
+    box-shadow:0 0 18px rgba(96,165,250,.5);
+    transition:width 1.1s cubic-bezier(.16,.7,.2,1) .2s;
 }
-#introOverlay.reveal .brand-underline{ width:min(560px,80vw); }
+#introOverlay.reveal .brand-underline{ width:min(520px,78vw); }
 
 /* Typed tagline */
 .tagline{
     position:relative; z-index:2; min-height:1.6em;
     font-family:'Inter',sans-serif; font-weight:600;
-    font-size:clamp(13px, 2.4vw, 21px); letter-spacing:.16em;
+    font-size:clamp(13px, 2.3vw, 20px); letter-spacing:.18em;
     text-transform:uppercase; text-align:center;
-    color:#eaf1ff; text-shadow:0 0 18px rgba(255,255,255,.28);
+    color:#dbe6f7; text-shadow:0 0 18px rgba(96,165,250,.25);
     padding:0 12px;
 }
 .tagline.typing::after{
-    content:'|'; margin-left:2px; color:var(--neon-b);
+    content:'|'; margin-left:2px; color:var(--brand-blue-light,#60a5fa);
     animation:caret .7s steps(1) infinite; font-weight:400;
 }
 @keyframes caret{ 50%{ opacity:0; } }
@@ -526,9 +515,8 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 @keyframes hintPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(59,130,246,.35); } 50%{ box-shadow:0 0 0 8px rgba(59,130,246,0); } }
 
 @media (prefers-reduced-motion: reduce){
-    .brand-name span, .brand-name span.in{ animation:none; opacity:1; transform:none; filter:none;
-        color:#fff; -webkit-text-fill-color:#fff; }
-    .orb{ animation:none; }
+    .brand-name span, .brand-name span.in{ animation:none; opacity:1; transform:none;
+        color:#fff; }
     #introOverlay, .login-stage{ transition:opacity .3s ease; }
 }
 /* Fixed backgrounds are janky on mobile — pin to scroll and reframe */
@@ -546,11 +534,8 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 <?php if ($showIntro): ?>
 <!-- ═══════════════════ WELCOME INTRO OVERLAY ═══════════════════ -->
 <div id="introOverlay">
-    <div class="intro-orbs">
-        <span class="orb g"></span><span class="orb b"></span>
-        <span class="orb r"></span><span class="orb y"></span>
-    </div>
     <div class="intro-grid"></div>
+    <div id="splashLayer"></div>
 
     <h1 id="brandName" class="brand-name" data-name="MASCARDI" aria-label="MASCARDI"></h1>
     <div class="brand-underline"></div>
@@ -884,21 +869,39 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
         })();
     }
 
-    /* ── Build the nameplate letters, each with its own splash rig ── */
+    /* ── Build the nameplate letters ─────────────────────────────
+       Deliberately plain: a single text node each, nothing nested
+       inside. This is what makes the layout bulletproof — there is
+       no absolutely-positioned content inside an auto-sized flex
+       item for the browser to mis-measure. ──────────────────── */
     var spans = [];
     NAME.split('').forEach(function (ch) {
         var s = document.createElement('span');
         s.textContent = ch;
+        brandEl.appendChild(s);
+        spans.push(s);
+    });
 
-        // Water-splash rig: 3 expanding rings + a burst of flying droplets,
-        // dormant until the '.go' class fires the instant the letter lands.
-        var splash = document.createElement('span');
-        splash.className = 'letter-splash';
-        ['ring1', 'ring2', 'ring3'].forEach(function (cls) {
+    /* ── Water splash — an independent overlay layer ─────────────
+       Positioned by JS-computed screen coordinates at the instant
+       a letter lands, completely decoupled from the letter's own
+       box. Elements are created fresh and removed after they
+       finish animating, so the layer never accumulates DOM. ──── */
+    var splashLayer = document.getElementById('splashLayer');
+    function splashAt(x, y) {
+        if (!splashLayer) return;
+        var frag = document.createDocumentFragment();
+
+        ['r1', 'r2', 'r3'].forEach(function (cls, i) {
             var ring = document.createElement('span');
             ring.className = 'splash-ring ' + cls;
-            splash.appendChild(ring);
+            ring.style.left = x + 'px';
+            ring.style.top  = y + 'px';
+            frag.appendChild(ring);
+            setTimeout(function () { ring.classList.add('go'); }, i * 70);
+            setTimeout(function () { ring.remove(); }, 900);
         });
+
         var dropCount = 6;
         for (var d = 0; d < dropCount; d++) {
             var drop = document.createElement('span');
@@ -907,25 +910,25 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
             var dist  = 9 + Math.random() * 9;
             var dx    = Math.cos(angle) * dist;
             var dy    = Math.sin(angle) * dist - 7; // bias upward, like water kicking up
+            drop.style.left = x + 'px';
+            drop.style.top  = y + 'px';
             drop.style.setProperty('--dx', dx.toFixed(1) + 'px');
             drop.style.setProperty('--dy', dy.toFixed(1) + 'px');
-            drop.style.animationDelay = (Math.random() * 0.05).toFixed(2) + 's';
-            splash.appendChild(drop);
+            frag.appendChild(drop);
+            (function (el, delay) {
+                setTimeout(function () { el.classList.add('go'); }, delay);
+                setTimeout(function () { el.remove(); }, delay + 600);
+            })(drop, Math.random() * 50);
         }
-        s.appendChild(splash);
 
-        brandEl.appendChild(s);
-        spans.push(s);
-    });
+        splashLayer.appendChild(frag);
+    }
 
-    // Fire the ripple + droplets for letter i (restarts the CSS animation
-    // cleanly even if called more than once).
+    // Splash at the base of letter `s`, in coordinates relative to the overlay.
     function splashLetter(s) {
-        var splash = s.querySelector('.letter-splash');
-        if (!splash) return;
-        splash.classList.remove('go');
-        void splash.offsetWidth; // force reflow so the animation restarts
-        splash.classList.add('go');
+        var r  = s.getBoundingClientRect();
+        var or = overlay.getBoundingClientRect();
+        splashAt(r.left + r.width / 2 - or.left, r.bottom - or.top - 3);
     }
 
     /* ── Reveal the login form + speak the closing line ──────── */
@@ -970,8 +973,8 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
             return;
         }
 
-        var step = 340;      // slower — each letter gets room to "splash"
-        var landAt = 580;    // ms into the 1s dropIn keyframes where the letter actually touches down (~58%)
+        var step = 340;      // gives each letter room to land and splash before the next falls
+        var landAt = 520;    // ms into the .85s dropIn keyframes where the letter touches down (~62%)
         spans.forEach(function (s, i) {
             setTimeout(function () {
                 s.classList.add('in');
