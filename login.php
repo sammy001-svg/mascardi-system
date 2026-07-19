@@ -406,17 +406,24 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
     -webkit-mask-image:radial-gradient(circle at 50% 45%, #000 40%, transparent 85%);
 }
 
-/* Brand name — Mokoto-style nameplate */
+/* Brand name — Mokoto-style nameplate. Guaranteed to stay centered and
+   inside the viewport: fixed width cap, centered flex row, wraps as a
+   last resort instead of ever spilling past the screen edge. */
 .brand-name{
-    position:relative; z-index:2; margin:0;
+    position:relative; z-index:2; margin:0 auto;
     font-family:<?= $mokotoFile ? "'Mokoto'," : '' ?>'Orbitron','Inter',sans-serif; font-weight:900;
-    font-size:clamp(46px, 11.5vw, 132px);
+    font-size:clamp(36px, 9.5vw, 108px);
     letter-spacing:.06em; line-height:1;
-    display:flex; gap:.02em; perspective:800px;
+    display:flex; flex-wrap:wrap; justify-content:center; align-items:baseline;
+    gap:.02em; row-gap:.08em;
+    width:100%; max-width:94vw;
+    text-align:center;
 }
 .brand-name span{
     position:relative; display:inline-block; opacity:0;
-    transform:translateY(-160%) rotateX(-90deg); filter:blur(8px);
+    /* Fixed, modest pixel offset — not viewport- or font-relative — so the
+       fall never travels far enough to visually leave the screen. */
+    transform:translateY(-64px) scale(.8); filter:blur(6px);
     color:#ffffff;
     text-shadow:0 0 26px rgba(255,255,255,.35), 0 6px 20px rgba(0,0,0,.45);
     will-change:transform,opacity;
@@ -425,11 +432,11 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 /* Splash flash as a letter lands */
 .brand-name span.pulse{ text-shadow:0 0 40px rgba(180,220,255,.95), 0 0 18px rgba(255,255,255,.9); }
 @keyframes dropIn{
-    0%{ opacity:0; transform:translateY(-160%) rotateX(-90deg); filter:blur(8px); }
-    58%{ opacity:1; transform:translateY(12%) rotateX(0); filter:blur(0); }
-    74%{ transform:translateY(-5%); }
-    88%{ transform:translateY(3%); }
-    100%{ opacity:1; transform:translateY(0) rotateX(0); filter:blur(0); }
+    0%{ opacity:0; transform:translateY(-64px) scale(.8); filter:blur(6px); }
+    58%{ opacity:1; transform:translateY(6px) scale(1.04); filter:blur(0); }
+    74%{ transform:translateY(-3px) scale(.99); }
+    88%{ transform:translateY(1px) scale(1.005); }
+    100%{ opacity:1; transform:translateY(0) scale(1); filter:blur(0); }
 }
 
 /* ── Water ripple + droplets — fires the instant a letter lands ───── */
