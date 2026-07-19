@@ -515,7 +515,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
     <div class="login-card">
         <?php $__logo = companyLogo(); ?>
         <?php if ($__logo['exists']): ?>
-        <div class="brand-icon has-logo"><img src="<?= e($__logo['url']) ?>" alt="<?= e(getSetting('company_name', 'Mascardi')) ?> logo"></div>
+        <div class="brand-icon has-logo"><img src="<?= htmlspecialchars($__logo['url']) ?>" alt="<?= htmlspecialchars(getSetting('company_name', 'Mascardi')) ?> logo"></div>
         <?php else: ?>
         <div class="brand-icon"><i class="fa fa-car-side"></i></div>
         <?php endif; ?>
