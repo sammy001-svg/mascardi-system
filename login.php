@@ -191,6 +191,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Show the animated welcome intro only on a fresh visit (not after a
 // failed login POST, not during first-run setup, not on session timeout).
 $showIntro = $_SERVER['REQUEST_METHOD'] === 'GET' && !$isFirstRun && !$setupDone && !$error && !isset($_GET['timeout']);
+
+// Mokoto nameplate font — self-hosted. Drop the file at assets/fonts/mokoto.woff2
+// (or .woff/.ttf/.otf) and it's picked up automatically, no code change needed.
+// Until then the nameplate falls back to Orbitron.
+$mokotoFile = null;
+foreach (['woff2', 'woff', 'ttf', 'otf'] as $__ext) {
+    if (is_file(BASE_PATH . '/assets/fonts/mokoto.' . $__ext)) { $mokotoFile = 'mokoto.' . $__ext; break; }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -204,6 +212,16 @@ $showIntro = $_SERVER['REQUEST_METHOD'] === 'GET' && !$isFirstRun && !$setupDone
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Orbitron approximates the Mokoto display look; Inter for body -->
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<?php if ($mokotoFile): ?>
+<style>
+@font-face {
+    font-family: 'Mokoto';
+    src: url('<?= BASE_URL ?>/assets/fonts/<?= htmlspecialchars($mokotoFile) ?>') format('<?= str_ends_with($mokotoFile, '.woff2') ? 'woff2' : (str_ends_with($mokotoFile, '.woff') ? 'woff' : (str_ends_with($mokotoFile, '.ttf') ? 'truetype' : 'opentype')) ?>');
+    font-weight: 400 900;
+    font-display: swap;
+}
+</style>
+<?php endif; ?>
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0a0f1e">
 <link rel="preload" as="image" href="<?= BASE_URL ?>/IMG_4604.webp">
@@ -391,7 +409,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 /* Brand name — Mokoto-style nameplate */
 .brand-name{
     position:relative; z-index:2; margin:0;
-    font-family:'Orbitron','Inter',sans-serif; font-weight:900;
+    font-family:<?= $mokotoFile ? "'Mokoto'," : '' ?>'Orbitron','Inter',sans-serif; font-weight:900;
     font-size:clamp(46px, 11.5vw, 132px);
     letter-spacing:.06em; line-height:1;
     display:flex; gap:.02em; perspective:800px;
