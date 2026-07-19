@@ -206,6 +206,7 @@ $showIntro = $_SERVER['REQUEST_METHOD'] === 'GET' && !$isFirstRun && !$setupDone
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0a0f1e">
+<link rel="preload" as="image" href="<?= BASE_URL ?>/IMG_4604.webp">
 <style>
 *, *::before, *::after { box-sizing: border-box; }
 body {
@@ -282,10 +283,11 @@ body::before {
 }
 body{
     background:
-        radial-gradient(1100px 620px at 15% -10%, rgba(59,130,246,.18), transparent 60%),
-        radial-gradient(900px 620px at 95% 110%, rgba(34,197,94,.14), transparent 60%),
-        radial-gradient(700px 500px at 60% 50%, rgba(239,68,68,.06), transparent 60%),
-        linear-gradient(160deg,#070b16 0%,#0a0f1e 55%,#0b1226 100%) !important;
+        radial-gradient(1000px 560px at 12% -8%, rgba(59,130,246,.20), transparent 60%),
+        radial-gradient(900px 600px at 96% 108%, rgba(34,197,94,.12), transparent 60%),
+        linear-gradient(120deg, rgba(5,7,15,.88) 0%, rgba(8,12,24,.62) 42%, rgba(11,18,38,.86) 100%),
+        url('<?= BASE_URL ?>/IMG_4604.webp') center center / cover no-repeat fixed,
+        #05070f !important;
     color:#e6edf7;
 }
 body::before{
@@ -461,6 +463,11 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
         -webkit-text-fill-color:transparent; }
     .orb{ animation:none; }
     #introOverlay, .login-stage{ transition:opacity .3s ease; }
+}
+/* Fixed backgrounds are janky on mobile — pin to scroll and reframe */
+@media (max-width:768px){
+    body{ background-attachment:scroll, scroll, scroll, scroll, scroll !important;
+          background-position:12% -8%, 96% 108%, center, 60% center, center !important; }
 }
 @media (max-width:560px){
     .intro-skip{ top:16px; right:16px; }
