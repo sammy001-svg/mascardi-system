@@ -421,6 +421,12 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 }
 .brand-name span{
     position:relative; display:inline-block; opacity:0;
+    /* Explicit height — without it, the absolutely-positioned .letter-splash
+       rig nested inside forces the browser to blow this box up to nearly
+       the full viewport height (auto-height + abs-positioned descendant
+       interaction), which is what was pinning the whole nameplate to the
+       bottom of the screen instead of the vertical middle. */
+    height:1em;
     /* Fixed, modest pixel offset — not viewport- or font-relative — so the
        fall never travels far enough to visually leave the screen. */
     transform:translateY(-64px) scale(.8); filter:blur(6px);
