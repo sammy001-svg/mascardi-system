@@ -397,7 +397,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
     display:flex; gap:.02em; perspective:800px;
 }
 .brand-name span{
-    display:inline-block; opacity:0;
+    position:relative; display:inline-block; opacity:0;
     transform:translateY(-160%) rotateX(-90deg); filter:blur(8px);
     color:#ffffff;
     text-shadow:0 0 26px rgba(255,255,255,.35), 0 6px 20px rgba(0,0,0,.45);
@@ -413,6 +413,42 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
     88%{ transform:translateY(3%); }
     100%{ opacity:1; transform:translateY(0) rotateX(0); filter:blur(0); }
 }
+
+/* ── Water ripple + droplets — fires the instant a letter lands ───── */
+.letter-splash{
+    position:absolute; left:50%; bottom:-4px; width:0; height:0;
+    pointer-events:none; z-index:1;
+}
+.splash-ring{
+    position:absolute; left:0; top:0;
+    width:16px; height:16px; margin:-8px 0 0 -8px;
+    border:2px solid rgba(255,255,255,.85);
+    border-radius:50%;
+    opacity:0; transform:scale(.15);
+    box-sizing:border-box;
+}
+.splash-ring.ring2{ border-color:rgba(200,225,255,.6); }
+.splash-ring.ring3{ border-color:rgba(160,205,255,.4); }
+.letter-splash.go .splash-ring{ animation:splashRing .7s cubic-bezier(.15,.6,.3,1) forwards; }
+.letter-splash.go .splash-ring.ring2{ animation-delay:.07s; }
+.letter-splash.go .splash-ring.ring3{ animation-delay:.15s; }
+@keyframes splashRing{
+    0%{ opacity:.9; transform:scale(.15) scaleY(.5); }
+    100%{ opacity:0; transform:scale(3.1) scaleY(.7); }
+}
+.splash-drop{
+    position:absolute; left:0; top:0;
+    width:4px; height:4px; margin:-2px 0 0 -2px;
+    background:#eaf4ff; border-radius:50%;
+    opacity:0;
+    box-shadow:0 0 6px rgba(255,255,255,.85);
+}
+.letter-splash.go .splash-drop{ animation:splashDrop .55s cubic-bezier(.1,.7,.25,1) forwards; }
+@keyframes splashDrop{
+    0%{ opacity:1; transform:translate(0,0) scale(1); }
+    100%{ opacity:0; transform:translate(var(--dx,0), var(--dy,-14px)) scale(.25); }
+}
+@media (prefers-reduced-motion: reduce){ .letter-splash{ display:none !important; } }
 
 .brand-underline{
     position:relative; z-index:2; height:2px; width:0;
@@ -817,14 +853,49 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
         })();
     }
 
-    /* ── Build the nameplate letters ─────────────────────────── */
+    /* ── Build the nameplate letters, each with its own splash rig ── */
     var spans = [];
     NAME.split('').forEach(function (ch) {
         var s = document.createElement('span');
         s.textContent = ch;
+
+        // Water-splash rig: 3 expanding rings + a burst of flying droplets,
+        // dormant until the '.go' class fires the instant the letter lands.
+        var splash = document.createElement('span');
+        splash.className = 'letter-splash';
+        ['ring1', 'ring2', 'ring3'].forEach(function (cls) {
+            var ring = document.createElement('span');
+            ring.className = 'splash-ring ' + cls;
+            splash.appendChild(ring);
+        });
+        var dropCount = 6;
+        for (var d = 0; d < dropCount; d++) {
+            var drop = document.createElement('span');
+            drop.className = 'splash-drop';
+            var angle = (Math.PI * 2 / dropCount) * d + (Math.random() * 0.5 - 0.25);
+            var dist  = 9 + Math.random() * 9;
+            var dx    = Math.cos(angle) * dist;
+            var dy    = Math.sin(angle) * dist - 7; // bias upward, like water kicking up
+            drop.style.setProperty('--dx', dx.toFixed(1) + 'px');
+            drop.style.setProperty('--dy', dy.toFixed(1) + 'px');
+            drop.style.animationDelay = (Math.random() * 0.05).toFixed(2) + 's';
+            splash.appendChild(drop);
+        }
+        s.appendChild(splash);
+
         brandEl.appendChild(s);
         spans.push(s);
     });
+
+    // Fire the ripple + droplets for letter i (restarts the CSS animation
+    // cleanly even if called more than once).
+    function splashLetter(s) {
+        var splash = s.querySelector('.letter-splash');
+        if (!splash) return;
+        splash.classList.remove('go');
+        void splash.offsetWidth; // force reflow so the animation restarts
+        splash.classList.add('go');
+    }
 
     /* ── Reveal the login form + speak the closing line ──────── */
     function revealLogin() {
@@ -868,12 +939,19 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
             return;
         }
 
-        var step = 340;   // slower — each letter gets room to "splash"
+        var step = 340;      // slower — each letter gets room to "splash"
+        var landAt = 580;    // ms into the 1s dropIn keyframes where the letter actually touches down (~58%)
         spans.forEach(function (s, i) {
             setTimeout(function () {
-                s.classList.add('in', 'pulse');
-                playWave(i);
-                setTimeout(function () { s.classList.remove('pulse'); }, 520);
+                s.classList.add('in');
+                // Ripple + droplets + sound fire together, right as the letter lands —
+                // not at the start of the fall.
+                setTimeout(function () {
+                    s.classList.add('pulse');
+                    playWave(i);
+                    splashLetter(s);
+                    setTimeout(function () { s.classList.remove('pulse'); }, 420);
+                }, landAt);
             }, i * step);
         });
 
