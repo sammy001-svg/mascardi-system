@@ -334,6 +334,11 @@ body::before{
 .password-toggle:hover{ color:var(--neon-b); }
 .form-check-label{ color:#93a3bb; }
 .brand-icon{ box-shadow:0 8px 26px rgba(37,99,235,.5), 0 0 24px rgba(59,130,246,.35); }
+.brand-icon.has-logo{
+    background:#ffffff !important; padding:8px;
+    box-shadow:0 8px 26px rgba(0,0,0,.4), 0 0 22px rgba(59,130,246,.28);
+}
+.brand-icon.has-logo img{ width:100%; height:100%; object-fit:contain; display:block; border-radius:8px; }
 .first-run-badge{
     background:rgba(59,130,246,.12) !important;
     border-color:rgba(59,130,246,.3) !important;
@@ -508,7 +513,12 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 
 <div class="login-wrap">
     <div class="login-card">
+        <?php $__logo = companyLogo(); ?>
+        <?php if ($__logo['exists']): ?>
+        <div class="brand-icon has-logo"><img src="<?= e($__logo['url']) ?>" alt="<?= e(getSetting('company_name', 'Mascardi')) ?> logo"></div>
+        <?php else: ?>
         <div class="brand-icon"><i class="fa fa-car-side"></i></div>
+        <?php endif; ?>
         <div class="login-title"><?= $isFirstRun ? 'System Setup' : htmlspecialchars(APP_NAME) ?></div>
         <div class="login-sub"><?= $isFirstRun ? 'Create your administrator account to get started.' : 'Staff portal — sign in to continue' ?></div>
 

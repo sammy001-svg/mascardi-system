@@ -62,17 +62,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         } else {
             $imgDir = BASE_PATH . '/assets/images';
             if (!is_dir($imgDir)) mkdir($imgDir, 0755, true);
-            $ext     = $allowed[$mime];
-            $destRel = '/assets/images/company_logo.' . $ext;
-            $dest    = BASE_PATH . $destRel;
+            $ext      = $allowed[$mime];
+            $fileName = 'company_logo.' . $ext;                 // stored as a bare filename
+            $dest     = BASE_PATH . '/assets/images/' . $fileName;
             // Remove any old logos with different extension
             foreach (['jpg','png','webp','svg'] as $e) {
                 $old = BASE_PATH . '/assets/images/company_logo.' . $e;
                 if (file_exists($old) && $e !== $ext) @unlink($old);
             }
             if (move_uploaded_file($file['tmp_name'], $dest)) {
-                $db->prepare("INSERT INTO settings (setting_key,setting_value) VALUES ('company_logo',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)")->execute([$destRel]);
-                $settings['company_logo'] = $destRel;
+                $db->prepare("INSERT INTO settings (setting_key,setting_value) VALUES ('company_logo',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)")->execute([$fileName]);
+                $settings['company_logo'] = $fileName;
                 setFlash('success', 'Logo uploaded successfully.');
             } else {
                 $errors[] = 'Failed to save logo. Check folder permissions.';
@@ -273,10 +273,10 @@ include __DIR__ . '/../../includes/header.php';
             <div class="card-header"><i class="fa fa-image me-2"></i>Company Logo</div>
             <div class="card-body d-flex flex-column">
                 <!-- Current logo preview -->
-                <?php $logoPath = $settings['company_logo'] ?? ''; ?>
+                <?php $__logoPrev = companyLogo(); ?>
                 <div class="text-center mb-3">
-                    <?php if ($logoPath && file_exists(BASE_PATH . $logoPath)): ?>
-                    <img src="<?= BASE_URL . e($logoPath) ?>?v=<?= filemtime(BASE_PATH . $logoPath) ?>"
+                    <?php if ($__logoPrev['exists']): ?>
+                    <img src="<?= e($__logoPrev['url']) ?>"
                          alt="Company Logo" style="max-height:100px;max-width:100%;object-fit:contain;border-radius:6px">
                     <?php else: ?>
                     <div class="d-flex align-items-center justify-content-center bg-light rounded"
@@ -297,7 +297,7 @@ include __DIR__ . '/../../includes/header.php';
                     <button type="submit" form="logoUploadForm" class="btn btn-sm btn-outline-primary">
                         <i class="fa fa-upload me-1"></i>Upload
                     </button>
-                    <?php if ($logoPath): ?>
+                    <?php if ($__logoPrev['exists']): ?>
                     <button type="submit" form="logoRemoveForm" class="btn btn-sm btn-outline-danger">
                         <i class="fa fa-trash me-1"></i>Remove
                     </button>

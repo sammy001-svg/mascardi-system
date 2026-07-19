@@ -175,3 +175,39 @@ function getSetting(string $key, string $default = ''): string {
     }
     return $settings[$key] ?? $default;
 }
+
+/**
+ * Resolve the uploaded company logo to a usable URL + filesystem path.
+ *
+ * The logo always lives at /assets/images/<file>. Historically the setting
+ * value was stored as the full path ('/assets/images/company_logo.png'), but
+ * the many templates across the system build '/assets/images/' . value and so
+ * expect a bare filename ('company_logo.png'). To make every template render
+ * correctly, this normalizes to a bare filename and self-heals a legacy value
+ * once (a single UPDATE on the first page load after deploy).
+ *
+ * Returns ['url' => cache-busted URL or '', 'file' => abs path or '', 'exists' => bool].
+ */
+function companyLogo(): array {
+    $raw = trim(getSetting('company_logo', ''));
+    if ($raw === '') return ['url' => '', 'file' => '', 'exists' => false];
+
+    $base = basename(str_replace('\\', '/', $raw));   // -> company_logo.png
+    if ($base !== $raw) {
+        // Legacy full-path value: rewrite it to the bare filename so the
+        // templates that don't use this helper also start working.
+        try {
+            getDB()->prepare("UPDATE settings SET setting_value=? WHERE setting_key='company_logo'")
+                   ->execute([$base]);
+        } catch (\Throwable $_) {}
+    }
+
+    $rel    = '/assets/images/' . $base;
+    $file   = BASE_PATH . $rel;
+    $exists = is_file($file);
+    return [
+        'url'    => $exists ? BASE_URL . $rel . '?v=' . @filemtime($file) : '',
+        'file'   => $file,
+        'exists' => $exists,
+    ];
+}

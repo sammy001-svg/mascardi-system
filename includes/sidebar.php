@@ -31,9 +31,9 @@ if (authRole() === 'supervisor') {
     <!-- Brand -->
     <div class="sidebar-brand">
         <div class="brand-logo">
-            <?php $__logo = getSetting('company_logo', ''); ?>
-            <?php if ($__logo && file_exists(BASE_PATH . '/assets/images/' . $__logo)): ?>
-            <img src="<?= BASE_URL ?>/assets/images/<?= e($__logo) ?>" alt="Logo"
+            <?php $__logo = companyLogo(); ?>
+            <?php if ($__logo['exists']): ?>
+            <img src="<?= e($__logo['url']) ?>" alt="Logo"
                  style="height:32px;width:32px;object-fit:contain;border-radius:4px">
             <?php else: ?>
             <i class="fa fa-car-side" style="font-size:16px"></i>
