@@ -1515,11 +1515,12 @@ const Chat = window.Chat = {
         this.prevSenderId = sid;
         this.prevMsgTs    = ts;
 
-        // Avatar for received messages
+        // Avatar on the first message of every group — sent and received alike (Slack style)
         const color = avatarColor(sid);
-        const avHtml = !sent && groupClass.includes('group-start')
-            ? `<div class="msg-av" style="background:${color}" title="${esc(m.sender_name||'')}">${esc(initials(m.sender_name||'?'))}</div>`
-            : (!sent ? `<div class="msg-av-ph"></div>` : '');
+        const dispName = m.sender_name || <?= json_encode($me['name']) ?>;
+        const avHtml = groupClass.includes('group-start')
+            ? `<div class="msg-av" style="background:${color}" title="${esc(dispName)}">${esc(initials(dispName||'?'))}</div>`
+            : `<div class="msg-av-ph"></div>`;
 
         // Reply preview (if this message is a reply)
         let replyBlock = '';
@@ -1536,9 +1537,9 @@ const Chat = window.Chat = {
             </div>`;
         }
 
-        // Sender name inside bubble for group received messages
-        const senderLabel = (!sent && this.convType === 'group' && groupClass.includes('group-start'))
-            ? `<div class="b-sender" style="color:${color}">${esc(m.sender_name||'')}</div>` : '';
+        // Sender name on the first message of every group (Slack style), with the time beside it
+        const senderLabel = groupClass.includes('group-start')
+            ? `<div class="b-sender">${esc(dispName)} <span class="b-sender-time">${time}</span></div>` : '';
 
         // Bubble content
         let body = '';
@@ -2576,6 +2577,106 @@ $(document).on('click', '#upList .up-item', function(e) {
     }
 });
 </script>
+
+<!-- ═══════════════ SLACK THEME — visual layer over the existing chat ═══════════════
+     Loaded last so it wins the cascade. Restyles the sidebar to Slack's aubergine,
+     flattens WhatsApp-style bubbles into Slack's left-aligned message rows with
+     avatars + bold sender names, and reworks the composer into Slack's bordered box. -->
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+.chat-root, .chat-root * { font-family: 'Lato', 'Inter', -apple-system, sans-serif; }
+
+/* ── Sidebar → Slack aubergine ─────────────────────────────── */
+.cp-left { background: #3F0E40 !important; border-right: none !important; }
+.cp-hdr { background: transparent !important; border-bottom: 1px solid rgba(255,255,255,.1) !important; }
+.cp-hdr-brand, .cp-hdr * { color: #fff !important; }
+.cp-hdr-icon { background: transparent !important; box-shadow: none !important; font-size: 19px !important; }
+.cp-search input, .cp-si input, .cp-search .form-control {
+    background: rgba(255,255,255,.12) !important; border: 1px solid rgba(255,255,255,.25) !important;
+    color: #fff !important; border-radius: 6px !important;
+}
+.cp-search input::placeholder { color: #BCABBC !important; }
+.cp-search i, .cp-si i { color: #BCABBC !important; }
+.cp-new-btn { background: #fff !important; color: #3F0E40 !important; border: none !important; font-weight: 700 !important; border-radius: 6px !important; }
+.conv-list { background: transparent !important; }
+
+.conv-item {
+    background: transparent !important; border: none !important; border-left: none !important;
+    border-radius: 6px !important; margin: 1px 8px !important; padding: 7px 10px !important;
+    color: #BCABBC !important;
+}
+.conv-item:hover { background: #350D36 !important; }
+.conv-item.active { background: #1164A3 !important; }
+.conv-item .cv-name { color: #fff !important; font-weight: 700 !important; }
+.conv-item:not(.active):hover .cv-name { color: #fff !important; }
+.conv-item .cv-time { color: #BCABBC !important; }
+.conv-item.active .cv-time, .conv-item.active * { color: #fff !important; }
+.cv-av { border-radius: 4px !important; }
+.conv-item [class*="unread"], .conv-item [class*="badge"] { background: #CD2553 !important; color: #fff !important; }
+[class*="online"] { background: #2BAC76 !important; }
+
+.cp-user-foot {
+    background: #3F0E40 !important; border-top: 1px solid rgba(255,255,255,.1) !important;
+}
+.cpu-name { color: #fff !important; font-weight: 700 !important; }
+.cpu-role { color: #BCABBC !important; }
+.cpu-av { border-radius: 4px !important; }
+.cpu-status-dot { background: #2BAC76 !important; }
+
+/* ── Conversation header ───────────────────────────────────── */
+.ch-name, .chat-active .ch-name { color: #1D1C1D !important; font-weight: 900 !important; font-size: 17px !important; }
+.ch-acts .btn, .ch-acts button, .ch-acts a { color: #616061 !important; }
+.ch-acts .btn:hover, .ch-acts button:hover { background: #F8F8F8 !important; color: #1D1C1D !important; }
+
+/* ── Messages → flat Slack rows ────────────────────────────── */
+.chat-msgs { background: #fff !important; background-image: none !important; padding: 12px 0 !important; }
+.msg-row, .msg-row.s, .msg-row.r {
+    justify-content: flex-start !important;
+    padding: 1px 20px 1px 16px !important; margin: 0 !important; gap: 10px !important;
+    align-items: flex-start !important;
+}
+.msg-row:hover { background: #F8F8F8 !important; }
+.msg-row.group-start { margin-top: 12px !important; }
+.msg-av { width: 36px !important; height: 36px !important; border-radius: 4px !important; font-size: 13px !important; flex-shrink: 0; }
+.msg-av-ph { width: 36px !important; flex-shrink: 0; }
+.msg-bubble-col { align-items: flex-start !important; max-width: calc(100% - 72px) !important; }
+.msg-row.s .bubble, .msg-row.r .bubble, .bubble {
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    border-radius: 0 !important; padding: 0 0 1px !important; max-width: 100% !important;
+    color: #1D1C1D !important;
+}
+.b-text { color: #1D1C1D !important; font-size: 15px !important; line-height: 1.46 !important; }
+.b-sender { font-weight: 900 !important; font-size: 15px !important; color: #1D1C1D !important; margin-bottom: 1px !important; }
+.b-sender-time { font-weight: 400; font-size: 12px; color: #616061; margin-left: 6px; }
+.b-meta { display: none !important; }   /* time now lives beside the sender name */
+.reply-prev { border-left: 3px solid #DDDDDD !important; background: #F8F8F8 !important; border-radius: 4px !important; }
+.msg-row.s .reply-prev { border-color: #DDDDDD !important; }
+.rp-name, .msg-row.s .rp-name { color: #616061 !important; }
+
+/* Hover actions → Slack's floating toolbar, top-right of the row */
+.msg-row.s .msg-actions, .msg-row.r .msg-actions, .msg-actions {
+    position: absolute !important; left: auto !important; right: 20px !important; top: -14px !important;
+    background: #fff !important; border: 1px solid #DDDDDD !important; border-radius: 8px !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,.1) !important; padding: 2px !important; z-index: 5;
+}
+.msg-act { color: #616061 !important; border-radius: 4px !important; }
+.msg-act:hover { background: #F8F8F8 !important; color: #1D1C1D !important; }
+.reaction-pill { background: #F8F8F8 !important; border: 1px solid #DDDDDD !important; border-radius: 12px !important; }
+.reaction-pill.mine { border-color: #1164A3 !important; background: #E8F5FA !important; }
+
+/* ── Composer → Slack's bordered box ───────────────────────── */
+.chat-input-wrap { background: #fff !important; border-top: none !important; padding: 0 20px 20px !important; }
+.chat-bar {
+    border: 1px solid rgba(141,141,141,.5) !important; border-radius: 8px !important;
+    background: #fff !important; box-shadow: none !important; padding: 6px 8px !important;
+}
+.chat-bar:focus-within { border-color: rgba(29,28,29,.6) !important; }
+.bar-input { background: transparent !important; }
+.bar-ic { color: #616061 !important; }
+.bar-ic:hover { color: #1D1C1D !important; background: #F8F8F8 !important; }
+.bar-send { background: #007A5A !important; }
+.bar-send:hover { background: #148567 !important; }
+</style>
 <?php $extraModal = ob_get_clean(); ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
