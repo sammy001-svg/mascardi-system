@@ -288,10 +288,108 @@ window.addEventListener('beforeinstallprompt', function(e) {
             .catch(function(){});
     }
 
+    /* ── Global alerting: ring + popup for new notifications AND new chat
+       messages, on EVERY page of the app — not just Team Chat. ───────── */
+    var chatApi    = '<?= BASE_URL ?>/modules/chat/api/unread.php';
+    var chatUrl    = '<?= BASE_URL ?>/modules/chat/index.php';
+    var onChatPage = location.pathname.indexOf('/modules/chat/') !== -1;
+    var LS_N = 'msc_seen_notif', LS_C = 'msc_seen_chat';
+
+    // Audio must be unlocked by a user gesture (browser autoplay policy);
+    // the same first gesture also asks for browser-notification permission.
+    var actx = null;
+    function unlockAlerts() {
+        if (!actx) {
+            var AC = window.AudioContext || window.webkitAudioContext;
+            if (AC) { try { actx = new AC(); } catch (e) {} }
+        }
+        if (actx && actx.state === 'suspended') { try { actx.resume(); } catch (e) {} }
+        if ('Notification' in window && Notification.permission === 'default') {
+            try { Notification.requestPermission(); } catch (e) {}
+        }
+    }
+    ['pointerdown','keydown'].forEach(function (ev) {
+        window.addEventListener(ev, unlockAlerts, { passive: true });
+    });
+
+    // Classic two-tone triple ring, synthesized — no audio file needed
+    function ring() {
+        if (!actx || actx.state !== 'running') return;
+        try {
+            var t = actx.currentTime;
+            for (var p = 0; p < 3; p++) {
+                var t0 = t + p * 0.38;
+                [880, 1174].forEach(function (f) {
+                    var o = actx.createOscillator(), g = actx.createGain();
+                    o.type = 'sine'; o.frequency.value = f;
+                    g.gain.setValueAtTime(0.0001, t0);
+                    g.gain.exponentialRampToValueAtTime(0.13, t0 + 0.02);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
+                    o.connect(g); g.connect(actx.destination);
+                    o.start(t0); o.stop(t0 + 0.32);
+                });
+            }
+        } catch (e) {}
+    }
+
+    // System popup when permitted, plus an in-page toast that always shows
+    function popupAlert(title, body, link) {
+        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+            try {
+                var n = new Notification(title, { body: body || '', icon: '<?= BASE_URL ?>/assets/images/icons/icon-192.png', tag: 'msc-' + title });
+                n.onclick = function () { window.focus(); if (link) location.href = link; n.close(); };
+            } catch (e) {}
+        }
+        try {
+            var tEl = document.createElement('a');
+            tEl.href = link || '#';
+            tEl.style.cssText = 'position:fixed;top:76px;right:20px;z-index:99999;background:#0f172a;color:#fff;'
+                + 'padding:14px 18px;border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.35);max-width:320px;'
+                + 'text-decoration:none;font-size:13.5px;display:block;opacity:0;transform:translateY(-8px);'
+                + 'transition:opacity .3s ease,transform .3s ease';
+            tEl.innerHTML = '<div style="font-weight:700;margin-bottom:2px"><i class="fa fa-bell me-2"></i>'
+                + escHtml(title) + '</div>'
+                + (body ? '<div style="opacity:.75">' + escHtml(body) + '</div>' : '');
+            document.body.appendChild(tEl);
+            requestAnimationFrame(function () { tEl.style.opacity = '1'; tEl.style.transform = 'none'; });
+            setTimeout(function () {
+                tEl.style.opacity = '0';
+                setTimeout(function () { tEl.remove(); }, 350);
+            }, 6000);
+        } catch (e) {}
+    }
+
+    function seen(k)     { return parseInt(localStorage.getItem(k) || '0', 10); }
+    function setSeen(k,v){ try { localStorage.setItem(k, String(v)); } catch (e) {} }
+
     function updateCount() {
+        // System notifications → bell badge + ring/popup on increase
         fetch(apiUrl + '?action=count')
             .then(function(r){ return r.json(); })
-            .then(function(d){ if (typeof d.count !== 'undefined') setBadge(d.count); })
+            .then(function(d){
+                if (typeof d.count === 'undefined') return;
+                setBadge(d.count);
+                var c = parseInt(d.count, 10) || 0;
+                if (c > seen(LS_N)) {
+                    ring();
+                    popupAlert('New notification', 'You have ' + c + ' unread notification' + (c > 1 ? 's' : ''),
+                        '<?= BASE_URL ?>/modules/notifications/index.php');
+                }
+                setSeen(LS_N, c);
+            })
+            .catch(function(){});
+
+        // Team chat messages → ring/popup on every page except the chat itself
+        fetch(chatApi)
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                var c = parseInt(d.count || 0, 10);
+                if (!onChatPage && c > seen(LS_C)) {
+                    ring();
+                    popupAlert('New team chat message', c + ' unread message' + (c > 1 ? 's' : '') + ' — click to open chat', chatUrl);
+                }
+                setSeen(LS_C, c);  // chat page keeps the baseline in sync (it has its own alerts)
+            })
             .catch(function(){});
     }
 
@@ -321,8 +419,9 @@ window.addEventListener('beforeinstallprompt', function(e) {
             .catch(function(){});
     });
 
-    // Poll every 60 s for new notifications
-    pollInt = setInterval(updateCount, 60000);
+    // Poll every 12 s for new notifications + chat messages, starting now
+    updateCount();
+    pollInt = setInterval(updateCount, 12000);
 }());
 </script>
 
