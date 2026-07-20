@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(php -r 'require_once '\\\\''includes/functions.php'\\\\''; $db=getDB\\(\\); $r=$db->query\\('\\\\''DESCRIBE cars'\\\\''\\)->fetchAll\\(PDO::FETCH_COLUMN\\); echo implode\\('\\\\'', '\\\\'',$r\\);')",
-      "WebFetch(domain:lucidmotors.com)"
+      "WebFetch(domain:lucidmotors.com)",
+      "Bash(php -l showroom/header.php)",
+      "Bash(php -l showroom/index.php)",
+      "Bash(php -l showroom/footer.php)"
     ]
   }
 }
