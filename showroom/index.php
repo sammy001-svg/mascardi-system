@@ -318,7 +318,6 @@ include __DIR__ . '/header.php';
                     <?php endif; ?>
                 </div>
                 <form method="GET" action="#inventory" style="padding:22px;display:flex;flex-direction:column;gap:22px">
-                    <?php if ($search): ?><input type="hidden" name="q" value="<?= htmlspecialchars($search) ?>"><?php endif; ?>
                     <?php if ($sort !== 'featured'): ?><input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>"><?php endif; ?>
 
                     <div>
