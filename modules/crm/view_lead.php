@@ -16,6 +16,11 @@ try { $db->exec("ALTER TABLE crm_leads ADD COLUMN due_date DATE NULL DEFAULT NUL
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN import_vehicle_details TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN expected_arrival_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN delivered_at DATETIME NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN id_number VARCHAR(50) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN kra_pin VARCHAR(20) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN po_box VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN id_card_front VARCHAR(255) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN id_card_back VARCHAR(255) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 // Test drive & car extended fields
 try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars MODIFY COLUMN status ENUM('in_transit','arrived','in_assessment','in_workshop','completed','sold','delivered','reserved') DEFAULT 'in_transit'"); } catch (\Throwable $_) {}
@@ -159,23 +164,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect(BASE_URL.'/modules/crm/view_lead.php?id='.$id);
     }
 
-    if ($action === 'update_details' && canWrite('crm')) {
-        $name        = trim($_POST['name']           ?? '');
-        $phone       = trim($_POST['phone']          ?? '') ?: null;
-        $email       = trim($_POST['email']          ?? '') ?: null;
-        $interestedIn = trim($_POST['interested_in'] ?? '') ?: null;
-        $budget      = $_POST['budget'] !== '' ? (float)$_POST['budget'] : null;
-        $assignedTo  = (int)($_POST['assigned_to']   ?? 0) ?: null;
-        $notes       = trim($_POST['notes']          ?? '') ?: null;
-        $followUp    = trim($_POST['follow_up_date'] ?? '') ?: null;
-        $lostReason  = trim($_POST['lost_reason']    ?? '') ?: null;
-        $campaign    = trim($_POST['campaign']       ?? '') ?: null;
+    if ($action === 'update_details') {
+        // Everyone with CRM access can edit identity/KYC fields; other fields
+        // remain gated behind canWrite('crm') even if posted directly.
+        $canEditCrm = canWrite('crm');
+
+        $name     = trim($_POST['name']      ?? '');
+        $idNumber = trim($_POST['id_number'] ?? '') ?: null;
+        $kraPin   = strtoupper(trim($_POST['kra_pin'] ?? '')) ?: null;
+        $poBox    = trim($_POST['po_box']    ?? '') ?: null;
+
+        if ($canEditCrm) {
+            $phone        = trim($_POST['phone']          ?? '') ?: null;
+            $email        = trim($_POST['email']          ?? '') ?: null;
+            $interestedIn = trim($_POST['interested_in']  ?? '') ?: null;
+            $budget       = $_POST['budget'] !== '' ? (float)$_POST['budget'] : null;
+            $assignedTo   = (int)($_POST['assigned_to']   ?? 0) ?: null;
+            $notes        = trim($_POST['notes']          ?? '') ?: null;
+            $followUp     = trim($_POST['follow_up_date'] ?? '') ?: null;
+            $lostReason   = trim($_POST['lost_reason']    ?? '') ?: null;
+            $campaign     = trim($_POST['campaign']       ?? '') ?: null;
+        } else {
+            $phone        = $lead['phone'];
+            $email        = $lead['email'];
+            $interestedIn = $lead['interested_in'];
+            $budget       = $lead['budget'];
+            $assignedTo   = $lead['assigned_to'];
+            $notes        = $lead['notes'];
+            $followUp     = $lead['follow_up_date'];
+            $lostReason   = $lead['lost_reason'];
+            $campaign     = $lead['campaign'];
+        }
+
+        // ID card front/back — uploadable by anyone who can reach this page.
+        $idCardFront = $lead['id_card_front'];
+        $idCardBack  = $lead['id_card_back'];
+        try {
+            if (!empty($_FILES['id_card_front']['name'])) {
+                $idCardFront = handleUpload($_FILES['id_card_front'], BASE_PATH . '/uploads/leads', ['jpg','jpeg','png','webp']);
+            }
+            if (!empty($_FILES['id_card_back']['name'])) {
+                $idCardBack = handleUpload($_FILES['id_card_back'], BASE_PATH . '/uploads/leads', ['jpg','jpeg','png','webp']);
+            }
+        } catch (\Throwable $e) {
+            setFlash('danger', 'ID card upload failed: ' . $e->getMessage());
+            redirect(BASE_URL.'/modules/crm/view_lead.php?id='.$id);
+        }
 
         if ($name) {
             $prevAssigned = (int)$lead['assigned_to'];
-            $db->prepare("UPDATE crm_leads SET name=?,phone=?,email=?,interested_in=?,budget=?,assigned_to=?,notes=?,follow_up_date=?,lost_reason=?,campaign=?,updated_at=NOW() WHERE id=?")
-               ->execute([$name,$phone,$email,$interestedIn,$budget,$assignedTo,$notes,$followUp,$lostReason,$campaign,$id]);
-            if ($assignedTo && $assignedTo !== $prevAssigned) {
+            $db->prepare("UPDATE crm_leads SET name=?,phone=?,email=?,interested_in=?,budget=?,assigned_to=?,notes=?,follow_up_date=?,lost_reason=?,campaign=?,id_number=?,kra_pin=?,po_box=?,id_card_front=?,id_card_back=?,updated_at=NOW() WHERE id=?")
+               ->execute([$name,$phone,$email,$interestedIn,$budget,$assignedTo,$notes,$followUp,$lostReason,$campaign,$idNumber,$kraPin,$poBox,$idCardFront,$idCardBack,$id]);
+            if ($canEditCrm && $assignedTo && $assignedTo !== $prevAssigned) {
                 require_once __DIR__ . '/../../includes/notifications.php';
                 createNotification((int)$assignedTo, 'info',
                     "Lead Assigned: {$name}",
@@ -1066,41 +1106,45 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
         <?php endif; ?>
 
         <!-- Edit details -->
-        <?php if (canWrite('crm')): ?>
+        <?php $canEditCrm = canWrite('crm'); ?>
         <div class="card">
             <div class="card-header fw-semibold"><i class="fa fa-pen me-2"></i>Edit Details</div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="action" value="update_details">
                     <div class="mb-2">
-                        <label class="form-label small fw-semibold">Name</label>
+                        <label class="form-label small fw-semibold">Full Name</label>
                         <input type="text" name="name" class="form-control form-control-sm" value="<?= e($lead['name']) ?>" required>
                     </div>
+
+                    <?php if (!$canEditCrm): ?>
+                    <div class="form-text text-muted mb-2"><i class="fa fa-lock me-1"></i>Contact/assignment fields below are read-only for your role.</div>
+                    <?php endif; ?>
                     <div class="mb-2">
                         <label class="form-label small fw-semibold">Phone</label>
-                        <input type="text" name="phone" class="form-control form-control-sm" value="<?= e($lead['phone'] ?? '') ?>">
+                        <input type="text" name="phone" class="form-control form-control-sm" value="<?= e($lead['phone'] ?? '') ?>" <?= $canEditCrm ? '' : 'disabled' ?>>
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-semibold">Email</label>
-                        <input type="email" name="email" class="form-control form-control-sm" value="<?= e($lead['email'] ?? '') ?>">
+                        <input type="email" name="email" class="form-control form-control-sm" value="<?= e($lead['email'] ?? '') ?>" <?= $canEditCrm ? '' : 'disabled' ?>>
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-semibold">Interested In</label>
-                        <input type="text" name="interested_in" class="form-control form-control-sm" value="<?= e($lead['interested_in'] ?? '') ?>">
+                        <input type="text" name="interested_in" class="form-control form-control-sm" value="<?= e($lead['interested_in'] ?? '') ?>" <?= $canEditCrm ? '' : 'disabled' ?>>
                     </div>
                     <div class="row g-2 mb-2">
                         <div class="col-6">
                             <label class="form-label small fw-semibold">Budget (KES)</label>
-                            <input type="number" name="budget" class="form-control form-control-sm" value="<?= e($lead['budget'] ?? '') ?>" step="1000">
+                            <input type="number" name="budget" class="form-control form-control-sm" value="<?= e($lead['budget'] ?? '') ?>" step="1000" <?= $canEditCrm ? '' : 'disabled' ?>>
                         </div>
                         <div class="col-6">
                             <label class="form-label small fw-semibold">Follow-up</label>
-                            <input type="date" name="follow_up_date" class="form-control form-control-sm" value="<?= e($lead['follow_up_date'] ?? '') ?>">
+                            <input type="date" name="follow_up_date" class="form-control form-control-sm" value="<?= e($lead['follow_up_date'] ?? '') ?>" <?= $canEditCrm ? '' : 'disabled' ?>>
                         </div>
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-semibold">Assigned To</label>
-                        <select name="assigned_to" class="form-select form-select-sm">
+                        <select name="assigned_to" class="form-select form-select-sm" <?= $canEditCrm ? '' : 'disabled' ?>>
                             <option value="">— Unassigned —</option>
                             <?php foreach ($salesUsers as $u): ?>
                             <option value="<?= $u['id'] ?>" <?= $lead['assigned_to'] == $u['id'] ? 'selected' : '' ?>><?= e($u['name']) ?></option>
@@ -1111,25 +1155,60 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         <label class="form-label small fw-semibold">Campaign / Ad</label>
                         <input type="text" name="campaign" class="form-control form-control-sm"
                                value="<?= e($lead['campaign'] ?? '') ?>"
-                               placeholder="e.g. Facebook Summer Ad, Google Q4…">
+                               placeholder="e.g. Facebook Summer Ad, Google Q4…" <?= $canEditCrm ? '' : 'disabled' ?>>
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-semibold">Notes</label>
-                        <textarea name="notes" class="form-control form-control-sm" rows="2"><?= e($lead['notes'] ?? '') ?></textarea>
+                        <textarea name="notes" class="form-control form-control-sm" rows="2" <?= $canEditCrm ? '' : 'disabled' ?>><?= e($lead['notes'] ?? '') ?></textarea>
                     </div>
                     <?php if (in_array($lead['stage'],['lost'])): ?>
                     <div class="mb-2">
                         <label class="form-label small fw-semibold">Lost Reason</label>
-                        <input type="text" name="lost_reason" class="form-control form-control-sm" value="<?= e($lead['lost_reason'] ?? '') ?>" placeholder="e.g. Price too high, bought elsewhere…">
+                        <input type="text" name="lost_reason" class="form-control form-control-sm" value="<?= e($lead['lost_reason'] ?? '') ?>" placeholder="e.g. Price too high, bought elsewhere…" <?= $canEditCrm ? '' : 'disabled' ?>>
                     </div>
                     <?php else: ?>
                     <input type="hidden" name="lost_reason" value="<?= e($lead['lost_reason'] ?? '') ?>">
                     <?php endif; ?>
+
+                    <hr class="my-3">
+                    <div class="fw-semibold small text-muted mb-2"><i class="fa fa-id-card me-1"></i>Identity / KYC Details</div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">ID Number</label>
+                        <input type="text" name="id_number" class="form-control form-control-sm" value="<?= e($lead['id_number'] ?? '') ?>" placeholder="National ID / Passport No.">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">KRA PIN</label>
+                        <input type="text" name="kra_pin" class="form-control form-control-sm text-uppercase" value="<?= e($lead['kra_pin'] ?? '') ?>" oninput="this.value=this.value.toUpperCase()" placeholder="A000000000X">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">P.O. Box</label>
+                        <input type="text" name="po_box" class="form-control form-control-sm" value="<?= e($lead['po_box'] ?? '') ?>" placeholder="e.g. 12345-00100, Nairobi">
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold">ID Card — Front</label>
+                            <?php if (!empty($lead['id_card_front'])): ?>
+                            <a href="<?= BASE_URL ?>/uploads/leads/<?= e($lead['id_card_front']) ?>" target="_blank" class="d-block mb-1">
+                                <img src="<?= thumbUrl('leads', $lead['id_card_front']) ?>" class="img-thumbnail" style="max-height:70px">
+                            </a>
+                            <?php endif; ?>
+                            <input type="file" name="id_card_front" class="form-control form-control-sm" accept="image/*">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold">ID Card — Back</label>
+                            <?php if (!empty($lead['id_card_back'])): ?>
+                            <a href="<?= BASE_URL ?>/uploads/leads/<?= e($lead['id_card_back']) ?>" target="_blank" class="d-block mb-1">
+                                <img src="<?= thumbUrl('leads', $lead['id_card_back']) ?>" class="img-thumbnail" style="max-height:70px">
+                            </a>
+                            <?php endif; ?>
+                            <input type="file" name="id_card_back" class="form-control form-control-sm" accept="image/*">
+                        </div>
+                    </div>
+
                     <button class="btn btn-sm btn-primary w-100 mt-1"><i class="fa fa-save me-1"></i>Save Changes</button>
                 </form>
             </div>
         </div>
-        <?php endif; ?>
     </div>
 
     <!-- Right: log activity + activity timeline -->

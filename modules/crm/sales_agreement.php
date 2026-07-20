@@ -15,6 +15,11 @@ foreach ([
     "ALTER TABLE crm_leads ADD COLUMN deposit_notes     TEXT          NULL DEFAULT NULL",
     "ALTER TABLE crm_leads ADD COLUMN agreed_sale_price DECIMAL(15,2) NULL DEFAULT NULL",
     "ALTER TABLE crm_leads ADD COLUMN due_date          DATE          NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN id_number         VARCHAR(50)   NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN kra_pin           VARCHAR(20)   NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN po_box            VARCHAR(100)  NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN id_card_front     VARCHAR(255)  NULL DEFAULT NULL",
+    "ALTER TABLE crm_leads ADD COLUMN id_card_back      VARCHAR(255)  NULL DEFAULT NULL",
     "ALTER TABLE clients   ADD COLUMN kra_pin           VARCHAR(20)   NULL",
 ] as $_sql) { try { $db->exec($_sql); } catch (\Throwable $_) {} }
 
@@ -55,8 +60,10 @@ if (!empty($lead['client_id'])) {
 $buyerName   = trim($client['name']      ?? $lead['name']  ?? '');
 $buyerPhone  = trim($client['phone']     ?? $lead['phone'] ?? '');
 $buyerEmail  = trim($client['email']     ?? $lead['email'] ?? '');
-$buyerKraPin = trim($client['kra_pin']   ?? '');
-$buyerIdNo   = trim($client['id_number'] ?? '');
+// KYC fields: prefer what was captured directly on the lead, fall back to the linked client
+$buyerKraPin = trim($lead['kra_pin']   ?? '') ?: trim($client['kra_pin']   ?? '');
+$buyerIdNo   = trim($lead['id_number'] ?? '') ?: trim($client['id_number'] ?? '');
+$buyerPoBox  = trim($lead['po_box']    ?? '');
 
 // Purchase price: agreed_sale_price → offer_price → asking_price
 $agreedPrice = (float)($lead['agreed_sale_price'] ?? 0);
@@ -236,7 +243,7 @@ include __DIR__ . '/../../includes/header.php';
                 <div style="font-weight:700;font-size:13px;margin-bottom:4px"><?= e($buyerName) ?></div>
                 <div style="font-size:12px;color:#333333;line-height:1.75">
                     <?php if ($buyerKraPin): ?>Pin: <?= e($buyerKraPin) ?><br><?php endif; ?>
-                    P.O Box: ___________________<br>
+                    P.O Box: <?= e($buyerPoBox ?: '___________________') ?><br>
                     <?php if ($buyerEmail): ?><?= e($buyerEmail) ?><br><?php endif; ?>
                     <?php if ($buyerPhone): ?>Phone Number: <?= e($buyerPhone) ?><?php endif; ?>
                 </div>
@@ -447,6 +454,37 @@ include __DIR__ . '/../../includes/header.php';
             </div>
 
         </div><!-- /signatures -->
+
+        <!-- ── Attachments: Buyer ID card (front/back) ─────────────────────────── -->
+        <?php if (!empty($lead['id_card_front'])): ?>
+        <div class="sa-page-break"></div>
+        <div style="padding-top:10px">
+            <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111111">
+                <div style="font-size:16px;font-weight:900;letter-spacing:3px;text-transform:uppercase">
+                    Attachment — ID Card (Front)
+                </div>
+            </div>
+            <div style="text-align:center">
+                <img src="<?= BASE_URL ?>/uploads/leads/<?= e($lead['id_card_front']) ?>"
+                     style="max-width:100%;max-height:650px;border:1px solid #ccc;border-radius:4px">
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($lead['id_card_back'])): ?>
+        <div class="sa-page-break"></div>
+        <div style="padding-top:10px">
+            <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111111">
+                <div style="font-size:16px;font-weight:900;letter-spacing:3px;text-transform:uppercase">
+                    Attachment — ID Card (Back)
+                </div>
+            </div>
+            <div style="text-align:center">
+                <img src="<?= BASE_URL ?>/uploads/leads/<?= e($lead['id_card_back']) ?>"
+                     style="max-width:100%;max-height:650px;border:1px solid #ccc;border-radius:4px">
+            </div>
+        </div>
+        <?php endif; ?>
 
     </div><!-- /body padding -->
 </div><!-- /#salesDoc -->
