@@ -13,6 +13,7 @@ try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_date DATE NULL DEFAULT
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN deposit_notes TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN agreed_sale_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN due_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN agreement_received_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN import_vehicle_details TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN expected_arrival_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN delivered_at DATETIME NULL DEFAULT NULL"); } catch (\Throwable $_) {}
@@ -267,18 +268,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $depositNotes    = trim($_POST['deposit_notes'] ?? '') ?: null;
         $agreedSalePrice = (float)($_POST['agreed_sale_price'] ?? 0) ?: null;
         $dueDate         = trim($_POST['due_date'] ?? '') ?: null;
+        $agreementRecvd  = trim($_POST['agreement_received_date'] ?? '') ?: null;
         $db->prepare("
             UPDATE crm_leads
             SET stage='reserved',
-                pinned_car_id     = COALESCE(?, pinned_car_id),
-                deposit_amount    = ?,
-                deposit_date      = CURDATE(),
-                deposit_notes     = ?,
-                agreed_sale_price = ?,
-                due_date          = ?,
-                updated_at        = NOW()
+                pinned_car_id           = COALESCE(?, pinned_car_id),
+                deposit_amount          = ?,
+                deposit_date            = CURDATE(),
+                deposit_notes           = ?,
+                agreed_sale_price       = ?,
+                due_date                = ?,
+                agreement_received_date = ?,
+                updated_at              = NOW()
             WHERE id = ?
-        ")->execute([$reserveCarId, $depositAmt, $depositNotes, $agreedSalePrice, $dueDate, $id]);
+        ")->execute([$reserveCarId, $depositAmt, $depositNotes, $agreedSalePrice, $dueDate, $agreementRecvd, $id]);
         require_once __DIR__ . '/../../includes/notifications.php';
         notifyRoles(['admin','sales_manager','general_manager'], 'sale',
             "Vehicle Reserved: {$lead['name']}",
@@ -368,14 +371,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $db->prepare("
             UPDATE crm_leads
-            SET stage             = 'active',
-                pinned_car_id     = NULL,
-                deposit_amount    = NULL,
-                deposit_date      = NULL,
-                deposit_notes     = NULL,
-                agreed_sale_price = NULL,
-                due_date          = NULL,
-                updated_at        = NOW()
+            SET stage                    = 'active',
+                pinned_car_id            = NULL,
+                deposit_amount           = NULL,
+                deposit_date             = NULL,
+                deposit_notes            = NULL,
+                agreed_sale_price        = NULL,
+                due_date                 = NULL,
+                agreement_received_date  = NULL,
+                updated_at               = NOW()
             WHERE id = ?
         ")->execute([$id]);
         require_once __DIR__ . '/../../includes/notifications.php';
@@ -1350,11 +1354,18 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         </div>
                     </div>
                 </div>
-                <?php if ($lead['deposit_notes']): ?>
-                <div class="text-muted small fst-italic border-top pt-2">
-                    <i class="fa fa-note-sticky me-1"></i><?= e($lead['deposit_notes']) ?>
+                <div class="small border-top pt-2">
+                    <?php if ($lead['deposit_notes']): ?>
+                    <div class="text-muted fst-italic mb-1">
+                        <i class="fa fa-note-sticky me-1"></i><?= e($lead['deposit_notes']) ?>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($lead['agreement_received_date'])): ?>
+                    <div class="text-success"><i class="fa fa-file-circle-check me-1"></i>Signed agreement received: <?= fmtDate($lead['agreement_received_date'],'d M Y') ?></div>
+                    <?php else: ?>
+                    <div class="text-muted"><i class="fa fa-file-circle-xmark me-1"></i>Signed agreement not yet received</div>
+                    <?php endif; ?>
                 </div>
-                <?php endif; ?>
                 <div class="border-top pt-3 mt-2 d-flex gap-2 flex-wrap align-items-center">
                     <a href="proforma.php?lead_id=<?= $id ?>" target="_blank"
                        class="btn btn-outline-primary btn-sm">
@@ -1812,7 +1823,7 @@ $_modalDiscPct       = ($_modalListPrice > 0 && $_modalDiscount > 0)
                         </div>
 
                         <!-- Balance Due Date (manual entry) -->
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label fw-semibold">
                                 Balance Due Date
                                 <span class="text-muted fw-normal small">(deadline for full payment)</span>
@@ -1821,8 +1832,18 @@ $_modalDiscPct       = ($_modalListPrice > 0 && $_modalDiscount > 0)
                                    value="<?= e($lead['due_date'] ?? '') ?>">
                         </div>
 
+                        <!-- Sales Agreement Received Date (manual entry) -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">
+                                Agreement Received
+                                <span class="text-muted fw-normal small">(signed copy received)</span>
+                            </label>
+                            <input type="date" name="agreement_received_date" class="form-control"
+                                   value="<?= e($lead['agreement_received_date'] ?? '') ?>">
+                        </div>
+
                         <!-- Notes -->
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label fw-semibold">Deposit Notes <span class="text-muted fw-normal small">(optional)</span></label>
                             <input type="text" name="deposit_notes" class="form-control"
                                    placeholder="e.g. Cash deposit received, M-Pesa ref #…"
