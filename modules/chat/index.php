@@ -1173,13 +1173,13 @@ const Chat = window.Chat = {
             const directs = convs.filter(c => c.type !== 'group');
             const groups  = convs.filter(c => c.type === 'group');
             let html = '';
-            if (directs.length) {
-                html += `<div class="conv-section-hdr">Direct Messages</div>`;
-                html += directs.map(c => this._convHtml(c)).join('');
-            }
             if (groups.length) {
-                html += `<div class="conv-section-hdr">Group Chats</div>`;
+                html += `<div class="conv-section-hdr"><i class="fa fa-caret-down me-1"></i>Channels</div>`;
                 html += groups.map(c => this._convHtml(c)).join('');
+            }
+            if (directs.length) {
+                html += `<div class="conv-section-hdr"><i class="fa fa-caret-down me-1"></i>Direct messages</div>`;
+                html += directs.map(c => this._convHtml(c)).join('');
             }
             list.innerHTML = html;
             if (this.convId)
@@ -1213,10 +1213,11 @@ const Chat = window.Chat = {
         const timeStyle = c.unread_count > 0 ? 'color:#2563eb;font-weight:700' : '';
         const isOnline  = !isGroup && c.other_online;
         const onlineDot = isOnline ? `<div class="online-dot"></div>` : '';
+        // Slack-style compact rows: "#" for channels, mini avatar + presence for DMs
         const avatarEl  = isGroup
-            ? `<div class="cv-av-wrap"><div class="cv-av" style="background:${color};font-size:14px"><i class="fa fa-users"></i><div class="cv-grp-ic"><i class="fa fa-users" style="font-size:6px"></i></div></div></div>`
-            : `<div class="cv-av-wrap"><div class="cv-av" style="background:${color}">${esc(initials(c.display_name))}</div>${onlineDot}</div>`;
-        return `<div class="conv-item ${active}"
+            ? `<span class="cv-hash">#</span>`
+            : `<span class="cv-mini-wrap"><span class="cv-mini-av" style="background:${color}">${esc(initials(c.display_name))}</span><span class="cv-pres ${isOnline?'on':''}"></span></span>`;
+        return `<div class="conv-item ${active}${c.unread_count>0?' has-unread':''}"
                      data-cid="${c.id}"
                      data-cname="${esc(c.display_name)}"
                      data-ccolor="${color}"
@@ -1224,18 +1225,11 @@ const Chat = window.Chat = {
                      data-ctype="${esc(c.type||'direct')}"
                      data-online="${isOnline ? '1' : '0'}"
                      data-lsd="${c.other_last_seen_diff != null ? c.other_last_seen_diff : ''}"
+                     title="${preview ? preview.replace(/"/g,'&quot;') : ''}"
                      >
             ${avatarEl}
-            <div class="cv-body">
-                <div class="cv-r1">
-                    <span class="cv-name">${esc(c.display_name)}</span>
-                    <span class="cv-time" style="${timeStyle}">${time}</span>
-                </div>
-                <div class="cv-r2">
-                    <span class="cv-prev">${preview || '<em style="opacity:.5">No messages yet</em>'}</span>
-                    ${badge}
-                </div>
-            </div>
+            <span class="cv-name">${esc(c.display_name)}</span>
+            ${badge}
         </div>`;
     },
 
@@ -2676,6 +2670,43 @@ $(document).on('click', '#upList .up-item', function(e) {
 .bar-ic:hover { color: #1D1C1D !important; background: #F8F8F8 !important; }
 .bar-send { background: #007A5A !important; }
 .bar-send:hover { background: #148567 !important; }
+
+/* ── Slack sidebar anatomy: sections + compact rows ─────────── */
+.conv-section-hdr {
+    color: #BCABBC !important; font-size: 13px !important; font-weight: 700 !important;
+    text-transform: none !important; letter-spacing: 0 !important;
+    padding: 14px 16px 4px !important; background: transparent !important; border: none !important;
+}
+.conv-item {
+    display: flex !important; align-items: center !important; gap: 8px !important;
+    min-height: 28px !important; padding: 3px 10px !important;
+}
+.cv-hash {
+    width: 20px; text-align: center; font-size: 15px; font-weight: 400;
+    color: #BCABBC; flex-shrink: 0;
+}
+.cv-mini-wrap { position: relative; width: 20px; height: 20px; flex-shrink: 0; }
+.cv-mini-av {
+    width: 20px; height: 20px; border-radius: 4px; color: #fff;
+    font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.cv-pres {
+    position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px;
+    border-radius: 50%; background: transparent; border: 2px solid #3F0E40;
+}
+.cv-pres.on { background: #2BAC76; }
+.conv-item .cv-name {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 15px !important; font-weight: 400 !important; color: #BCABBC !important;
+}
+.conv-item.has-unread .cv-name { color: #fff !important; font-weight: 900 !important; }
+.conv-item.active .cv-name, .conv-item:hover .cv-name { color: #fff !important; font-weight: 400; }
+.conv-item.active.has-unread .cv-name { font-weight: 900 !important; }
+.cv-unread {
+    background: #CD2553 !important; color: #fff !important; border-radius: 9px !important;
+    font-size: 11px !important; font-weight: 700 !important; padding: 1px 8px !important;
+    flex-shrink: 0; margin-left: auto;
+}
 </style>
 <?php $extraModal = ob_get_clean(); ?>
 
