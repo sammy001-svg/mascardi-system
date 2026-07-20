@@ -32,7 +32,7 @@ function hasAdminUser(): bool {
     }
 }
 
-function _issueRememberToken(PDO $db, int $userId): void {
+function _issueRememberToken(PDO $db, int $userId, string $username = ''): void {
     try {
         $db->exec("CREATE TABLE IF NOT EXISTS remember_tokens (
             id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -43,19 +43,27 @@ function _issueRememberToken(PDO $db, int $userId): void {
             UNIQUE KEY uk_token (token_hash),
             KEY        idx_user (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        // Remove old tokens for this user and clean up global expired ones
-        $db->prepare("DELETE FROM remember_tokens WHERE user_id = ? OR expires_at < NOW()")->execute([$userId]);
+        // Purge only EXPIRED tokens — never other live tokens for this user,
+        // so remember-me keeps working on their other devices/browsers too.
+        $db->exec("DELETE FROM remember_tokens WHERE expires_at < NOW()");
         $token = bin2hex(random_bytes(32));
         $hash  = hash('sha256', $token);
         $db->prepare("INSERT INTO remember_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 YEAR))")
            ->execute([$userId, $hash]);
-        setcookie('rm_tok', $token, [
+        $cookieOpts = [
             'expires'  => time() + 10 * 365 * 86400,
             'path'     => '/',
             'httponly' => true,
             'samesite' => 'Lax',
             'secure'   => isset($_SERVER['HTTPS']),
-        ]);
+        ];
+        setcookie('rm_tok', $token, $cookieOpts);
+        // Remember the username for form prefill (read server-side only; the
+        // password itself is never stored — the browser's own password manager
+        // handles that via the autocomplete attributes on the form).
+        if ($username !== '') {
+            setcookie('rm_user', $username, $cookieOpts);
+        }
     } catch (Exception $e) {
         // Non-fatal — user just won't be remembered
     }
