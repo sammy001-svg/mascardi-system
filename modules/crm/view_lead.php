@@ -21,6 +21,28 @@ try { $db->exec("ALTER TABLE crm_leads ADD COLUMN kra_pin VARCHAR(20) NULL DEFAU
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN po_box VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN id_card_front VARCHAR(255) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN id_card_back VARCHAR(255) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN reservation_status VARCHAR(20) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("CREATE TABLE IF NOT EXISTS crm_lead_deposits (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    lead_id INT NOT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    deposit_date DATE NOT NULL,
+    notes VARCHAR(255) NULL,
+    created_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_lead (lead_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $_) {}
+try { $db->exec("CREATE TABLE IF NOT EXISTS crm_delivery_protocol (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    lead_id INT NOT NULL UNIQUE,
+    s1_moved_at DATETIME NULL, s1_approved_at DATETIME NULL,
+    s2_service_at DATETIME NULL, s2_confirmed_at DATETIME NULL, s2_workshop_done_at DATETIME NULL,
+    s3_requested_at DATETIME NULL, s3_reg_number VARCHAR(50) NULL, s3_completed_at DATETIME NULL,
+    s4_requested_at DATETIME NULL, s4_confirmed_at DATETIME NULL, s4_completed_at DATETIME NULL,
+    s5_items TEXT NULL, s5_location VARCHAR(150) NULL, s5_confirmed_at DATETIME NULL,
+    s6_requested_at DATETIME NULL, s6_approved_at DATETIME NULL, s6_approved_by INT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $_) {}
 // Test drive & car extended fields
 try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars MODIFY COLUMN status ENUM('in_transit','arrived','in_assessment','in_workshop','completed','sold','delivered','reserved') DEFAULT 'in_transit'"); } catch (\Throwable $_) {}
@@ -34,7 +56,8 @@ if (!$id) redirect(BASE_URL . '/modules/crm/leads.php');
 
 $me  = authUser();
 $uid = (int)$me['id'];
-$isCrmAgent = ($me['role'] === 'customer_relations');
+$isCrmAgent   = ($me['role'] === 'customer_relations');
+$isSuperAdmin = ($me['role'] === 'super_admin');
 
 $lead = $db->prepare("
     SELECT l.*, u.name AS assigned_name, c.name AS client_name
@@ -53,6 +76,36 @@ if ($isCrmAgent && (int)$lead['assigned_to'] !== $uid) {
 }
 
 $pageTitle = $lead['name'];
+
+// ── Additional deposits + delivery protocol state ─────────────────────────────
+$extraDeposits = [];
+try {
+    $st = $db->prepare("SELECT d.*, u.name AS user_name FROM crm_lead_deposits d LEFT JOIN users u ON u.id = d.created_by WHERE d.lead_id = ? ORDER BY d.deposit_date ASC, d.id ASC");
+    $st->execute([$id]);
+    $extraDeposits = $st->fetchAll();
+} catch (\Throwable $_) {}
+$extraDepositTotal = 0.0;
+foreach ($extraDeposits as $xd) $extraDepositTotal += (float)$xd['amount'];
+$totalDeposit = (float)($lead['deposit_amount'] ?? 0) + $extraDepositTotal;
+
+$dp = null;
+try {
+    $st = $db->prepare("SELECT * FROM crm_delivery_protocol WHERE lead_id = ?");
+    $st->execute([$id]);
+    $dp = $st->fetch() ?: null;
+} catch (\Throwable $_) {}
+
+// Effective sale price for the 20% B3 threshold
+$dpPrice = (float)($lead['agreed_sale_price'] ?? 0);
+if (!$dpPrice && !empty($lead['pinned_car_id'])) {
+    try {
+        $st = $db->prepare("SELECT offer_price, asking_price FROM cars WHERE id = ?");
+        $st->execute([(int)$lead['pinned_car_id']]);
+        if ($pc = $st->fetch()) {
+            $dpPrice = (float)($pc['offer_price'] ?: $pc['asking_price'] ?: 0);
+        }
+    } catch (\Throwable $_) {}
+}
 
 $stages = [
     'hot'       => ['Hot',       'danger',    'fa-fire'],
@@ -262,33 +315,301 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'reserve_lead' && canWrite('crm')) {
+        $hasExistingReservation = ($lead['stage'] === 'reserved') || (($lead['reservation_status'] ?? '') === 'pending_approval');
+        // Only Super Admin may UPDATE an existing reservation
+        if ($hasExistingReservation && !$isSuperAdmin) {
+            setFlash('danger', 'Only Super Admin can update an existing reservation.');
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+        }
         $reserveCarId    = (int)($_POST['reserve_car_id'] ?? 0) ?: null;
         $depositAmt      = (float)($_POST['deposit_amount'] ?? 0);
         $depositDate     = trim($_POST['deposit_date'] ?? '') ?: date('Y-m-d');
         $depositNotes    = trim($_POST['deposit_notes'] ?? '') ?: null;
         $agreedSalePrice = (float)($_POST['agreed_sale_price'] ?? 0) ?: null;
         $dueDate         = trim($_POST['due_date'] ?? '') ?: null;
-        $db->prepare("
-            UPDATE crm_leads
-            SET stage='reserved',
-                pinned_car_id     = COALESCE(?, pinned_car_id),
-                deposit_amount    = ?,
-                deposit_date      = ?,
-                deposit_notes     = ?,
-                agreed_sale_price = ?,
-                due_date          = ?,
-                updated_at        = NOW()
-            WHERE id = ?
-        ")->execute([$reserveCarId, $depositAmt, $depositDate, $depositNotes, $agreedSalePrice, $dueDate, $id]);
         require_once __DIR__ . '/../../includes/notifications.php';
-        notifyRoles(['admin','sales_manager','general_manager'], 'sale',
-            "Vehicle Reserved: {$lead['name']}",
-            "Deposit: " . money($depositAmt) . ($depositNotes ? " — {$depositNotes}" : ''),
+
+        if ($isSuperAdmin) {
+            // Super Admin: takes effect immediately (create or update)
+            $db->prepare("
+                UPDATE crm_leads
+                SET stage='reserved',
+                    reservation_status = 'approved',
+                    pinned_car_id     = COALESCE(?, pinned_car_id),
+                    deposit_amount    = ?,
+                    deposit_date      = ?,
+                    deposit_notes     = ?,
+                    agreed_sale_price = ?,
+                    due_date          = ?,
+                    updated_at        = NOW()
+                WHERE id = ?
+            ")->execute([$reserveCarId, $depositAmt, $depositDate, $depositNotes, $agreedSalePrice, $dueDate, $id]);
+            $carForStatus = $reserveCarId ?: (int)($lead['pinned_car_id'] ?? 0);
+            if ($carForStatus) {
+                $db->prepare("UPDATE cars SET status='reserved', updated_at=NOW() WHERE id=?")->execute([$carForStatus]);
+            }
+            notifyRoles(['admin','sales_manager','general_manager'], 'sale',
+                "Vehicle Reserved: {$lead['name']}",
+                "Deposit: " . money($depositAmt) . ($depositNotes ? " — {$depositNotes}" : ''),
+                BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+            );
+            logActivity('update', 'crm_leads', $id, "Reservation saved by Super Admin. Deposit: " . number_format($depositAmt, 2));
+            setFlash('success', 'Reservation saved. Proforma Invoice and Sales Agreement are ready below.');
+        } else {
+            // Regular users: reservation is recorded but held for Super Admin approval.
+            // The lead stage and the vehicle do NOT change until it is approved.
+            $db->prepare("
+                UPDATE crm_leads
+                SET reservation_status = 'pending_approval',
+                    pinned_car_id     = COALESCE(?, pinned_car_id),
+                    deposit_amount    = ?,
+                    deposit_date      = ?,
+                    deposit_notes     = ?,
+                    agreed_sale_price = ?,
+                    due_date          = ?,
+                    updated_at        = NOW()
+                WHERE id = ?
+            ")->execute([$reserveCarId, $depositAmt, $depositDate, $depositNotes, $agreedSalePrice, $dueDate, $id]);
+            notifyRoles(['super_admin'], 'alert',
+                "Reservation Approval Needed: {$lead['name']}",
+                "Submitted by {$me['name']}. Deposit: " . money($depositAmt) . " — review and approve.",
+                BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+            );
+            logActivity('update', 'crm_leads', $id, "Reservation submitted for approval by {$me['name']}. Deposit: " . number_format($depositAmt, 2));
+            setFlash('success', 'Reservation submitted — awaiting Super Admin approval.');
+        }
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
+    if ($action === 'approve_reservation' && $isSuperAdmin) {
+        if (($lead['reservation_status'] ?? '') !== 'pending_approval') {
+            setFlash('warning', 'No pending reservation to approve.');
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+        }
+        $db->prepare("UPDATE crm_leads SET stage='reserved', reservation_status='approved', updated_at=NOW() WHERE id=?")->execute([$id]);
+        $pinnedCarId = (int)($lead['pinned_car_id'] ?? 0);
+        if ($pinnedCarId) {
+            $db->prepare("UPDATE cars SET status='reserved', updated_at=NOW() WHERE id=?")->execute([$pinnedCarId]);
+        }
+        // Keep the delivery protocol in sync — approval of the reservation IS step 1
+        try {
+            $db->prepare("INSERT INTO crm_delivery_protocol (lead_id, s1_moved_at, s1_approved_at) VALUES (?, NOW(), NOW())
+                          ON DUPLICATE KEY UPDATE s1_moved_at = COALESCE(s1_moved_at, NOW()), s1_approved_at = COALESCE(s1_approved_at, NOW())")->execute([$id]);
+        } catch (\Throwable $_) {}
+        require_once __DIR__ . '/../../includes/notifications.php';
+        notifyRoles(['sales_manager','sales_officer','customer_relations','supervisor'], 'sale',
+            "Reservation Approved: {$lead['name']}",
+            "Approved by {$me['name']}. The vehicle is now reserved.",
             BASE_URL . '/modules/crm/view_lead.php?id=' . $id
         );
-        logActivity('update', 'crm_leads', $id, "Lead reserved. Deposit: " . number_format($depositAmt, 2));
-        setFlash('success', 'Vehicle reserved. Proforma Invoice and Sales Agreement are ready below.');
+        logActivity('update', 'crm_leads', $id, "Reservation approved by Super Admin ({$me['name']}).");
+        setFlash('success', 'Reservation approved. The vehicle is now reserved.');
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
+    if ($action === 'add_deposit' && canWrite('crm')) {
+        $amt   = (float)($_POST['amount'] ?? 0);
+        $date  = trim($_POST['deposit_date'] ?? '') ?: date('Y-m-d');
+        $notes = trim($_POST['notes'] ?? '') ?: null;
+        if ($amt > 0) {
+            $db->prepare("INSERT INTO crm_lead_deposits (lead_id, amount, deposit_date, notes, created_by) VALUES (?,?,?,?,?)")
+               ->execute([$id, $amt, $date, $notes, $uid]);
+            logActivity('update', 'crm_leads', $id, "Additional deposit recorded: " . number_format($amt, 2) . " on {$date}" . ($notes ? " — {$notes}" : ''));
+            require_once __DIR__ . '/../../includes/notifications.php';
+            notifyRoles(['super_admin','sales_manager'], 'sale',
+                "Additional Deposit: {$lead['name']}",
+                money($amt) . " received on " . date('d M Y', strtotime($date)) . ($notes ? " — {$notes}" : ''),
+                BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+            );
+            setFlash('success', 'Additional deposit recorded.');
+        } else {
+            setFlash('warning', 'Enter a deposit amount greater than zero.');
+        }
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
+    // ── Delivery Protocol actions (6-step gated workflow) ────────────────────
+    if ($action === 'dp_action') {
+        $dpStep = $_POST['dp'] ?? '';
+        require_once __DIR__ . '/../../includes/notifications.php';
+        try { $db->prepare("INSERT IGNORE INTO crm_delivery_protocol (lead_id) VALUES (?)")->execute([$id]); } catch (\Throwable $_) {}
+        $st = $db->prepare("SELECT * FROM crm_delivery_protocol WHERE lead_id = ?");
+        $st->execute([$id]);
+        $dp = $st->fetch() ?: [];
+
+        $leadUrl  = BASE_URL . '/modules/crm/view_lead.php?id=' . $id;
+        $isCR     = in_array($me['role'], ['customer_relations', 'super_admin', 'admin']);
+        $isSales  = in_array($me['role'], ['sales_person', 'super_admin', 'admin']);
+        $step1Done = !empty($dp['s1_approved_at']) || $lead['stage'] === 'reserved' || $lead['stage'] === 'delivered';
+        $fail = function (string $msg) use ($leadUrl) { setFlash('danger', $msg); redirect($leadUrl); };
+
+        switch ($dpStep) {
+            case 'move_b3':
+                if (!canWrite('crm'))                     $fail('You do not have permission for this step.');
+                if ($step1Done)                           $fail('This lead is already reserved.');
+                if ($dpPrice <= 0)                        $fail('Set the agreed sale price (or link a priced vehicle) before moving to B3.');
+                if ($totalDeposit < $dpPrice * 0.20)      $fail('Client must pay at least 20% of the vehicle value (KES ' . number_format($dpPrice * 0.20) . ') before moving to B3 Reservation. Recorded so far: KES ' . number_format($totalDeposit) . '.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s1_moved_at = NOW() WHERE lead_id = ?")->execute([$id]);
+                $db->prepare("UPDATE crm_leads SET reservation_status = 'pending_approval', updated_at = NOW() WHERE id = ?")->execute([$id]);
+                notifyRoles(['super_admin','supervisor','sales_officer'], 'alert',
+                    "B3 Reservation Approval: {$lead['name']}",
+                    "20% deposit confirmed (KES " . number_format($totalDeposit) . " of KES " . number_format($dpPrice) . "). Approval needed.",
+                    $leadUrl);
+                logActivity('update', 'crm_leads', $id, 'Delivery Protocol: moved to B3 Reservation, awaiting approval.');
+                setFlash('success', 'Moved to B3 Reservation — Super Admin, Supervisor and Sales Office have been notified.');
+                break;
+
+            case 'approve_b3':
+                if (!$isSuperAdmin)                       $fail('Only Super Admin can approve the B3 reservation.');
+                if (empty($dp['s1_moved_at']))            $fail('B3 move has not been requested yet.');
+                if (!empty($dp['s1_approved_at']))        $fail('Already approved.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s1_approved_at = NOW() WHERE lead_id = ?")->execute([$id]);
+                $db->prepare("UPDATE crm_leads SET stage = 'reserved', reservation_status = 'approved', updated_at = NOW() WHERE id = ?")->execute([$id]);
+                if (!empty($lead['pinned_car_id'])) {
+                    $db->prepare("UPDATE cars SET status = 'reserved', updated_at = NOW() WHERE id = ?")->execute([(int)$lead['pinned_car_id']]);
+                }
+                notifyRoles(['customer_relations','sales_officer','supervisor'], 'sale',
+                    "B3 Approved: {$lead['name']}", "The vehicle is now Reserved. Proceed to Service when ready.", $leadUrl);
+                logActivity('update', 'crm_leads', $id, 'Delivery Protocol: B3 reservation approved.');
+                setFlash('success', 'B3 approved — the vehicle is now Reserved.');
+                break;
+
+            case 'proceed_service':
+                if (!$isCR)                               $fail('Only Customer Relations can start the Service step.');
+                if (!$step1Done)                          $fail('Complete Step 1 (B3 Reservation) first.');
+                if (!empty($dp['s2_service_at']))         $fail('Service step already started.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s2_service_at = NOW() WHERE lead_id = ?")->execute([$id]);
+                notifyRoles(['sales_person'], 'info',
+                    "Service Requested: {$lead['name']}", "Confirm and move the vehicle to the workshop.", $leadUrl);
+                logActivity('update', 'crm_leads', $id, 'Delivery Protocol: proceed to Service — Sales Person notified.');
+                setFlash('success', 'Service requested — Sales Person has been notified.');
+                break;
+
+            case 'confirm_workshop':
+                if (!$isSales)                            $fail('Only the Sales Person can confirm the move to workshop.');
+                if (empty($dp['s2_service_at']))          $fail('Service has not been requested yet.');
+                if (!empty($dp['s2_confirmed_at']))       $fail('Already confirmed.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s2_confirmed_at = NOW() WHERE lead_id = ?")->execute([$id]);
+                notifyRoles(['workshop_manager'], 'info',
+                    "Vehicle Incoming: {$lead['name']}", "Reserved vehicle confirmed for workshop service.", $leadUrl);
+                logActivity('update', 'crm_leads', $id, 'Delivery Protocol: confirmed — vehicle moved to workshop.');
+                setFlash('success', 'Confirmed — vehicle moved to workshop.');
+                break;
+
+            case 'workshop_done':
+                if (!$isSales && $me['role'] !== 'workshop_manager') $fail('Only the Sales Person or Workshop Manager can check the vehicle out of the workshop.');
+                if (empty($dp['s2_confirmed_at']))        $fail('The vehicle has not been moved to the workshop yet.');
+                if (!empty($dp['s2_workshop_done_at']))   $fail('Already checked out.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s2_workshop_done_at = NOW() WHERE lead_id = ?")->execute([$id]);
+                notifyRoles(['customer_relations'], 'info',
+                    "Workshop Complete: {$lead['name']}", "Vehicle checked out of workshop. You may proceed to Registration & Payment.", $leadUrl);
+                logActivity('update', 'crm_leads', $id, 'Delivery Protocol: vehicle checked out of workshop.');
+                setFlash('success', 'Vehicle checked out of workshop — Step 3 unlocked.');
+                break;
+
+            case 'request_reg':
+                if (!$isCR)                               $fail('Only Customer Relations can request registration.');
+                if (empty($dp['s2_workshop_done_at']))    $fail('Complete Step 2 (Service) first.');
+                if (!empty($dp['s3_requested_at']))       $fail('Registration already requested.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s3_requested_at = NOW() WHERE lead_id = ?")->execute([$id]);
+                notifyRoles(['super_admin'], 'alert',
+                    "Vehicle Registration Needed: {$lead['name']}", "Register the vehicle, enter the registration number, and confirm full payment.", $leadUrl);
+                logActivity('update', 'crm_leads', $id, 'Delivery Protocol: registration & full-payment confirmation requested.');
+                setFlash('success', 'Super Admin has been notified to register the vehicle and confirm full payment.');
+                break;
+
+            case 'complete_reg':
+                if (!$isSuperAdmin)                       $fail('Only Super Admin can complete registration.');
+                if (empty($dp['s3_requested_at']))        $fail('Registration has not been requested yet.');
+                if (!empty($dp['s3_completed_at']))       $fail('Registration already completed.');
+                $regNo = strtoupper(trim($_POST['reg_number'] ?? ''));
+                if ($regNo === '')                        $fail('Enter the registration number.');
+                if (empty($_POST['payment_confirmed']))   $fail('Tick the full-payment confirmation box.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s3_reg_number = ?, s3_completed_at = NOW() WHERE lead_id = ?")->execute([$regNo, $id]);
+                if (!empty($lead['pinned_car_id'])) {
+                    try { $db->prepare("UPDATE cars SET registration_number = ?, updated_at = NOW() WHERE id = ?")->execute([$regNo, (int)$lead['pinned_car_id']]); } catch (\Throwable $_) {}
+                }
+                notifyRoles(['customer_relations','sales_person'], 'sale',
+                    "Registered & Paid: {$lead['name']}", "Reg No. {$regNo}. Full payment confirmed — proceed to PDI.", $leadUrl);
+                logActivity('update', 'crm_leads', $id, "Delivery Protocol: vehicle registered ({$regNo}), full payment confirmed.");
+                setFlash('success', 'Registration and full payment confirmed — Step 4 (PDI) unlocked.');
+                break;
+
+            case 'request_pdi':
+                if (!$isCR)                               $fail('Only Customer Relations can request PDI.');
+                if (empty($dp['s3_completed_at']))        $fail('Complete Step 3 (Registration & Payment) first.');
+                if (!empty($dp['s4_requested_at']))       $fail('PDI already requested.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s4_requested_at = NOW() WHERE lead_id = ?")->execute([$id]);
+                notifyRoles(['sales_person'], 'info',
+                    "PDI Requested: {$lead['name']}", "Confirm and carry out the Pre-Delivery Inspection.", $leadUrl);
+                logActivity('update', 'crm_leads', $id, 'Delivery Protocol: PDI requested.');
+                setFlash('success', 'PDI requested — Sales Person has been notified.');
+                break;
+
+            case 'confirm_pdi':
+                if (!$isSales)                            $fail('Only the Sales Person can confirm PDI.');
+                if (empty($dp['s4_requested_at']))        $fail('PDI has not been requested yet.');
+                if (!empty($dp['s4_confirmed_at']))       $fail('PDI already confirmed.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s4_confirmed_at = NOW() WHERE lead_id = ?")->execute([$id]);
+                logActivity('update', 'crm_leads', $id, 'Delivery Protocol: PDI confirmed / in progress.');
+                setFlash('success', 'PDI confirmed — mark it completed when done.');
+                break;
+
+            case 'pdi_done':
+                if (!$isSales)                            $fail('Only the Sales Person can complete PDI.');
+                if (empty($dp['s4_confirmed_at']))        $fail('Confirm the PDI first.');
+                if (!empty($dp['s4_completed_at']))       $fail('PDI already completed.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s4_completed_at = NOW() WHERE lead_id = ?")->execute([$id]);
+                notifyRoles(['customer_relations'], 'sale',
+                    "PDI Completed: {$lead['name']}", "Proceed to the Delivery Experience step.", $leadUrl);
+                logActivity('update', 'crm_leads', $id, 'Delivery Protocol: PDI completed.');
+                setFlash('success', 'PDI completed — Step 5 (Delivery Experience) unlocked.');
+                break;
+
+            case 'delivery_exp':
+                if (!$isCR)                               $fail('Only Customer Relations can confirm the Delivery Experience.');
+                if (empty($dp['s4_completed_at']))        $fail('Complete Step 4 (PDI) first.');
+                if (!empty($dp['s5_confirmed_at']))       $fail('Delivery Experience already confirmed.');
+                $items = trim($_POST['items'] ?? '');
+                $loc   = trim($_POST['location'] ?? '');
+                if ($items === '')                        $fail('List the items needed for the delivery experience.');
+                if ($loc === '')                          $fail('Select/enter the delivery location.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s5_items = ?, s5_location = ?, s5_confirmed_at = NOW() WHERE lead_id = ?")->execute([$items, $loc, $id]);
+                logActivity('update', 'crm_leads', $id, "Delivery Protocol: delivery experience confirmed — location: {$loc}.");
+                setFlash('success', 'Delivery Experience confirmed — Step 6 (Delivery Note) unlocked.');
+                break;
+
+            case 'request_note':
+                if (!$isCR)                               $fail('Only Customer Relations can request the delivery note.');
+                if (empty($dp['s5_confirmed_at']))        $fail('Complete Step 5 (Delivery Experience) first.');
+                if (!empty($dp['s6_requested_at']))       $fail('Delivery note confirmation already requested.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s6_requested_at = NOW() WHERE lead_id = ?")->execute([$id]);
+                notifyRoles(['super_admin','supervisor'], 'alert',
+                    "Delivery Note Confirmation: {$lead['name']}", "Confirm so Customer Relations can print the delivery note.", $leadUrl);
+                logActivity('update', 'crm_leads', $id, 'Delivery Protocol: delivery note confirmation requested.');
+                setFlash('success', 'Super Admin and Supervisor have been notified to confirm the delivery note.');
+                break;
+
+            case 'approve_note':
+                if (!$isSuperAdmin && $me['role'] !== 'supervisor') $fail('Only Super Admin or Supervisor can confirm the delivery note.');
+                if (empty($dp['s6_requested_at']))        $fail('Delivery note confirmation has not been requested.');
+                if (!empty($dp['s6_approved_at']))        $fail('Already confirmed.');
+                $db->prepare("UPDATE crm_delivery_protocol SET s6_approved_at = NOW(), s6_approved_by = ? WHERE lead_id = ?")->execute([$uid, $id]);
+                // The protocol is complete — mark the lead delivered and retire the vehicle
+                $db->prepare("UPDATE crm_leads SET stage='delivered', delivered_at = NOW(), converted_at = COALESCE(converted_at, NOW()), updated_at = NOW() WHERE id = ?")->execute([$id]);
+                if (!empty($lead['pinned_car_id'])) {
+                    $db->prepare("UPDATE cars SET status='delivered', show_on_website=0, updated_at=NOW() WHERE id=?")->execute([(int)$lead['pinned_car_id']]);
+                }
+                notifyRoles(['customer_relations','sales_person','sales_manager'], 'sale',
+                    "Delivery Note Confirmed: {$lead['name']}", "Confirmed by {$me['name']}. The delivery note can now be printed.", $leadUrl);
+                logActivity('update', 'crm_leads', $id, "Delivery Protocol: delivery note confirmed by {$me['name']}. Lead marked Delivered.");
+                setFlash('success', 'Delivery note confirmed — Customer Relations can now print it.');
+                break;
+
+            default:
+                $fail('Unknown protocol step.');
+        }
+        redirect($leadUrl);
     }
 
     if ($action === 'import_order_lead' && canWrite('crm')) {
@@ -694,8 +1015,8 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         <?php elseif ($sk === 'delivered'): ?>
                         <button type="button"
                                 class="btn btn-sm <?= $lead['stage'] === $sk ? 'btn-'.$sc : 'btn-outline-'.$sc ?>"
-                                data-bs-toggle="modal" data-bs-target="#deliverModal">
-                            <i class="fa <?= $si ?> me-1"></i><?= $sl ?>
+                                data-bs-toggle="modal" data-bs-target="#deliveryProtocolModal">
+                            <i class="fa fa-clipboard-check me-1"></i>Delivery Protocol
                         </button>
                         <?php else: ?>
                         <button type="submit" name="stage" value="<?= $sk ?>"
@@ -1254,6 +1575,32 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
         </div>
         <?php endif; ?>
 
+        <!-- Pending reservation approval banner -->
+        <?php if (($lead['reservation_status'] ?? '') === 'pending_approval'): ?>
+        <div class="card mb-4" style="border-color:#f59e0b;border-width:2px">
+            <div class="card-body d-flex align-items-center gap-3 flex-wrap" style="background:#fffbeb">
+                <i class="fa fa-hourglass-half" style="font-size:22px;color:#d97706"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-bold" style="color:#92400e">Reservation awaiting Super Admin approval</div>
+                    <div class="small" style="color:#b45309">
+                        Deposit: <?= money((float)($lead['deposit_amount'] ?? 0)) ?>
+                        <?= $lead['deposit_date'] ? ' received ' . fmtDate($lead['deposit_date'], 'd M Y') : '' ?>
+                        <?= $lead['agreed_sale_price'] ? ' · Agreed price: ' . money((float)$lead['agreed_sale_price']) : '' ?>
+                        — the vehicle stays available until approved.
+                    </div>
+                </div>
+                <?php if ($isSuperAdmin): ?>
+                <form method="POST">
+                    <input type="hidden" name="action" value="approve_reservation">
+                    <button type="submit" class="btn btn-success btn-sm">
+                        <i class="fa fa-check me-1"></i>Approve Reservation
+                    </button>
+                </form>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Reservation Documents (shown only when stage = reserved) -->
         <?php if ($lead['stage'] === 'reserved'): ?>
         <?php
@@ -1269,7 +1616,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
             ? ($carListPrice - $agreedPrice) : 0;
         $resDiscPct     = ($carListPrice > 0 && $resDiscount > 0)
             ? round(($resDiscount / $carListPrice) * 100, 1) : 0;
-        $balance        = max(0, $effectivePrice - $depAmt);
+        $balance        = max(0, $effectivePrice - $totalDeposit);
         ?>
         <div class="card mb-4" style="border-color:#16a34a;border-width:2px">
             <div class="card-header fw-semibold d-flex justify-content-between align-items-center"
@@ -1335,9 +1682,11 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                     <!-- Deposit -->
                     <div class="col-md-3">
                         <div class="rounded-3 p-3 text-center" style="background:#f0fdf4;border:1px solid #bbf7d0">
-                            <div class="text-muted small mb-1">Deposit Paid</div>
-                            <div class="fw-bold text-success" style="font-size:20px"><?= money($depAmt) ?></div>
-                            <div class="text-muted" style="font-size:11px"><?= fmtDate($depDate,'d M Y') ?></div>
+                            <div class="text-muted small mb-1">Total Deposits</div>
+                            <div class="fw-bold text-success" style="font-size:20px"><?= money($totalDeposit) ?></div>
+                            <div class="text-muted" style="font-size:11px">
+                                <?= count($extraDeposits) ? (1 + count($extraDeposits)) . ' payments' : fmtDate($depDate,'d M Y') ?>
+                            </div>
                         </div>
                     </div>
                     <!-- Balance -->
@@ -1351,6 +1700,24 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         </div>
                     </div>
                 </div>
+
+                <!-- Deposit history (initial + additional, each with its date) -->
+                <div class="border-top pt-2 mb-2">
+                    <div class="text-muted small fw-semibold mb-1"><i class="fa fa-coins me-1"></i>Deposit History</div>
+                    <div class="d-flex flex-column gap-1" style="font-size:13px">
+                        <div class="d-flex justify-content-between">
+                            <span>Initial deposit<span class="text-muted"> — <?= fmtDate($depDate,'d M Y') ?></span></span>
+                            <strong class="text-success"><?= money($depAmt) ?></strong>
+                        </div>
+                        <?php foreach ($extraDeposits as $xd): ?>
+                        <div class="d-flex justify-content-between">
+                            <span>Additional deposit<span class="text-muted"> — <?= fmtDate($xd['deposit_date'],'d M Y') ?><?= $xd['notes'] ? ' · ' . e($xd['notes']) : '' ?><?= $xd['user_name'] ? ' · by ' . e($xd['user_name']) : '' ?></span></span>
+                            <strong class="text-success"><?= money((float)$xd['amount']) ?></strong>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
                 <?php if ($lead['deposit_notes']): ?>
                 <div class="text-muted small fst-italic border-top pt-2">
                     <i class="fa fa-note-sticky me-1"></i><?= e($lead['deposit_notes']) ?>
@@ -1373,10 +1740,18 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                        class="btn btn-info btn-sm text-white">
                         <i class="fa fa-file-invoice-dollar me-1"></i>Sales Receipt
                     </a>
-                    <button type="button" class="btn btn-outline-secondary btn-sm ms-auto"
+                    <?php if (canWrite('crm')): ?>
+                    <button type="button" class="btn btn-outline-success btn-sm ms-auto"
+                            data-bs-toggle="modal" data-bs-target="#addDepositModal">
+                        <i class="fa fa-plus me-1"></i>Add Deposit
+                    </button>
+                    <?php endif; ?>
+                    <?php if ($isSuperAdmin): ?>
+                    <button type="button" class="btn btn-outline-secondary btn-sm<?= canWrite('crm') ? '' : ' ms-auto' ?>"
                             data-bs-toggle="modal" data-bs-target="#reserveModal">
                         <i class="fa fa-pen me-1"></i>Update Reservation
                     </button>
+                    <?php endif; ?>
                     <?php if ($me['role'] === 'admin'): ?>
                     <form method="POST" class="ms-2"
                           onsubmit="return confirm('Revoke this reservation?\n\nThis will:\n• Return the lead to Active stage\n• Free the vehicle back to Available\n• Clear all deposit and pricing data\n\nThis cannot be undone.')">
@@ -1601,8 +1976,8 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         <i class="fa fa-file-signature me-1"></i>Sales Agreement
                     </a>
                     <button type="button" class="btn btn-outline-success btn-sm ms-auto"
-                            data-bs-toggle="modal" data-bs-target="#deliverModal">
-                        <i class="fa fa-pen me-1"></i>Update Delivery
+                            data-bs-toggle="modal" data-bs-target="#deliveryProtocolModal">
+                        <i class="fa fa-clipboard-check me-1"></i>Delivery Protocol
                     </button>
                 </div>
             </div>
@@ -2090,63 +2465,283 @@ $_modalDiscPct       = ($_modalListPrice > 0 && $_modalDiscount > 0)
 }());
 </script>
 
-<!-- Deliver Modal -->
-<div class="modal fade" id="deliverModal" tabindex="-1" aria-labelledby="deliverModalLabel">
-    <div class="modal-dialog modal-dialog-centered">
+<!-- ═══════════ DELIVERY PROTOCOL MODAL — 6 gated steps ═══════════ -->
+<?php
+$dpStep1 = !empty($dp['s1_approved_at']) || in_array($lead['stage'], ['reserved','delivered']);
+$dpStep2 = !empty($dp['s2_workshop_done_at']);
+$dpStep3 = !empty($dp['s3_completed_at']);
+$dpStep4 = !empty($dp['s4_completed_at']);
+$dpStep5 = !empty($dp['s5_confirmed_at']);
+$dpStep6 = !empty($dp['s6_approved_at']);
+$dpIsCR    = in_array($me['role'], ['customer_relations','super_admin','admin']);
+$dpIsSales = in_array($me['role'], ['sales_person','super_admin','admin']);
+$dpNeed20  = $dpPrice > 0 ? $dpPrice * 0.20 : 0;
+// Small helpers for step chrome
+function dpBadge(bool $done, bool $open): string {
+    if ($done) return '<span class="badge bg-success"><i class="fa fa-check me-1"></i>Done</span>';
+    if ($open) return '<span class="badge bg-primary">In Progress</span>';
+    return '<span class="badge bg-secondary"><i class="fa fa-lock me-1"></i>Locked</span>';
+}
+?>
+<div class="modal fade" id="deliveryProtocolModal" tabindex="-1" aria-labelledby="deliveryProtocolLabel">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header" style="background:linear-gradient(135deg,#14532d,#16a34a);color:#fff">
-                <h6 class="modal-title fw-bold" id="deliverModalLabel">
-                    <i class="fa fa-truck me-2"></i>Confirm Vehicle Delivery — <?= e($lead['name']) ?>
+                <h6 class="modal-title fw-bold" id="deliveryProtocolLabel">
+                    <i class="fa fa-clipboard-check me-2"></i>Delivery Protocol — <?= e($lead['name']) ?>
                 </h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
-                <input type="hidden" name="action" value="deliver_lead">
-                <div class="modal-body">
-                    <?php
-                    $dlvModalCar = $pinnedCar
-                        ? trim(($pinnedCar['year']??'').' '.($pinnedCar['make']??'').' '.($pinnedCar['model']??''))
-                        : ($lead['import_vehicle_details'] ?? ($lead['interested_in'] ?? ''));
-                    ?>
-                    <?php if ($dlvModalCar): ?>
-                    <div class="mb-3 p-3 rounded-3 fw-semibold" style="background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:14px">
-                        <i class="fa fa-car me-2"></i><?= e($dlvModalCar) ?>
-                    </div>
-                    <?php endif; ?>
+            <div class="modal-body p-0">
+                <div class="list-group list-group-flush">
 
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label fw-semibold">
-                                <i class="fa fa-calendar-check me-1 text-success"></i>Delivery Date
-                                <span class="text-danger">*</span>
-                            </label>
-                            <input type="date" name="delivery_date" class="form-control" required
-                                   value="<?= e($lead['delivered_at'] ? substr($lead['delivered_at'],0,10) : date('Y-m-d')) ?>">
-                            <div class="form-text text-muted">Date the vehicle is physically handed over to the buyer.</div>
+                    <!-- STEP 1: B3 Reservation -->
+                    <div class="list-group-item py-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong>1 · B3 Reservation <span class="text-muted fw-normal small">(client pays 20% of vehicle value)</span></strong>
+                            <?= dpBadge($dpStep1, !empty($dp['s1_moved_at'])) ?>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label fw-semibold">Delivery Notes <span class="text-muted fw-normal small">(optional)</span></label>
-                            <input type="text" name="delivery_notes" class="form-control"
-                                   placeholder="e.g. All keys handed over, full tank, spare tyre included…">
+                        <?php if ($dpStep1): ?>
+                        <div class="small text-success"><i class="fa fa-check me-1"></i>Vehicle reserved<?= !empty($dp['s1_approved_at']) ? ' — approved ' . fmtDate($dp['s1_approved_at'],'d M Y H:i') : '' ?>.</div>
+                        <?php else: ?>
+                        <div class="small text-muted mb-2">
+                            Value: <?= $dpPrice > 0 ? money($dpPrice) : '<span class="text-danger">not set</span>' ?>
+                            · 20% required: <?= $dpNeed20 > 0 ? money($dpNeed20) : '—' ?>
+                            · Deposits recorded: <strong class="<?= ($dpNeed20 > 0 && $totalDeposit >= $dpNeed20) ? 'text-success' : 'text-danger' ?>"><?= money($totalDeposit) ?></strong>
                         </div>
-                        <div class="col-12">
-                            <div class="d-flex align-items-start gap-2 p-3 rounded-3"
-                                 style="background:#fef9c3;border:1px solid #fde047;font-size:13px">
-                                <i class="fa fa-triangle-exclamation text-warning mt-1 flex-shrink-0"></i>
-                                <div>
-                                    Confirming delivery will <strong>remove this vehicle from active inventory</strong>
-                                    and the website. A printable <strong>Delivery Note</strong> will be available
-                                    immediately after saving.
+                            <?php if (empty($dp['s1_moved_at'])): ?>
+                                <?php if (canWrite('crm')): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="move_b3">
+                                    <button class="btn btn-sm btn-primary" <?= ($dpNeed20 <= 0 || $totalDeposit < $dpNeed20) ? 'disabled title="20% deposit not yet recorded"' : '' ?>>
+                                        <i class="fa fa-arrow-right me-1"></i>Move to B3 Reservation
+                                    </button>
+                                </form>
+                                <span class="small text-muted ms-2">Notifies Super Admin, Supervisor &amp; Sales Office.</span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                            <div class="small text-warning mb-2"><i class="fa fa-hourglass-half me-1"></i>Moved <?= fmtDate($dp['s1_moved_at'],'d M Y H:i') ?> — awaiting Super Admin approval.</div>
+                                <?php if ($isSuperAdmin): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="approve_b3">
+                                    <button class="btn btn-sm btn-success"><i class="fa fa-check me-1"></i>Approve — Move Car to Reserved</button>
+                                </form>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- STEP 2: Service -->
+                    <div class="list-group-item py-3 <?= $dpStep1 ? '' : 'opacity-50' ?>">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong>2 · Service <span class="text-muted fw-normal small">(workshop preparation)</span></strong>
+                            <?= dpBadge($dpStep2, !empty($dp['s2_service_at'])) ?>
+                        </div>
+                        <?php if ($dpStep1 && !$dpStep2): ?>
+                            <?php if (empty($dp['s2_service_at'])): ?>
+                                <?php if ($dpIsCR): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="proceed_service">
+                                    <button class="btn btn-sm btn-primary"><i class="fa fa-wrench me-1"></i>Proceed to Service</button>
+                                </form>
+                                <span class="small text-muted ms-2">Notifies the Sales Person.</span>
+                                <?php else: ?><span class="small text-muted">Waiting for Customer Relations to proceed to service.</span><?php endif; ?>
+                            <?php elseif (empty($dp['s2_confirmed_at'])): ?>
+                                <div class="small text-muted mb-2">Service requested <?= fmtDate($dp['s2_service_at'],'d M Y H:i') ?>.</div>
+                                <?php if ($dpIsSales): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="confirm_workshop">
+                                    <button class="btn btn-sm btn-primary"><i class="fa fa-check me-1"></i>Confirm &amp; Move to Workshop</button>
+                                </form>
+                                <?php else: ?><span class="small text-muted">Waiting for the Sales Person to confirm the move to workshop.</span><?php endif; ?>
+                            <?php else: ?>
+                                <div class="small text-muted mb-2">In workshop since <?= fmtDate($dp['s2_confirmed_at'],'d M Y H:i') ?>.</div>
+                                <?php if ($dpIsSales || $me['role'] === 'workshop_manager'): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="workshop_done">
+                                    <button class="btn btn-sm btn-success"><i class="fa fa-car-on me-1"></i>Vehicle Checked Out of Workshop</button>
+                                </form>
+                                <?php else: ?><span class="small text-muted">Waiting for workshop checkout.</span><?php endif; ?>
+                            <?php endif; ?>
+                        <?php elseif ($dpStep2): ?>
+                        <div class="small text-success"><i class="fa fa-check me-1"></i>Workshop complete — checked out <?= fmtDate($dp['s2_workshop_done_at'],'d M Y H:i') ?>.</div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- STEP 3: Registration & full payment -->
+                    <div class="list-group-item py-3 <?= $dpStep2 ? '' : 'opacity-50' ?>">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong>3 · Vehicle Registration &amp; Full Payment</strong>
+                            <?= dpBadge($dpStep3, !empty($dp['s3_requested_at'])) ?>
+                        </div>
+                        <?php if ($dpStep2 && !$dpStep3): ?>
+                            <?php if (empty($dp['s3_requested_at'])): ?>
+                                <?php if ($dpIsCR): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="request_reg">
+                                    <button class="btn btn-sm btn-primary"><i class="fa fa-id-card me-1"></i>Vehicle Registration &amp; Full Payment Confirmation</button>
+                                </form>
+                                <span class="small text-muted ms-2">Notifies Super Admin.</span>
+                                <?php else: ?><span class="small text-muted">Waiting for Customer Relations to request registration.</span><?php endif; ?>
+                            <?php else: ?>
+                                <div class="small text-muted mb-2">Requested <?= fmtDate($dp['s3_requested_at'],'d M Y H:i') ?> — Super Admin registers the vehicle.</div>
+                                <?php if ($isSuperAdmin): ?>
+                                <form method="POST" class="d-flex gap-2 align-items-center flex-wrap">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="complete_reg">
+                                    <input type="text" name="reg_number" class="form-control form-control-sm" style="max-width:180px;text-transform:uppercase"
+                                           placeholder="Reg No. e.g. KDS 001A" required oninput="this.value=this.value.toUpperCase()">
+                                    <div class="form-check m-0">
+                                        <input class="form-check-input" type="checkbox" name="payment_confirmed" value="1" id="dpPayConfirm" required>
+                                        <label class="form-check-label small" for="dpPayConfirm">Full payment confirmed</label>
+                                    </div>
+                                    <button class="btn btn-sm btn-success"><i class="fa fa-check me-1"></i>Save Registration</button>
+                                </form>
+                                <?php else: ?><span class="small text-muted">Waiting for Super Admin to register &amp; confirm payment.</span><?php endif; ?>
+                            <?php endif; ?>
+                        <?php elseif ($dpStep3): ?>
+                        <div class="small text-success"><i class="fa fa-check me-1"></i>Registered as <strong><?= e($dp['s3_reg_number']) ?></strong>, full payment confirmed <?= fmtDate($dp['s3_completed_at'],'d M Y H:i') ?>.</div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- STEP 4: PDI -->
+                    <div class="list-group-item py-3 <?= $dpStep3 ? '' : 'opacity-50' ?>">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong>4 · PDI <span class="text-muted fw-normal small">(Pre-Delivery Inspection)</span></strong>
+                            <?= dpBadge($dpStep4, !empty($dp['s4_requested_at'])) ?>
+                        </div>
+                        <?php if ($dpStep3 && !$dpStep4): ?>
+                            <?php if (empty($dp['s4_requested_at'])): ?>
+                                <?php if ($dpIsCR): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="request_pdi">
+                                    <button class="btn btn-sm btn-primary"><i class="fa fa-magnifying-glass me-1"></i>Proceed to PDI</button>
+                                </form>
+                                <span class="small text-muted ms-2">Notifies the Sales Person.</span>
+                                <?php else: ?><span class="small text-muted">Waiting for Customer Relations to proceed to PDI.</span><?php endif; ?>
+                            <?php elseif (empty($dp['s4_confirmed_at'])): ?>
+                                <div class="small text-muted mb-2">PDI requested <?= fmtDate($dp['s4_requested_at'],'d M Y H:i') ?>.</div>
+                                <?php if ($dpIsSales): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="confirm_pdi">
+                                    <button class="btn btn-sm btn-primary"><i class="fa fa-check me-1"></i>Confirm PDI</button>
+                                </form>
+                                <?php else: ?><span class="small text-muted">Waiting for the Sales Person to confirm PDI.</span><?php endif; ?>
+                            <?php else: ?>
+                                <div class="small text-muted mb-2">PDI in progress since <?= fmtDate($dp['s4_confirmed_at'],'d M Y H:i') ?>.</div>
+                                <?php if ($dpIsSales): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="pdi_done">
+                                    <button class="btn btn-sm btn-success"><i class="fa fa-clipboard-check me-1"></i>PDI Completed</button>
+                                </form>
+                                <?php else: ?><span class="small text-muted">Waiting for the Sales Person to complete PDI.</span><?php endif; ?>
+                            <?php endif; ?>
+                        <?php elseif ($dpStep4): ?>
+                        <div class="small text-success"><i class="fa fa-check me-1"></i>PDI completed <?= fmtDate($dp['s4_completed_at'],'d M Y H:i') ?>.</div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- STEP 5: Delivery Experience -->
+                    <div class="list-group-item py-3 <?= $dpStep4 ? '' : 'opacity-50' ?>">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong>5 · Delivery Experience</strong>
+                            <?= dpBadge($dpStep5, false) ?>
+                        </div>
+                        <?php if ($dpStep4 && !$dpStep5): ?>
+                            <?php if ($dpIsCR): ?>
+                            <form method="POST" class="row g-2">
+                                <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="delivery_exp">
+                                <div class="col-12">
+                                    <label class="form-label small fw-semibold mb-1">Items needed for the delivery experience *</label>
+                                    <textarea name="items" class="form-control form-control-sm" rows="3" required
+                                              placeholder="e.g. Ribbon &amp; bow, flowers, branded key holder, gift hamper, camera crew…"></textarea>
                                 </div>
-                            </div>
+                                <div class="col-md-8">
+                                    <label class="form-label small fw-semibold mb-1">Delivery location *</label>
+                                    <input type="text" name="location" class="form-control form-control-sm" required
+                                           placeholder="e.g. Showroom — Spring Valley, or client's address">
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <button class="btn btn-sm btn-success w-100"><i class="fa fa-check me-1"></i>Confirm</button>
+                                </div>
+                            </form>
+                            <?php else: ?><span class="small text-muted">Waiting for Customer Relations to plan the delivery experience.</span><?php endif; ?>
+                        <?php elseif ($dpStep5): ?>
+                        <div class="small text-success"><i class="fa fa-check me-1"></i>Confirmed <?= fmtDate($dp['s5_confirmed_at'],'d M Y H:i') ?> — location: <strong><?= e($dp['s5_location']) ?></strong></div>
+                        <div class="small text-muted mt-1" style="white-space:pre-line"><?= e($dp['s5_items']) ?></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- STEP 6: Delivery Note -->
+                    <div class="list-group-item py-3 <?= $dpStep5 ? '' : 'opacity-50' ?>">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong>6 · Generate Delivery Note</strong>
+                            <?= dpBadge($dpStep6, !empty($dp['s6_requested_at'])) ?>
+                        </div>
+                        <?php if ($dpStep5 && !$dpStep6): ?>
+                            <?php if (empty($dp['s6_requested_at'])): ?>
+                                <?php if ($dpIsCR): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="request_note">
+                                    <button class="btn btn-sm btn-primary"><i class="fa fa-file-lines me-1"></i>Generate Delivery Note</button>
+                                </form>
+                                <span class="small text-muted ms-2">Notifies Super Admin &amp; Supervisor to confirm.</span>
+                                <?php else: ?><span class="small text-muted">Waiting for Customer Relations to generate the delivery note.</span><?php endif; ?>
+                            <?php else: ?>
+                                <div class="small text-muted mb-2">Requested <?= fmtDate($dp['s6_requested_at'],'d M Y H:i') ?> — awaiting confirmation.</div>
+                                <?php if ($isSuperAdmin || $me['role'] === 'supervisor'): ?>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="approve_note">
+                                    <button class="btn btn-sm btn-success"><i class="fa fa-check me-1"></i>Confirm Delivery Note</button>
+                                </form>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        <?php elseif ($dpStep6): ?>
+                        <div class="small text-success mb-2"><i class="fa fa-check me-1"></i>Confirmed <?= fmtDate($dp['s6_approved_at'],'d M Y H:i') ?>. The vehicle is marked Delivered.</div>
+                        <a href="delivery_note.php?lead_id=<?= $id ?>" target="_blank" class="btn btn-sm btn-success">
+                            <i class="fa fa-print me-1"></i>Print Delivery Note
+                        </a>
+                        <?php endif; ?>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <span class="small text-muted me-auto"><i class="fa fa-circle-info me-1"></i>Each step unlocks only when the previous one is completed.</span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Deposit Modal -->
+<div class="modal fade" id="addDepositModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title fw-bold"><i class="fa fa-coins me-2 text-success"></i>Add Deposit — <?= e($lead['name']) ?></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="add_deposit">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Amount (KES) <span class="text-danger">*</span></label>
+                            <input type="number" name="amount" class="form-control" min="1" step="any" required placeholder="e.g. 150,000">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Date Received <span class="text-danger">*</span></label>
+                            <input type="date" name="deposit_date" class="form-control" required value="<?= date('Y-m-d') ?>">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Notes <span class="text-muted fw-normal small">(optional)</span></label>
+                            <input type="text" name="notes" class="form-control" placeholder="e.g. M-Pesa ref, bank transfer…">
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">
-                        <i class="fa fa-truck me-1"></i>Confirm Delivery &amp; Generate Note
-                    </button>
+                    <button type="submit" class="btn btn-success"><i class="fa fa-plus me-1"></i>Record Deposit</button>
                 </div>
             </form>
         </div>
@@ -2421,7 +3016,7 @@ $companyWa = getSetting('company_name', 'us');
 <script>
 // Move modals to <body> so they escape the page-body animation compositing layer
 document.addEventListener('DOMContentLoaded', function () {
-    ['scheduleTdModal', 'waTemplateModal', 'lostModal', 'reserveModal', 'importOrderModal', 'deliverModal'].forEach(function (id) {
+    ['scheduleTdModal', 'waTemplateModal', 'lostModal', 'reserveModal', 'importOrderModal', 'deliveryProtocolModal', 'addDepositModal'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el && el.parentNode !== document.body) document.body.appendChild(el);
     });
