@@ -120,7 +120,10 @@ $pageTitle = 'Sales Agreement — ' . ($buyerName ?: 'Lead #' . $leadId);
 include __DIR__ . '/../../includes/header.php';
 ?>
 <style>
-@page { size: A4; margin: 0; }
+/* @page margin repeats on EVERY printed page (unlike element padding, which
+   only applies to the first fragment of a box) — this is what keeps page 2+
+   content from starting flush against the paper edge and getting clipped. */
+@page { size: A4; margin: 14mm 15mm 18mm; }
 /* ── Print suppression ───────────────────────────────────────────────────── */
 @media print {
     .d-print-none { display:none !important; }
@@ -132,11 +135,18 @@ include __DIR__ . '/../../includes/header.php';
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     #salesDoc {
         box-shadow:none !important; border:none !important; border-radius:0 !important;
-        max-width:100% !important; padding:0 !important;
+        max-width:100% !important;
     }
-    .sa-body { padding:18px 26px 24px !important; }
+    .sa-body { padding:8px 0 6px !important; }
     .sa-page-break { break-after: page; page-break-after: always; }
+    /* Keep clauses, table rows, party boxes, signatures and attachments from
+       being sliced across a page boundary. */
+    .sa-clause, .sa-table tr, .sa-avoid-break {
+        break-inside: avoid; page-break-inside: avoid;
+    }
+    .sa-print-footer { display:block; }
 }
+.sa-print-footer { display:none; }
 /* ── Document shell ──────────────────────────────────────────────────────── */
 #salesDoc {
     max-width:800px; margin:0 auto;
@@ -159,6 +169,12 @@ include __DIR__ . '/../../includes/header.php';
 .sa-table th { background:#f0f0f0; font-weight:700; width:38%; white-space:nowrap; }
 /* ── Signature lines ─────────────────────────────────────────────────────── */
 .sig-line { border-bottom:1.5px solid #333; min-height:38px; margin-bottom:4px; }
+/* ── Running print footer (position:fixed repeats on every printed page) ──── */
+.sa-print-footer {
+    position:fixed; left:0; right:0; bottom:6mm; text-align:center;
+    font-size:8.5px; color:#999; letter-spacing:.02em;
+    border-top:1px solid #ddd; padding-top:5px; font-family:Arial,Helvetica,sans-serif;
+}
 </style>
 
 <!-- ── Action bar (screen only) ─────────────────────────────────────────────── -->
@@ -223,7 +239,7 @@ include __DIR__ . '/../../includes/header.php';
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
 
             <!-- Seller -->
-            <div style="border:1px solid #cccccc;padding:12px 14px">
+            <div class="sa-avoid-break" style="border:1px solid #cccccc;padding:12px 14px">
                 <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;
                             letter-spacing:.08em;color:#777777;margin-bottom:7px">The Seller</div>
                 <div style="font-weight:700;font-size:13px;margin-bottom:4px">Mascardi Ventures Limited</div>
@@ -237,7 +253,7 @@ include __DIR__ . '/../../includes/header.php';
             </div>
 
             <!-- Buyer -->
-            <div style="border:1px solid #cccccc;padding:12px 14px">
+            <div class="sa-avoid-break" style="border:1px solid #cccccc;padding:12px 14px">
                 <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;
                             letter-spacing:.08em;color:#777777;margin-bottom:7px">The Buyer</div>
                 <div style="font-weight:700;font-size:13px;margin-bottom:4px"><?= e($buyerName) ?></div>
@@ -401,7 +417,7 @@ include __DIR__ . '/../../includes/header.php';
         </div>
 
         <!-- ── Signatures ─────────────────────────────────────────────────────── -->
-        <div style="margin-top:18px;border-top:2px solid #111111;padding-top:16px">
+        <div class="sa-avoid-break" style="margin-top:18px;border-top:2px solid #111111;padding-top:16px">
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:18px">
 
@@ -458,7 +474,7 @@ include __DIR__ . '/../../includes/header.php';
         <!-- ── Attachments: Buyer ID card (front/back) ─────────────────────────── -->
         <?php if (!empty($lead['id_card_front'])): ?>
         <div class="sa-page-break"></div>
-        <div style="padding-top:10px">
+        <div class="sa-avoid-break" style="padding-top:10px">
             <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111111">
                 <div style="font-size:16px;font-weight:900;letter-spacing:3px;text-transform:uppercase">
                     Attachment — ID Card (Front)
@@ -473,7 +489,7 @@ include __DIR__ . '/../../includes/header.php';
 
         <?php if (!empty($lead['id_card_back'])): ?>
         <div class="sa-page-break"></div>
-        <div style="padding-top:10px">
+        <div class="sa-avoid-break" style="padding-top:10px">
             <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111111">
                 <div style="font-size:16px;font-weight:900;letter-spacing:3px;text-transform:uppercase">
                     Attachment — ID Card (Back)
@@ -488,6 +504,9 @@ include __DIR__ . '/../../includes/header.php';
 
     </div><!-- /body padding -->
 </div><!-- /#salesDoc -->
+
+<!-- Print-only running footer — position:fixed repeats it on every printed page -->
+<div class="sa-print-footer">Mascardi Ventures Limited &middot; Car Sales Agreement &middot; Ref: <?= e($agmtRef) ?></div>
 
 <div class="d-print-none mt-4 mb-4"></div>
 
