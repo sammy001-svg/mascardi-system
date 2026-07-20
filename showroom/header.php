@@ -26,15 +26,15 @@ $__pageTitle = isset($pageTitle)
 
 $__navOverlay = !empty($navOverlay);
 
-// Vehicle categories for the nav dropdown (cheap, cached per request)
-$__navCats = [];
+// Vehicle makes for the nav dropdown (cheap, cached per request)
+$__navMakes = [];
 try {
-    $__navCats = getDB()->query("
-        SELECT body_type, COUNT(*) AS n FROM cars
+    $__navMakes = getDB()->query("
+        SELECT make, COUNT(*) AS n FROM cars
         WHERE car_type='inventory' AND show_on_website=1
           AND (status IS NULL OR status NOT IN ('delivered','sold'))
-          AND body_type IS NOT NULL AND body_type != ''
-        GROUP BY body_type ORDER BY n DESC LIMIT 8
+          AND make IS NOT NULL AND make != ''
+        GROUP BY make ORDER BY n DESC, make ASC LIMIT 10
     ")->fetchAll(PDO::FETCH_KEY_PAIR);
 } catch (\Throwable $_) {}
 ?>
@@ -71,14 +71,14 @@ try {
 <style>
 /* ── Design Tokens — minimal luxury ─────────────────────────── */
 :root {
-    --paper:    #f8f7f5;   /* warm off-white section bg   */
+    --paper:    #f4f4f2;   /* neutral light section bg    */
     --white:    #ffffff;
-    --ink:      #191919;   /* primary text                */
-    --ink-2:    #575757;   /* secondary text              */
-    --ink-3:    #8f8b85;   /* muted text                  */
-    --line:     #e5e2dd;   /* hairline borders            */
-    --bronze:   #9a7b4f;   /* restrained luxury accent    */
-    --black:    #0c0c0c;   /* dark sections / footer      */
+    --ink:      #111111;   /* primary text                */
+    --ink-2:    #565656;   /* secondary text              */
+    --ink-3:    #8a8a8a;   /* muted text                  */
+    --line:     #e4e4e2;   /* hairline borders            */
+    --bronze:   #6e6e6e;   /* monochrome hover accent     */
+    --black:    #0a0a0a;   /* dark sections / footer      */
     --r:        2px;       /* squared corners throughout  */
     --nav-h:    72px;
     --ease:     cubic-bezier(.25,.46,.45,.94);
@@ -128,6 +128,18 @@ h1,h2,h3,h4,h5,h6 { font-weight: 400; letter-spacing: -.01em; }
 .btn-lx-ghost:hover { background: rgba(255,255,255,.12); color: #fff; border-color: #fff; }
 .btn-lx-ghost-dark { background: transparent; color: var(--ink); border-color: var(--ink); }
 .btn-lx-ghost-dark:hover { background: var(--ink); color: #fff; }
+
+/* Shared layout + form primitives */
+.lx-wrap { max-width: 1320px; margin: 0 auto; padding: 0 28px; }
+.lx-flabel { display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .16em; color: var(--ink-3); margin-bottom: 8px; }
+.lx-input {
+    width: 100%; border: 1px solid var(--line); border-radius: var(--r);
+    padding: 10px 13px; font-size: 13.5px; font-family: inherit; color: var(--ink);
+    background: var(--white); outline: none; transition: border-color .25s var(--ease);
+}
+.lx-input:focus { border-color: var(--ink); }
+select.lx-input { cursor: pointer; }
+.lx-noimg { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 52px; color: var(--line); background: var(--paper); }
 
 /* ── Navbar ─────────────────────────────────────────────────── */
 .site-nav {
@@ -268,18 +280,18 @@ h1,h2,h3,h4,h5,h6 { font-weight: 400; letter-spacing: -.01em; }
                     <button type="button" aria-haspopup="true">Vehicles <i class="fa fa-chevron-down drop-caret"></i></button>
                     <div class="nav-drop">
                         <div class="nav-drop-grid">
-                            <div class="drop-head">Browse by Body Type</div>
-                            <?php foreach ($__navCats as $__cat => $__n): ?>
-                            <a class="drop-link" href="<?= BASE_URL ?>/showroom/?body=<?= urlencode($__cat) ?>#inventory">
-                                <?= htmlspecialchars($__cat) ?> <span class="n"><?= (int)$__n ?></span>
+                            <div class="drop-head">Browse by Make</div>
+                            <?php foreach ($__navMakes as $__mk => $__n): ?>
+                            <a class="drop-link" href="<?= BASE_URL ?>/showroom/vehicles.php?make=<?= urlencode($__mk) ?>">
+                                <?= htmlspecialchars($__mk) ?> <span class="n"><?= (int)$__n ?></span>
                             </a>
                             <?php endforeach; ?>
-                            <?php if (!$__navCats): ?>
-                            <a class="drop-link" href="<?= BASE_URL ?>/showroom/#inventory">All Vehicles</a>
+                            <?php if (!$__navMakes): ?>
+                            <a class="drop-link" href="<?= BASE_URL ?>/showroom/vehicles.php">All Vehicles</a>
                             <?php endif; ?>
                             <div class="drop-cta">
-                                <a href="<?= BASE_URL ?>/showroom/#inventory">View All Inventory <i class="fa fa-arrow-right" style="font-size:10px"></i></a>
-                                <a href="<?= BASE_URL ?>/showroom/?sort=newest#inventory">New Arrivals</a>
+                                <a href="<?= BASE_URL ?>/showroom/vehicles.php">View All Vehicles <i class="fa fa-arrow-right" style="font-size:10px"></i></a>
+                                <a href="<?= BASE_URL ?>/showroom/vehicles.php?sort=newest">New Arrivals</a>
                                 <a href="<?= BASE_URL ?>/showroom/compare.php">Compare</a>
                             </div>
                         </div>
@@ -331,10 +343,10 @@ h1,h2,h3,h4,h5,h6 { font-weight: 400; letter-spacing: -.01em; }
 <div class="nav-mobile" id="navMobile">
     <div class="m-group">
         <div class="m-head">Vehicles</div>
-        <?php foreach ($__navCats as $__cat => $__n): ?>
-        <a href="<?= BASE_URL ?>/showroom/?body=<?= urlencode($__cat) ?>#inventory"><?= htmlspecialchars($__cat) ?> <span style="color:var(--ink-3);font-size:12px">(<?= (int)$__n ?>)</span></a>
+        <?php foreach ($__navMakes as $__mk => $__n): ?>
+        <a href="<?= BASE_URL ?>/showroom/vehicles.php?make=<?= urlencode($__mk) ?>"><?= htmlspecialchars($__mk) ?> <span style="color:var(--ink-3);font-size:12px">(<?= (int)$__n ?>)</span></a>
         <?php endforeach; ?>
-        <a href="<?= BASE_URL ?>/showroom/#inventory">View All Inventory</a>
+        <a href="<?= BASE_URL ?>/showroom/vehicles.php">View All Vehicles</a>
         <a href="<?= BASE_URL ?>/showroom/compare.php">Compare</a>
     </div>
     <div class="m-group">
