@@ -9,7 +9,9 @@
       "Bash(php -l showroom/vehicles.php)",
       "Bash(php -l login.php)",
       "Bash(php -l config/app.php)",
-      "Bash(php -l modules/chat/index.php)"
+      "Bash(php -l modules/chat/index.php)",
+      "Bash(sed -i '1084,1088d' modules/chat/index.php)",
+      "Bash(sed -i \"1083r /c/PROGRA~1/KMSpico/temp/claude/c--Mascardi-Systems-mascardi-system/7bbf88ed-4575-4967-86fd-bb6c6124d353/scratchpad/emoji_rows.txt\" modules/chat/index.php)"
     ]
   }
 }

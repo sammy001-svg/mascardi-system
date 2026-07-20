@@ -103,7 +103,7 @@ body > .modal-backdrop,
 }
 
 
-/* â”€â”€ Root shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* â"€â"€ Root shell â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 .chat-root {
     display: flex !important;
     height: calc(100vh - 60px);   /* topbar is exactly 60px */
@@ -114,7 +114,7 @@ body > .modal-backdrop,
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   LEFT PANEL â€“ conversation list
+   LEFT PANEL â€" conversation list
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .cp-left {
     width: 360px; min-width: 360px;
@@ -193,7 +193,7 @@ body > .modal-backdrop,
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   RIGHT PANEL â€“ active chat
+   RIGHT PANEL â€" active chat
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .cp-right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
@@ -269,7 +269,7 @@ body > .modal-backdrop,
 .ch-sub  { font-size: 12px; color: #667781; }
 .ch-acts { display: flex; gap: 2px; }
 
-/* â”€â”€ Messages area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* â"€â"€ Messages area â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 .chat-msgs {
     flex: 1; overflow-y: auto; padding: 12px 16px 8px;
     display: flex; flex-direction: column;
@@ -398,7 +398,7 @@ body > .modal-backdrop,
     box-shadow: 0 1px 2px rgba(0,0,0,.07);
 }
 
-/* â”€â”€ Scroll-to-bottom FAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* â"€â"€ Scroll-to-bottom FAB â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 .scroll-fab {
     position: absolute; bottom: 80px; right: 20px; z-index: 10;
     width: 42px; height: 42px; border-radius: 50%;
@@ -549,12 +549,12 @@ body > .modal-backdrop,
 .up-name { font-size:14px;font-weight:600;color:#111b21; }
 .up-role { font-size:12px;color:#667781; }
 
-/* â”€â”€ Shared icon button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* â"€â"€ Shared icon button â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 .ic-btn { width:36px;height:36px;border-radius:50%;background:none;border:none;color:#54656f;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;flex-shrink:0;transition:background .15s; }
 .ic-btn:hover { background:#e9edef; }
 .ch-acts .ic-btn { font-size:19px; }
 
-/* â”€â”€ Mobile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* â"€â"€ Mobile â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 @media (max-width:767px) {
     .cp-left  { width:100%;min-width:100%; }
     .cp-right { position:absolute;inset:0;z-index:5; }
@@ -810,26 +810,26 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
     <div class="cp-right" id="cpRight" style="display:flex;flex-direction:column">
 
         <!-- Welcome -->
-        <div class=”chat-welcome” id=”chatWelcome”<?= $autoConvId ? ' style=”display:none”' : '' ?>>
-            <div class=”cw-icon”><i class=”fa fa-comments”></i></div>
+        <div class="chat-welcome" id="chatWelcome"<?= $autoConvId ? ' style="display:none"' : '' ?>>
+            <div class="cw-icon"><i class="fa fa-comments"></i></div>
             <h6>Mascardi Team Chat</h6>
             <p>Message your colleagues directly or create group conversations to collaborate with your team.</p>
-            <div class=”cw-actions”>
-                <button class=”cw-btn cw-btn-primary” id=”btnWelcomeNewChat”>
-                    <i class=”fa fa-pen-to-square”></i>New Conversation
+            <div class="cw-actions">
+                <button class="cw-btn cw-btn-primary" id="btnWelcomeNewChat">
+                    <i class="fa fa-pen-to-square"></i>New Conversation
                 </button>
             </div>
-            <div class=”cw-tips”>
-                <div class=”cw-tip”>
-                    <span class=”cw-tip-ic”>💬</span>
-                    <div class=”cw-tip-text”>
+            <div class="cw-tips">
+                <div class="cw-tip">
+                    <span class="cw-tip-ic">💬</span>
+                    <div class="cw-tip-text">
                         <strong>Direct Message</strong>
                         Select a colleague to start a private chat instantly.
                     </div>
                 </div>
-                <div class=”cw-tip”>
-                    <span class=”cw-tip-ic”>👥</span>
-                    <div class=”cw-tip-text”>
+                <div class="cw-tip">
+                    <span class="cw-tip-ic">👥</span>
+                    <div class="cw-tip-text">
                         <strong>Group Chat</strong>
                         Create groups for departments or projects.
                     </div>
@@ -838,17 +838,17 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
         </div>
 
         <!-- Active conversation -->
-        <div class=”chat-active<?= $autoConvId ? ' is-open' : '' ?>” id=”chatActive”<?= !$autoConvId ? ' style=”position:fixed!important;top:-200vh!important;left:-200vw!important;width:0!important;height:0!important;overflow:hidden!important;visibility:hidden!important”' : '' ?>>
+        <div class="chat-active<?= $autoConvId ? ' is-open' : '' ?>" id="chatActive"<?= !$autoConvId ? ' style="position:fixed!important;top:-200vh!important;left:-200vw!important;width:0!important;height:0!important;overflow:hidden!important;visibility:hidden!important"' : '' ?>>
 
             <!-- Header -->
-            <div class=”ch-hdr”>
-                <button class=”ic-btn ch-back-mob” id=”chBack” style=”display:none” title=”Back”>
-                    <i class=”fa fa-arrow-left”></i>
+            <div class="ch-hdr">
+                <button class="ic-btn ch-back-mob" id="chBack" style="display:none" title="Back">
+                    <i class="fa fa-arrow-left"></i>
                 </button>
-                <div class=”ch-av” id=”chAv” style=”background:<?= e($autoConvColor) ?>”><?= $autoConvId ? e(mb_strtoupper(mb_substr($autoConvName,0,1))) : '' ?></div>
-                <div class=”ch-info”>
-                    <div class=”ch-name” id=”chName”><?= $autoConvId ? e($autoConvName) : '' ?></div>
-                    <div class=”ch-sub”  id=”chSub”></div>
+                <div class="ch-av" id="chAv" style="background:<?= e($autoConvColor) ?>"><?= $autoConvId ? e(mb_strtoupper(mb_substr($autoConvName,0,1))) : '' ?></div>
+                <div class="ch-info">
+                    <div class="ch-name" id="chName"><?= $autoConvId ? e($autoConvName) : '' ?></div>
+                    <div class="ch-sub"  id="chSub"></div>
                     <div class="ch-typing" id="chTyping"><span id="chTypingName"></span><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
                 </div>
                 <div class="ch-acts">
@@ -945,8 +945,8 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
     <video class="call-rv" id="remoteVid" autoplay playsinline style="display:none"></video>
     <video class="call-lv" id="localVid"  autoplay muted playsinline style="display:none"></video>
     <div class="call-body">
-        <div class=”call-avatar” id=”callAv” style=”background:#128c7e”>?</div>
-        <div class=”call-name”  id=”callName”></div>
+        <div class="call-avatar" id="callAv" style="background:#128c7e">?</div>
+        <div class="call-name"  id="callName"></div>
         <div class="call-stat"  id="callStat">Calling…</div>
         <div class="call-timer" id="callTimer"></div>
         <div class="call-btns">
@@ -1041,7 +1041,7 @@ async function apiUpload(ep,fd){
     try { return JSON.parse(txt); } catch { return {}; }
 }
 
-/* â”€â”€ Ping sound via Web Audio API (no external file needed) â”€ */
+/* â"€â"€ Ping sound via Web Audio API (no external file needed) â"€ */
 function pingSound() {
     try {
         const ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -1058,7 +1058,7 @@ function pingSound() {
     } catch {}
 }
 
-/* â”€â”€ Browser Notification API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* â"€â"€ Browser Notification API â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 function requestNotifPerm() {
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission().catch(()=>{});
@@ -1081,11 +1081,11 @@ function pushNotification(title, body) {
    Emoji picker data
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const EMOJIS = [
-    'ðŸ˜€','ðŸ˜‚','ðŸ¤£','ðŸ˜Š','ðŸ˜','ðŸ¥°','ðŸ˜Ž','ðŸ¤”','ðŸ˜…','ðŸ˜­','ðŸ˜±','ðŸ¥³',
-    'ðŸ˜†','ðŸ˜œ','ðŸ˜‡','ðŸ˜´','ðŸ˜¡','ðŸ¤©','ðŸ¥º','ðŸ˜','ðŸ˜’','ðŸ™„','ðŸ¤—','ðŸ˜¬',
-    'ðŸ‘','ðŸ‘Ž','ðŸ‘','ðŸ™','ðŸ¤','ðŸ’ª','ðŸ‘‹','âœŒï¸','ðŸ«¶','â¤ï¸','ðŸ’”','ðŸ”¥',
-    'âœ¨','ðŸ’¯','ðŸŽ‰','ðŸŽŠ','ðŸŽ¯','ðŸš€','ðŸ’¡','â­','ðŸŒŸ','âœ…','âŒ','âš¡',
-    'ðŸ˜‹','ðŸ¤­','ðŸ«¡','ðŸ« ','ðŸ˜®','ðŸ˜¯','ðŸ˜²','ðŸ¤¯','ðŸ¥´','ðŸ˜µ','ðŸ¤¤','ðŸ˜ª',
+    '😀','😂','🤣','😊','😍','🥰','😎','🤔','😅','😭','😱','🥳',
+    '😆','😜','😇','😴','😡','🤩','🥺','😏','😒','🙄','🤗','😬',
+    '👍','👎','👏','🙏','🤝','💪','👋','✌️','🫶','❤️','💔','🔥',
+    '✨','💯','🎉','🎊','🎯','🚀','💡','⭐','🌟','✅','❌','⚡',
+    '😋','🤭','🫡','🫠','😮','😯','😲','🤯','🥴','😵','🤤','😪',
 ];
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -1119,7 +1119,7 @@ const Chat = window.Chat = {
 
     STUN:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]},
 
-    /* â”€â”€ Build emoji picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ Build emoji picker â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     buildEmojiPicker() {
         const picker = el('emojiPicker');
         picker.innerHTML = EMOJIS.map(e =>
@@ -1154,7 +1154,7 @@ const Chat = window.Chat = {
         el('btnEmoji').classList.toggle('active-emoji', this.emojiOpen);
     },
 
-    /* â”€â”€ Load conversations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ Load conversations â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     async loadConvs() {
         try {
             const d = await apiGet('conversations.php');
@@ -1239,7 +1239,7 @@ const Chat = window.Chat = {
         </div>`;
     },
 
-    /* â”€â”€ Open conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ Open conversation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     async openConv(cid, cname, ccolor, callee, ctype, extra) {
         this.convId    = parseInt(cid)||0;
         this.convName  = cname;
@@ -1313,7 +1313,7 @@ const Chat = window.Chat = {
         if (this.emojiOpen) this.toggleEmoji();
     },
 
-    /* â”€â”€ Fetch & render messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ Fetch & render messages â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     async _fetchMsgs(initial) {
         try {
             const params = initial
@@ -1322,8 +1322,8 @@ const Chat = window.Chat = {
 
             // Fire messages fetch and (on polls) typing check in parallel
             const [d, td] = await Promise.all([
-                apiGet(‘messages.php’, params),
-                initial ? Promise.resolve({ typing: [] }) : apiGet(‘typing.php’, { conversation_id: this.convId }),
+                apiGet('messages.php', params),
+                initial ? Promise.resolve({ typing: [] }) : apiGet('typing.php', { conversation_id: this.convId }),
             ]);
 
             // ── Typing indicator ───────────────────────────────────────────
@@ -1331,25 +1331,25 @@ const Chat = window.Chat = {
 
             const msgs = d.messages || [];
             // Update read_min for tick rendering
-            if (typeof d.read_min === ‘number’) this.readMin = d.read_min;
-            const box  = el(‘chatMsgs’);
+            if (typeof d.read_min === 'number') this.readMin = d.read_min;
+            const box  = el('chatMsgs');
 
             if (!msgs.length) {
-                if (initial) box.innerHTML = `<div style=”text-align:center;color:#8696a0;padding:60px 0;font-size:13px”>No messages yet — say hello 👋</div>`;
+                if (initial) box.innerHTML = `<div style="text-align:center;color:#8696a0;padding:60px 0;font-size:13px">No messages yet — say hello 👋</div>`;
                 return;
             }
 
             const atBottom = initial || (box.scrollHeight - box.scrollTop - box.clientHeight < 80);
 
             if (initial) {
-                box.innerHTML = ‘’;
-                this.prevSenderId = null; this.prevMsgTs = null; this.lastDay = ‘’;
+                box.innerHTML = '';
+                this.prevSenderId = null; this.prevMsgTs = null; this.lastDay = '';
                 // ── Load-more button ───────────────────────────────────────
                 if (d.has_more) {
                     this.hasMoreMsgs = true;
-                    box.insertAdjacentHTML(‘afterbegin’, `<div class=”load-more-wrap” id=”loadMoreWrap”>
-                        <button class=”load-more-btn” id=”loadMoreBtn” onclick=”Chat.loadMore()”>
-                            <i class=”fa fa-clock-rotate-left me-1”></i>Load older messages
+                    box.insertAdjacentHTML('afterbegin', `<div class="load-more-wrap" id="loadMoreWrap">
+                        <button class="load-more-btn" id="loadMoreBtn" onclick="Chat.loadMore()">
+                            <i class="fa fa-clock-rotate-left me-1"></i>Load older messages
                         </button>
                     </div>`);
                 } else {
@@ -1361,10 +1361,10 @@ const Chat = window.Chat = {
             msgs.forEach(m => {
                 const day = fmtDay(m.created_at);
                 if (day && day !== this.lastDay) {
-                    box.insertAdjacentHTML(‘beforeend’, `<div class=”day-sep”><span>${esc(day)}</span></div>`);
+                    box.insertAdjacentHTML('beforeend', `<div class="day-sep"><span>${esc(day)}</span></div>`);
                     this.lastDay = day; this.prevSenderId = null; this.prevMsgTs = null;
                 }
-                box.insertAdjacentHTML(‘beforeend’, this._msgHtml(m));
+                box.insertAdjacentHTML('beforeend', this._msgHtml(m));
                 const mid = parseInt(m.id);
                 this.lastMsgId    = Math.max(this.lastMsgId,    mid);
                 this.oldestMsgId  = Math.min(this.oldestMsgId,  mid);
@@ -1375,15 +1375,15 @@ const Chat = window.Chat = {
                 box.scrollTop = box.scrollHeight;
             } else if (!initial && newFromOthers > 0) {
                 this.scrollUnread += newFromOthers;
-                show(el(‘scrollFab’), ‘flex’);
-                const fb = el(‘fabBadge’);
-                fb.textContent = this.scrollUnread > 99 ? ‘99+’ : this.scrollUnread;
+                show(el('scrollFab'), 'flex');
+                const fb = el('fabBadge');
+                fb.textContent = this.scrollUnread > 99 ? '99+' : this.scrollUnread;
                 show(fb);
                 pingSound();
                 if (msgs.length) {
                     const last = msgs[msgs.length-1];
                     if (parseInt(last.sender_id) !== ME.id) {
-                        pushNotification(last.sender_name || ‘New message’, last.content || ‘📎 Attachment’);
+                        pushNotification(last.sender_name || 'New message', last.content || '📎 Attachment');
                     }
                 }
             }
@@ -1396,22 +1396,22 @@ const Chat = window.Chat = {
                     this.doSearch(el('searchInput').value);
                 }
             }
-        } catch(e) { console.error(‘_fetchMsgs’, e); }
+        } catch(e) { console.error('_fetchMsgs', e); }
     },
 
     /* ── Load more (older) messages ────────────────────────────────────────── */
     async loadMore() {
-        const btn = el(‘loadMoreBtn’);
+        const btn = el('loadMoreBtn');
         if (btn) btn.disabled = true;
-        const box = el(‘chatMsgs’);
+        const box = el('chatMsgs');
         const prevScrollHeight = box.scrollHeight;
 
         try {
-            const d    = await apiGet(‘messages.php’, { conversation_id: this.convId, before: this.oldestMsgId });
+            const d    = await apiGet('messages.php', { conversation_id: this.convId, before: this.oldestMsgId });
             const msgs = d.messages || [];
 
             // Remove the load-more wrap
-            el(‘loadMoreWrap’)?.remove();
+            el('loadMoreWrap')?.remove();
 
             if (!msgs.length) return;
 
@@ -1419,13 +1419,13 @@ const Chat = window.Chat = {
             const savedSender = this.prevSenderId;
             const savedTs     = this.prevMsgTs;
             const savedDay    = this.lastDay;
-            this.prevSenderId = null; this.prevMsgTs = null; this.lastDay = ‘’;
+            this.prevSenderId = null; this.prevMsgTs = null; this.lastDay = '';
 
-            let html = ‘’;
+            let html = '';
             msgs.forEach(m => {
                 const day = fmtDay(m.created_at);
                 if (day && day !== this.lastDay) {
-                    html += `<div class=”day-sep”><span>${esc(day)}</span></div>`;
+                    html += `<div class="day-sep"><span>${esc(day)}</span></div>`;
                     this.lastDay = day;
                 }
                 html += this._msgHtml(m);
@@ -1438,21 +1438,21 @@ const Chat = window.Chat = {
             this.lastDay      = savedDay;
 
             // If still more messages, prepend a new load-more button
-            let prefix = ‘’;
+            let prefix = '';
             if (d.has_more) {
-                prefix = `<div class=”load-more-wrap” id=”loadMoreWrap”>
-                    <button class=”load-more-btn” id=”loadMoreBtn” onclick=”Chat.loadMore()”>
-                        <i class=”fa fa-clock-rotate-left me-1”></i>Load older messages
+                prefix = `<div class="load-more-wrap" id="loadMoreWrap">
+                    <button class="load-more-btn" id="loadMoreBtn" onclick="Chat.loadMore()">
+                        <i class="fa fa-clock-rotate-left me-1"></i>Load older messages
                     </button>
                 </div>`;
             }
             // Insert before first child (keeps the new button at top if needed)
-            box.insertAdjacentHTML(‘afterbegin’, html);
-            if (prefix) box.insertAdjacentHTML(‘afterbegin’, prefix);
+            box.insertAdjacentHTML('afterbegin', html);
+            if (prefix) box.insertAdjacentHTML('afterbegin', prefix);
 
             // Preserve scroll position (prevent jump to top)
             box.scrollTop = box.scrollHeight - prevScrollHeight;
-        } catch(e) { console.error(‘loadMore’, e); if (btn) btn.disabled = false; }
+        } catch(e) { console.error('loadMore', e); if (btn) btn.disabled = false; }
     },
 
     /* ── Typing indicator ───────────────────────────────────────────────────── */
@@ -1461,21 +1461,21 @@ const Chat = window.Chat = {
         const now = Date.now();
         if (now - this.typingLastSent < 3000) return; // throttle: at most once per 3 s
         this.typingLastSent = now;
-        apiPost(‘typing.php’, { conversation_id: this.convId }).catch(()=>{});
+        apiPost('typing.php', { conversation_id: this.convId }).catch(()=>{});
     },
     _updateTyping(typers) {
-        const wrap = el(‘chTyping’);
-        const nameEl = el(‘chTypingName’);
+        const wrap = el('chTyping');
+        const nameEl = el('chTypingName');
         if (!typers || !typers.length) {
-            wrap.classList.remove(‘visible’);
+            wrap.classList.remove('visible');
             return;
         }
-        const names = typers.map(t => t.name.split(‘ ‘)[0]); // first name only
-        nameEl.textContent = names.join(‘, ‘) + (names.length === 1 ? ‘ is typing ‘ : ‘ are typing ‘);
-        wrap.classList.add(‘visible’);
+        const names = typers.map(t => t.name.split(' ')[0]); // first name only
+        nameEl.textContent = names.join(', ') + (names.length === 1 ? ' is typing ' : ' are typing ');
+        wrap.classList.add('visible');
     },
 
-    /* â”€â”€ Render a single message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ Render a single message â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     _msgHtml(m) {
         const sent    = parseInt(m.sender_id) === ME.id;
         const sid     = parseInt(m.sender_id);
@@ -1611,7 +1611,7 @@ const Chat = window.Chat = {
         </div>`;
     },
 
-    /* â”€â”€ Send text â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ Send text â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     async sendText() {
         if (!this.convId) return;
         const msgEl = el('msgIn');
@@ -1630,7 +1630,7 @@ const Chat = window.Chat = {
         } catch(e) { console.error('sendText',e); }
     },
 
-    /* â”€â”€ Start direct conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ Start direct conversation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     _chatErr(msgsBox, icon, title, sub) {
         if (!msgsBox) return;
         msgsBox.innerHTML = `<div style="text-align:center;padding:48px 24px">
@@ -1677,7 +1677,7 @@ const Chat = window.Chat = {
         }
     },
 
-    /* â”€â”€ File upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ File upload â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     async uploadFile(file) {
         if (!this.convId) return;
         const fd = new FormData();
@@ -1690,7 +1690,7 @@ const Chat = window.Chat = {
         } catch(e) { console.error('uploadFile',e); }
     },
 
-    /* â”€â”€ Voice recording â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ Voice recording â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     _bestMime() {
         const t = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
         for (const m of t) if (MediaRecorder.isTypeSupported(m)) return m;
@@ -1769,7 +1769,7 @@ const Chat = window.Chat = {
         this.sendText();
     },
 
-    /* â”€â”€ Voice playback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ Voice playback â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     playVoice(src, vid) {
         if (this.curAudio) {
             this.curAudio.pause(); this.curAudio=null;
@@ -1794,7 +1794,7 @@ const Chat = window.Chat = {
         if (btn) btn.onclick=()=>{ audio.pause(); btn.innerHTML='<i class="fa fa-play"></i>'; btn.onclick=null; this.curAudio=null; };
     },
 
-    /* â”€â”€ WebRTC Calls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ WebRTC Calls â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     async call(type) {
         if (!this.convId||!this.calleeId) return;
         this.pendingIce=[];
@@ -2184,7 +2184,7 @@ const Chat = window.Chat = {
         } catch {}
     },
 
-    /* â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* â"€â"€ Init â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     init() {
         // On mobile, the right panel is absolutely positioned covering the full screen.
         // Hide it initially so the user sees the conversation list first.
@@ -2411,7 +2411,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // NEW CHAT MODAL — rendered as direct child of <body> (via footer.php $extraModal hook)
 // This places it OUTSIDE the .page-body stacking context, fixing the black-overlay bug.
 ob_start(); ?>
-<!-- â”€â”€ NEW CHAT MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<!-- â"€â"€ NEW CHAT MODAL â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ -->
 <div class="modal fade" id="newChatModal" tabindex="-1">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
