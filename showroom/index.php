@@ -388,27 +388,75 @@ include __DIR__ . '/header.php';
     .lx-stat:nth-child(n+3) { border-bottom: none; }
 }
 
-/* Dual feature blocks */
-.lx-feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
-@media (max-width: 991px) { .lx-feature-grid { grid-template-columns: 1fr; } }
-.lx-feature { background: var(--white); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column; }
-.lx-feature-img { display: block; position: relative; aspect-ratio: 16/9; overflow: hidden; background: var(--paper); }
-.lx-feature-img img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease); }
-.lx-feature:hover .lx-feature-img img { transform: scale(1.03); }
-.lx-feature-body { padding: 34px 36px 38px; flex: 1; display: flex; flex-direction: column; }
-.lx-feature-body h3 { font-size: 27px; font-weight: 400; letter-spacing: -.01em; margin: 0 0 8px; }
-.lx-feature-price { font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 26px; }
-.lx-feature-price del { color: var(--ink-3); font-weight: 400; margin-left: 8px; font-size: 13px; }
-.lx-feature-specs { display: flex; gap: 0; margin-bottom: 30px; flex-wrap: wrap; }
-.lx-feature-specs > div { padding: 0 26px; border-right: 1px solid var(--line); }
-.lx-feature-specs > div:first-child { padding-left: 0; }
-.lx-feature-specs > div:last-child { border-right: none; }
-.lx-feature-specs .sv { font-size: 20px; font-weight: 300; color: var(--ink); }
-.lx-feature-specs .sl { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-3); margin-top: 3px; }
+/* ── Scroll-reveal (elements with .rv fade-rise when they enter view) ── */
+.rv { opacity: 0; transform: translateY(30px); transition: opacity .9s var(--ease), transform .9s var(--ease); }
+.rv.in { opacity: 1; transform: none; }
+.rv-d1 { transition-delay: .12s; }
+.rv-d2 { transition-delay: .24s; }
+.rv-d3 { transition-delay: .36s; }
+/* Staggered rows */
+.lx-stats  .lx-stat.rv:nth-child(2)  { transition-delay: .08s; }
+.lx-stats  .lx-stat.rv:nth-child(3)  { transition-delay: .16s; }
+.lx-stats  .lx-stat.rv:nth-child(4)  { transition-delay: .24s; }
+.lx-values .lx-value.rv:nth-child(2) { transition-delay: .08s; }
+.lx-values .lx-value.rv:nth-child(3) { transition-delay: .16s; }
+.lx-values .lx-value.rv:nth-child(4) { transition-delay: .24s; }
+.lx-values .lx-value.rv:nth-child(5) { transition-delay: .32s; }
+.lx-values .lx-value.rv:nth-child(6) { transition-delay: .40s; }
+
+/* ── 3D showcase carousel ─────────────────────────────────────── */
+.c3d-wrap { position: relative; }
+.c3d-viewport {
+    position: relative;
+    height: calc(min(430px, 82vw) * 0.625 + 172px);
+    perspective: 1700px;
+}
+.c3d-card {
+    position: absolute; left: 50%; top: 0;
+    width: min(430px, 82vw);
+    margin-left: calc(min(430px, 82vw) / -2);
+    background: var(--white); border: 1px solid var(--line); border-radius: var(--r);
+    overflow: hidden; display: block; text-decoration: none;
+    transform-style: preserve-3d; backface-visibility: hidden;
+    transition: transform .7s var(--ease), opacity .7s var(--ease), box-shadow .7s var(--ease);
+    will-change: transform, opacity;
+}
+.c3d-card .img { aspect-ratio: 16/10; overflow: hidden; background: var(--paper); }
+.c3d-card .img img { width: 100%; height: 100%; object-fit: cover; }
+.c3d-body { padding: 20px 26px 24px; }
+.c3d-body h3 { font-size: 21px; font-weight: 500; letter-spacing: -.01em; color: var(--ink); margin: 0 0 8px; }
+.c3d-price { font-size: 16px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.c3d-price del { font-size: 12.5px; color: var(--ink-3); font-weight: 400; margin-left: 8px; }
+.c3d-specs { font-size: 12.5px; color: var(--ink-3); }
+.c3d-card.is-center { box-shadow: 0 34px 80px rgba(0,0,0,.18); }
+.c3d-card:not(.is-center) .c3d-body { pointer-events: none; }
+
+.c3d-nav {
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 200;
+    width: 46px; height: 46px; border: 1px solid var(--line); border-radius: var(--r);
+    background: rgba(255,255,255,.95); color: var(--ink); font-size: 14px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: border-color .25s var(--ease), background .25s var(--ease);
+}
+.c3d-nav:hover { border-color: var(--ink); background: #fff; }
+.c3d-prev { left: max(16px, calc(50% - min(430px, 82vw) / 2 - 260px)); }
+.c3d-next { right: max(16px, calc(50% - min(430px, 82vw) / 2 - 260px)); }
+
+.c3d-dots { display: flex; gap: 8px; justify-content: center; margin-top: 30px; }
+.c3d-dot {
+    width: 26px; height: 2px; padding: 0; border: none; cursor: pointer;
+    background: var(--line); transition: background .3s var(--ease);
+}
+.c3d-dot.on { background: var(--ink); }
+
 .offer-tag {
     display: inline-block; font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
     background: var(--ink); color: #fff;
     padding: 3px 9px; border-radius: var(--r); vertical-align: 2px; margin-right: 7px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .rv { opacity: 1; transform: none; transition: none; }
+    .c3d-card { transition: opacity .3s ease; }
 }
 
 /* Promo cards */
@@ -444,9 +492,141 @@ include __DIR__ . '/header.php';
 
 @media (max-width: 768px) {
     .lx-hero-content { padding-bottom: 80px; }
-    .lx-feature-body { padding: 26px 24px 30px; }
-    .lx-feature-specs > div { padding: 0 16px; }
+    .c3d-nav { top: auto; bottom: -8px; transform: none; }
+    .c3d-prev { left: calc(50% - 60px); }
+    .c3d-next { right: calc(50% - 60px); }
+    .c3d-dots { margin-top: 66px; }
 }
 </style>
+
+<!-- ── Home page interactions: 3D carousel, scroll reveal, stat count-up ── -->
+<script>
+(function () {
+    'use strict';
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* ── 3D showcase carousel ─────────────────────────────────── */
+    (function () {
+        var vp = document.getElementById('c3dViewport');
+        if (!vp) return;
+        var cards = [].slice.call(vp.querySelectorAll('.c3d-card'));
+        var n = cards.length;
+        if (!n) return;
+        var dotsWrap = document.getElementById('c3dDots');
+        var cur = 0, timer = null;
+
+        var dots = [];
+        if (dotsWrap && n > 1) {
+            cards.forEach(function (_, i) {
+                var b = document.createElement('button');
+                b.className = 'c3d-dot';
+                b.setAttribute('aria-label', 'Go to vehicle ' + (i + 1));
+                b.addEventListener('click', function () { go(i); });
+                dotsWrap.appendChild(b);
+                dots.push(b);
+            });
+        }
+
+        function layout() {
+            cards.forEach(function (card, i) {
+                // shortest signed distance from the current card (wraps around)
+                var d = (i - cur + n) % n;
+                if (d > n / 2) d -= n;
+                var ad = Math.abs(d), x, z, ry, s, o;
+                if      (ad === 0) { x = 0;       z = 0;    ry = 0;       s = 1;   o = 1;   }
+                else if (ad === 1) { x = d * 58;  z = -190; ry = -d * 26; s = .85; o = .8;  }
+                else if (ad === 2) { x = d * 98;  z = -360; ry = -d * 36; s = .7;  o = .3;  }
+                else               { x = d * 120; z = -480; ry = -d * 40; s = .6;  o = 0;   }
+                card.style.transform = 'translateX(' + x + '%) translateZ(' + z + 'px) rotateY(' + ry + 'deg) scale(' + s + ')';
+                card.style.opacity = o;
+                card.style.zIndex = String(100 - ad);
+                card.style.pointerEvents = ad > 2 ? 'none' : 'auto';
+                card.classList.toggle('is-center', ad === 0);
+            });
+            dots.forEach(function (dd, i) { dd.classList.toggle('on', i === cur); });
+        }
+        function go(i)  { cur = (i + n) % n; layout(); restart(); }
+        function next() { go(cur + 1); }
+        function prev() { go(cur - 1); }
+
+        // Clicking a side card centres it; only the centre card follows its link
+        cards.forEach(function (card, i) {
+            card.addEventListener('click', function (e) {
+                if (i !== cur) { e.preventDefault(); go(i); }
+            });
+        });
+
+        var bPrev = document.getElementById('c3dPrev');
+        var bNext = document.getElementById('c3dNext');
+        if (bPrev) bPrev.addEventListener('click', prev);
+        if (bNext) bNext.addEventListener('click', next);
+
+        function restart() {
+            if (timer) clearInterval(timer);
+            timer = null;
+            if (!reduced && n > 1) timer = setInterval(next, 4500);
+        }
+        vp.addEventListener('mouseenter', function () { if (timer) { clearInterval(timer); timer = null; } });
+        vp.addEventListener('mouseleave', restart);
+
+        // Swipe
+        var sx = 0;
+        vp.addEventListener('touchstart', function (e) { sx = e.changedTouches[0].screenX; }, { passive: true });
+        vp.addEventListener('touchend', function (e) {
+            var dx = e.changedTouches[0].screenX - sx;
+            if (Math.abs(dx) > 40) (dx < 0 ? next : prev)();
+        }, { passive: true });
+
+        layout();
+        restart();
+    }());
+
+    /* ── Scroll reveal ────────────────────────────────────────── */
+    (function () {
+        var els = [].slice.call(document.querySelectorAll('.rv'));
+        if (!els.length) return;
+        if (reduced || !('IntersectionObserver' in window)) {
+            els.forEach(function (e) { e.classList.add('in'); });
+            return;
+        }
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (en) {
+                if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+            });
+        }, { threshold: .12, rootMargin: '0px 0px -40px 0px' });
+        els.forEach(function (e) { io.observe(e); });
+    }());
+
+    /* ── Stat count-up ────────────────────────────────────────── */
+    (function () {
+        var els = [].slice.call(document.querySelectorAll('[data-count]'));
+        if (!els.length) return;
+        function animate(el) {
+            var target = parseInt(el.getAttribute('data-count'), 10) || 0;
+            var suffix = el.getAttribute('data-suffix') || '';
+            if (reduced) { el.textContent = target.toLocaleString() + suffix; return; }
+            var t0 = null, dur = 1400;
+            function tick(ts) {
+                if (!t0) t0 = ts;
+                var p = Math.min(1, (ts - t0) / dur);
+                var eased = 1 - Math.pow(1 - p, 3);
+                el.textContent = Math.round(target * eased).toLocaleString() + suffix;
+                if (p < 1) requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
+        }
+        if (!('IntersectionObserver' in window)) {
+            els.forEach(animate);
+            return;
+        }
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (en) {
+                if (en.isIntersecting) { animate(en.target); io.unobserve(en.target); }
+            });
+        }, { threshold: .4 });
+        els.forEach(function (e) { io.observe(e); });
+    }());
+}());
+</script>
 
 <?php include __DIR__ . '/footer.php'; ?>
