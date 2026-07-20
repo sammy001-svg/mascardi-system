@@ -103,309 +103,123 @@ $__waClean   = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSet
 $pageTitle   = 'Quality Vehicles';
 $metaDesc    = "Browse {$totalStock} quality vehicles at {$companyName}. Transparent pricing, flexible financing. Find your dream car today.";
 
+// Feature blocks — top two featured cars (fallback: newest two)
+$featureBlocks = array_slice($featuredAll ?: $allCars, 0, 2);
+
+// Nav renders transparently over the video hero
+$navOverlay = true;
+
 include __DIR__ . '/header.php';
 ?>
 
 <!-- ═══════════════════════════════════════════════════════════
-     HERO
+     HERO — full-bleed autoplay video
 ═══════════════════════════════════════════════════════════════ -->
-<section id="hero" style="
-    background:
-        linear-gradient(105deg,
-            rgba(10,16,35,0.97)  0%,
-            rgba(10,16,35,0.88) 38%,
-            rgba(10,16,35,0.55) 62%,
-            rgba(10,16,35,0.25) 100%
-        ),
-        url('<?= BASE_URL ?>/assets/images/hero.webp') center center / cover no-repeat;
-    min-height: 88vh;
-    display: flex; align-items: center;
-    position: relative; overflow: hidden;
-    padding: 80px 0;
-">
-    <!-- Subtle grid overlay on text side only -->
-    <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:60px 60px;pointer-events:none"></div>
-
-    <div class="container-xl" style="position:relative;z-index:1">
-        <div class="row align-items-center g-5">
-            <div class="col-lg-6">
-                <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(37,99,235,.2);border:1px solid rgba(59,130,246,.3);border-radius:20px;padding:6px 16px;margin-bottom:24px;font-size:12.5px;color:#93c5fd;font-weight:600;letter-spacing:.5px">
-                    <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block"></span>
-                    <?= $totalStock ?> Vehicles Currently Available
-                </div>
-                <h1 style="font-size:clamp(36px,6vw,62px);font-weight:900;color:#fff;letter-spacing:-2px;line-height:1.07;margin:0 0 20px">
-                    Find Your<br>
-                    <span style="background:linear-gradient(135deg,#60a5fa,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
-                        Perfect Car
-                    </span>
-                </h1>
-                <p style="font-size:17px;color:rgba(255,255,255,.6);line-height:1.7;margin:0 0 36px;max-width:480px">
-                    Quality imported vehicles with transparent pricing and flexible financing options. Your dream car is waiting.
-                </p>
-
-                <!-- Search bar -->
-                <form method="GET" action="#inventory" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:10px;display:flex;gap:8px;flex-wrap:wrap">
-                    <input type="text" name="q" value="<?= htmlspecialchars($search) ?>"
-                           placeholder="Search make, model, body type..."
-                           style="flex:1;min-width:180px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;font-family:inherit;outline:none"
-                           onfocus="this.style.borderColor='rgba(96,165,250,.5)'"
-                           onblur="this.style.borderColor='rgba(255,255,255,.1)'">
-                    <select name="body" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;font-family:inherit;outline:none;cursor:pointer">
-                        <option value="" style="background:#1e3a8a">All Types</option>
-                        <?php foreach (array_keys($catCounts) as $bt): ?>
-                        <option value="<?= htmlspecialchars($bt) ?>" <?= $filterBody === $bt ? 'selected' : '' ?> style="background:#1e3a8a"><?= htmlspecialchars($bt) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <button type="submit"
-                            style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;white-space:nowrap;transition:box-shadow .15s"
-                            onmouseover="this.style.boxShadow='0 4px 20px rgba(37,99,235,.5)'"
-                            onmouseout="this.style.boxShadow='none'">
-                        <i class="fa fa-search"></i> Search Cars
-                    </button>
-                </form>
-
-                <!-- Quick stats -->
-                <div style="display:flex;gap:32px;margin-top:32px;flex-wrap:wrap">
-                    <?php
-                    $heroStats = [
-                        [$totalStock,                               'Vehicles in Stock'],
-                        [count($featuredAll),                        'Featured Picks'],
-                        [count($catCounts),                          'Categories'],
-                    ];
-                    foreach ($heroStats as [$val, $lbl]): ?>
-                    <div>
-                        <div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:-1px"><?= $val ?>+</div>
-                        <div style="font-size:12px;color:rgba(255,255,255,.4);font-weight:600;text-transform:uppercase;letter-spacing:.5px"><?= $lbl ?></div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <!-- Hero image / featured car card -->
-            <div class="col-lg-6 d-none d-lg-block">
-                <?php if ($featuredAll): $fc = $featuredAll[0]; $fcImg = $fc['primary_image'] ? thumbUrl('cars', $fc['primary_image']) : null; ?>
-                <div style="position:relative">
-                    <!-- Main featured car card -->
-                    <div style="background:rgba(255,255,255,.06);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:24px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.4)">
-                        <?php if ($fcImg): ?>
-                        <img src="<?= htmlspecialchars($fcImg) ?>" alt="<?= htmlspecialchars($fc['make'].' '.$fc['model']) ?>"
-                             style="width:100%;height:280px;object-fit:cover" fetchpriority="high" decoding="async">
-                        <?php else: ?>
-                        <div style="width:100%;height:280px;background:linear-gradient(135deg,rgba(37,99,235,.2),rgba(29,78,216,.1));display:flex;align-items:center;justify-content:center">
-                            <i class="fa fa-car-side" style="font-size:80px;color:rgba(255,255,255,.1)"></i>
-                        </div>
-                        <?php endif; ?>
-                        <div style="padding:24px">
-                            <div style="display:flex;justify-content:space-between;align-items:start">
-                                <div>
-                                    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px"><?= $fc['year'] ?> &bull; <?= ucfirst($fc['transmission'] ?? '') ?></div>
-                                    <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px"><?= htmlspecialchars($fc['make'].' '.$fc['model']) ?></div>
-                                </div>
-                                <div style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;color:#f59e0b;white-space:nowrap">
-                                    ⭐ Featured
-                                </div>
-                            </div>
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
-                                <div style="font-size:26px;font-weight:900;color:#60a5fa;letter-spacing:-1px">
-                                    <?php if (!empty($fc['offer_price']) && $fc['offer_price'] > 0): ?>
-                                        <span style="font-size:11px;background:#dc2626;color:#fff;padding:2px 8px;border-radius:12px;vertical-align:middle;margin-right:6px;font-weight:700">SALE</span>
-                                        KES <?= number_format((float)$fc['offer_price']) ?>
-                                        <?php if (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
-                                        <del style="font-size:14px;color:rgba(255,255,255,.4);font-weight:500;margin-left:6px">KES <?= number_format((float)$fc['asking_price']) ?></del>
-                                        <?php endif; ?>
-                                    <?php else: ?>
-                                        KES <?= number_format((float)$fc['asking_price']) ?>
-                                    <?php endif; ?>
-                                </div>
-                                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fc['id'] ?>"
-                                   style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;text-decoration:none;transition:box-shadow .15s"
-                                   onmouseover="this.style.boxShadow='0 4px 20px rgba(37,99,235,.5)'"
-                                   onmouseout="this.style.boxShadow='none'">
-                                    View Details →
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Floating badge -->
-                    <div style="position:absolute;top:-16px;left:24px;background:#22c55e;color:#fff;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;box-shadow:0 4px 14px rgba(34,197,94,.4)">
-                        ✓ Available Now
-                    </div>
-                </div>
-                <?php else: ?>
-                <!-- No featured car — show decorative stat cards -->
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                    <?php foreach ([['fa-car','Fleet','Quality Imports'],['fa-shield-check','Certified','All Verified'],['fa-wallet','Finance','Flexible Plans'],['fa-headset','Support','24/7 Service']] as [$ico,$t,$s]): ?>
-                    <div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:24px;text-align:center">
-                        <i class="fa <?= $ico ?>" style="font-size:28px;color:#60a5fa;margin-bottom:12px;display:block"></i>
-                        <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px"><?= $t ?></div>
-                        <div style="font-size:12px;color:rgba(255,255,255,.4)"><?= $s ?></div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
+<section id="hero" class="lx-hero">
+    <div class="lx-video-cover">
+        <iframe src="https://www.youtube-nocookie.com/embed/x7U4nFENdjU?autoplay=1&amp;mute=1&amp;controls=0&amp;loop=1&amp;playlist=x7U4nFENdjU&amp;playsinline=1&amp;rel=0&amp;iv_load_policy=3&amp;disablekb=1&amp;fs=0"
+                title="" allow="autoplay; encrypted-media" tabindex="-1"
+                referrerpolicy="no-referrer"></iframe>
     </div>
+    <div class="lx-hero-shade"></div>
 
-    <!-- Scroll indicator -->
-    <div style="position:absolute;bottom:32px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;animation:bounce 2s infinite">
-        <div style="width:1px;height:40px;background:linear-gradient(to bottom,rgba(255,255,255,0),rgba(255,255,255,.3))"></div>
-        <i class="fa fa-chevron-down" style="color:rgba(255,255,255,.3);font-size:12px"></i>
-    </div>
-</section>
-
-<style>
-@keyframes bounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(8px)} }
-</style>
-
-<!-- ═══════════════════════════════════════════════════════════
-     TRUST BAR
-═══════════════════════════════════════════════════════════════ -->
-<section style="background:#fff;border-bottom:1px solid #f1f5f9;padding:0">
-    <div class="container-xl">
-        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:0">
-            <?php
-            $trustItems = [
-                ['fa-car',            $totalStock . '+ Vehicles',     'In Stock Right Now'],
-                ['fa-shield-halved',  'Quality Assured',               'Every Car Verified'],
-                ['fa-credit-card',    'Finance Available',             'Flexible Payment Plans'],
-                ['fa-rotate',         'Trade-In Welcome',              'Fair Market Value'],
-                ['fa-headset',        '24/7 Support',                  'Always Here to Help'],
-            ];
-            foreach ($trustItems as [$ico, $title, $sub]): ?>
-            <div style="flex:1;min-width:160px;max-width:220px;padding:28px 20px;text-align:center;border-right:1px solid #f1f5f9">
-                <i class="fa <?= $ico ?>" style="font-size:24px;color:#2563eb;margin-bottom:10px;display:block"></i>
-                <div style="font-size:14px;font-weight:800;color:#0f172a;margin-bottom:3px"><?= $title ?></div>
-                <div style="font-size:12px;color:#94a3b8;font-weight:500"><?= $sub ?></div>
-            </div>
-            <?php endforeach; ?>
-        </div>
-    </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════
-     CATEGORIES
-═══════════════════════════════════════════════════════════════ -->
-<section id="categories" style="background:#f8fafc;padding:80px 0">
-    <div class="container-xl">
-        <div style="text-align:center;margin-bottom:52px">
-            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#2563eb;margin-bottom:10px">Browse by Type</div>
-            <h2 style="font-size:clamp(28px,4vw,42px);font-weight:900;color:#0f172a;letter-spacing:-1px;margin:0 0 14px">Explore by Category</h2>
-            <p style="font-size:16px;color:#64748b;max-width:520px;margin:0 auto;line-height:1.6">
-                Choose from our wide selection of vehicle categories. Every car is quality-checked and ready for the road.
-            </p>
-        </div>
-
-        <?php
-        $catIconMap = [
-            'SUV'      => ['fa-truck-monster',  '#2563eb', '#dbeafe'],
-            'Saloon'   => ['fa-car',            '#7c3aed', '#f3e8ff'],
-            'Pick-Up'  => ['fa-truck-pickup',   '#d97706', '#fef3c7'],
-            'Van'      => ['fa-van-shuttle',    '#0891b2', '#e0f2fe'],
-            'Truck'    => ['fa-truck',          '#64748b', '#f1f5f9'],
-            'Hatchback'=> ['fa-car-side',       '#16a34a', '#dcfce7'],
-            'Coupe'    => ['fa-car-side',       '#e11d48', '#ffe4e6'],
-            'Bus'      => ['fa-bus',            '#0f172a', '#f1f5f9'],
-            'Minibus'  => ['fa-bus-simple',     '#7c3aed', '#f3e8ff'],
-            'Other'    => ['fa-car',            '#64748b', '#f8fafc'],
-        ];
-        ?>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px">
-            <?php foreach ($catCounts as $cat => $count):
-                [$ico, $color, $bg] = $catIconMap[$cat] ?? ['fa-car', '#64748b', '#f1f5f9'];
-                $isActive = $filterBody === $cat;
-            ?>
-            <a href="?body=<?= urlencode($cat) ?>#inventory"
-               style="background:<?= $isActive ? $color : '#fff' ?>;border:2px solid <?= $isActive ? $color : '#e2e8f0' ?>;border-radius:16px;padding:24px 16px;text-align:center;text-decoration:none;transition:all .2s;display:block;cursor:pointer"
-               onmouseover="if(!<?= $isActive ? 'true' : 'false' ?>){this.style.borderColor='<?= $color ?>';this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 32px rgba(0,0,0,.1)'}"
-               onmouseout="if(!<?= $isActive ? 'true' : 'false' ?>){this.style.borderColor='#e2e8f0';this.style.transform='';this.style.boxShadow=''}">
-                <div style="width:56px;height:56px;border-radius:14px;background:<?= $isActive ? 'rgba(255,255,255,.2)' : $bg ?>;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:22px;color:<?= $isActive ? '#fff' : $color ?>">
-                    <i class="fa <?= $ico ?>"></i>
-                </div>
-                <div style="font-size:15px;font-weight:800;color:<?= $isActive ? '#fff' : '#0f172a' ?>;margin-bottom:4px"><?= htmlspecialchars($cat) ?></div>
-                <div style="font-size:13px;color:<?= $isActive ? 'rgba(255,255,255,.7)' : '#94a3b8' ?>;font-weight:600"><?= $count ?> <?= $count === 1 ? 'car' : 'cars' ?></div>
-            </a>
-            <?php endforeach; ?>
-
-            <?php if (!$catCounts): ?>
-            <div style="grid-column:1/-1;text-align:center;padding:40px;color:#94a3b8">
-                <i class="fa fa-car" style="font-size:40px;display:block;margin-bottom:12px"></i>
-                No vehicles listed yet.
-            </div>
+    <div class="lx-hero-content">
+        <div class="lx-label" style="color:rgba(255,255,255,.65);margin-bottom:18px"><?= $totalStock ?> Vehicles Available Now</div>
+        <h1>Extraordinary cars.<br>Effortless ownership.</h1>
+        <p>Quality imported vehicles, transparent pricing and flexible financing — hand-inspected and ready for the road.</p>
+        <div class="lx-hero-ctas">
+            <a href="#inventory" class="btn-lx-light">Explore Inventory</a>
+            <?php if ($__waClean): ?>
+            <a href="https://wa.me/<?= $__waClean ?>?text=<?= urlencode('Hi, I\'d like to book a test drive.') ?>"
+               target="_blank" rel="noopener" class="btn-lx-ghost">Book a Test Drive</a>
             <?php endif; ?>
         </div>
     </div>
+
+    <div class="lx-hero-scroll" aria-hidden="true">
+        <span></span>
+    </div>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════
-     FEATURED VEHICLES (only shown if featured cars exist)
+     STAT STRIP
 ═══════════════════════════════════════════════════════════════ -->
-<?php if (!empty($featuredAll)): ?>
-<section style="background:#fff;padding:80px 0">
-    <div class="container-xl">
-        <div style="text-align:center;margin-bottom:52px">
-            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#f59e0b;margin-bottom:10px">
-                <i class="fa fa-star me-1"></i>Staff Picks
+<section style="background:var(--white);border-bottom:1px solid var(--line)">
+    <div class="lx-wrap">
+        <div class="lx-stats">
+            <?php foreach ([
+                [$totalStock . '+',        'Vehicles in Stock'],
+                [count($catCounts),        'Body Types'],
+                ['100%',                   'Inspected & Verified'],
+                ['Finance',                'Flexible Plans Available'],
+            ] as [$val, $lbl]): ?>
+            <div class="lx-stat">
+                <div class="v"><?= $val ?></div>
+                <div class="l"><?= $lbl ?></div>
             </div>
-            <h2 style="font-size:clamp(28px,4vw,42px);font-weight:900;color:#0f172a;letter-spacing:-1px;margin:0 0 14px">Featured Vehicles</h2>
-            <p style="font-size:16px;color:#64748b;max-width:500px;margin:0 auto">Handpicked by our experts — the finest vehicles in our current inventory.</p>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     DUAL FEATURE BLOCKS — flagship vehicles
+═══════════════════════════════════════════════════════════════ -->
+<?php if ($featureBlocks): ?>
+<section style="background:var(--paper);padding:96px 0">
+    <div class="lx-wrap">
+        <div style="text-align:center;margin-bottom:64px">
+            <div class="lx-label" style="margin-bottom:14px">Featured</div>
+            <h2 class="lx-h2">Handpicked from our showroom</h2>
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px">
-            <?php foreach (array_slice($featuredAll, 0, 3) as $fc):
-                $fcImg = $fc['primary_image'] ? thumbUrl('cars', $fc['primary_image']) : null;
-                $waMsg = urlencode("Hi, I'm interested in the {$fc['year']} {$fc['make']} {$fc['model']} (KES " . number_format((float)$fc['asking_price']) . ").");
+        <div class="lx-feature-grid">
+            <?php foreach ($featureBlocks as $fb):
+                $fbImg   = $fb['primary_image'] ? thumbUrl('cars', $fb['primary_image']) : null;
+                $fbPrice = (!empty($fb['offer_price']) && $fb['offer_price'] > 0) ? (float)$fb['offer_price'] : (float)($fb['asking_price'] ?? 0);
+                $fbIsOffer = !empty($fb['offer_price']) && $fb['offer_price'] > 0;
+                $fbWa    = urlencode("Hi, I'm interested in the {$fb['year']} {$fb['make']} {$fb['model']}.");
             ?>
-            <div class="featured-card">
-                <!-- Image -->
-                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fc['id'] ?>" class="featured-img-wrap">
-                    <?php if ($fcImg): ?>
-                    <img src="<?= htmlspecialchars($fcImg) ?>" alt="<?= htmlspecialchars($fc['make'].' '.$fc['model']) ?>" loading="lazy" decoding="async">
+            <div class="lx-feature">
+                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fb['id'] ?>" class="lx-feature-img">
+                    <?php if ($fbImg): ?>
+                    <img src="<?= htmlspecialchars($fbImg) ?>" alt="<?= htmlspecialchars($fb['make'].' '.$fb['model']) ?>" loading="lazy" decoding="async">
                     <?php else: ?>
-                    <div class="featured-no-img"><i class="fa fa-car-side"></i></div>
-                    <?php endif; ?>
-                    <div class="featured-badge"><i class="fa fa-star me-1"></i>Featured</div>
-                    <?php if ($fc['image_count'] > 1): ?>
-                    <div class="featured-count"><i class="fa fa-images me-1"></i><?= $fc['image_count'] ?></div>
+                    <div class="lx-noimg"><i class="fa fa-car-side"></i></div>
                     <?php endif; ?>
                 </a>
-                <!-- Body -->
-                <div class="featured-body">
-                    <div class="featured-meta">
-                        <?= $fc['year'] ?>
-                        <?php if ($fc['body_type']): ?> &bull; <?= $fc['body_type'] ?><?php endif; ?>
-                        <?php if ($fc['fuel_type']): ?> &bull; <?= ucfirst($fc['fuel_type']) ?><?php endif; ?>
-                    </div>
-                    <h3 class="featured-title">
-                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fc['id'] ?>">
-                            <?= htmlspecialchars($fc['make'] . ' ' . $fc['model']) ?>
-                        </a>
-                    </h3>
-                    <div class="featured-specs">
-                        <?php if ($fc['transmission']): ?><span><i class="fa fa-gears me-1"></i><?= ucfirst($fc['transmission']) ?></span><?php endif; ?>
-                        <?php if ($fc['mileage']):     ?><span><i class="fa fa-gauge me-1"></i><?= number_format($fc['mileage']) ?> km</span><?php endif; ?>
-                        <?php if ($fc['engine_cc']):   ?><span><i class="fa fa-cog me-1"></i><?= number_format($fc['engine_cc']) ?> cc</span><?php endif; ?>
-                        <?php if ($fc['color']):       ?><span><i class="fa fa-palette me-1"></i><?= htmlspecialchars($fc['color']) ?></span><?php endif; ?>
-                    </div>
-                    <div class="featured-price">
-                        <?php if (!empty($fc['offer_price']) && $fc['offer_price'] > 0): ?>
-                            <span style="font-size:11px;background:#dc2626;color:#fff;padding:2px 8px;border-radius:12px;vertical-align:middle;margin-right:6px;font-weight:700">SALE</span>
-                            KES <?= number_format((float)$fc['offer_price']) ?>
-                            <?php if (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
-                            <del style="font-size:14px;color:#94a3b8;font-weight:500;display:block;margin-top:2px">KES <?= number_format((float)$fc['asking_price']) ?></del>
+                <div class="lx-feature-body">
+                    <div class="lx-label" style="margin-bottom:8px"><?= $fb['year'] ?><?= $fb['body_type'] ? ' · ' . htmlspecialchars($fb['body_type']) : '' ?></div>
+                    <h3><?= htmlspecialchars($fb['make'] . ' ' . $fb['model']) ?></h3>
+                    <div class="lx-feature-price">
+                        <?php if ($fbPrice > 0): ?>
+                            <?= $fbIsOffer ? '<span class="offer-tag">Offer</span>' : 'From' ?>
+                            KES <?= number_format($fbPrice) ?>
+                            <?php if ($fbIsOffer && !empty($fb['asking_price'])): ?>
+                            <del>KES <?= number_format((float)$fb['asking_price']) ?></del>
                             <?php endif; ?>
-                        <?php elseif (!empty($fc['asking_price']) && $fc['asking_price'] > 0): ?>
-                            KES <?= number_format((float)$fc['asking_price']) ?>
                         <?php else: ?>
-                            <span style="font-size:15px;font-weight:700;color:#64748b">Contact for Price</span>
+                            Price on request
                         <?php endif; ?>
                     </div>
-                    <div class="featured-actions">
-                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fc['id'] ?>" class="btn-view">View Details <i class="fa fa-arrow-right ms-1"></i></a>
+                    <div class="lx-feature-specs">
+                        <?php if ($fb['mileage']): ?>
+                        <div><div class="sv"><?= number_format($fb['mileage']) ?></div><div class="sl">km</div></div>
+                        <?php endif; ?>
+                        <?php if ($fb['engine_cc']): ?>
+                        <div><div class="sv"><?= number_format($fb['engine_cc']) ?></div><div class="sl">cc</div></div>
+                        <?php endif; ?>
+                        <?php if ($fb['transmission']): ?>
+                        <div><div class="sv"><?= ucfirst($fb['transmission']) ?></div><div class="sl">Transmission</div></div>
+                        <?php endif; ?>
+                        <?php if ($fb['fuel_type']): ?>
+                        <div><div class="sv"><?= ucfirst($fb['fuel_type']) ?></div><div class="sl">Fuel</div></div>
+                        <?php endif; ?>
+                    </div>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap">
+                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fb['id'] ?>" class="btn-lx">View Details</a>
                         <?php if ($__waClean): ?>
-                        <a href="https://wa.me/<?= $__waClean ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="btn-whatsapp-sm">
-                            <i class="fa-brands fa-whatsapp"></i>
-                        </a>
+                        <a href="https://wa.me/<?= $__waClean ?>?text=<?= $fbWa ?>" target="_blank" rel="noopener" class="btn-lx-ghost-dark">Enquire</a>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -417,45 +231,100 @@ include __DIR__ . '/header.php';
 <?php endif; ?>
 
 <!-- ═══════════════════════════════════════════════════════════
+     BRAND STATEMENT
+═══════════════════════════════════════════════════════════════ -->
+<section id="story" style="background:var(--white);padding:110px 0;text-align:center">
+    <div class="lx-wrap" style="max-width:900px">
+        <h2 class="lx-h2" style="font-size:clamp(30px,4.6vw,54px)">
+            Sourced worldwide.<br>
+            Inspected in Nairobi.<br>
+            <span style="color:var(--bronze)">Ready for your road.</span>
+        </h2>
+        <p style="font-size:16px;color:var(--ink-2);line-height:1.8;max-width:560px;margin:28px auto 0">
+            Every vehicle at <?= htmlspecialchars($companyName) ?> passes a thorough multi-point
+            inspection before it reaches the showroom floor. What you see is exactly what you get —
+            no hidden fees, no surprises.
+        </p>
+    </div>
+
+    <div class="lx-wrap" style="margin-top:64px">
+        <div class="lx-promo-grid">
+            <a href="<?= BASE_URL ?>/showroom/?sort=price_asc#inventory" class="lx-promo">
+                <div class="lx-label" style="margin-bottom:10px">Current Offers</div>
+                <div class="t">Explore vehicles on offer</div>
+                <span class="arr"><i class="fa fa-arrow-right"></i></span>
+            </a>
+            <a href="<?= BASE_URL ?>/showroom/contact.php" class="lx-promo">
+                <div class="lx-label" style="margin-bottom:10px">Visit Us</div>
+                <div class="t">Find our showroom</div>
+                <span class="arr"><i class="fa fa-arrow-right"></i></span>
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECOND VIDEO — brand film
+═══════════════════════════════════════════════════════════════ -->
+<section class="lx-film">
+    <div class="lx-video-cover">
+        <iframe src="https://www.youtube-nocookie.com/embed/P3JHd_cHHCM?autoplay=1&amp;mute=1&amp;controls=0&amp;loop=1&amp;playlist=P3JHd_cHHCM&amp;playsinline=1&amp;rel=0&amp;iv_load_policy=3&amp;disablekb=1&amp;fs=0"
+                title="" allow="autoplay; encrypted-media" tabindex="-1" loading="lazy"
+                referrerpolicy="no-referrer"></iframe>
+    </div>
+    <div class="lx-film-shade"></div>
+    <div class="lx-film-caption">
+        <div class="lx-label" style="color:rgba(255,255,255,.65);margin-bottom:14px">The Mascardi Experience</div>
+        <h2 style="font-size:clamp(26px,3.6vw,44px);font-weight:300;color:#fff;margin:0 0 26px;line-height:1.15">
+            A new standard for<br>car buying in Kenya
+        </h2>
+        <a href="#inventory" class="btn-lx-light">Browse the Collection</a>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
      FULL INVENTORY
 ═══════════════════════════════════════════════════════════════ -->
-<section id="inventory" style="background:#f8fafc;padding:80px 0">
-    <div class="container-xl">
+<section id="inventory" style="background:var(--paper);padding:96px 0">
+    <div class="lx-wrap">
 
         <!-- Section header -->
-        <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;margin-bottom:40px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;margin-bottom:44px">
             <div>
-                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#2563eb;margin-bottom:10px">Complete Inventory</div>
-                <h2 style="font-size:clamp(26px,4vw,38px);font-weight:900;color:#0f172a;letter-spacing:-1px;margin:0">
-                    All Available Vehicles
-                </h2>
+                <div class="lx-label" style="margin-bottom:12px">Inventory</div>
+                <h2 class="lx-h2">All available vehicles</h2>
             </div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                <span style="font-size:14px;color:#64748b">
-                    <strong style="color:#0f172a"><?= $filteredCount ?></strong> vehicle<?= $filteredCount !== 1 ? 's' : '' ?>
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                <span style="font-size:13px;color:var(--ink-2)">
+                    <strong style="color:var(--ink);font-weight:600"><?= $filteredCount ?></strong> vehicle<?= $filteredCount !== 1 ? 's' : '' ?>
                     <?= $isFiltered ? 'found' : 'available' ?>
                 </span>
                 <?php if ($isFiltered): ?>
-                <a href="#inventory" style="font-size:13px;color:#dc2626;font-weight:600;text-decoration:none;border:1px solid #fca5a5;border-radius:7px;padding:4px 12px;background:#fef2f2">
-                    <i class="fa fa-xmark me-1"></i>Clear filters
+                <a href="<?= BASE_URL ?>/showroom/#inventory" style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--ink);border:1px solid var(--ink);border-radius:var(--r);padding:7px 14px">
+                    Clear Filters
                 </a>
                 <?php endif; ?>
             </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:260px 1fr;gap:28px;align-items:start">
+        <div class="lx-inv-layout">
 
             <!-- ── Sidebar Filters ─────────────────────── -->
-            <div style="background:#fff;border-radius:20px;border:1px solid #e2e8f0;overflow:hidden;position:sticky;top:90px;box-shadow:0 4px 20px rgba(0,0,0,.05)">
-                <div style="padding:20px 22px;border-bottom:1px solid #f1f5f9;font-weight:800;font-size:15px;color:#0f172a;display:flex;align-items:center;justify-content:space-between">
-                    <span><i class="fa fa-sliders me-2 text-primary"></i>Filter</span>
+            <div class="lx-filter">
+                <div class="lx-filter-head">
+                    <span class="lx-label" style="color:var(--ink)">Filter</span>
                     <?php if ($isFiltered): ?>
-                    <a href="#inventory" style="font-size:12px;color:#94a3b8;font-weight:600;text-decoration:none">Reset</a>
+                    <a href="<?= BASE_URL ?>/showroom/#inventory" style="font-size:11px;color:var(--ink-3);letter-spacing:.1em;text-transform:uppercase">Reset</a>
                     <?php endif; ?>
                 </div>
-                <form method="GET" action="#inventory" style="padding:20px 22px;display:flex;flex-direction:column;gap:20px">
+                <form method="GET" action="#inventory" style="padding:22px;display:flex;flex-direction:column;gap:22px">
                     <?php if ($search): ?><input type="hidden" name="q" value="<?= htmlspecialchars($search) ?>"><?php endif; ?>
                     <?php if ($sort !== 'featured'): ?><input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>"><?php endif; ?>
+
+                    <div>
+                        <label class="lx-flabel">Search</label>
+                        <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Make, model, colour…" class="lx-input">
+                    </div>
 
                     <?php
                     $filterGroups = [
@@ -469,10 +338,8 @@ include __DIR__ . '/header.php';
                     $ucfirst = $fg[5] ?? false;
                     ?>
                     <div>
-                        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;display:block;margin-bottom:8px"><?= $label ?></label>
-                        <select name="<?= $name ?>" style="width:100%;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 12px;font-size:13.5px;font-family:inherit;color:#0f172a;background:#fff;cursor:pointer;outline:none;transition:border-color .15s"
-                                onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'"
-                                onchange="this.form.submit()">
+                        <label class="lx-flabel"><?= $label ?></label>
+                        <select name="<?= $name ?>" class="lx-input" onchange="this.form.submit()">
                             <option value=""><?= $placeholder ?></option>
                             <?php foreach ($options as $opt): ?>
                             <option value="<?= htmlspecialchars($opt) ?>" <?= $current === $opt ? 'selected' : '' ?>>
@@ -483,71 +350,50 @@ include __DIR__ . '/header.php';
                     </div>
                     <?php endforeach; ?>
 
-                    <!-- Price range -->
                     <div>
-                        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;display:block;margin-bottom:8px">
-                            Price Range (KES)
-                        </label>
+                        <label class="lx-flabel">Price Range (KES)</label>
                         <div style="display:flex;gap:8px;align-items:center">
-                            <input type="number" name="min" value="<?= $filterMin ?: '' ?>" placeholder="Min"
-                                   style="flex:1;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 10px;font-size:13px;font-family:inherit;outline:none;width:0;min-width:0"
-                                   onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
-                            <span style="color:#94a3b8;flex-shrink:0;font-size:12px">–</span>
-                            <input type="number" name="max" value="<?= $filterMax ?: '' ?>" placeholder="Max"
-                                   style="flex:1;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 10px;font-size:13px;font-family:inherit;outline:none;width:0;min-width:0"
-                                   onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
+                            <input type="number" name="min" value="<?= $filterMin ?: '' ?>" placeholder="Min" class="lx-input" style="width:0;min-width:0;flex:1">
+                            <span style="color:var(--ink-3);font-size:12px">–</span>
+                            <input type="number" name="max" value="<?= $filterMax ?: '' ?>" placeholder="Max" class="lx-input" style="width:0;min-width:0;flex:1">
                         </div>
                     </div>
 
-                    <!-- Year range -->
                     <div>
-                        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;display:block;margin-bottom:8px">Year</label>
+                        <label class="lx-flabel">Year</label>
                         <div style="display:flex;gap:8px;align-items:center">
-                            <input type="number" name="year_min" value="<?= $filterYearMin ?: '' ?>"
-                                   placeholder="<?= $yearRange['min_yr'] ?>"
-                                   min="<?= $yearRange['min_yr'] ?>" max="<?= $yearRange['max_yr'] ?>"
-                                   style="flex:1;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 10px;font-size:13px;font-family:inherit;outline:none;width:0;min-width:0"
-                                   onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
-                            <span style="color:#94a3b8;flex-shrink:0;font-size:12px">–</span>
-                            <input type="number" name="year_max" value="<?= $filterYearMax ?: '' ?>"
-                                   placeholder="<?= $yearRange['max_yr'] ?>"
-                                   min="<?= $yearRange['min_yr'] ?>" max="<?= $yearRange['max_yr'] ?>"
-                                   style="flex:1;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 10px;font-size:13px;font-family:inherit;outline:none;width:0;min-width:0"
-                                   onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
+                            <input type="number" name="year_min" value="<?= $filterYearMin ?: '' ?>" placeholder="<?= $yearRange['min_yr'] ?>"
+                                   min="<?= $yearRange['min_yr'] ?>" max="<?= $yearRange['max_yr'] ?>" class="lx-input" style="width:0;min-width:0;flex:1">
+                            <span style="color:var(--ink-3);font-size:12px">–</span>
+                            <input type="number" name="year_max" value="<?= $filterYearMax ?: '' ?>" placeholder="<?= $yearRange['max_yr'] ?>"
+                                   min="<?= $yearRange['min_yr'] ?>" max="<?= $yearRange['max_yr'] ?>" class="lx-input" style="width:0;min-width:0;flex:1">
                         </div>
                     </div>
 
-                    <!-- Max mileage -->
                     <div>
-                        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;display:block;margin-bottom:8px">Max Mileage (km)</label>
-                        <input type="number" name="mile_max" value="<?= $filterMileMax ?: '' ?>" placeholder="e.g. 80000" min="0"
-                               style="width:100%;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none"
-                               onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
+                        <label class="lx-flabel">Max Mileage (km)</label>
+                        <input type="number" name="mile_max" value="<?= $filterMileMax ?: '' ?>" placeholder="e.g. 80000" min="0" class="lx-input">
                     </div>
 
-                    <button type="submit" style="width:100%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:12px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;transition:box-shadow .15s;font-family:inherit"
-                            onmouseover="this.style.boxShadow='0 4px 16px rgba(37,99,235,.4)'"
-                            onmouseout="this.style.boxShadow='none'">
-                        <i class="fa fa-search me-1"></i> Apply Filters
-                    </button>
+                    <button type="submit" class="btn-lx" style="width:100%">Apply Filters</button>
                 </form>
             </div>
 
             <!-- ── Car Grid ─────────────────────────────── -->
             <div>
                 <!-- Sort + count bar -->
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                        <div style="font-size:13.5px;color:#64748b">
-                            Showing <strong style="color:#0f172a"><?= $filteredCount ?></strong> of <strong style="color:#0f172a"><?= $totalStock ?></strong> vehicles
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:12px">
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                        <div style="font-size:13px;color:var(--ink-2)">
+                            Showing <strong style="color:var(--ink);font-weight:600"><?= $filteredCount ?></strong> of <strong style="color:var(--ink);font-weight:600"><?= $totalStock ?></strong>
                         </div>
                         <button id="favFilterBtn" onclick="toggleFavFilter()"
-                                style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:700;color:#0f172a;cursor:pointer;display:flex;align-items:center;gap:5px">
-                            <i class="fa fa-heart" style="color:#dc2626"></i> Saved
-                            <span id="favCount" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;font-weight:700">0</span>
+                                style="background:none;border:1px solid var(--line);border-radius:var(--r);padding:6px 14px;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit">
+                            <i class="fa fa-heart" style="font-size:11px"></i> Saved
+                            <span id="favCount" style="display:none;background:var(--ink);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px">0</span>
                         </button>
                     </div>
-                    <form method="GET" action="#inventory" style="display:flex;align-items:center;gap:8px">
+                    <form method="GET" action="#inventory" style="display:flex;align-items:center;gap:10px">
                         <?php foreach (['make','body','fuel','trans','q'] as $k): ?>
                         <?php if (isset($_GET[$k]) && $_GET[$k] !== ''): ?>
                         <input type="hidden" name="<?= $k ?>" value="<?= htmlspecialchars($_GET[$k]) ?>">
@@ -558,9 +404,8 @@ include __DIR__ . '/header.php';
                         <?php if ($filterYearMin): ?><input type="hidden" name="year_min" value="<?= $filterYearMin ?>"><?php endif; ?>
                         <?php if ($filterYearMax): ?><input type="hidden" name="year_max" value="<?= $filterYearMax ?>"><?php endif; ?>
                         <?php if ($filterMileMax): ?><input type="hidden" name="mile_max" value="<?= $filterMileMax ?>"><?php endif; ?>
-                        <span style="font-size:13px;color:#64748b;white-space:nowrap">Sort by:</span>
-                        <select name="sort" style="border:1.5px solid #e2e8f0;border-radius:9px;padding:7px 12px;font-size:13px;font-family:inherit;outline:none;cursor:pointer;background:#fff;color:#0f172a"
-                                onchange="this.form.submit()">
+                        <span class="lx-flabel" style="margin:0;white-space:nowrap">Sort</span>
+                        <select name="sort" class="lx-input" style="width:auto;padding:8px 12px" onchange="this.form.submit()">
                             <option value="featured"   <?= $sort==='featured'   ?'selected':'' ?>>Featured First</option>
                             <option value="newest"     <?= $sort==='newest'     ?'selected':'' ?>>Newest Arrivals</option>
                             <option value="price_asc"  <?= $sort==='price_asc'  ?'selected':'' ?>>Price: Low to High</option>
@@ -572,13 +417,11 @@ include __DIR__ . '/header.php';
 
                 <?php if (!$filteredCars): ?>
                 <!-- Empty state -->
-                <div style="background:#fff;border-radius:20px;border:1px solid #e2e8f0;padding:60px 24px;text-align:center">
-                    <div style="font-size:56px;margin-bottom:16px">🔍</div>
-                    <h3 style="font-size:20px;font-weight:800;color:#0f172a;margin-bottom:8px">No vehicles found</h3>
-                    <p style="color:#64748b;margin-bottom:20px">Try adjusting your filters or clearing your search.</p>
-                    <a href="#inventory" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border-radius:10px;padding:11px 24px;font-weight:700;text-decoration:none;font-size:14px">
-                        View All Vehicles
-                    </a>
+                <div style="background:var(--white);border:1px solid var(--line);border-radius:var(--r);padding:72px 24px;text-align:center">
+                    <div class="lx-label" style="margin-bottom:14px">No Results</div>
+                    <h3 style="font-size:22px;font-weight:400;margin:0 0 10px">No vehicles found</h3>
+                    <p style="color:var(--ink-2);font-size:14px;margin:0 0 26px">Try adjusting your filters or clearing your search.</p>
+                    <a href="<?= BASE_URL ?>/showroom/#inventory" class="btn-lx">View All Vehicles</a>
                 </div>
                 <?php else: ?>
 
@@ -593,63 +436,56 @@ include __DIR__ . '/header.php';
                     <div class="inv-card<?= $isReserved ? ' inv-card-reserved' : '' ?>" data-car-id="<?= $car['id'] ?>" data-car-name="<?= htmlspecialchars($car['year'].' '.$car['make'].' '.$car['model']) ?>">
                         <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="inv-img-wrap">
                             <?php if ($isReserved): ?>
-                            <span class="inv-badge-reserved"><i class="fa fa-bookmark me-1"></i>Reserved</span>
+                            <span class="inv-badge">Reserved</span>
                             <?php elseif ($car['featured']): ?>
-                            <span class="inv-badge-featured"><i class="fa fa-star me-1"></i>Featured</span>
+                            <span class="inv-badge inv-badge-bronze">Featured</span>
                             <?php elseif ($isNew): ?>
-                            <span class="inv-badge-new">New</span>
+                            <span class="inv-badge">New Arrival</span>
                             <?php endif; ?>
                             <?php if ($car['image_count'] > 1): ?>
-                            <span class="inv-badge-photos"><i class="fa fa-images me-1"></i><?= $car['image_count'] ?></span>
+                            <span class="inv-photos"><i class="fa fa-images"></i> <?= $car['image_count'] ?></span>
                             <?php endif; ?>
                             <?php if ($img): ?>
                             <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($car['make'].' '.$car['model']) ?>" loading="lazy" decoding="async">
                             <?php else: ?>
-                            <div class="inv-no-img"><i class="fa fa-car-side"></i></div>
+                            <div class="lx-noimg"><i class="fa fa-car-side"></i></div>
                             <?php endif; ?>
                         </a>
                         <div class="inv-body">
-                            <div class="inv-meta">
-                                <?= $car['year'] ?>
-                                <?php if ($car['transmission']): ?> &bull; <?= ucfirst($car['transmission']) ?><?php endif; ?>
-                                <?php if ($car['fuel_type']): ?> &bull; <?= ucfirst($car['fuel_type']) ?><?php endif; ?>
-                            </div>
+                            <div class="inv-meta"><?= $car['year'] ?><?= $car['body_type'] ? ' · ' . htmlspecialchars($car['body_type']) : '' ?></div>
                             <h3 class="inv-title">
                                 <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>">
                                     <?= htmlspecialchars($car['make'] . ' ' . $car['model']) ?>
                                 </a>
                             </h3>
                             <div class="inv-specs">
-                                <?php if ($car['body_type']): ?><span><?= htmlspecialchars($car['body_type']) ?></span><?php endif; ?>
-                                <?php if ($car['mileage']):   ?><span><?= number_format($car['mileage']) ?> km</span><?php endif; ?>
-                                <?php if ($car['color']):     ?><span><?= htmlspecialchars($car['color']) ?></span><?php endif; ?>
+                                <?php if ($car['mileage']):      ?><span><i class="fa fa-gauge-high"></i><?= number_format($car['mileage']) ?> km</span><?php endif; ?>
+                                <?php if ($car['transmission']): ?><span><i class="fa fa-gears"></i><?= ucfirst($car['transmission']) ?></span><?php endif; ?>
+                                <?php if ($car['fuel_type']):    ?><span><i class="fa fa-gas-pump"></i><?= ucfirst($car['fuel_type']) ?></span><?php endif; ?>
+                                <?php if ($car['engine_cc']):    ?><span><i class="fa fa-car-side"></i><?= number_format($car['engine_cc']) ?> cc</span><?php endif; ?>
                             </div>
                             <div class="inv-price">
                                 <?php if ($isReserved): ?>
-                                    <span style="font-size:12px;background:#7c3aed;color:#fff;padding:3px 10px;border-radius:10px;font-weight:700;display:inline-block">
-                                        <i class="fa fa-bookmark me-1"></i>Reserved
-                                    </span>
+                                    <span class="reserved-tag">Reserved</span>
                                     <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
-                                    <div style="font-size:13px;color:#94a3b8;font-weight:500;margin-top:3px">KES <?= number_format((float)$car['asking_price']) ?></div>
+                                    <span style="font-size:13px;color:var(--ink-3);font-weight:400;margin-left:8px">KES <?= number_format((float)$car['asking_price']) ?></span>
                                     <?php endif; ?>
                                 <?php elseif (!empty($car['offer_price']) && $car['offer_price'] > 0): ?>
-                                    <span style="font-size:10px;background:#dc2626;color:#fff;padding:2px 7px;border-radius:10px;vertical-align:middle;margin-right:5px;font-weight:700">SALE</span>
+                                    <span class="offer-tag">Offer</span>
                                     KES <?= number_format((float)$car['offer_price']) ?>
                                     <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
-                                    <del style="font-size:13px;color:#94a3b8;font-weight:500;display:block;margin-top:1px">KES <?= number_format((float)$car['asking_price']) ?></del>
+                                    <del>KES <?= number_format((float)$car['asking_price']) ?></del>
                                     <?php endif; ?>
                                 <?php elseif (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
                                     KES <?= number_format((float)$car['asking_price']) ?>
                                 <?php else: ?>
-                                    <span style="font-size:14px;font-weight:700;color:#64748b">Contact for Price</span>
+                                    <span style="font-weight:400;color:var(--ink-2)">Price on request</span>
                                 <?php endif; ?>
                             </div>
                             <div class="inv-actions">
-                                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="inv-btn-view">
-                                    View Details
-                                </a>
+                                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="inv-btn-view">View Details</a>
                                 <?php if (!$isReserved && $__waClean): ?>
-                                <a href="https://wa.me/<?= $__waClean ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="inv-btn-wa" title="Enquire on WhatsApp">
+                                <a href="https://wa.me/<?= $__waClean ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="inv-btn-icon" title="Enquire on WhatsApp">
                                     <i class="fa-brands fa-whatsapp"></i>
                                 </a>
                                 <?php endif; ?>
@@ -674,36 +510,27 @@ include __DIR__ . '/header.php';
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════
-     WHY CHOOSE US
+     WHY MASCARDI
 ═══════════════════════════════════════════════════════════════ -->
-<section id="why-us" style="background:var(--navy);padding:88px 0;position:relative;overflow:hidden">
-    <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);background-size:50px 50px;pointer-events:none"></div>
-    <div class="container-xl" style="position:relative;z-index:1">
-        <div style="text-align:center;margin-bottom:60px">
-            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#60a5fa;margin-bottom:10px">Our Commitment</div>
-            <h2 style="font-size:clamp(28px,4vw,42px);font-weight:900;color:#fff;letter-spacing:-1px;margin:0 0 14px">Why Choose Us?</h2>
-            <p style="font-size:16px;color:rgba(255,255,255,.5);max-width:520px;margin:0 auto;line-height:1.6">We're committed to making your car buying experience simple, transparent, and exceptional.</p>
+<section style="background:var(--white);padding:100px 0;border-top:1px solid var(--line)">
+    <div class="lx-wrap">
+        <div style="text-align:center;margin-bottom:64px">
+            <div class="lx-label" style="margin-bottom:14px">Our Commitment</div>
+            <h2 class="lx-h2">Why choose <?= htmlspecialchars($companyName) ?></h2>
         </div>
-
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:24px">
-            <?php
-            $whyUs = [
-                ['fa-shield-halved', '#22c55e', 'Quality Assured',       'Every vehicle undergoes a thorough inspection before listing. What you see is exactly what you get.'],
-                ['fa-eye',           '#3b82f6', 'Transparent Pricing',   'No hidden fees, no surprises. Our asking price is our final price. Full cost breakdown available.'],
-                ['fa-credit-card',   '#f59e0b', 'Flexible Financing',    'We work with leading financiers to offer flexible payment plans tailored to your budget.'],
-                ['fa-rotate',        '#a78bfa', 'Trade-In Welcome',      'Have a vehicle to trade in? Get a fair market value assessment and upgrade to your dream car.'],
-                ['fa-headset',       '#fb923c', 'Expert Guidance',       'Our knowledgeable team is here to guide you through every step of the purchase process.'],
-                ['fa-truck',         '#34d399', 'Nationwide Delivery',   'We can arrange delivery of your vehicle to any location across the country.'],
-            ];
-            foreach ($whyUs as [$ico, $color, $title, $desc]): ?>
-            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:28px 24px;transition:background .2s,transform .2s"
-                 onmouseover="this.style.background='rgba(255,255,255,.07)';this.style.transform='translateY(-4px)'"
-                 onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.transform=''">
-                <div style="width:52px;height:52px;border-radius:14px;background:<?= $color ?>20;display:flex;align-items:center;justify-content:center;margin-bottom:18px;font-size:22px;color:<?= $color ?>">
-                    <i class="fa <?= $ico ?>"></i>
-                </div>
-                <div style="font-size:17px;font-weight:800;color:#fff;margin-bottom:10px;letter-spacing:-.3px"><?= $title ?></div>
-                <p style="font-size:14px;color:rgba(255,255,255,.45);line-height:1.65;margin:0"><?= $desc ?></p>
+        <div class="lx-values">
+            <?php foreach ([
+                ['fa-shield-halved', 'Quality Assured',     'Every vehicle undergoes a thorough inspection before listing. What you see is exactly what you get.'],
+                ['fa-eye',           'Transparent Pricing', 'No hidden fees, no surprises. Our asking price is our final price, with a full cost breakdown available.'],
+                ['fa-credit-card',   'Flexible Financing',  'We work with leading financiers to offer payment plans tailored to your budget.'],
+                ['fa-rotate',        'Trade-In Welcome',    'Get a fair market value assessment on your current vehicle and upgrade with ease.'],
+                ['fa-headset',       'Expert Guidance',     'Our team guides you through every step of the purchase, from viewing to logbook transfer.'],
+                ['fa-truck',         'Nationwide Delivery', 'We arrange safe delivery of your vehicle to any location across the country.'],
+            ] as [$ico, $title, $desc]): ?>
+            <div class="lx-value">
+                <i class="fa <?= $ico ?>"></i>
+                <div class="t"><?= $title ?></div>
+                <p><?= $desc ?></p>
             </div>
             <?php endforeach; ?>
         </div>
@@ -713,76 +540,43 @@ include __DIR__ . '/header.php';
 <!-- ═══════════════════════════════════════════════════════════
      BOOK A SERVICE
 ═══════════════════════════════════════════════════════════════ -->
-<section id="book-service" style="background:#f0f9ff;padding:88px 0;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-80px;right:-40px;width:340px;height:340px;border-radius:50%;background:radial-gradient(rgba(37,99,235,.07),transparent 70%);pointer-events:none"></div>
-    <div style="position:absolute;bottom:-60px;left:-20px;width:240px;height:240px;border-radius:50%;background:radial-gradient(rgba(124,58,237,.06),transparent 70%);pointer-events:none"></div>
-
-    <div class="container-xl" style="position:relative;z-index:1">
-        <div class="row align-items-center g-5">
-
-            <!-- Left: intro + service type tiles -->
+<section id="book-service" style="background:var(--paper);padding:96px 0;border-top:1px solid var(--line)">
+    <div class="lx-wrap">
+        <div class="row g-5 align-items-center">
             <div class="col-lg-5">
-                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#2563eb;margin-bottom:12px">Client Self-Service</div>
-                <h2 style="font-size:clamp(26px,4vw,40px);font-weight:900;color:#0f172a;letter-spacing:-1px;margin:0 0 14px;line-height:1.15">
-                    Book Your Vehicle<br>Service Online
-                </h2>
-                <p style="font-size:15.5px;color:#64748b;line-height:1.7;margin:0 0 32px;max-width:420px">
-                    No need to call. Choose a date, describe the issue, and we'll confirm your workshop slot fast.
+                <div class="lx-label" style="margin-bottom:14px">Ownership</div>
+                <h2 class="lx-h2" style="margin-bottom:18px">Book your vehicle<br>service online</h2>
+                <p style="font-size:15px;color:var(--ink-2);line-height:1.75;margin:0 0 36px;max-width:420px">
+                    No need to call. Choose a date, describe the issue, and we'll confirm your
+                    workshop slot — fast.
                 </p>
-
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:32px">
-                    <?php foreach ([
-                        ['fa-engine',            'Engine Service', '#2563eb'],
-                        ['fa-screwdriver-wrench','Major Service',  '#7c3aed'],
-                        ['fa-stethoscope',       'Diagnostics',    '#0891b2'],
-                        ['fa-brush',             'Paint Job',      '#d97706'],
-                        ['fa-car-burst',         'Body Work',      '#dc2626'],
-                        ['fa-circle-dot',        'Buffing',        '#16a34a'],
-                    ] as [$ico, $label, $color]): ?>
-                    <div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;box-shadow:0 1px 5px rgba(0,0,0,.04)">
-                        <div style="width:34px;height:34px;border-radius:9px;background:<?= $color ?>18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                            <i class="fa <?= $ico ?>" style="font-size:14px;color:<?= $color ?>"></i>
-                        </div>
-                        <span style="font-size:13px;font-weight:700;color:#0f172a"><?= $label ?></span>
-                    </div>
+                <div class="lx-service-list">
+                    <?php foreach (['Engine Service','Major Service','Diagnostics','Paint Job','Body Work','Buffing'] as $svc): ?>
+                    <div><?= $svc ?></div>
                     <?php endforeach; ?>
                 </div>
-
-                <a href="<?= BASE_URL ?>/showroom/book-service.php"
-                   style="display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border-radius:12px;padding:14px 28px;font-size:15px;font-weight:800;text-decoration:none;transition:box-shadow .2s,transform .1s;letter-spacing:-.2px"
-                   onmouseover="this.style.boxShadow='0 8px 28px rgba(37,99,235,.4)';this.style.transform='translateY(-1px)'"
-                   onmouseout="this.style.boxShadow='none';this.style.transform=''">
-                    <i class="fa fa-calendar-check fa-lg"></i>Book a Service Slot
-                </a>
             </div>
-
-            <!-- Right: quick booking mini-form -->
             <div class="col-lg-7">
-                <div style="background:#fff;border-radius:24px;border:1px solid #e2e8f0;box-shadow:0 8px 48px rgba(0,0,0,.08);padding:36px 32px">
-                    <div style="margin-bottom:24px">
-                        <h3 style="font-size:19px;font-weight:900;color:#0f172a;letter-spacing:-.4px;margin:0 0 4px">
-                            <i class="fa fa-calendar-plus me-2" style="color:#2563eb;font-size:.85em"></i>Quick Booking
-                        </h3>
-                        <p style="font-size:13px;color:#94a3b8;margin:0">Fill in your details and we'll get back to you right away.</p>
-                    </div>
+                <div style="background:var(--white);border:1px solid var(--line);border-radius:var(--r);padding:40px 36px">
+                    <div class="lx-label" style="margin-bottom:6px">Quick Booking</div>
+                    <p style="font-size:13px;color:var(--ink-3);margin:0 0 26px">Fill in your details and we'll get back to you right away.</p>
 
-                    <form method="GET" action="<?= BASE_URL ?>/showroom/book-service.php" style="display:grid;gap:16px">
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                    <form method="GET" action="<?= BASE_URL ?>/showroom/book-service.php" style="display:grid;gap:18px">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
                             <div>
-                                <label style="display:block;font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Full Name <span style="color:#dc2626">*</span></label>
-                                <input type="text" name="name" placeholder="Your full name" required class="qb-input">
+                                <label class="lx-flabel">Full Name *</label>
+                                <input type="text" name="name" placeholder="Your full name" required class="lx-input">
                             </div>
                             <div>
-                                <label style="display:block;font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Phone <span style="color:#dc2626">*</span></label>
-                                <input type="tel" name="phone" placeholder="e.g. 0712 345 678" required class="qb-input">
+                                <label class="lx-flabel">Phone *</label>
+                                <input type="tel" name="phone" placeholder="e.g. 0712 345 678" required class="lx-input">
                             </div>
                         </div>
-
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
                             <div>
-                                <label style="display:block;font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Service Needed <span style="color:#dc2626">*</span></label>
-                                <select name="service" required class="qb-input">
-                                    <option value="">Select service...</option>
+                                <label class="lx-flabel">Service Needed *</label>
+                                <select name="service" required class="lx-input">
+                                    <option value="">Select service…</option>
                                     <option>Engine Service</option>
                                     <option>Major Service</option>
                                     <option>Diagnostics</option>
@@ -792,27 +586,16 @@ include __DIR__ . '/header.php';
                                 </select>
                             </div>
                             <div>
-                                <label style="display:block;font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Preferred Date</label>
-                                <input type="date" name="date" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" class="qb-input">
+                                <label class="lx-flabel">Preferred Date</label>
+                                <input type="date" name="date" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" class="lx-input">
                             </div>
                         </div>
-
                         <div>
-                            <label style="display:block;font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Car Reg. <span style="color:#94a3b8;font-weight:500;text-transform:none;letter-spacing:0;font-size:11px">(optional)</span></label>
-                            <input type="text" name="reg" placeholder="e.g. KDA 000Q" class="qb-input"
+                            <label class="lx-flabel">Car Reg. (optional)</label>
+                            <input type="text" name="reg" placeholder="e.g. KDA 000Q" class="lx-input"
                                    style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
                         </div>
-
-                        <button type="submit"
-                                style="width:100%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:11px;padding:13px 20px;font-size:14.5px;font-weight:800;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px;transition:box-shadow .15s,transform .1s"
-                                onmouseover="this.style.boxShadow='0 6px 20px rgba(37,99,235,.4)';this.style.transform='translateY(-1px)'"
-                                onmouseout="this.style.boxShadow='none';this.style.transform=''">
-                            <i class="fa fa-arrow-right"></i>Continue &amp; Confirm Booking
-                        </button>
-
-                        <p style="font-size:12px;color:#94a3b8;margin:0;line-height:1.5">
-                            <i class="fa fa-circle-info me-1 text-primary"></i>You'll complete the full details on the next page. We confirm your slot within a few hours.
-                        </p>
+                        <button type="submit" class="btn-lx" style="width:100%">Continue &amp; Confirm Booking</button>
                     </form>
                 </div>
             </div>
@@ -820,128 +603,218 @@ include __DIR__ . '/header.php';
     </div>
 </section>
 
-<style>
-.qb-input {
-    width:100%; border:1.5px solid #e2e8f0; border-radius:10px;
-    padding:11px 14px; font-size:14px; font-family:inherit; outline:none;
-    color:#0f172a; background:#fff; transition:border-color .15s, box-shadow .15s;
-}
-.qb-input:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
-select.qb-input { cursor:pointer; }
-</style>
-
 <!-- ═══════════════════════════════════════════════════════════
-     INQUIRY CTA BAND
+     CTA BAND
 ═══════════════════════════════════════════════════════════════ -->
-<section style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:64px 0">
-    <div class="container-xl">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:28px">
-            <div>
-                <h2 style="font-size:clamp(24px,4vw,36px);font-weight:900;color:#fff;letter-spacing:-1px;margin:0 0 10px">Ready to find your car?</h2>
-                <p style="font-size:16px;color:rgba(255,255,255,.65);margin:0">Talk to our team today. We're here to help.</p>
-            </div>
-            <div style="display:flex;gap:12px;flex-wrap:wrap">
-                <?php if ($__waClean): ?>
-                <a href="https://wa.me/<?= $__waClean ?>" target="_blank" rel="noopener"
-                   style="background:#25d366;color:#fff;padding:14px 28px;border-radius:12px;font-size:15px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:9px;transition:all .15s;box-shadow:0 4px 20px rgba(0,0,0,.2)"
-                   onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-                    <i class="fa-brands fa-whatsapp" style="font-size:20px"></i> Chat on WhatsApp
-                </a>
-                <?php endif; ?>
-                <a href="#inventory"
-                   style="background:rgba(255,255,255,.15);color:#fff;border:2px solid rgba(255,255,255,.3);padding:14px 28px;border-radius:12px;font-size:15px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:9px;transition:all .15s"
-                   onmouseover="this.style.background='rgba(255,255,255,.25)'" onmouseout="this.style.background='rgba(255,255,255,.15)'">
-                    <i class="fa fa-car"></i> Browse Vehicles
-                </a>
-            </div>
+<section style="background:var(--black);padding:88px 0;text-align:center">
+    <div class="lx-wrap">
+        <h2 style="font-size:clamp(26px,3.6vw,44px);font-weight:300;color:#fff;margin:0 0 14px">Ready to find your car?</h2>
+        <p style="font-size:15px;color:rgba(255,255,255,.55);margin:0 0 36px">Talk to our team today. We're here to help.</p>
+        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+            <?php if ($__waClean): ?>
+            <a href="https://wa.me/<?= $__waClean ?>" target="_blank" rel="noopener" class="btn-lx-light">
+                <i class="fa-brands fa-whatsapp"></i> Chat on WhatsApp
+            </a>
+            <?php endif; ?>
+            <a href="#inventory" class="btn-lx-ghost">Browse Vehicles</a>
         </div>
     </div>
 </section>
 
 <!-- ── Styles ──────────────────────────────────────────────────────────────── -->
 <style>
-/* Featured cards */
-.featured-card { background:#fff; border-radius:20px; overflow:hidden; border:1px solid #e2e8f0; box-shadow:0 4px 20px rgba(0,0,0,.06); transition:transform .2s, box-shadow .2s; display:flex; flex-direction:column; }
-.featured-card:hover { transform:translateY(-6px); box-shadow:0 20px 48px rgba(0,0,0,.12); }
-.featured-img-wrap { display:block; position:relative; aspect-ratio:16/10; overflow:hidden; background:#f1f5f9; }
-.featured-img-wrap img { width:100%; height:100%; object-fit:cover; transition:transform .4s ease; }
-.featured-card:hover .featured-img-wrap img { transform:scale(1.04); }
-.featured-no-img { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:56px; color:#cbd5e1; }
-.featured-badge { position:absolute; top:12px; left:12px; background:#f59e0b; color:#fff; font-size:11.5px; font-weight:700; padding:4px 12px; border-radius:20px; }
-.featured-count { position:absolute; top:12px; right:12px; background:rgba(0,0,0,.5); color:#fff; font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; }
-.featured-body { padding:20px 22px 22px; flex:1; display:flex; flex-direction:column; }
-.featured-meta { font-size:11.5px; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
-.featured-title { font-size:20px; font-weight:800; margin:0 0 10px; letter-spacing:-.4px; }
-.featured-title a { color:#0f172a; }
-.featured-title a:hover { color:#2563eb; text-decoration:none; }
-.featured-specs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
-.featured-specs span { font-size:12px; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:7px; padding:3px 10px; }
-.featured-price { font-size:22px; font-weight:900; color:#2563eb; letter-spacing:-.5px; margin-top:auto; margin-bottom:16px; }
-.featured-actions { display:flex; gap:9px; }
-.btn-view { flex:1; background:#0f172a; color:#fff; border-radius:10px; padding:11px 16px; font-size:13.5px; font-weight:700; text-align:center; display:flex; align-items:center; justify-content:center; transition:background .15s; text-decoration:none; }
-.btn-view:hover { background:#1e293b; color:#fff; text-decoration:none; }
-.btn-whatsapp-sm { width:44px; height:44px; background:#dcfce7; color:#16a34a; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; text-decoration:none; transition:background .15s; flex-shrink:0; }
-.btn-whatsapp-sm:hover { background:#25d366; color:#fff; }
+.lx-wrap { max-width: 1320px; margin: 0 auto; padding: 0 28px; }
 
-/* Inventory grid */
-.inv-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:20px; }
-.inv-card { background:#fff; border-radius:18px; overflow:hidden; border:1px solid #e2e8f0; box-shadow:0 2px 12px rgba(0,0,0,.05); transition:transform .2s, box-shadow .2s; display:flex; flex-direction:column; }
-.inv-card:hover { transform:translateY(-5px); box-shadow:0 16px 40px rgba(0,0,0,.10); }
-.inv-img-wrap { display:block; position:relative; aspect-ratio:16/10; overflow:hidden; background:#f1f5f9; flex-shrink:0; }
-.inv-img-wrap img { width:100%; height:100%; object-fit:cover; transition:transform .4s ease; }
-.inv-card:hover .inv-img-wrap img { transform:scale(1.04); }
-.inv-no-img { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:44px; color:#cbd5e1; }
-.inv-badge-featured { position:absolute; top:10px; left:10px; background:#f59e0b; color:#fff; font-size:10.5px; font-weight:700; padding:3px 10px; border-radius:20px; }
-.inv-badge-new { position:absolute; top:10px; left:10px; background:#22c55e; color:#fff; font-size:10.5px; font-weight:700; padding:3px 10px; border-radius:20px; }
-.inv-badge-photos { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.5); color:#fff; font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px; }
-.inv-badge-reserved { position:absolute; top:10px; left:10px; background:#7c3aed; color:#fff; font-size:10.5px; font-weight:700; padding:3px 10px; border-radius:20px; }
-.inv-card-reserved { opacity:.85; }
-.inv-card-reserved .inv-img-wrap::after { content:''; position:absolute; inset:0; background:rgba(124,58,237,.08); pointer-events:none; }
-.inv-body { padding:16px 18px 18px; flex:1; display:flex; flex-direction:column; }
-.inv-meta { font-size:11px; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
-.inv-title { font-size:17px; font-weight:800; margin:0 0 8px; letter-spacing:-.3px; }
-.inv-title a { color:#0f172a; }
-.inv-title a:hover { color:#2563eb; text-decoration:none; }
-.inv-specs { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
-.inv-specs span { font-size:11px; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:2px 8px; }
-.inv-price { font-size:19px; font-weight:900; color:#2563eb; letter-spacing:-.4px; margin-top:auto; margin-bottom:13px; }
-.inv-actions { display:flex; gap:8px; }
-.inv-btn-view { flex:1; background:#0f172a; color:#fff; border-radius:9px; padding:9px 12px; font-size:13px; font-weight:700; text-align:center; display:flex; align-items:center; justify-content:center; transition:background .15s; text-decoration:none; }
-.inv-btn-view:hover { background:#1e293b; color:#fff; text-decoration:none; }
-.inv-btn-wa { width:38px; height:38px; background:#dcfce7; color:#16a34a; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:18px; text-decoration:none; transition:background .15s; flex-shrink:0; }
-.inv-btn-wa:hover { background:#25d366; color:#fff; }
-
-/* Inventory icon buttons (fav + compare) */
-.inv-btn-icon { width:38px; height:38px; background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; cursor:pointer; transition:background .15s,color .15s; flex-shrink:0; }
-.inv-btn-icon:hover { background:#e2e8f0; color:#0f172a; }
-.inv-btn-icon.active-fav { background:#fef2f2; color:#dc2626; border-color:#fca5a5; }
-.inv-btn-icon.active-cmp { background:#eff6ff; color:#2563eb; border-color:#93c5fd; }
-
-/* Responsive */
-@media (max-width: 1024px) {
-    #inventory > .container-xl > div:last-child { grid-template-columns: 1fr; }
-    #inventory > .container-xl > div:last-child > div:first-child { position:static; }
+/* ── Cropped, chrome-free YouTube cover video ─────────────────
+   The iframe is oversized + scaled so YouTube UI/watermark falls
+   outside the visible crop; pointer-events off = no hover chrome. */
+.lx-video-cover { position: absolute; inset: 0; overflow: hidden; background: var(--black); pointer-events: none; }
+.lx-video-cover iframe {
+    position: absolute; top: 50%; left: 50%;
+    width:  max(100%, calc(100vh * 1.7778), 177.78vh);
+    height: max(100%, 56.25vw);
+    min-width: 100%; min-height: 100%;
+    transform: translate(-50%, -50%) scale(1.3);
+    border: 0;
 }
+
+/* Hero */
+.lx-hero { position: relative; min-height: 100vh; display: flex; align-items: flex-end; overflow: hidden; }
+.lx-hero-shade {
+    position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(to top, rgba(6,6,6,.78) 0%, rgba(6,6,6,.25) 45%, rgba(6,6,6,.35) 100%);
+}
+.lx-hero-content {
+    position: relative; z-index: 2;
+    width: 100%; max-width: 1320px; margin: 0 auto;
+    padding: 0 28px 110px;
+}
+.lx-hero-content h1 {
+    font-size: clamp(36px, 5.4vw, 68px); font-weight: 300; letter-spacing: -.01em;
+    color: #fff; line-height: 1.08; margin: 0 0 20px;
+}
+.lx-hero-content p { font-size: 16px; color: rgba(255,255,255,.72); max-width: 460px; line-height: 1.7; margin: 0 0 36px; }
+.lx-hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; }
+.lx-hero-scroll { position: absolute; bottom: 34px; right: 44px; z-index: 2; }
+.lx-hero-scroll span {
+    display: block; width: 1px; height: 56px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.7));
+    animation: lxScroll 2.2s var(--ease) infinite;
+}
+@keyframes lxScroll { 0% { transform: scaleY(0); transform-origin: top; } 45% { transform: scaleY(1); transform-origin: top; } 55% { transform: scaleY(1); transform-origin: bottom; } 100% { transform: scaleY(0); transform-origin: bottom; } }
+
+/* Stat strip */
+.lx-stats { display: grid; grid-template-columns: repeat(4, 1fr); }
+.lx-stat { padding: 40px 24px; text-align: center; border-right: 1px solid var(--line); }
+.lx-stat:last-child { border-right: none; }
+.lx-stat .v { font-size: 30px; font-weight: 300; letter-spacing: -.01em; color: var(--ink); margin-bottom: 6px; }
+.lx-stat .l { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .16em; color: var(--ink-3); }
 @media (max-width: 768px) {
-    .inv-grid { grid-template-columns: 1fr 1fr; }
+    .lx-stats { grid-template-columns: 1fr 1fr; }
+    .lx-stat:nth-child(2) { border-right: none; }
+    .lx-stat { border-bottom: 1px solid var(--line); }
+    .lx-stat:nth-child(n+3) { border-bottom: none; }
 }
-@media (max-width: 480px) {
+
+/* Dual feature blocks */
+.lx-feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+@media (max-width: 991px) { .lx-feature-grid { grid-template-columns: 1fr; } }
+.lx-feature { background: var(--white); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column; }
+.lx-feature-img { display: block; position: relative; aspect-ratio: 16/9; overflow: hidden; background: var(--paper); }
+.lx-feature-img img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease); }
+.lx-feature:hover .lx-feature-img img { transform: scale(1.03); }
+.lx-feature-body { padding: 34px 36px 38px; flex: 1; display: flex; flex-direction: column; }
+.lx-feature-body h3 { font-size: 27px; font-weight: 400; letter-spacing: -.01em; margin: 0 0 8px; }
+.lx-feature-price { font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 26px; }
+.lx-feature-price del { color: var(--ink-3); font-weight: 400; margin-left: 8px; font-size: 13px; }
+.lx-feature-specs { display: flex; gap: 0; margin-bottom: 30px; flex-wrap: wrap; }
+.lx-feature-specs > div { padding: 0 26px; border-right: 1px solid var(--line); }
+.lx-feature-specs > div:first-child { padding-left: 0; }
+.lx-feature-specs > div:last-child { border-right: none; }
+.lx-feature-specs .sv { font-size: 20px; font-weight: 300; color: var(--ink); }
+.lx-feature-specs .sl { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-3); margin-top: 3px; }
+
+/* Promo cards */
+.lx-promo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 768px) { .lx-promo-grid { grid-template-columns: 1fr; } }
+.lx-promo {
+    position: relative; display: block; text-align: left;
+    background: var(--paper); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 40px 44px; transition: border-color .3s var(--ease);
+}
+.lx-promo:hover { border-color: var(--ink); }
+.lx-promo .t { font-size: 21px; font-weight: 400; color: var(--ink); }
+.lx-promo .arr { position: absolute; right: 36px; top: 50%; transform: translateY(-50%); color: var(--ink-3); font-size: 15px; transition: transform .3s var(--ease), color .3s var(--ease); }
+.lx-promo:hover .arr { transform: translateY(-50%) translateX(6px); color: var(--ink); }
+
+/* Brand film */
+.lx-film { position: relative; height: min(86vh, 780px); min-height: 480px; overflow: hidden; display: flex; align-items: center; }
+.lx-film-shade { position: absolute; inset: 0; background: rgba(6,6,6,.42); pointer-events: none; }
+.lx-film-caption { position: relative; z-index: 2; width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 28px; }
+
+/* No-image placeholder */
+.lx-noimg { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 52px; color: var(--line); background: var(--paper); }
+
+/* Inventory layout */
+.lx-inv-layout { display: grid; grid-template-columns: 280px 1fr; gap: 32px; align-items: start; }
+@media (max-width: 1024px) { .lx-inv-layout { grid-template-columns: 1fr; } .lx-filter { position: static !important; } }
+.lx-filter { background: var(--white); border: 1px solid var(--line); border-radius: var(--r); position: sticky; top: calc(var(--nav-h) + 20px); }
+.lx-filter-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 22px; border-bottom: 1px solid var(--line); }
+.lx-flabel { display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .16em; color: var(--ink-3); margin-bottom: 8px; }
+.lx-input {
+    width: 100%; border: 1px solid var(--line); border-radius: var(--r);
+    padding: 10px 13px; font-size: 13.5px; font-family: inherit; color: var(--ink);
+    background: var(--white); outline: none; transition: border-color .25s var(--ease);
+}
+.lx-input:focus { border-color: var(--ink); }
+select.lx-input { cursor: pointer; }
+
+/* Inventory cards */
+.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
+.inv-card { background: var(--white); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow .35s var(--ease), border-color .35s var(--ease); }
+.inv-card:hover { box-shadow: 0 22px 48px rgba(0,0,0,.09); border-color: #d5d1ca; }
+.inv-img-wrap { display: block; position: relative; aspect-ratio: 16/10; overflow: hidden; background: var(--paper); flex-shrink: 0; }
+.inv-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease); }
+.inv-card:hover .inv-img-wrap img { transform: scale(1.04); }
+.inv-badge {
+    position: absolute; top: 14px; left: 14px; z-index: 1;
+    background: rgba(12,12,12,.82); color: #fff;
+    font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    padding: 5px 12px; border-radius: var(--r);
+}
+.inv-badge-bronze { background: var(--bronze); }
+.inv-photos { position: absolute; top: 14px; right: 14px; z-index: 1; background: rgba(12,12,12,.55); color: #fff; font-size: 10.5px; font-weight: 500; padding: 3px 9px; border-radius: var(--r); }
+.inv-card-reserved { opacity: .82; }
+.inv-body { padding: 22px 24px 24px; flex: 1; display: flex; flex-direction: column; }
+.inv-meta { font-size: 10.5px; color: var(--ink-3); font-weight: 600; text-transform: uppercase; letter-spacing: .16em; margin-bottom: 6px; }
+.inv-title { font-size: 18px; font-weight: 500; letter-spacing: -.01em; margin: 0 0 14px; }
+.inv-title a { color: var(--ink); }
+.inv-title a:hover { color: var(--bronze); }
+.inv-specs { display: flex; flex-wrap: wrap; gap: 12px 16px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.inv-specs span { font-size: 12px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 7px; }
+.inv-specs i { font-size: 11px; color: var(--ink-3); }
+.inv-price { font-size: 17px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); margin-top: auto; margin-bottom: 16px; }
+.inv-price del { font-size: 12.5px; color: var(--ink-3); font-weight: 400; margin-left: 8px; }
+.offer-tag, .reserved-tag {
+    display: inline-block; font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: var(--r); vertical-align: 2px; margin-right: 7px;
+}
+.offer-tag { background: var(--bronze); color: #fff; }
+.reserved-tag { background: var(--ink); color: #fff; }
+.inv-actions { display: flex; gap: 8px; }
+.inv-btn-view {
+    flex: 1; background: var(--ink); color: #fff; border-radius: var(--r);
+    padding: 11px 14px; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    text-align: center; display: flex; align-items: center; justify-content: center;
+    transition: background .25s var(--ease);
+}
+.inv-btn-view:hover { background: #000; color: #fff; }
+.inv-btn-icon {
+    width: 40px; height: 40px; background: var(--white); color: var(--ink-2);
+    border: 1px solid var(--line); border-radius: var(--r);
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+    cursor: pointer; transition: all .25s var(--ease); flex-shrink: 0; text-decoration: none;
+}
+.inv-btn-icon:hover { border-color: var(--ink); color: var(--ink); }
+.inv-btn-icon.active-fav { background: var(--ink); color: #fff; border-color: var(--ink); }
+.inv-btn-icon.active-cmp { background: var(--bronze); color: #fff; border-color: var(--bronze); }
+
+/* Values */
+.lx-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+@media (max-width: 991px) { .lx-values { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .lx-values { grid-template-columns: 1fr; } }
+.lx-value { padding: 40px 36px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.lx-value i { font-size: 20px; color: var(--bronze); margin-bottom: 18px; display: block; }
+.lx-value .t { font-size: 16px; font-weight: 500; margin-bottom: 10px; color: var(--ink); }
+.lx-value p { font-size: 13.5px; color: var(--ink-2); line-height: 1.7; margin: 0; }
+
+/* Service list */
+.lx-service-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: 1px solid var(--line); max-width: 420px; }
+.lx-service-list div { font-size: 13.5px; color: var(--ink); padding: 13px 4px; border-bottom: 1px solid var(--line); }
+
+@media (max-width: 768px) {
+    .inv-grid { grid-template-columns: 1fr 1fr; gap: 16px; }
+    .lx-hero-content { padding-bottom: 80px; }
+    .lx-feature-body { padding: 26px 24px 30px; }
+    .lx-feature-specs > div { padding: 0 16px; }
+}
+@media (max-width: 520px) {
     .inv-grid { grid-template-columns: 1fr; }
 }
 </style>
 
 <!-- ── Compare sticky bar ─────────────────────────────────────────────────── -->
-<div id="compareBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#0f172a;border-top:1px solid rgba(255,255,255,.08);padding:12px 20px;z-index:1050;box-shadow:0 -4px 24px rgba(0,0,0,.35)">
-    <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <span style="color:#64748b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">Compare:</span>
+<div id="compareBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--black);border-top:1px solid rgba(255,255,255,.1);padding:14px 24px;z-index:1050">
+    <div style="max-width:1320px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span class="lx-label" style="color:rgba(255,255,255,.5);white-space:nowrap">Compare</span>
         <div id="compareSlots" style="display:flex;gap:8px;flex:1;flex-wrap:wrap"></div>
         <a id="compareBtn" href="#"
-           style="background:#2563eb;color:#fff;padding:9px 20px;border-radius:9px;font-size:13.5px;font-weight:700;text-decoration:none;white-space:nowrap;transition:background .15s">
+           style="background:#fff;color:var(--ink);padding:10px 22px;border-radius:var(--r);font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;text-decoration:none;white-space:nowrap">
             Compare Cars
         </a>
         <button onclick="clearCompare()"
-                style="background:rgba(255,255,255,.06);color:#64748b;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;white-space:nowrap">
-            <i class="fa fa-xmark me-1"></i>Clear
+                style="background:none;color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.25);border-radius:var(--r);padding:9px 16px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;white-space:nowrap;font-family:inherit">
+            Clear
         </button>
     </div>
 </div>
@@ -980,9 +853,9 @@ function toggleFavFilter() {
     applyFavFilter();
     var btn = document.getElementById('favFilterBtn');
     if (btn) {
-        btn.style.background = showingFavs ? '#fef2f2' : '';
-        btn.style.borderColor = showingFavs ? '#fca5a5' : '';
-        btn.style.color = showingFavs ? '#dc2626' : '';
+        btn.style.background  = showingFavs ? 'var(--ink)' : '';
+        btn.style.color       = showingFavs ? '#fff' : '';
+        btn.style.borderColor = showingFavs ? 'var(--ink)' : '';
     }
 }
 function applyFavFilter() {
@@ -1023,9 +896,9 @@ function syncCompareUI() {
     bar.style.display = '';
 
     slots.innerHTML = compareIds.map(function(id) {
-        return '<div style="background:rgba(255,255,255,.08);color:#e2e8f0;border-radius:8px;padding:5px 10px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px">'
+        return '<div style="background:rgba(255,255,255,.1);color:#eee;border-radius:2px;padding:5px 11px;font-size:12.5px;font-weight:500;display:flex;align-items:center;gap:8px">'
             + '<span>' + (compareNames[id]||'Car '+id) + '</span>'
-            + '<button onclick="toggleCompare('+id+',this)" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;padding:0;line-height:1">&times;</button>'
+            + '<button onclick="toggleCompare('+id+',this)" style="background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:14px;padding:0;line-height:1">&times;</button>'
             + '</div>';
     }).join('');
 
