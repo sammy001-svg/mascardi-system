@@ -79,8 +79,33 @@ $isFiltered = $filterMake || $filterBody || $filterFuel || $filterTrans || $filt
            || $filterYearMin || $filterYearMax || $filterMileMax || $search;
 $companyName = getSetting('company_name', 'Mascardi Car Yard');
 $__waClean   = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSetting('company_phone', '')));
-$pageTitle   = $filterMake ? $filterMake . ' Vehicles' : 'All Vehicles';
+$pageTitle   = $filterMake ? $filterMake . ' Vehicles' : 'Available Vehicles';
 $metaDesc    = "Browse {$totalStock} quality vehicles at {$companyName}. Transparent pricing, flexible financing.";
+
+// URL for the current query minus the given params (used by filter chips)
+function sv_url_without(array $drop): string {
+    $q = $_GET;
+    foreach ($drop as $k) unset($q[$k]);
+    $s = http_build_query($q);
+    return BASE_URL . '/showroom/vehicles.php' . ($s ? '?' . $s : '');
+}
+
+// Active filter chips: [label, params-to-drop]
+$chips = [];
+if ($search)        $chips[] = ['"' . $search . '"',                                        ['q']];
+if ($filterMake)    $chips[] = [$filterMake,                                                ['make']];
+if ($filterBody)    $chips[] = [$filterBody,                                                ['body']];
+if ($filterFuel)    $chips[] = [ucfirst($filterFuel),                                       ['fuel']];
+if ($filterTrans)   $chips[] = [ucfirst($filterTrans),                                      ['trans']];
+if ($filterMin || $filterMax) {
+    $chips[] = ['KES ' . ($filterMin ? number_format($filterMin) : '0') . ' – ' . ($filterMax ? number_format($filterMax) : 'any'), ['min','max']];
+}
+if ($filterYearMin || $filterYearMax) {
+    $chips[] = ['Year ' . ($filterYearMin ?: 'any') . ' – ' . ($filterYearMax ?: 'any'),    ['year_min','year_max']];
+}
+if ($filterMileMax) $chips[] = ['≤ ' . number_format($filterMileMax) . ' km',               ['mile_max']];
+
+$moreFiltersActive = $filterMin || $filterMax || $filterYearMin || $filterYearMax || $filterMileMax;
 
 include __DIR__ . '/header.php';
 ?>
@@ -88,290 +113,382 @@ include __DIR__ . '/header.php';
 <!-- ═══════════════════════════════════════════════════════════
      PAGE HEAD
 ═══════════════════════════════════════════════════════════════ -->
-<section style="background:var(--white);border-bottom:1px solid var(--line);padding:72px 0 56px">
+<section style="background:var(--white);padding:64px 0 40px">
     <div class="lx-wrap">
         <div class="lx-label" style="margin-bottom:14px">Inventory</div>
-        <h1 class="lx-h2" style="font-size:clamp(32px,4.6vw,54px)">
-            <?= $filterMake ? htmlspecialchars($filterMake) . ' vehicles' : 'All vehicles' ?>
+        <h1 class="lx-h2" style="font-size:clamp(32px,4.6vw,52px)">
+            <?= $filterMake ? htmlspecialchars($filterMake) . ' vehicles' : 'Available vehicles' ?>
         </h1>
-        <p style="font-size:15px;color:var(--ink-2);margin:16px 0 0;max-width:520px;line-height:1.7">
-            <?= $totalStock ?> quality vehicles in stock — every one inspected, verified and ready for the road.
-        </p>
     </div>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════
-     INVENTORY BROWSER
+     FILTER BAR
 ═══════════════════════════════════════════════════════════════ -->
-<section id="inventory" style="background:var(--paper);padding:56px 0 96px">
+<section class="sv-filterbar-wrap">
     <div class="lx-wrap">
-
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:32px">
-            <span style="font-size:13px;color:var(--ink-2)">
-                <strong style="color:var(--ink);font-weight:600"><?= $filteredCount ?></strong> vehicle<?= $filteredCount !== 1 ? 's' : '' ?>
-                <?= $isFiltered ? 'found' : 'available' ?>
-            </span>
-            <?php if ($isFiltered): ?>
-            <a href="<?= BASE_URL ?>/showroom/vehicles.php" style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--ink);border:1px solid var(--ink);border-radius:var(--r);padding:7px 14px">
-                Clear Filters
-            </a>
-            <?php endif; ?>
-        </div>
-
-        <div class="lx-inv-layout">
-
-            <!-- ── Sidebar Filters ─────────────────────── -->
-            <div class="lx-filter">
-                <div class="lx-filter-head">
-                    <span class="lx-label" style="color:var(--ink)">Filter</span>
-                    <?php if ($isFiltered): ?>
-                    <a href="<?= BASE_URL ?>/showroom/vehicles.php" style="font-size:11px;color:var(--ink-3);letter-spacing:.1em;text-transform:uppercase">Reset</a>
-                    <?php endif; ?>
+        <form method="GET" action="<?= BASE_URL ?>/showroom/vehicles.php" id="svFilterForm">
+            <div class="sv-filterbar">
+                <div class="sv-search">
+                    <i class="fa fa-magnifying-glass"></i>
+                    <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Search make, model, colour…">
                 </div>
-                <form method="GET" action="<?= BASE_URL ?>/showroom/vehicles.php" style="padding:22px;display:flex;flex-direction:column;gap:22px">
-                    <?php if ($sort !== 'featured'): ?><input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>"><?php endif; ?>
 
-                    <div>
-                        <label class="lx-flabel">Search</label>
-                        <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Make, model, colour…" class="lx-input">
-                    </div>
-
-                    <?php
-                    $filterGroups = [
-                        ['Make', 'make', $makes, 'All Makes', $filterMake],
-                        ['Body Type', 'body', ['SUV','Saloon','Pick-Up','Hatchback','Van','Truck','Coupe','Bus','Minibus','Other'], 'All Types', $filterBody],
-                        ['Fuel Type', 'fuel', ['petrol','diesel','hybrid','electric'], 'All Fuel Types', $filterFuel, true],
-                        ['Transmission', 'trans', ['automatic','manual','cvt'], 'All Types', $filterTrans, true],
-                    ];
-                    foreach ($filterGroups as $fg):
-                    [$label, $name, $options, $placeholder, $current] = $fg;
-                    $ucfirst = $fg[5] ?? false;
-                    ?>
-                    <div>
-                        <label class="lx-flabel"><?= $label ?></label>
-                        <select name="<?= $name ?>" class="lx-input" onchange="this.form.submit()">
-                            <option value=""><?= $placeholder ?></option>
-                            <?php foreach ($options as $opt): ?>
-                            <option value="<?= htmlspecialchars($opt) ?>" <?= $current === $opt ? 'selected' : '' ?>>
-                                <?= $ucfirst ? ucfirst($opt) : htmlspecialchars($opt) ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                <select name="make" class="sv-select" onchange="this.form.submit()">
+                    <option value="">Make</option>
+                    <?php foreach ($makes as $mk): ?>
+                    <option value="<?= htmlspecialchars($mk) ?>" <?= $filterMake === $mk ? 'selected' : '' ?>><?= htmlspecialchars($mk) ?></option>
                     <?php endforeach; ?>
+                </select>
 
+                <select name="body" class="sv-select" onchange="this.form.submit()">
+                    <option value="">Body Type</option>
+                    <?php foreach (['SUV','Saloon','Pick-Up','Hatchback','Van','Truck','Coupe','Bus','Minibus','Other'] as $bt): ?>
+                    <option value="<?= $bt ?>" <?= $filterBody === $bt ? 'selected' : '' ?>><?= $bt ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <select name="fuel" class="sv-select" onchange="this.form.submit()">
+                    <option value="">Fuel</option>
+                    <?php foreach (['petrol','diesel','hybrid','electric'] as $fu): ?>
+                    <option value="<?= $fu ?>" <?= $filterFuel === $fu ? 'selected' : '' ?>><?= ucfirst($fu) ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <select name="trans" class="sv-select" onchange="this.form.submit()">
+                    <option value="">Transmission</option>
+                    <?php foreach (['automatic','manual','cvt'] as $tr): ?>
+                    <option value="<?= $tr ?>" <?= $filterTrans === $tr ? 'selected' : '' ?>><?= ucfirst($tr) ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <button type="button" class="sv-more-btn<?= $moreFiltersActive ? ' active' : '' ?>" id="svMoreBtn">
+                    More Filters <i class="fa fa-chevron-down" style="font-size:9px"></i>
+                </button>
+
+                <div class="sv-sort">
+                    <span>Sort</span>
+                    <select name="sort" onchange="this.form.submit()">
+                        <option value="featured"   <?= $sort==='featured'   ?'selected':'' ?>>Featured First</option>
+                        <option value="newest"     <?= $sort==='newest'     ?'selected':'' ?>>Newest Arrivals</option>
+                        <option value="price_asc"  <?= $sort==='price_asc'  ?'selected':'' ?>>Price: Low to High</option>
+                        <option value="price_desc" <?= $sort==='price_desc' ?'selected':'' ?>>Price: High to Low</option>
+                        <option value="year_desc"  <?= $sort==='year_desc'  ?'selected':'' ?>>Year: Newest First</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Expandable range filters -->
+            <div class="sv-more-panel<?= $moreFiltersActive ? ' open' : '' ?>" id="svMorePanel">
+                <div class="sv-more-grid">
                     <div>
                         <label class="lx-flabel">Price Range (KES)</label>
                         <div style="display:flex;gap:8px;align-items:center">
-                            <input type="number" name="min" value="<?= $filterMin ?: '' ?>" placeholder="Min" class="lx-input" style="width:0;min-width:0;flex:1">
+                            <input type="number" name="min" value="<?= $filterMin ?: '' ?>" placeholder="Min" class="lx-input">
                             <span style="color:var(--ink-3);font-size:12px">–</span>
-                            <input type="number" name="max" value="<?= $filterMax ?: '' ?>" placeholder="Max" class="lx-input" style="width:0;min-width:0;flex:1">
+                            <input type="number" name="max" value="<?= $filterMax ?: '' ?>" placeholder="Max" class="lx-input">
                         </div>
                     </div>
-
                     <div>
                         <label class="lx-flabel">Year</label>
                         <div style="display:flex;gap:8px;align-items:center">
                             <input type="number" name="year_min" value="<?= $filterYearMin ?: '' ?>" placeholder="<?= $yearRange['min_yr'] ?>"
-                                   min="<?= $yearRange['min_yr'] ?>" max="<?= $yearRange['max_yr'] ?>" class="lx-input" style="width:0;min-width:0;flex:1">
+                                   min="<?= $yearRange['min_yr'] ?>" max="<?= $yearRange['max_yr'] ?>" class="lx-input">
                             <span style="color:var(--ink-3);font-size:12px">–</span>
                             <input type="number" name="year_max" value="<?= $filterYearMax ?: '' ?>" placeholder="<?= $yearRange['max_yr'] ?>"
-                                   min="<?= $yearRange['min_yr'] ?>" max="<?= $yearRange['max_yr'] ?>" class="lx-input" style="width:0;min-width:0;flex:1">
+                                   min="<?= $yearRange['min_yr'] ?>" max="<?= $yearRange['max_yr'] ?>" class="lx-input">
                         </div>
                     </div>
-
                     <div>
                         <label class="lx-flabel">Max Mileage (km)</label>
                         <input type="number" name="mile_max" value="<?= $filterMileMax ?: '' ?>" placeholder="e.g. 80000" min="0" class="lx-input">
                     </div>
-
-                    <button type="submit" class="btn-lx" style="width:100%">Apply Filters</button>
-                </form>
+                    <div style="display:flex;align-items:flex-end">
+                        <button type="submit" class="btn-lx" style="width:100%;padding:12px 20px">Apply</button>
+                    </div>
+                </div>
             </div>
+        </form>
 
-            <!-- ── Car Grid ─────────────────────────────── -->
-            <div>
-                <!-- Sort + saved bar -->
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:12px">
-                    <button id="favFilterBtn" onclick="toggleFavFilter()"
-                            style="background:none;border:1px solid var(--line);border-radius:var(--r);padding:6px 14px;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit">
-                        <i class="fa fa-heart" style="font-size:11px"></i> Saved
-                        <span id="favCount" style="display:none;background:var(--ink);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px">0</span>
-                    </button>
-                    <form method="GET" action="<?= BASE_URL ?>/showroom/vehicles.php" style="display:flex;align-items:center;gap:10px">
-                        <?php foreach (['make','body','fuel','trans','q'] as $k): ?>
-                        <?php if (isset($_GET[$k]) && $_GET[$k] !== ''): ?>
-                        <input type="hidden" name="<?= $k ?>" value="<?= htmlspecialchars($_GET[$k]) ?>">
-                        <?php endif; ?>
-                        <?php endforeach; ?>
-                        <?php if ($filterMin):     ?><input type="hidden" name="min"      value="<?= $filterMin ?>"><?php endif; ?>
-                        <?php if ($filterMax):     ?><input type="hidden" name="max"      value="<?= $filterMax ?>"><?php endif; ?>
-                        <?php if ($filterYearMin): ?><input type="hidden" name="year_min" value="<?= $filterYearMin ?>"><?php endif; ?>
-                        <?php if ($filterYearMax): ?><input type="hidden" name="year_max" value="<?= $filterYearMax ?>"><?php endif; ?>
-                        <?php if ($filterMileMax): ?><input type="hidden" name="mile_max" value="<?= $filterMileMax ?>"><?php endif; ?>
-                        <span class="lx-flabel" style="margin:0;white-space:nowrap">Sort</span>
-                        <select name="sort" class="lx-input" style="width:auto;padding:8px 12px" onchange="this.form.submit()">
-                            <option value="featured"   <?= $sort==='featured'   ?'selected':'' ?>>Featured First</option>
-                            <option value="newest"     <?= $sort==='newest'     ?'selected':'' ?>>Newest Arrivals</option>
-                            <option value="price_asc"  <?= $sort==='price_asc'  ?'selected':'' ?>>Price: Low to High</option>
-                            <option value="price_desc" <?= $sort==='price_desc' ?'selected':'' ?>>Price: High to Low</option>
-                            <option value="year_desc"  <?= $sort==='year_desc'  ?'selected':'' ?>>Year: Newest First</option>
-                        </select>
-                    </form>
-                </div>
+        <!-- Count + active chips -->
+        <div class="sv-meta-row">
+            <span style="font-size:13px;color:var(--ink-2)">
+                <strong style="color:var(--ink);font-weight:600"><?= $filteredCount ?></strong>
+                vehicle<?= $filteredCount !== 1 ? 's' : '' ?> <?= $isFiltered ? 'found' : 'available' ?>
+            </span>
+            <?php if ($chips): ?>
+            <div class="sv-chips">
+                <?php foreach ($chips as [$lbl, $drop]): ?>
+                <a href="<?= htmlspecialchars(sv_url_without($drop)) ?>" class="sv-chip">
+                    <?= htmlspecialchars($lbl) ?> <i class="fa fa-xmark"></i>
+                </a>
+                <?php endforeach; ?>
+                <a href="<?= BASE_URL ?>/showroom/vehicles.php" class="sv-chip sv-chip-clear">Clear all</a>
+            </div>
+            <?php endif; ?>
+            <button id="favFilterBtn" onclick="toggleFavFilter()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:var(--r);padding:6px 14px;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit">
+                <i class="fa fa-heart" style="font-size:11px"></i> Saved
+                <span id="favCount" style="display:none;background:var(--ink);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px">0</span>
+            </button>
+        </div>
+    </div>
+</section>
 
-                <?php if (!$filteredCars): ?>
-                <!-- Empty state -->
-                <div style="background:var(--white);border:1px solid var(--line);border-radius:var(--r);padding:72px 24px;text-align:center">
-                    <div class="lx-label" style="margin-bottom:14px">No Results</div>
-                    <h3 style="font-size:22px;font-weight:400;margin:0 0 10px">No vehicles found</h3>
-                    <p style="color:var(--ink-2);font-size:14px;margin:0 0 26px">Try adjusting your filters or clearing your search.</p>
-                    <a href="<?= BASE_URL ?>/showroom/vehicles.php" class="btn-lx">View All Vehicles</a>
-                </div>
-                <?php else: ?>
+<!-- ═══════════════════════════════════════════════════════════
+     VEHICLE GRID
+═══════════════════════════════════════════════════════════════ -->
+<section style="background:var(--white);padding:40px 0 110px">
+    <div class="lx-wrap">
 
-                <!-- Car grid -->
-                <div class="inv-grid">
-                    <?php foreach ($filteredCars as $car):
-                        $img = $car['primary_image'] ? thumbUrl('cars', $car['primary_image']) : null;
-                        $waMsg = urlencode("Hi, I'm interested in the {$car['year']} {$car['make']} {$car['model']} (KES " . number_format((float)$car['asking_price']) . ") listed on your showroom.");
-                        $isNew      = strtotime($car['created_at']) > strtotime('-30 days');
-                        $isReserved = ($car['status'] ?? '') === 'reserved';
-                    ?>
-                    <div class="inv-card<?= $isReserved ? ' inv-card-reserved' : '' ?>" data-car-id="<?= $car['id'] ?>" data-car-name="<?= htmlspecialchars($car['year'].' '.$car['make'].' '.$car['model']) ?>">
-                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="inv-img-wrap">
-                            <?php if ($isReserved): ?>
-                            <span class="inv-badge">Reserved</span>
-                            <?php elseif ($car['featured']): ?>
-                            <span class="inv-badge">Featured</span>
-                            <?php elseif ($isNew): ?>
-                            <span class="inv-badge">New Arrival</span>
-                            <?php endif; ?>
-                            <?php if ($car['image_count'] > 1): ?>
-                            <span class="inv-photos"><i class="fa fa-images"></i> <?= $car['image_count'] ?></span>
-                            <?php endif; ?>
-                            <?php if ($img): ?>
-                            <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($car['make'].' '.$car['model']) ?>" loading="lazy" decoding="async">
-                            <?php else: ?>
-                            <div class="lx-noimg"><i class="fa fa-car-side"></i></div>
-                            <?php endif; ?>
+        <?php if (!$filteredCars): ?>
+        <!-- Empty state -->
+        <div style="border:1px solid var(--line);border-radius:var(--r);padding:88px 24px;text-align:center">
+            <div class="lx-label" style="margin-bottom:14px">No Results</div>
+            <h3 style="font-size:22px;font-weight:400;margin:0 0 10px">No vehicles found</h3>
+            <p style="color:var(--ink-2);font-size:14px;margin:0 0 26px">Try adjusting your filters or clearing your search.</p>
+            <a href="<?= BASE_URL ?>/showroom/vehicles.php" class="btn-lx">View All Vehicles</a>
+        </div>
+        <?php else: ?>
+
+        <div class="sv-grid">
+            <?php foreach ($filteredCars as $car):
+                $img = $car['primary_image'] ? thumbUrl('cars', $car['primary_image']) : null;
+                $waMsg = urlencode("Hi, I'm interested in the {$car['year']} {$car['make']} {$car['model']} (KES " . number_format((float)$car['asking_price']) . ") listed on your showroom.");
+                $isNew      = strtotime($car['created_at']) > strtotime('-30 days');
+                $isReserved = ($car['status'] ?? '') === 'reserved';
+                $hasOffer   = !$isReserved && !empty($car['offer_price']) && $car['offer_price'] > 0;
+                $askPrice   = (float)($car['asking_price'] ?? 0);
+                $showPrice  = $hasOffer ? (float)$car['offer_price'] : $askPrice;
+                $saveAmt    = ($hasOffer && $askPrice > $car['offer_price']) ? $askPrice - (float)$car['offer_price'] : 0;
+
+                // Meta line: Year · Colour · Fuel  (Lucid: year · paint · wheels)
+                $metaBits = array_filter([
+                    $car['year'] ?: null,
+                    $car['color'] ? htmlspecialchars($car['color']) : null,
+                    $car['fuel_type'] ? ucfirst($car['fuel_type']) : null,
+                ]);
+            ?>
+            <div class="sv-card<?= $isReserved ? ' sv-card-reserved' : '' ?>" data-car-id="<?= $car['id'] ?>" data-car-name="<?= htmlspecialchars($car['year'].' '.$car['make'].' '.$car['model']) ?>">
+
+                <!-- Image -->
+                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="sv-card-img">
+                    <?php if ($isReserved): ?>
+                    <span class="sv-chip-avail sv-chip-dark">Reserved</span>
+                    <?php elseif ($car['featured']): ?>
+                    <span class="sv-chip-avail">Available Today</span>
+                    <?php elseif ($isNew): ?>
+                    <span class="sv-chip-avail">New Arrival</span>
+                    <?php else: ?>
+                    <span class="sv-chip-avail">Available</span>
+                    <?php endif; ?>
+                    <?php if ($car['image_count'] > 1): ?>
+                    <span class="sv-photos"><i class="fa fa-camera"></i> <?= $car['image_count'] ?></span>
+                    <?php endif; ?>
+                    <?php if ($img): ?>
+                    <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($car['make'].' '.$car['model']) ?>" loading="lazy" decoding="async">
+                    <?php else: ?>
+                    <div class="lx-noimg"><i class="fa fa-car-side"></i></div>
+                    <?php endif; ?>
+                </a>
+
+                <!-- Body -->
+                <div class="sv-card-body">
+                    <h3 class="sv-card-title">
+                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>">
+                            <?= htmlspecialchars($car['make'] . ' ' . $car['model']) ?>
                         </a>
-                        <div class="inv-body">
-                            <div class="inv-meta"><?= $car['year'] ?><?= $car['body_type'] ? ' · ' . htmlspecialchars($car['body_type']) : '' ?></div>
-                            <h3 class="inv-title">
-                                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>">
-                                    <?= htmlspecialchars($car['make'] . ' ' . $car['model']) ?>
-                                </a>
-                            </h3>
-                            <div class="inv-specs">
-                                <?php if ($car['mileage']):      ?><span><i class="fa fa-gauge-high"></i><?= number_format($car['mileage']) ?> km</span><?php endif; ?>
-                                <?php if ($car['transmission']): ?><span><i class="fa fa-gears"></i><?= ucfirst($car['transmission']) ?></span><?php endif; ?>
-                                <?php if ($car['fuel_type']):    ?><span><i class="fa fa-gas-pump"></i><?= ucfirst($car['fuel_type']) ?></span><?php endif; ?>
-                                <?php if ($car['engine_cc']):    ?><span><i class="fa fa-car-side"></i><?= number_format($car['engine_cc']) ?> cc</span><?php endif; ?>
-                            </div>
-                            <div class="inv-price">
-                                <?php if ($isReserved): ?>
-                                    <span class="inv-tag">Reserved</span>
-                                    <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
-                                    <span style="font-size:13px;color:var(--ink-3);font-weight:400;margin-left:8px">KES <?= number_format((float)$car['asking_price']) ?></span>
-                                    <?php endif; ?>
-                                <?php elseif (!empty($car['offer_price']) && $car['offer_price'] > 0): ?>
-                                    <span class="inv-tag">Offer</span>
-                                    KES <?= number_format((float)$car['offer_price']) ?>
-                                    <?php if (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
-                                    <del>KES <?= number_format((float)$car['asking_price']) ?></del>
-                                    <?php endif; ?>
-                                <?php elseif (!empty($car['asking_price']) && $car['asking_price'] > 0): ?>
-                                    KES <?= number_format((float)$car['asking_price']) ?>
-                                <?php else: ?>
-                                    <span style="font-weight:400;color:var(--ink-2)">Price on request</span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="inv-actions">
-                                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="inv-btn-view">View Details</a>
-                                <?php if (!$isReserved && $__waClean): ?>
-                                <a href="https://wa.me/<?= $__waClean ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="inv-btn-icon" title="Enquire on WhatsApp">
-                                    <i class="fa-brands fa-whatsapp"></i>
-                                </a>
-                                <?php endif; ?>
-                                <button class="fav-btn inv-btn-icon" data-id="<?= $car['id'] ?>"
-                                        onclick="toggleFav(<?= $car['id'] ?>,this)" title="Save to favorites">
-                                    <i class="fa-regular fa-heart"></i>
-                                </button>
-                                <button class="cmp-btn inv-btn-icon" data-id="<?= $car['id'] ?>"
-                                        onclick="toggleCompare(<?= $car['id'] ?>,this)" title="Add to compare">
-                                    <i class="fa fa-scale-balanced"></i>
-                                </button>
-                            </div>
+                    </h3>
+                    <div class="sv-card-meta"><?= implode(' &middot; ', $metaBits) ?: '&nbsp;' ?></div>
+
+                    <div class="sv-card-price">
+                        <?php if ($isReserved): ?>
+                            <span class="p">Reserved</span>
+                            <?php if ($askPrice > 0): ?><span class="sub">KES <?= number_format($askPrice) ?></span><?php endif; ?>
+                        <?php elseif ($showPrice > 0): ?>
+                            <span class="p">KES <?= number_format($showPrice) ?></span>
+                            <?php if ($saveAmt > 0): ?>
+                            <span class="sub"><del>KES <?= number_format($askPrice) ?></del> &nbsp;Save KES <?= number_format($saveAmt) ?></span>
+                            <?php else: ?>
+                            <span class="sub">Financing available</span>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <span class="p" style="font-weight:400;color:var(--ink-2)">Price on request</span>
+                            <span class="sub">Contact us for details</span>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Icon stat row (Lucid: Range / Power / Drive) -->
+                    <div class="sv-card-stats">
+                        <div>
+                            <i class="fa fa-road"></i>
+                            <div class="v"><?= $car['mileage'] ? number_format($car['mileage']) . ' km' : '—' ?></div>
+                            <div class="l">Mileage</div>
+                        </div>
+                        <div>
+                            <i class="fa fa-bolt"></i>
+                            <div class="v"><?= $car['engine_cc'] ? number_format($car['engine_cc']) . ' cc' : '—' ?></div>
+                            <div class="l">Engine</div>
+                        </div>
+                        <div>
+                            <i class="fa fa-gears"></i>
+                            <div class="v"><?= $car['transmission'] ? ucfirst($car['transmission']) : '—' ?></div>
+                            <div class="l">Drive</div>
                         </div>
                     </div>
-                    <?php endforeach; ?>
-                </div>
 
-                <?php endif; ?>
-            </div><!-- /car grid col -->
-        </div><!-- /grid layout -->
+                    <!-- CTAs -->
+                    <div class="sv-card-actions">
+                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="sv-btn-main">View Details</a>
+                        <?php if (!$isReserved && $__waClean): ?>
+                        <a href="https://wa.me/<?= $__waClean ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="sv-btn-sq" title="Enquire on WhatsApp">
+                            <i class="fa-brands fa-whatsapp"></i>
+                        </a>
+                        <?php endif; ?>
+                        <button class="fav-btn sv-btn-sq" data-id="<?= $car['id'] ?>"
+                                onclick="toggleFav(<?= $car['id'] ?>,this)" title="Save to favorites">
+                            <i class="fa-regular fa-heart"></i>
+                        </button>
+                        <button class="cmp-btn sv-btn-sq" data-id="<?= $car['id'] ?>"
+                                onclick="toggleCompare(<?= $car['id'] ?>,this)" title="Add to compare">
+                            <i class="fa fa-scale-balanced"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+
+        <?php endif; ?>
     </div>
 </section>
 
 <!-- ── Styles ──────────────────────────────────────────────────────────────── -->
 <style>
-.lx-inv-layout { display: grid; grid-template-columns: 280px 1fr; gap: 32px; align-items: start; }
-@media (max-width: 1024px) { .lx-inv-layout { grid-template-columns: 1fr; } .lx-filter { position: static !important; } }
-.lx-filter { background: var(--white); border: 1px solid var(--line); border-radius: var(--r); position: sticky; top: calc(var(--nav-h) + 20px); }
-.lx-filter-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 22px; border-bottom: 1px solid var(--line); }
+/* ── Filter bar ─────────────────────────────────────────────── */
+.sv-filterbar-wrap { background: var(--white); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 18px 0; position: sticky; top: var(--nav-h); z-index: 100; }
+.sv-filterbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sv-search {
+    display: flex; align-items: center; gap: 9px;
+    border: 1px solid var(--line); border-radius: var(--r);
+    padding: 0 14px; height: 42px; flex: 1 1 220px; min-width: 200px;
+    transition: border-color .25s var(--ease); background: var(--white);
+}
+.sv-search:focus-within { border-color: var(--ink); }
+.sv-search i { font-size: 12px; color: var(--ink-3); }
+.sv-search input { border: none; outline: none; font-family: inherit; font-size: 13.5px; color: var(--ink); width: 100%; background: transparent; }
+.sv-select {
+    height: 42px; border: 1px solid var(--line); border-radius: var(--r);
+    padding: 0 12px; font-family: inherit; font-size: 12px; font-weight: 500;
+    letter-spacing: .04em; color: var(--ink); background: var(--white);
+    cursor: pointer; outline: none; transition: border-color .25s var(--ease);
+}
+.sv-select:hover, .sv-select:focus { border-color: var(--ink); }
+.sv-more-btn {
+    height: 42px; border: 1px solid var(--line); border-radius: var(--r);
+    padding: 0 16px; font-family: inherit; font-size: 11px; font-weight: 600;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--ink);
+    background: var(--white); cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    transition: all .25s var(--ease);
+}
+.sv-more-btn:hover, .sv-more-btn.active { border-color: var(--ink); }
+.sv-more-btn.active { background: var(--ink); color: #fff; }
+.sv-sort { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+.sv-sort span { font-size: 10.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+.sv-sort select {
+    height: 42px; border: none; border-bottom: 1px solid var(--line);
+    font-family: inherit; font-size: 13px; font-weight: 500; color: var(--ink);
+    background: transparent; cursor: pointer; outline: none; padding: 0 4px;
+}
+.sv-sort select:hover { border-bottom-color: var(--ink); }
 
-.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
-.inv-card { background: var(--white); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow .35s var(--ease), border-color .35s var(--ease); }
-.inv-card:hover { box-shadow: 0 22px 48px rgba(0,0,0,.09); border-color: #cfcfcd; }
-.inv-img-wrap { display: block; position: relative; aspect-ratio: 16/10; overflow: hidden; background: var(--paper); flex-shrink: 0; }
-.inv-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease); }
-.inv-card:hover .inv-img-wrap img { transform: scale(1.04); }
-.inv-badge {
-    position: absolute; top: 14px; left: 14px; z-index: 1;
-    background: rgba(10,10,10,.85); color: #fff;
-    font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
-    padding: 5px 12px; border-radius: var(--r);
+.sv-more-panel { display: none; border-top: 1px solid var(--line); margin-top: 16px; padding-top: 18px; }
+.sv-more-panel.open { display: block; }
+.sv-more-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+@media (max-width: 991px) { .sv-more-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 576px) { .sv-more-grid { grid-template-columns: 1fr; } }
+
+.sv-meta-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+.sv-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sv-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--ink); border-radius: 20px;
+    padding: 5px 13px; font-size: 12px; font-weight: 500; color: var(--ink);
+    transition: all .25s var(--ease);
 }
-.inv-photos { position: absolute; top: 14px; right: 14px; z-index: 1; background: rgba(10,10,10,.55); color: #fff; font-size: 10.5px; font-weight: 500; padding: 3px 9px; border-radius: var(--r); }
-.inv-card-reserved { opacity: .82; }
-.inv-body { padding: 22px 24px 24px; flex: 1; display: flex; flex-direction: column; }
-.inv-meta { font-size: 10.5px; color: var(--ink-3); font-weight: 600; text-transform: uppercase; letter-spacing: .16em; margin-bottom: 6px; }
-.inv-title { font-size: 18px; font-weight: 500; letter-spacing: -.01em; margin: 0 0 14px; }
-.inv-title a { color: var(--ink); }
-.inv-title a:hover { color: var(--ink-2); }
-.inv-specs { display: flex; flex-wrap: wrap; gap: 12px 16px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
-.inv-specs span { font-size: 12px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 7px; }
-.inv-specs i { font-size: 11px; color: var(--ink-3); }
-.inv-price { font-size: 17px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); margin-top: auto; margin-bottom: 16px; }
-.inv-price del { font-size: 12.5px; color: var(--ink-3); font-weight: 400; margin-left: 8px; }
-.inv-tag {
-    display: inline-block; font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
-    background: var(--ink); color: #fff;
-    padding: 3px 9px; border-radius: var(--r); vertical-align: 2px; margin-right: 7px;
+.sv-chip i { font-size: 10px; color: var(--ink-3); }
+.sv-chip:hover { background: var(--ink); color: #fff; }
+.sv-chip:hover i { color: #fff; }
+.sv-chip-clear { border-color: var(--line); color: var(--ink-3); }
+
+/* ── Vehicle cards (Lucid available-vehicles anatomy) ───────── */
+.sv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+@media (max-width: 1100px) { .sv-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px)  { .sv-grid { grid-template-columns: 1fr; } }
+
+.sv-card {
+    background: var(--white); border: 1px solid var(--line); border-radius: var(--r);
+    overflow: hidden; display: flex; flex-direction: column;
+    transition: box-shadow .35s var(--ease), border-color .35s var(--ease), transform .35s var(--ease);
 }
-.inv-actions { display: flex; gap: 8px; }
-.inv-btn-view {
+.sv-card:hover { box-shadow: 0 24px 56px rgba(0,0,0,.10); border-color: #cfcfcd; transform: translateY(-3px); }
+.sv-card-reserved { opacity: .8; }
+
+.sv-card-img { display: block; position: relative; aspect-ratio: 16/10; overflow: hidden; background: linear-gradient(180deg, #f7f7f5 0%, #ececea 100%); flex-shrink: 0; }
+.sv-card-img img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease); }
+.sv-card:hover .sv-card-img img { transform: scale(1.04); }
+
+.sv-chip-avail {
+    position: absolute; top: 16px; left: 16px; z-index: 1;
+    background: var(--white); color: var(--ink); border: 1px solid var(--line);
+    font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    padding: 5px 12px; border-radius: 20px;
+}
+.sv-chip-dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+.sv-photos { position: absolute; top: 16px; right: 16px; z-index: 1; background: rgba(10,10,10,.55); color: #fff; font-size: 10.5px; font-weight: 500; padding: 4px 10px; border-radius: 20px; display: inline-flex; align-items: center; gap: 6px; }
+.sv-photos i { font-size: 10px; }
+
+.sv-card-body { padding: 24px 26px 26px; flex: 1; display: flex; flex-direction: column; }
+.sv-card-title { font-size: 20px; font-weight: 500; letter-spacing: -.01em; margin: 0 0 5px; }
+.sv-card-title a { color: var(--ink); }
+.sv-card-title a:hover { color: var(--ink-2); }
+.sv-card-meta { font-size: 12.5px; color: var(--ink-3); margin-bottom: 18px; }
+
+.sv-card-price { margin-bottom: 20px; }
+.sv-card-price .p { display: block; font-size: 21px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); }
+.sv-card-price .sub { display: block; font-size: 12px; color: var(--ink-3); margin-top: 3px; }
+.sv-card-price .sub del { color: var(--ink-3); }
+
+.sv-card-stats {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    padding: 16px 0; margin-bottom: 20px; margin-top: auto;
+}
+.sv-card-stats > div { text-align: center; border-right: 1px solid var(--line); padding: 0 8px; }
+.sv-card-stats > div:last-child { border-right: none; }
+.sv-card-stats i { font-size: 15px; color: var(--ink); display: block; margin-bottom: 8px; }
+.sv-card-stats .v { font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; }
+.sv-card-stats .l { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-3); margin-top: 3px; }
+
+.sv-card-actions { display: flex; gap: 8px; }
+.sv-btn-main {
     flex: 1; background: var(--ink); color: #fff; border-radius: var(--r);
-    padding: 11px 14px; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    padding: 12px 14px; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
     text-align: center; display: flex; align-items: center; justify-content: center;
     transition: background .25s var(--ease);
 }
-.inv-btn-view:hover { background: #000; color: #fff; }
-.inv-btn-icon {
-    width: 40px; height: 40px; background: var(--white); color: var(--ink-2);
+.sv-btn-main:hover { background: #000; color: #fff; }
+.sv-btn-sq {
+    width: 42px; height: 42px; background: var(--white); color: var(--ink-2);
     border: 1px solid var(--line); border-radius: var(--r);
     display: flex; align-items: center; justify-content: center; font-size: 15px;
     cursor: pointer; transition: all .25s var(--ease); flex-shrink: 0; text-decoration: none;
 }
-.inv-btn-icon:hover { border-color: var(--ink); color: var(--ink); }
-.inv-btn-icon.active-fav, .inv-btn-icon.active-cmp { background: var(--ink); color: #fff; border-color: var(--ink); }
+.sv-btn-sq:hover { border-color: var(--ink); color: var(--ink); }
+.sv-btn-sq.active-fav, .sv-btn-sq.active-cmp { background: var(--ink); color: #fff; border-color: var(--ink); }
 
 @media (max-width: 768px) {
-    .inv-grid { grid-template-columns: 1fr 1fr; gap: 16px; }
-}
-@media (max-width: 520px) {
-    .inv-grid { grid-template-columns: 1fr; }
+    .sv-sort { margin-left: 0; width: 100%; }
+    .sv-filterbar-wrap { position: static; }
 }
 </style>
 
@@ -393,6 +510,11 @@ include __DIR__ . '/header.php';
 
 <script>
 var BASE_URL_JS = '<?= BASE_URL ?>';
+
+/* ── More Filters toggle ────────────────────────────────────────────────── */
+document.getElementById('svMoreBtn').addEventListener('click', function () {
+    document.getElementById('svMorePanel').classList.toggle('open');
+});
 
 /* ── Favorites ─────────────────────────────────────────────────────────── */
 var FAV_KEY = 'msc_favs';
@@ -432,7 +554,7 @@ function toggleFavFilter() {
 }
 function applyFavFilter() {
     var favs = getFavs();
-    document.querySelectorAll('.inv-card').forEach(function(c) {
+    document.querySelectorAll('.sv-card').forEach(function(c) {
         c.style.display = showingFavs && favs.indexOf(parseInt(c.dataset.carId)) < 0 ? 'none' : '';
     });
 }
@@ -448,7 +570,7 @@ function toggleCompare(id, btn) {
     } else {
         if (compareIds.length >= 3) { alert('You can compare up to 3 cars at a time.'); return; }
         compareIds.push(id);
-        var card = document.querySelector('.inv-card[data-car-id="'+id+'"]');
+        var card = document.querySelector('.sv-card[data-car-id="'+id+'"]');
         compareNames[id] = card ? card.dataset.carName : 'Car '+id;
     }
     syncCompareUI();
