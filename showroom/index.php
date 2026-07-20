@@ -119,49 +119,66 @@ include __DIR__ . '/header.php';
         </div>
     </div>
 
-    <div class="c3d-wrap rv rv-d1">
-        <div class="c3d-viewport" id="c3dViewport">
-            <?php foreach ($carouselCars as $cc):
-                $ccImg     = thumbUrl('cars', $cc['primary_image']);
-                $ccIsOffer = !empty($cc['offer_price']) && $cc['offer_price'] > 0;
-                $ccPrice   = $ccIsOffer ? (float)$cc['offer_price'] : (float)($cc['asking_price'] ?? 0);
-                $ccSpecs   = array_filter([
-                    $cc['mileage']      ? number_format($cc['mileage']) . ' km' : null,
-                    $cc['transmission'] ? ucfirst($cc['transmission'])          : null,
-                    $cc['fuel_type']    ? ucfirst($cc['fuel_type'])             : null,
-                ]);
-            ?>
-            <a class="c3d-card" href="<?= BASE_URL ?>/showroom/view.php?id=<?= $cc['id'] ?>">
-                <div class="img">
-                    <img src="<?= htmlspecialchars($ccImg) ?>" alt="<?= htmlspecialchars($cc['make'].' '.$cc['model']) ?>" loading="lazy" decoding="async">
-                </div>
-                <div class="c3d-body">
-                    <div class="lx-label" style="margin-bottom:6px"><?= $cc['year'] ?><?= $cc['body_type'] ? ' · ' . htmlspecialchars($cc['body_type']) : '' ?></div>
-                    <h3><?= htmlspecialchars($cc['make'] . ' ' . $cc['model']) ?></h3>
-                    <div class="c3d-price">
-                        <?php if ($ccPrice > 0): ?>
-                            <?php if ($ccIsOffer): ?><span class="offer-tag">Offer</span><?php endif; ?>
-                            KES <?= number_format($ccPrice) ?>
-                            <?php if ($ccIsOffer && !empty($cc['asking_price'])): ?>
-                            <del>KES <?= number_format((float)$cc['asking_price']) ?></del>
-                            <?php endif; ?>
-                        <?php else: ?>
-                            Price on request
-                        <?php endif; ?>
+    <div class="fcar rv rv-d1">
+        <div class="fcar-viewport" id="fcarViewport">
+            <div class="fcar-track" id="fcarTrack">
+                <?php foreach ($carouselCars as $fb):
+                    $fbImg   = thumbUrl('cars', $fb['primary_image']);
+                    $fbPrice = (!empty($fb['offer_price']) && $fb['offer_price'] > 0) ? (float)$fb['offer_price'] : (float)($fb['asking_price'] ?? 0);
+                    $fbIsOffer = !empty($fb['offer_price']) && $fb['offer_price'] > 0;
+                    $fbWa    = urlencode("Hi, I'm interested in the {$fb['year']} {$fb['make']} {$fb['model']}.");
+                ?>
+                <div class="fcar-slide">
+                    <div class="lx-feature">
+                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fb['id'] ?>" class="lx-feature-img">
+                            <img src="<?= htmlspecialchars($fbImg) ?>" alt="<?= htmlspecialchars($fb['make'].' '.$fb['model']) ?>" loading="lazy" decoding="async">
+                        </a>
+                        <div class="lx-feature-body">
+                            <div class="lx-label" style="margin-bottom:8px"><?= $fb['year'] ?><?= $fb['body_type'] ? ' · ' . htmlspecialchars($fb['body_type']) : '' ?></div>
+                            <h3><?= htmlspecialchars($fb['make'] . ' ' . $fb['model']) ?></h3>
+                            <div class="lx-feature-price">
+                                <?php if ($fbPrice > 0): ?>
+                                    <?= $fbIsOffer ? '<span class="offer-tag">Offer</span>' : 'From' ?>
+                                    KES <?= number_format($fbPrice) ?>
+                                    <?php if ($fbIsOffer && !empty($fb['asking_price'])): ?>
+                                    <del>KES <?= number_format((float)$fb['asking_price']) ?></del>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    Price on request
+                                <?php endif; ?>
+                            </div>
+                            <div class="lx-feature-specs">
+                                <?php if ($fb['mileage']): ?>
+                                <div><div class="sv"><?= number_format($fb['mileage']) ?></div><div class="sl">km</div></div>
+                                <?php endif; ?>
+                                <?php if ($fb['engine_cc']): ?>
+                                <div><div class="sv"><?= number_format($fb['engine_cc']) ?></div><div class="sl">cc</div></div>
+                                <?php endif; ?>
+                                <?php if ($fb['transmission']): ?>
+                                <div><div class="sv"><?= ucfirst($fb['transmission']) ?></div><div class="sl">Transmission</div></div>
+                                <?php endif; ?>
+                                <?php if ($fb['fuel_type']): ?>
+                                <div><div class="sv"><?= ucfirst($fb['fuel_type']) ?></div><div class="sl">Fuel</div></div>
+                                <?php endif; ?>
+                            </div>
+                            <div style="display:flex;gap:12px;flex-wrap:wrap">
+                                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fb['id'] ?>" class="btn-lx">View Details</a>
+                                <?php if ($__waClean): ?>
+                                <a href="https://wa.me/<?= $__waClean ?>?text=<?= $fbWa ?>" target="_blank" rel="noopener" class="btn-lx-ghost-dark">Enquire</a>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </div>
-                    <?php if ($ccSpecs): ?>
-                    <div class="c3d-specs"><?= implode(' &middot; ', $ccSpecs) ?></div>
-                    <?php endif; ?>
                 </div>
-            </a>
-            <?php endforeach; ?>
+                <?php endforeach; ?>
+            </div>
 
             <?php if (count($carouselCars) > 1): ?>
-            <button type="button" class="c3d-nav c3d-prev" id="c3dPrev" aria-label="Previous vehicle"><i class="fa fa-chevron-left"></i></button>
-            <button type="button" class="c3d-nav c3d-next" id="c3dNext" aria-label="Next vehicle"><i class="fa fa-chevron-right"></i></button>
+            <button type="button" class="fcar-nav fcar-prev" id="fcarPrev" aria-label="Previous vehicles"><i class="fa fa-chevron-left"></i></button>
+            <button type="button" class="fcar-nav fcar-next" id="fcarNext" aria-label="Next vehicles"><i class="fa fa-chevron-right"></i></button>
             <?php endif; ?>
         </div>
-        <div class="c3d-dots" id="c3dDots"></div>
+        <div class="fcar-dots" id="fcarDots"></div>
     </div>
 
     <div class="lx-wrap rv" style="text-align:center;margin-top:40px">
@@ -404,50 +421,49 @@ include __DIR__ . '/header.php';
 .lx-values .lx-value.rv:nth-child(5) { transition-delay: .32s; }
 .lx-values .lx-value.rv:nth-child(6) { transition-delay: .40s; }
 
-/* ── 3D showcase carousel ─────────────────────────────────────── */
-.c3d-wrap { position: relative; }
-.c3d-viewport {
-    position: relative;
-    height: calc(min(430px, 82vw) * 0.625 + 172px);
-    perspective: 1700px;
+/* ── Featured carousel — original large feature cards on a sliding track ── */
+.fcar { position: relative; max-width: 1320px; margin: 0 auto; padding: 0 28px; }
+.fcar-viewport { position: relative; overflow: hidden; }
+.fcar-track {
+    display: flex; gap: 32px;
+    transition: transform .75s var(--ease);
+    will-change: transform;
 }
-.c3d-card {
-    position: absolute; left: 50%; top: 0;
-    width: min(430px, 82vw);
-    margin-left: calc(min(430px, 82vw) / -2);
-    background: var(--white); border: 1px solid var(--line); border-radius: var(--r);
-    overflow: hidden; display: block; text-decoration: none;
-    transform-style: preserve-3d; backface-visibility: hidden;
-    transition: transform .7s var(--ease), opacity .7s var(--ease), box-shadow .7s var(--ease);
-    will-change: transform, opacity;
-}
-.c3d-card .img { aspect-ratio: 16/10; overflow: hidden; background: var(--paper); }
-.c3d-card .img img { width: 100%; height: 100%; object-fit: cover; }
-.c3d-body { padding: 20px 26px 24px; }
-.c3d-body h3 { font-size: 21px; font-weight: 500; letter-spacing: -.01em; color: var(--ink); margin: 0 0 8px; }
-.c3d-price { font-size: 16px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
-.c3d-price del { font-size: 12.5px; color: var(--ink-3); font-weight: 400; margin-left: 8px; }
-.c3d-specs { font-size: 12.5px; color: var(--ink-3); }
-.c3d-card.is-center { box-shadow: 0 34px 80px rgba(0,0,0,.18); }
-.c3d-card:not(.is-center) .c3d-body { pointer-events: none; }
+.fcar-slide { flex: 0 0 calc((100% - 32px) / 2); min-width: 0; }
+@media (max-width: 991px) { .fcar-slide { flex: 0 0 100%; } }
 
-.c3d-nav {
-    position: absolute; top: 50%; transform: translateY(-50%); z-index: 200;
+.lx-feature { background: var(--white); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column; height: 100%; }
+.lx-feature-img { display: block; position: relative; aspect-ratio: 16/9; overflow: hidden; background: var(--paper); }
+.lx-feature-img img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease); }
+.lx-feature:hover .lx-feature-img img { transform: scale(1.03); }
+.lx-feature-body { padding: 34px 36px 38px; flex: 1; display: flex; flex-direction: column; }
+.lx-feature-body h3 { font-size: 27px; font-weight: 400; letter-spacing: -.01em; margin: 0 0 8px; }
+.lx-feature-price { font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 26px; }
+.lx-feature-price del { color: var(--ink-3); font-weight: 400; margin-left: 8px; font-size: 13px; }
+.lx-feature-specs { display: flex; gap: 0; margin-bottom: 30px; flex-wrap: wrap; }
+.lx-feature-specs > div { padding: 0 26px; border-right: 1px solid var(--line); }
+.lx-feature-specs > div:first-child { padding-left: 0; }
+.lx-feature-specs > div:last-child { border-right: none; }
+.lx-feature-specs .sv { font-size: 20px; font-weight: 300; color: var(--ink); }
+.lx-feature-specs .sl { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-3); margin-top: 3px; }
+
+.fcar-nav {
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 20;
     width: 46px; height: 46px; border: 1px solid var(--line); border-radius: var(--r);
-    background: rgba(255,255,255,.95); color: var(--ink); font-size: 14px;
+    background: rgba(255,255,255,.96); color: var(--ink); font-size: 14px;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: border-color .25s var(--ease), background .25s var(--ease);
+    transition: border-color .25s var(--ease), background .25s var(--ease), opacity .25s var(--ease);
 }
-.c3d-nav:hover { border-color: var(--ink); background: #fff; }
-.c3d-prev { left: max(16px, calc(50% - min(430px, 82vw) / 2 - 260px)); }
-.c3d-next { right: max(16px, calc(50% - min(430px, 82vw) / 2 - 260px)); }
+.fcar-nav:hover { border-color: var(--ink); background: #fff; }
+.fcar-prev { left: 12px; }
+.fcar-next { right: 12px; }
 
-.c3d-dots { display: flex; gap: 8px; justify-content: center; margin-top: 30px; }
-.c3d-dot {
+.fcar-dots { display: flex; gap: 8px; justify-content: center; margin-top: 30px; }
+.fcar-dot {
     width: 26px; height: 2px; padding: 0; border: none; cursor: pointer;
     background: var(--line); transition: background .3s var(--ease);
 }
-.c3d-dot.on { background: var(--ink); }
+.fcar-dot.on { background: var(--ink); }
 
 .offer-tag {
     display: inline-block; font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
@@ -456,7 +472,7 @@ include __DIR__ . '/header.php';
 }
 @media (prefers-reduced-motion: reduce) {
     .rv { opacity: 1; transform: none; transition: none; }
-    .c3d-card { transition: opacity .3s ease; }
+    .fcar-track { transition: none; }
 }
 
 /* Promo cards */
@@ -492,10 +508,8 @@ include __DIR__ . '/header.php';
 
 @media (max-width: 768px) {
     .lx-hero-content { padding-bottom: 80px; }
-    .c3d-nav { top: auto; bottom: -8px; transform: none; }
-    .c3d-prev { left: calc(50% - 60px); }
-    .c3d-next { right: calc(50% - 60px); }
-    .c3d-dots { margin-top: 66px; }
+    .lx-feature-body { padding: 26px 24px 30px; }
+    .lx-feature-specs > div { padding: 0 16px; }
 }
 </style>
 
@@ -505,66 +519,55 @@ include __DIR__ . '/header.php';
     'use strict';
     var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    /* ── 3D showcase carousel ─────────────────────────────────── */
+    /* ── Featured carousel — sliding track, auto-playing ──────── */
     (function () {
-        var vp = document.getElementById('c3dViewport');
-        if (!vp) return;
-        var cards = [].slice.call(vp.querySelectorAll('.c3d-card'));
-        var n = cards.length;
+        var vp    = document.getElementById('fcarViewport');
+        var track = document.getElementById('fcarTrack');
+        if (!vp || !track) return;
+        var slides = [].slice.call(track.querySelectorAll('.fcar-slide'));
+        var n = slides.length;
         if (!n) return;
-        var dotsWrap = document.getElementById('c3dDots');
-        var cur = 0, timer = null;
+        var dotsWrap = document.getElementById('fcarDots');
+        var idx = 0, timer = null, dots = [];
 
-        var dots = [];
-        if (dotsWrap && n > 1) {
-            cards.forEach(function (_, i) {
-                var b = document.createElement('button');
-                b.className = 'c3d-dot';
-                b.setAttribute('aria-label', 'Go to vehicle ' + (i + 1));
-                b.addEventListener('click', function () { go(i); });
-                dotsWrap.appendChild(b);
-                dots.push(b);
-            });
+        function perView() { return window.innerWidth >= 992 ? 2 : 1; }
+        function maxIdx()  { return Math.max(0, n - perView()); }
+
+        function buildDots() {
+            if (!dotsWrap) return;
+            dotsWrap.innerHTML = '';
+            dots = [];
+            if (maxIdx() === 0) return;
+            for (var i = 0; i <= maxIdx(); i++) {
+                (function (i) {
+                    var b = document.createElement('button');
+                    b.className = 'fcar-dot';
+                    b.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+                    b.addEventListener('click', function () { go(i); });
+                    dotsWrap.appendChild(b);
+                    dots.push(b);
+                }(i));
+            }
         }
 
         function layout() {
-            cards.forEach(function (card, i) {
-                // shortest signed distance from the current card (wraps around)
-                var d = (i - cur + n) % n;
-                if (d > n / 2) d -= n;
-                var ad = Math.abs(d), x, z, ry, s, o;
-                if      (ad === 0) { x = 0;       z = 0;    ry = 0;       s = 1;   o = 1;   }
-                else if (ad === 1) { x = d * 58;  z = -190; ry = -d * 26; s = .85; o = .8;  }
-                else if (ad === 2) { x = d * 98;  z = -360; ry = -d * 36; s = .7;  o = .3;  }
-                else               { x = d * 120; z = -480; ry = -d * 40; s = .6;  o = 0;   }
-                card.style.transform = 'translateX(' + x + '%) translateZ(' + z + 'px) rotateY(' + ry + 'deg) scale(' + s + ')';
-                card.style.opacity = o;
-                card.style.zIndex = String(100 - ad);
-                card.style.pointerEvents = ad > 2 ? 'none' : 'auto';
-                card.classList.toggle('is-center', ad === 0);
-            });
-            dots.forEach(function (dd, i) { dd.classList.toggle('on', i === cur); });
+            if (idx > maxIdx()) idx = maxIdx();
+            track.style.transform = 'translateX(-' + slides[idx].offsetLeft + 'px)';
+            dots.forEach(function (d, i) { d.classList.toggle('on', i === idx); });
         }
-        function go(i)  { cur = (i + n) % n; layout(); restart(); }
-        function next() { go(cur + 1); }
-        function prev() { go(cur - 1); }
+        function go(i)  { idx = Math.max(0, Math.min(i, maxIdx())); layout(); restart(); }
+        function next() { go(idx >= maxIdx() ? 0 : idx + 1); }   // wrap back to start
+        function prev() { go(idx <= 0 ? maxIdx() : idx - 1); }
 
-        // Clicking a side card centres it; only the centre card follows its link
-        cards.forEach(function (card, i) {
-            card.addEventListener('click', function (e) {
-                if (i !== cur) { e.preventDefault(); go(i); }
-            });
-        });
-
-        var bPrev = document.getElementById('c3dPrev');
-        var bNext = document.getElementById('c3dNext');
+        var bPrev = document.getElementById('fcarPrev');
+        var bNext = document.getElementById('fcarNext');
         if (bPrev) bPrev.addEventListener('click', prev);
         if (bNext) bNext.addEventListener('click', next);
 
         function restart() {
             if (timer) clearInterval(timer);
             timer = null;
-            if (!reduced && n > 1) timer = setInterval(next, 4500);
+            if (!reduced && maxIdx() > 0) timer = setInterval(next, 5000);
         }
         vp.addEventListener('mouseenter', function () { if (timer) { clearInterval(timer); timer = null; } });
         vp.addEventListener('mouseleave', restart);
@@ -577,6 +580,13 @@ include __DIR__ . '/header.php';
             if (Math.abs(dx) > 40) (dx < 0 ? next : prev)();
         }, { passive: true });
 
+        var pv = perView();
+        window.addEventListener('resize', function () {
+            if (perView() !== pv) { pv = perView(); buildDots(); }
+            layout();
+        });
+
+        buildDots();
         layout();
         restart();
     }());
