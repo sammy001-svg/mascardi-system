@@ -375,148 +375,99 @@ body.has-intro .login-stage{
 }
 body.has-intro .login-stage.show{ opacity:1; transform:none; }
 
-/* ═══════════════════ INTRO OVERLAY ═══════════════════ */
+/* ═══════════════════ INTRO OVERLAY — silent luxury reveal ═══════════════════ */
 #introOverlay{
     position:fixed; inset:0; z-index:9999;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:26px; padding:24px; overflow:hidden;
-    background:#0a1a4d;   /* solid navy blue */
-    transition:opacity .9s ease, transform .9s ease, visibility .9s;
+    gap:30px; padding:24px; overflow:hidden;
+    background:#060606;
+    transition:opacity 1s ease, visibility 1s;
 }
-#introOverlay.done{ opacity:0; transform:scale(1.08); visibility:hidden; pointer-events:none; }
+#introOverlay.done{ opacity:0; visibility:hidden; pointer-events:none; }
 
+/* Faint centre glow + hairline grid, fading out at the edges */
 #introOverlay .intro-grid{
     position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(720px 440px at 50% 42%, rgba(255,255,255,.055), transparent 70%);
+}
+#introOverlay .intro-grid::after{
+    content:''; position:absolute; inset:0;
     background-image:
-        linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
-    background-size:58px 58px;
-    mask-image:radial-gradient(circle at 50% 45%, #000 40%, transparent 85%);
-    -webkit-mask-image:radial-gradient(circle at 50% 45%, #000 40%, transparent 85%);
+        linear-gradient(rgba(255,255,255,.024) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.024) 1px, transparent 1px);
+    background-size:64px 64px;
+    mask-image:radial-gradient(circle at 50% 45%, #000 35%, transparent 82%);
+    -webkit-mask-image:radial-gradient(circle at 50% 45%, #000 35%, transparent 82%);
 }
 
-/* Brand name — Mokoto-style nameplate. Guaranteed to stay centered and
-   inside the viewport: fixed width cap, centered flex row, wraps as a
-   last resort instead of ever spilling past the screen edge.
-
-   The letters themselves are deliberately PLAIN — a single text node,
-   nothing nested inside. Splash effects live in a completely separate
-   #splashLayer overlay, positioned by JS-computed coordinates rather
-   than as children of the letter. This is the fix for two prior bugs
-   (letters exploding to ~900px tall, and letters going invisible):
-   an absolutely-positioned element nested inside an auto-sized flex
-   item is fragile across browsers. Decoupling it removes the whole
-   class of failure permanently. */
+/* Wordmark — letters rise, unblur and settle with a calm stagger.
+   Plain spans (single text node each), centered flex row, capped width:
+   this layout is bulletproof across browsers and never spills the viewport. */
 .brand-name{
     position:relative; z-index:2; margin:0 auto;
     font-family:<?= $mokotoFile ? "'Mokoto'," : '' ?>'Orbitron','Inter',sans-serif; font-weight:900;
-    font-size:clamp(38px, 9.5vw, 112px);
-    letter-spacing:.05em; line-height:1;
+    font-size:clamp(34px, 8.5vw, 96px);
+    letter-spacing:.3em; text-indent:.3em; /* indent balances the trailing tracking */
+    line-height:1;
     display:flex; flex-wrap:wrap; justify-content:center; align-items:baseline;
-    gap:.03em; row-gap:.1em;
     width:100%; max-width:94vw;
     text-align:center;
+    color:#ffffff;
 }
 .brand-name span{
     display:inline-block; opacity:0;
-    color:#ffffff;
-    text-shadow:0 0 30px rgba(96,165,250,.4), 0 8px 22px rgba(0,0,0,.5);
-    /* Fixed, modest pixel offset — not viewport- or font-relative — so the
-       fall never travels far enough to visually leave the screen. Plain
-       opacity + translateY only: no filter, no scale, nothing that can
-       interact unpredictably with compositing. */
-    transform:translateY(-46px);
-    will-change:transform,opacity;
+    transform:translateY(26px);
+    filter:blur(12px);
+    text-shadow:0 0 34px rgba(255,255,255,.18);
+    will-change:transform,opacity,filter;
 }
-.brand-name span.in{ animation:dropIn .85s cubic-bezier(.2,.85,.25,1.2) forwards; }
-/* Brighten as a letter lands, in sync with the splash */
-.brand-name span.pulse{ text-shadow:0 0 48px rgba(147,197,253,.95), 0 0 20px rgba(255,255,255,.95); }
-@keyframes dropIn{
-    0%{ opacity:0; transform:translateY(-46px); }
-    62%{ opacity:1; transform:translateY(5px); }
-    80%{ transform:translateY(-2px); }
-    100%{ opacity:1; transform:translateY(0); }
+.brand-name span.in{ animation:letterIn 1.15s cubic-bezier(.16,.68,.24,1) forwards; }
+@keyframes letterIn{
+    0%{ opacity:0; transform:translateY(26px); filter:blur(12px); }
+    55%{ opacity:1; }
+    100%{ opacity:1; transform:translateY(0); filter:blur(0); }
 }
-
-/* ── Water ripple + droplets — an independent overlay layer, positioned
-   by JS at each letter's landing point. Never nested inside a letter. ── */
-#splashLayer{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
-.splash-ring{
-    position:absolute; left:0; top:0;
-    width:18px; height:18px; margin:-9px 0 0 -9px;
-    border:2px solid rgba(255,255,255,.85);
-    border-radius:50%;
-    opacity:0; transform:scale(.15);
-    box-sizing:border-box;
+/* Light glint that sweeps letter-by-letter once the name has settled */
+.brand-name span.glint{
+    text-shadow:0 0 42px rgba(255,255,255,.85), 0 0 14px rgba(255,255,255,.6);
+    transition:text-shadow .3s ease;
 }
-.splash-ring.r2{ border-color:rgba(147,197,253,.6); }
-.splash-ring.r3{ border-color:rgba(96,165,250,.4); }
-.splash-ring.go{ animation:splashRing .7s cubic-bezier(.15,.6,.3,1) forwards; }
-@keyframes splashRing{
-    0%{ opacity:.9; transform:scale(.15) scaleY(.5); }
-    100%{ opacity:0; transform:scale(3.2) scaleY(.7); }
-}
-.splash-drop{
-    position:absolute; left:0; top:0;
-    width:4px; height:4px; margin:-2px 0 0 -2px;
-    background:#eaf4ff; border-radius:50%;
-    opacity:0;
-    box-shadow:0 0 6px rgba(255,255,255,.85);
-}
-.splash-drop.go{ animation:splashDrop .5s cubic-bezier(.1,.7,.25,1) forwards; }
-@keyframes splashDrop{
-    0%{ opacity:1; transform:translate(0,0) scale(1); }
-    100%{ opacity:0; transform:translate(var(--dx,0), var(--dy,-14px)) scale(.25); }
-}
-@media (prefers-reduced-motion: reduce){ #splashLayer{ display:none !important; } }
 
 .brand-underline{
-    position:relative; z-index:2; height:2px; width:0;
-    border-radius:3px; margin-top:-4px;
-    background:linear-gradient(90deg, transparent, rgba(147,197,253,.9), transparent);
-    box-shadow:0 0 18px rgba(96,165,250,.5);
-    transition:width 1.1s cubic-bezier(.16,.7,.2,1) .2s;
+    position:relative; z-index:2; height:1px; width:0;
+    margin-top:-2px;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.8), transparent);
+    transition:width 1.3s cubic-bezier(.16,.7,.2,1) .15s;
 }
 #introOverlay.reveal .brand-underline{ width:min(520px,78vw); }
 
-/* Typed tagline */
+/* Tagline — fades up while its tracking settles into place */
 .tagline{
     position:relative; z-index:2; min-height:1.6em;
-    font-family:'Inter',sans-serif; font-weight:600;
-    font-size:clamp(13px, 2.3vw, 20px); letter-spacing:.18em;
+    font-family:'Inter',sans-serif; font-weight:500;
+    font-size:clamp(11px, 2vw, 15px); letter-spacing:.42em;
     text-transform:uppercase; text-align:center;
-    color:#dbe6f7; text-shadow:0 0 18px rgba(96,165,250,.25);
+    color:rgba(255,255,255,.62);
     padding:0 12px;
+    opacity:0; transform:translateY(14px);
+    transition:opacity 1.2s ease .25s, transform 1.2s ease .25s, letter-spacing 1.6s ease .25s;
 }
-.tagline.typing::after{
-    content:'|'; margin-left:2px; color:var(--brand-blue-light,#60a5fa);
-    animation:caret .7s steps(1) infinite; font-weight:400;
-}
-@keyframes caret{ 50%{ opacity:0; } }
+#introOverlay.reveal .tagline{ opacity:1; transform:none; letter-spacing:.24em; }
 
-/* Skip + sound hint */
+/* Skip */
 .intro-skip{
     position:fixed; top:22px; right:24px; z-index:10000;
-    font-size:12.5px; font-weight:600; color:rgba(255,255,255,.7);
-    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.16);
-    border-radius:9px; padding:8px 15px; cursor:pointer;
-    display:flex; align-items:center; gap:7px; transition:all .15s;
+    font-size:10.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase;
+    color:rgba(255,255,255,.55);
+    background:none; border:1px solid rgba(255,255,255,.22);
+    border-radius:2px; padding:9px 18px; cursor:pointer;
+    display:flex; align-items:center; gap:8px; transition:all .25s ease;
 }
-.intro-skip:hover{ color:#fff; background:rgba(255,255,255,.12); border-color:rgba(255,255,255,.3); }
-.sound-hint{
-    position:fixed; bottom:26px; left:50%; transform:translateX(-50%); z-index:10000;
-    font-size:12px; font-weight:500; color:rgba(255,255,255,.72);
-    background:rgba(15,23,42,.6); border:1px solid rgba(148,163,184,.22);
-    border-radius:30px; padding:8px 16px; display:flex; align-items:center; gap:8px;
-    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-    animation:hintPulse 1.8s ease-in-out infinite; transition:opacity .4s;
-}
-.sound-hint.hide{ opacity:0; pointer-events:none; }
-@keyframes hintPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(59,130,246,.35); } 50%{ box-shadow:0 0 0 8px rgba(59,130,246,0); } }
+.intro-skip:hover{ color:#fff; border-color:rgba(255,255,255,.6); }
 
 @media (prefers-reduced-motion: reduce){
-    .brand-name span, .brand-name span.in{ animation:none; opacity:1; transform:none;
-        color:#fff; }
+    .brand-name span, .brand-name span.in{ animation:none; opacity:1; transform:none; filter:none; }
+    .tagline{ transition:opacity .3s ease; }
     #introOverlay, .login-stage{ transition:opacity .3s ease; }
 }
 /* Fixed backgrounds are janky on mobile — pin to scroll and reframe */
@@ -535,18 +486,14 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 <!-- ═══════════════════ WELCOME INTRO OVERLAY ═══════════════════ -->
 <div id="introOverlay">
     <div class="intro-grid"></div>
-    <div id="splashLayer"></div>
 
     <h1 id="brandName" class="brand-name" data-name="MASCARDI" aria-label="MASCARDI"></h1>
     <div class="brand-underline"></div>
-    <div id="tagline" class="tagline" aria-live="polite"></div>
+    <div id="tagline" class="tagline">Welcome to Mascardi &mdash; Home of Luxury Cars</div>
 
     <button type="button" id="skipIntro" class="intro-skip">
-        <i class="fa fa-forward"></i> Skip
+        Skip <i class="fa fa-forward" style="font-size:9px"></i>
     </button>
-    <div id="soundHint" class="sound-hint">
-        <i class="fa fa-volume-high"></i> Click anywhere to hear the welcome
-    </div>
 </div>
 <?php endif; ?>
 
@@ -683,197 +630,22 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
 </script>
 
 <?php if ($showIntro): ?>
-<!-- ═══════════════════ INTRO ORCHESTRATION ═══════════════════ -->
+<!-- ═══════════════════ INTRO ORCHESTRATION — silent ═══════════════════ -->
 <script>
 (function () {
     'use strict';
 
-    var overlay  = document.getElementById('introOverlay');
-    var brandEl  = document.getElementById('brandName');
-    var taglineEl= document.getElementById('tagline');
-    var stage    = document.getElementById('loginStage');
-    var skipBtn  = document.getElementById('skipIntro');
-    var soundHint= document.getElementById('soundHint');
+    var overlay = document.getElementById('introOverlay');
+    var brandEl = document.getElementById('brandName');
+    var stage   = document.getElementById('loginStage');
+    var skipBtn = document.getElementById('skipIntro');
     if (!overlay || !stage) return;
 
-    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    var NAME  = (brandEl.getAttribute('data-name') || 'MASCARDI');
-    var LINE1 = 'WELCOME TO MASCARDI, HOME OF LUXURY CARS';
-    var LINE2 = 'Use your username and password to log in to your account. Have a great day at work today.';
-
+    var reduced  = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var NAME     = brandEl.getAttribute('data-name') || 'MASCARDI';
     var finished = false;
 
-    /* ── Web Audio: synthesized water-wave blips ─────────────── */
-    var actx = null, audioUnlocked = false;
-    function audioCtx() {
-        if (!actx) {
-            var AC = window.AudioContext || window.webkitAudioContext;
-            if (AC) { try { actx = new AC(); } catch (e) { actx = null; } }
-        }
-        if (actx && actx.state === 'suspended') { try { actx.resume(); } catch (e) {} }
-        return actx;
-    }
-    // A water SPLASH for each falling letter: bright splish + wash + droplet plonk
-    function playWave(idx) {
-        var ctx = audioCtx();
-        if (!ctx || ctx.state !== 'running') return;
-        try {
-            var now = ctx.currentTime;
-
-            // 1) Bright splish — short high-passed noise burst (the impact)
-            var sDur = 0.26;
-            var sBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * sDur), ctx.sampleRate);
-            var sd = sBuf.getChannelData(0);
-            for (var i = 0; i < sd.length; i++) sd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / sd.length, 2.3);
-            var sSrc = ctx.createBufferSource(); sSrc.buffer = sBuf;
-            var hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.setValueAtTime(1900, now);
-            var sg = ctx.createGain();
-            sg.gain.setValueAtTime(0.0001, now);
-            sg.gain.exponentialRampToValueAtTime(0.24, now + 0.008);
-            sg.gain.exponentialRampToValueAtTime(0.0001, now + sDur);
-            sSrc.connect(hp); hp.connect(sg); sg.connect(ctx.destination);
-            sSrc.start(now); sSrc.stop(now + sDur);
-
-            // 2) Water wash — low-passed noise decay (the "sploosh")
-            var wDur = 0.5;
-            var wBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * wDur), ctx.sampleRate);
-            var wd = wBuf.getChannelData(0);
-            for (var j = 0; j < wd.length; j++) wd[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / wd.length, 1.5);
-            var wSrc = ctx.createBufferSource(); wSrc.buffer = wBuf;
-            var lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
-            lp.frequency.setValueAtTime(1300, now);
-            lp.frequency.exponentialRampToValueAtTime(300, now + wDur);
-            var wg = ctx.createGain();
-            wg.gain.setValueAtTime(0.0001, now);
-            wg.gain.exponentialRampToValueAtTime(0.28, now + 0.04);
-            wg.gain.exponentialRampToValueAtTime(0.0001, now + wDur);
-            wSrc.connect(lp); lp.connect(wg); wg.connect(ctx.destination);
-            wSrc.start(now); wSrc.stop(now + wDur);
-
-            // 3) Droplet plonk — quick descending sine
-            var o = ctx.createOscillator(); o.type = 'sine';
-            var f0 = 540 - idx * 16;
-            o.frequency.setValueAtTime(f0, now);
-            o.frequency.exponentialRampToValueAtTime(f0 * 0.42, now + 0.19);
-            var og = ctx.createGain();
-            og.gain.setValueAtTime(0.0001, now);
-            og.gain.exponentialRampToValueAtTime(0.17, now + 0.02);
-            og.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
-            o.connect(og); og.connect(ctx.destination);
-            o.start(now); o.stop(now + 0.32);
-        } catch (e) {}
-    }
-
-    /* ── Speech: pick the warmest female / African-English voice ── */
-    function pickVoice() {
-        var vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
-        if (!vs.length) return null;
-        var byLang = function (p) {
-            for (var i = 0; i < vs.length; i++) {
-                if (vs[i].lang && vs[i].lang.toLowerCase().indexOf(p) === 0) return vs[i];
-            }
-            return null;
-        };
-        // African English locales first
-        var v = byLang('en-ke') || byLang('en-ng') || byLang('en-za') || byLang('en-gh') || byLang('sw');
-        if (v) return v;
-        // Female-sounding English voices by name
-        var femHint = /(female|woman|zira|aria|jenny|tessa|ayanda|imani|amara|libby|sonia|hazel|susan|linda|nadia|joanna|salli|kendra)/i;
-        for (var j = 0; j < vs.length; j++) {
-            if (/^en/i.test(vs[j].lang) && femHint.test(vs[j].name)) return vs[j];
-        }
-        // Google English (often female-ish) then any English
-        for (var k = 0; k < vs.length; k++) {
-            if (/google.*english/i.test(vs[k].name)) return vs[k];
-        }
-        for (var m = 0; m < vs.length; m++) {
-            if (/^en/i.test(vs[m].lang)) return vs[m];
-        }
-        return vs[0];
-    }
-
-    var currentLine = '';
-    // Chrome pauses/cuts speech after a while — nudge it while it's talking.
-    var resumeTimer = null;
-    function keepAlive() {
-        if (resumeTimer) clearInterval(resumeTimer);
-        resumeTimer = setInterval(function () {
-            if (!window.speechSynthesis || !speechSynthesis.speaking) {
-                clearInterval(resumeTimer); resumeTimer = null; return;
-            }
-            try { speechSynthesis.resume(); } catch (e) {}
-        }, 3000);
-    }
-    function makeUtterance(text) {
-        var u = new SpeechSynthesisUtterance(text);
-        var v = pickVoice();
-        if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'en-GB'; }
-        u.rate = 0.9; u.pitch = 1.05; u.volume = 1;   // slower, calmer delivery
-        return u;
-    }
-    function speak(text) {
-        if (!('speechSynthesis' in window)) return;
-        try {
-            currentLine = text;
-            var u = makeUtterance(text);
-            try { speechSynthesis.cancel(); } catch (e) {}
-            try { speechSynthesis.resume(); } catch (e) {}
-            speechSynthesis.speak(u);
-            keepAlive();
-        } catch (e) {}
-    }
-    // Speak + guaranteed callback (fallback timer if onend never fires / audio blocked)
-    function speakThen(text, cb) {
-        var done = false, fire = function () { if (!done) { done = true; cb && cb(); } };
-        // Wait generously so the voice has a real chance to finish before we move on.
-        var fallback = setTimeout(fire, Math.max(4200, text.length * 95));
-        if (!('speechSynthesis' in window)) return;
-        try {
-            currentLine = text;
-            var u = makeUtterance(text);
-            u.onend = function () { clearTimeout(fallback); fire(); };
-            u.onerror = function () { clearTimeout(fallback); fire(); };
-            try { speechSynthesis.cancel(); } catch (e) {}
-            try { speechSynthesis.resume(); } catch (e) {}
-            speechSynthesis.speak(u);
-            keepAlive();
-        } catch (e) { clearTimeout(fallback); fire(); }
-    }
-
-    /* ── Unlock audio on first user gesture (autoplay policy) ─── */
-    function unlockAudio() {
-        if (audioUnlocked) return;
-        audioUnlocked = true;
-        audioCtx();
-        if (soundHint) soundHint.classList.add('hide');
-        // If speech didn't start (was blocked), speak whatever line is current
-        if ('speechSynthesis' in window && !speechSynthesis.speaking && currentLine && !finished) {
-            speak(currentLine);
-        }
-    }
-    // Only real activation gestures unlock audio (a mousemove does not
-    // satisfy the browser's autoplay policy).
-    ['pointerdown', 'touchstart', 'keydown'].forEach(function (ev) {
-        window.addEventListener(ev, unlockAudio, { passive: true });
-    });
-
-    /* ── Typing effect ───────────────────────────────────────── */
-    function typeText(el, text, speed, done) {
-        el.textContent = ''; el.classList.add('typing');
-        var i = 0;
-        (function tick() {
-            if (finished) { el.textContent = text; el.classList.remove('typing'); return; }
-            if (i <= text.length) { el.textContent = text.slice(0, i); i++; setTimeout(tick, speed); }
-            else { el.classList.remove('typing'); done && done(); }
-        })();
-    }
-
-    /* ── Build the nameplate letters ─────────────────────────────
-       Deliberately plain: a single text node each, nothing nested
-       inside. This is what makes the layout bulletproof — there is
-       no absolutely-positioned content inside an auto-sized flex
-       item for the browser to mis-measure. ──────────────────── */
+    /* ── Build the nameplate letters — plain spans, nothing nested ── */
     var spans = [];
     NAME.split('').forEach(function (ch) {
         var s = document.createElement('span');
@@ -882,131 +654,55 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
         spans.push(s);
     });
 
-    /* ── Water splash — an independent overlay layer ─────────────
-       Positioned by JS-computed screen coordinates at the instant
-       a letter lands, completely decoupled from the letter's own
-       box. Elements are created fresh and removed after they
-       finish animating, so the layer never accumulates DOM. ──── */
-    var splashLayer = document.getElementById('splashLayer');
-    function splashAt(x, y) {
-        if (!splashLayer) return;
-        var frag = document.createDocumentFragment();
-
-        ['r1', 'r2', 'r3'].forEach(function (cls, i) {
-            var ring = document.createElement('span');
-            ring.className = 'splash-ring ' + cls;
-            ring.style.left = x + 'px';
-            ring.style.top  = y + 'px';
-            frag.appendChild(ring);
-            setTimeout(function () { ring.classList.add('go'); }, i * 70);
-            setTimeout(function () { ring.remove(); }, 900);
-        });
-
-        var dropCount = 6;
-        for (var d = 0; d < dropCount; d++) {
-            var drop = document.createElement('span');
-            drop.className = 'splash-drop';
-            var angle = (Math.PI * 2 / dropCount) * d + (Math.random() * 0.5 - 0.25);
-            var dist  = 9 + Math.random() * 9;
-            var dx    = Math.cos(angle) * dist;
-            var dy    = Math.sin(angle) * dist - 7; // bias upward, like water kicking up
-            drop.style.left = x + 'px';
-            drop.style.top  = y + 'px';
-            drop.style.setProperty('--dx', dx.toFixed(1) + 'px');
-            drop.style.setProperty('--dy', dy.toFixed(1) + 'px');
-            frag.appendChild(drop);
-            (function (el, delay) {
-                setTimeout(function () { el.classList.add('go'); }, delay);
-                setTimeout(function () { el.remove(); }, delay + 600);
-            })(drop, Math.random() * 50);
-        }
-
-        splashLayer.appendChild(frag);
-    }
-
-    // Splash at the base of letter `s`, in coordinates relative to the overlay.
-    function splashLetter(s) {
-        var r  = s.getBoundingClientRect();
-        var or = overlay.getBoundingClientRect();
-        splashAt(r.left + r.width / 2 - or.left, r.bottom - or.top - 3);
-    }
-
-    /* ── Reveal the login form + speak the closing line ──────── */
+    /* ── Reveal the login form ───────────────────────────────── */
     function revealLogin() {
         if (finished) return;
         finished = true;
         overlay.classList.add('done');
         document.body.classList.add('intro-done');
         stage.classList.add('show');
-        // focus username once it's in view
         setTimeout(function () {
-            stage.classList.add('show');
             var u = stage.querySelector('input[name="username"]');
             if (u) { try { u.focus(); } catch (e) {} }
-        }, 450);
-        speak(LINE2);
-        setTimeout(function () { if (overlay && overlay.parentNode) overlay.style.display = 'none'; }, 1000);
+        }, 500);
+        setTimeout(function () { if (overlay && overlay.parentNode) overlay.style.display = 'none'; }, 1100);
     }
 
     /* ── Skip ────────────────────────────────────────────────── */
-    function skip() {
-        if (finished) return;
-        try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) {}
-        finished = true;
-        overlay.classList.add('done');
-        document.body.classList.add('intro-done');
-        stage.classList.add('show');
-        setTimeout(function () { if (overlay) overlay.style.display = 'none'; }, 700);
-    }
-    if (skipBtn) skipBtn.addEventListener('click', function (e) { e.stopPropagation(); skip(); });
-    window.addEventListener('keydown', function (e) { if (e.key === 'Escape') skip(); });
+    if (skipBtn) skipBtn.addEventListener('click', function (e) { e.stopPropagation(); revealLogin(); });
+    window.addEventListener('keydown', function (e) { if (e.key === 'Escape') revealLogin(); });
 
     /* ── Timeline ────────────────────────────────────────────── */
-    function run() {
-        audioCtx(); // best-effort start (may stay suspended until gesture)
+    if (reduced) {
+        spans.forEach(function (s) { s.classList.add('in'); });
+        overlay.classList.add('reveal');
+        setTimeout(revealLogin, 1400);
+        return;
+    }
 
-        if (reduced) {
-            spans.forEach(function (s) { s.classList.add('in'); });
-            overlay.classList.add('reveal');
-            taglineEl.textContent = LINE1;
-            speakThen(LINE1, function () { setTimeout(revealLogin, 400); });
-            return;
-        }
+    // 1. Letters rise + unblur, one after another
+    var step = 95;
+    spans.forEach(function (s, i) {
+        setTimeout(function () { s.classList.add('in'); }, 250 + i * step);
+    });
 
-        var step = 340;      // gives each letter room to land and splash before the next falls
-        var landAt = 520;    // ms into the .85s dropIn keyframes where the letter touches down (~62%)
+    var settled = 250 + spans.length * step + 900; // name fully in place
+
+    // 2. Underline draws + tagline settles in
+    setTimeout(function () { overlay.classList.add('reveal'); }, settled - 350);
+
+    // 3. A light glint sweeps across the wordmark
+    setTimeout(function () {
         spans.forEach(function (s, i) {
             setTimeout(function () {
-                s.classList.add('in');
-                // Ripple + droplets + sound fire together, right as the letter lands —
-                // not at the start of the fall.
-                setTimeout(function () {
-                    s.classList.add('pulse');
-                    playWave(i);
-                    splashLetter(s);
-                    setTimeout(function () { s.classList.remove('pulse'); }, 420);
-                }, landAt);
-            }, i * step);
+                s.classList.add('glint');
+                setTimeout(function () { s.classList.remove('glint'); }, 340);
+            }, i * 55);
         });
+    }, settled + 250);
 
-        var afterName = spans.length * step + 800;   // hold on the finished name
-        setTimeout(function () { overlay.classList.add('reveal'); }, afterName - 400);
-
-        setTimeout(function () {
-            typeText(taglineEl, LINE1, 72);           // slower typing
-            speakThen(LINE1, function () { setTimeout(revealLogin, 1100); });
-        }, afterName);
-    }
-
-    // Kick off once voices are (likely) ready so the first line uses a good voice
-    if ('speechSynthesis' in window && speechSynthesis.getVoices().length === 0) {
-        var started = false;
-        var go = function () { if (!started) { started = true; run(); } };
-        speechSynthesis.onvoiceschanged = go;
-        setTimeout(go, 550); // fallback if the event never fires
-    } else {
-        run();
-    }
+    // 4. Hold, then hand over to the login card
+    setTimeout(revealLogin, settled + 2500);
 }());
 </script>
 <?php endif; ?>
