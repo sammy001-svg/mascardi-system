@@ -157,7 +157,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         // Remember-me cookie
                         if (!empty($_POST['remember_me'])) {
-                            _issueRememberToken($db, (int)$user['id']);
+                            _issueRememberToken($db, (int)$user['id'], $user['username']);
+                        } else {
+                            // Box unchecked — forget this browser
+                            setcookie('rm_tok',  '', time() - 3600, '/', '', isset($_SERVER['HTTPS']), true);
+                            setcookie('rm_user', '', time() - 3600, '/', '', isset($_SERVER['HTTPS']), true);
                         }
 
                         $next = $_GET['next'] ?? '';
@@ -185,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['last_activity'] = time();
                     $db->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
                     if (!empty($_POST['remember_me'])) {
-                        _issueRememberToken($db, (int)$user['id']);
+                        _issueRememberToken($db, (int)$user['id'], $user['username']);
                     }
                     header('Location: ' . BASE_URL . '/index.php'); exit;
                 } else {
@@ -199,6 +203,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Show the animated welcome intro only on a fresh visit (not after a
 // failed login POST, not during first-run setup, not on session timeout).
 $showIntro = $_SERVER['REQUEST_METHOD'] === 'GET' && !$isFirstRun && !$setupDone && !$error && !isset($_GET['timeout']);
+
+// Username remembered from a previous "Remember me" login (never the password —
+// that stays with the browser's own password manager via autocomplete).
+$rememberedUser = trim($_COOKIE['rm_user'] ?? '');
 
 // Mokoto nameplate font — self-hosted. Drop the file at assets/fonts/mokoto.woff2
 // (or .woff/.ttf/.otf) and it's picked up automatically, no code change needed.
@@ -335,12 +343,65 @@ body::before{
                inset 0 1px 0 rgba(255,255,255,.05) !important;
     position:relative; overflow:hidden;
 }
-.login-card::after{
-    content:''; position:absolute; inset:0; border-radius:inherit; padding:1px;
-    background:linear-gradient(130deg, rgba(34,197,94,.5), rgba(59,130,246,.5) 45%, rgba(239,68,68,.45));
+/* ── 3D tilt + animated neon glow ──────────────────────────────────── */
+.login-wrap{ perspective:1400px; }
+.card-3d{ position:relative; transform-style:preserve-3d; will-change:transform; }
+body .card-3d{ opacity:0; }
+body.no-intro .card-3d,
+body.has-intro .login-stage.show .card-3d{
+    animation:cardIn .9s cubic-bezier(.17,.75,.28,1) .1s backwards;
+    opacity:1;
+}
+@keyframes cardIn{
+    0%{ opacity:0; transform:translateY(42px) rotateX(16deg) scale(.955); }
+    100%{ opacity:1; transform:translateY(0) rotateX(0) scale(1); }
+}
+/* Shake after a failed sign-in, once the card has settled */
+.card-3d.err{
+    animation:cardIn .9s cubic-bezier(.17,.75,.28,1) .05s backwards,
+              shakeX .5s ease 1s;
+}
+@keyframes shakeX{
+    0%,100%{ transform:translateX(0); }
+    20%,60%{ transform:translateX(-9px); }
+    40%,80%{ transform:translateX(9px); }
+}
+
+/* Soft neon aura breathing around the card (sits behind it in 3D space) */
+.neon-aura{
+    position:absolute; inset:-14px; border-radius:36px; z-index:0;
+    overflow:hidden; filter:blur(28px); opacity:.45;
+    pointer-events:none; transition:opacity .5s ease;
+    transform:translateZ(-40px);
+}
+.neon-aura::before{
+    content:''; position:absolute; left:50%; top:50%;
+    width:240%; height:240%; margin:-120% 0 0 -120%;
+    background:conic-gradient(#22d3ee, #3b82f6, #8b5cf6, #d946ef, #3b82f6, #22d3ee);
+    animation:neonSpin 7s linear infinite;
+}
+.card-3d:hover .neon-aura{ opacity:.72; }
+
+/* Crisp neon ring tracing the card edge — same rotating gradient */
+.neon-ring{
+    position:absolute; inset:0; border-radius:24px; padding:1.5px;
+    z-index:2; pointer-events:none; overflow:hidden;
     -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite:xor; mask-composite:exclude;
-    opacity:.4; pointer-events:none;
+}
+.neon-ring::before{
+    content:''; position:absolute; left:50%; top:50%;
+    width:240%; height:240%; margin:-120% 0 0 -120%;
+    background:conic-gradient(#22d3ee, #3b82f6, #8b5cf6, #d946ef, #3b82f6, #22d3ee);
+    animation:neonSpin 7s linear infinite;
+}
+@keyframes neonSpin{ to{ transform:rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce){
+    .neon-aura::before, .neon-ring::before{ animation:none; }
+    body.no-intro .card-3d,
+    body.has-intro .login-stage.show .card-3d,
+    .card-3d.err{ animation:none; opacity:1; }
 }
 .login-title{ color:#f8fafc !important; }
 .login-sub{ color:#93a3bb !important; }
@@ -514,7 +575,10 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 </a>
 
 <div class="login-wrap">
+    <div class="card-3d<?= $error ? ' err' : '' ?>" id="card3d">
+    <div class="neon-aura" aria-hidden="true"></div>
     <div class="login-card">
+        <span class="neon-ring" aria-hidden="true"></span>
         <?php $__logo = companyLogo(); ?>
         <?php if ($__logo['exists']): ?>
         <div class="brand-icon has-logo"><img src="<?= htmlspecialchars($__logo['url']) ?>" alt="<?= htmlspecialchars(getSetting('company_name', 'Mascardi')) ?> logo"></div>
@@ -586,7 +650,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
             <div class="mb-3">
                 <label class="form-label">Username</label>
                 <div class="field-wrap"><i class="fa fa-user"></i>
-                <input type="text" name="username" class="form-control" placeholder="Enter your username" required autocomplete="username" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"></div>
+                <input type="text" name="username" class="form-control" placeholder="Enter your username" required autocomplete="username" value="<?= htmlspecialchars($_POST['username'] ?? $rememberedUser) ?>"></div>
             </div>
             <div class="mb-3">
                 <label class="form-label">Password</label>
@@ -598,7 +662,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
             </div>
             <div class="mb-4">
                 <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="remember_me" id="rememberMe" value="1"<?= !empty($_POST['remember_me']) ? ' checked' : '' ?>>
+                    <input class="form-check-input" type="checkbox" name="remember_me" id="rememberMe" value="1"<?= (!empty($_POST['remember_me']) || ($_SERVER['REQUEST_METHOD'] !== 'POST' && $rememberedUser)) ? ' checked' : '' ?>>
                     <label class="form-check-label" for="rememberMe">Remember me on this browser</label>
                 </div>
             </div>
@@ -607,7 +671,8 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
             </button>
         </form>
         <?php endif; ?>
-    </div>
+    </div><!-- /login-card -->
+    </div><!-- /card-3d -->
 
     <div class="text-center mt-3">
         <p style="font-size:12px;color:rgba(255,255,255,.35);margin:0 0 8px">
@@ -635,6 +700,34 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
         }
     });
 });
+
+/* ── 3D tilt — the card leans gently toward the cursor ─────────────
+   Skipped on touch devices and for users preferring reduced motion.
+   Values ease toward the target each frame, so movement stays smooth. */
+(function () {
+    var wrap = document.getElementById('card3d');
+    if (!wrap) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(pointer: coarse)').matches) return;
+
+    var tx = 0, ty = 0, cx = 0, cy = 0, raf = null;
+    function frame() {
+        cx += (tx - cx) * 0.14;
+        cy += (ty - cy) * 0.14;
+        wrap.style.transform = 'rotateX(' + cy.toFixed(2) + 'deg) rotateY(' + cx.toFixed(2) + 'deg)';
+        if (Math.abs(tx - cx) > 0.05 || Math.abs(ty - cy) > 0.05) raf = requestAnimationFrame(frame);
+        else raf = null;
+    }
+    function kick() { if (!raf) raf = requestAnimationFrame(frame); }
+
+    wrap.addEventListener('mousemove', function (e) {
+        var r = wrap.getBoundingClientRect();
+        tx = ((e.clientX - r.left) / r.width  - 0.5) * 12;  // rotateY: ±6°
+        ty = -((e.clientY - r.top) / r.height - 0.5) * 10;  // rotateX: ±5°
+        kick();
+    });
+    wrap.addEventListener('mouseleave', function () { tx = 0; ty = 0; kick(); });
+}());
 </script>
 
 <?php if ($showIntro): ?>

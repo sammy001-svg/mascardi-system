@@ -44,8 +44,7 @@ if (!isset($_SESSION['auth_user']) && !empty($_COOKIE['rm_tok']) && function_exi
         $db   = getDB();
         $hash = hash('sha256', $_COOKIE['rm_tok']);
         $stmt = $db->prepare("
-            SELECT rt.id AS token_id, u.id, u.name, u.username, u.role,
-                   u.linked_id, u.linked_type
+            SELECT rt.id AS token_id, rt.created_at AS token_created, u.*
             FROM remember_tokens rt
             JOIN users u ON u.id = rt.user_id
             WHERE rt.token_hash = ? AND rt.expires_at > NOW() AND u.status = 'active'
@@ -54,19 +53,29 @@ if (!isset($_SESSION['auth_user']) && !empty($_COOKIE['rm_tok']) && function_exi
         $stmt->execute([$hash]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($row) {
-            // Rotate the token to prevent replay attacks
-            $newToken = bin2hex(random_bytes(32));
-            $newHash  = hash('sha256', $newToken);
-            $db->prepare("DELETE FROM remember_tokens WHERE id = ?")->execute([$row['token_id']]);
-            $db->prepare("INSERT INTO remember_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 YEAR))")
-               ->execute([$row['id'], $newHash]);
-            setcookie('rm_tok', $newToken, [
-                'expires'  => time() + 10 * 365 * 86400,
-                'path'     => '/',
-                'httponly' => true,
-                'samesite' => 'Lax',
-                'secure'   => isset($_SERVER['HTTPS']),
-            ]);
+            // Rotate the token only once a week — NOT on every request. Rotating
+            // every time creates a race: the browser fires several requests in
+            // parallel on startup (restored tabs, service worker, manifest), the
+            // first one invalidates the token, and the others then treat the
+            // still-in-flight cookie as stale and wipe remember-me entirely.
+            $tokenAge = time() - (strtotime($row['token_created'] ?? '') ?: time());
+            if ($tokenAge > 7 * 86400) {
+                $newToken = bin2hex(random_bytes(32));
+                $newHash  = hash('sha256', $newToken);
+                // Grace period instead of instant delete: parallel requests still
+                // carrying the old cookie keep working for a couple of minutes.
+                $db->prepare("UPDATE remember_tokens SET expires_at = DATE_ADD(NOW(), INTERVAL 2 MINUTE) WHERE id = ?")
+                   ->execute([$row['token_id']]);
+                $db->prepare("INSERT INTO remember_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 YEAR))")
+                   ->execute([$row['id'], $newHash]);
+                setcookie('rm_tok', $newToken, [
+                    'expires'  => time() + 10 * 365 * 86400,
+                    'path'     => '/',
+                    'httponly' => true,
+                    'samesite' => 'Lax',
+                    'secure'   => isset($_SERVER['HTTPS']),
+                ]);
+            }
             session_regenerate_id(true);
             $_SESSION['auth_user'] = [
                 'id'          => (int)$row['id'],
@@ -75,6 +84,7 @@ if (!isset($_SESSION['auth_user']) && !empty($_COOKIE['rm_tok']) && function_exi
                 'role'        => $row['role'],
                 'linked_id'   => $row['linked_id'],
                 'linked_type' => $row['linked_type'],
+                'location_id' => $row['location_id'] ?? null,
             ];
             $_SESSION['last_activity']    = time();
             $_SESSION['sess_regenerated'] = time();

@@ -7,7 +7,8 @@
       "Bash(php -l showroom/index.php)",
       "Bash(php -l showroom/footer.php)",
       "Bash(php -l showroom/vehicles.php)",
-      "Bash(php -l login.php)"
+      "Bash(php -l login.php)",
+      "Bash(php -l config/app.php)"
     ]
   }
 }
