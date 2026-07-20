@@ -32,8 +32,18 @@ $__waClean   = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSet
 $pageTitle   = 'Quality Vehicles';
 $metaDesc    = "Browse {$totalStock} quality vehicles at {$companyName}. Transparent pricing, flexible financing. Find your dream car today.";
 
-// Feature blocks — top two featured cars (fallback: newest two)
-$featureBlocks = array_slice($featuredAll ?: $allCars, 0, 2);
+// 3D showcase carousel — ONLY vehicles that have a photo. Featured cars first,
+// topped up with other photographed inventory when there aren't enough.
+$withImg = fn($c) => !empty($c['primary_image']);
+$carouselCars = array_values(array_filter($featuredAll, $withImg));
+if (count($carouselCars) < 5) {
+    $haveIds = array_column($carouselCars, 'id');
+    foreach ($allCars as $c) {
+        if (count($carouselCars) >= 8) break;
+        if ($withImg($c) && !in_array($c['id'], $haveIds)) $carouselCars[] = $c;
+    }
+}
+$carouselCars = array_slice($carouselCars, 0, 8);
 
 $vehiclesUrl = BASE_URL . '/showroom/vehicles.php';
 
@@ -55,10 +65,10 @@ include __DIR__ . '/header.php';
     <div class="lx-hero-shade"></div>
 
     <div class="lx-hero-content">
-        <div class="lx-label" style="color:rgba(255,255,255,.65);margin-bottom:18px"><?= $totalStock ?> Vehicles Available Now</div>
-        <h1>Extraordinary cars.<br>Effortless ownership.</h1>
-        <p>Quality imported vehicles, transparent pricing and flexible financing — hand-inspected and ready for the road.</p>
-        <div class="lx-hero-ctas">
+        <div class="lx-label rv" style="color:rgba(255,255,255,.65);margin-bottom:18px"><?= $totalStock ?> Vehicles Available Now</div>
+        <h1 class="rv rv-d1">Extraordinary cars.<br>Effortless ownership.</h1>
+        <p class="rv rv-d2">Quality imported vehicles, transparent pricing and flexible financing — hand-inspected and ready for the road.</p>
+        <div class="lx-hero-ctas rv rv-d3">
             <a href="<?= $vehiclesUrl ?>" class="btn-lx-light">Explore Vehicles</a>
             <?php if ($__waClean): ?>
             <a href="https://wa.me/<?= $__waClean ?>?text=<?= urlencode('Hi, I\'d like to book a test drive.') ?>"
@@ -79,13 +89,17 @@ include __DIR__ . '/header.php';
     <div class="lx-wrap">
         <div class="lx-stats">
             <?php foreach ([
-                [$totalStock . '+',        'Vehicles in Stock'],
-                [count($catCounts),        'Body Types'],
-                ['100%',                   'Inspected & Verified'],
-                ['Finance',                'Flexible Plans Available'],
-            ] as [$val, $lbl]): ?>
-            <div class="lx-stat">
-                <div class="v"><?= $val ?></div>
+                [$totalStock,       '+',       'Vehicles in Stock'],
+                [count($catCounts), '',        'Body Types'],
+                [100,               '%',       'Inspected & Verified'],
+                [null,              'Finance', 'Flexible Plans Available'],
+            ] as [$num, $suffix, $lbl]): ?>
+            <div class="lx-stat rv">
+                <?php if ($num !== null): ?>
+                <div class="v" data-count="<?= $num ?>" data-suffix="<?= htmlspecialchars($suffix) ?>">0<?= htmlspecialchars($suffix) ?></div>
+                <?php else: ?>
+                <div class="v"><?= htmlspecialchars($suffix) ?></div>
+                <?php endif; ?>
                 <div class="l"><?= $lbl ?></div>
             </div>
             <?php endforeach; ?>
@@ -94,73 +108,64 @@ include __DIR__ . '/header.php';
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════
-     DUAL FEATURE BLOCKS — flagship vehicles
+     3D SHOWCASE CAROUSEL — flagship vehicles (photos only)
 ═══════════════════════════════════════════════════════════════ -->
-<?php if ($featureBlocks): ?>
-<section style="background:var(--paper);padding:96px 0">
+<?php if ($carouselCars): ?>
+<section style="background:var(--paper);padding:96px 0;overflow:hidden">
     <div class="lx-wrap">
-        <div style="text-align:center;margin-bottom:64px">
+        <div class="rv" style="text-align:center;margin-bottom:56px">
             <div class="lx-label" style="margin-bottom:14px">Featured</div>
             <h2 class="lx-h2">Handpicked from our showroom</h2>
         </div>
+    </div>
 
-        <div class="lx-feature-grid">
-            <?php foreach ($featureBlocks as $fb):
-                $fbImg   = $fb['primary_image'] ? thumbUrl('cars', $fb['primary_image']) : null;
-                $fbPrice = (!empty($fb['offer_price']) && $fb['offer_price'] > 0) ? (float)$fb['offer_price'] : (float)($fb['asking_price'] ?? 0);
-                $fbIsOffer = !empty($fb['offer_price']) && $fb['offer_price'] > 0;
-                $fbWa    = urlencode("Hi, I'm interested in the {$fb['year']} {$fb['make']} {$fb['model']}.");
+    <div class="c3d-wrap rv rv-d1">
+        <div class="c3d-viewport" id="c3dViewport">
+            <?php foreach ($carouselCars as $cc):
+                $ccImg     = thumbUrl('cars', $cc['primary_image']);
+                $ccIsOffer = !empty($cc['offer_price']) && $cc['offer_price'] > 0;
+                $ccPrice   = $ccIsOffer ? (float)$cc['offer_price'] : (float)($cc['asking_price'] ?? 0);
+                $ccSpecs   = array_filter([
+                    $cc['mileage']      ? number_format($cc['mileage']) . ' km' : null,
+                    $cc['transmission'] ? ucfirst($cc['transmission'])          : null,
+                    $cc['fuel_type']    ? ucfirst($cc['fuel_type'])             : null,
+                ]);
             ?>
-            <div class="lx-feature">
-                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fb['id'] ?>" class="lx-feature-img">
-                    <?php if ($fbImg): ?>
-                    <img src="<?= htmlspecialchars($fbImg) ?>" alt="<?= htmlspecialchars($fb['make'].' '.$fb['model']) ?>" loading="lazy" decoding="async">
-                    <?php else: ?>
-                    <div class="lx-noimg"><i class="fa fa-car-side"></i></div>
-                    <?php endif; ?>
-                </a>
-                <div class="lx-feature-body">
-                    <div class="lx-label" style="margin-bottom:8px"><?= $fb['year'] ?><?= $fb['body_type'] ? ' · ' . htmlspecialchars($fb['body_type']) : '' ?></div>
-                    <h3><?= htmlspecialchars($fb['make'] . ' ' . $fb['model']) ?></h3>
-                    <div class="lx-feature-price">
-                        <?php if ($fbPrice > 0): ?>
-                            <?= $fbIsOffer ? '<span class="offer-tag">Offer</span>' : 'From' ?>
-                            KES <?= number_format($fbPrice) ?>
-                            <?php if ($fbIsOffer && !empty($fb['asking_price'])): ?>
-                            <del>KES <?= number_format((float)$fb['asking_price']) ?></del>
+            <a class="c3d-card" href="<?= BASE_URL ?>/showroom/view.php?id=<?= $cc['id'] ?>">
+                <div class="img">
+                    <img src="<?= htmlspecialchars($ccImg) ?>" alt="<?= htmlspecialchars($cc['make'].' '.$cc['model']) ?>" loading="lazy" decoding="async">
+                </div>
+                <div class="c3d-body">
+                    <div class="lx-label" style="margin-bottom:6px"><?= $cc['year'] ?><?= $cc['body_type'] ? ' · ' . htmlspecialchars($cc['body_type']) : '' ?></div>
+                    <h3><?= htmlspecialchars($cc['make'] . ' ' . $cc['model']) ?></h3>
+                    <div class="c3d-price">
+                        <?php if ($ccPrice > 0): ?>
+                            <?php if ($ccIsOffer): ?><span class="offer-tag">Offer</span><?php endif; ?>
+                            KES <?= number_format($ccPrice) ?>
+                            <?php if ($ccIsOffer && !empty($cc['asking_price'])): ?>
+                            <del>KES <?= number_format((float)$cc['asking_price']) ?></del>
                             <?php endif; ?>
                         <?php else: ?>
                             Price on request
                         <?php endif; ?>
                     </div>
-                    <div class="lx-feature-specs">
-                        <?php if ($fb['mileage']): ?>
-                        <div><div class="sv"><?= number_format($fb['mileage']) ?></div><div class="sl">km</div></div>
-                        <?php endif; ?>
-                        <?php if ($fb['engine_cc']): ?>
-                        <div><div class="sv"><?= number_format($fb['engine_cc']) ?></div><div class="sl">cc</div></div>
-                        <?php endif; ?>
-                        <?php if ($fb['transmission']): ?>
-                        <div><div class="sv"><?= ucfirst($fb['transmission']) ?></div><div class="sl">Transmission</div></div>
-                        <?php endif; ?>
-                        <?php if ($fb['fuel_type']): ?>
-                        <div><div class="sv"><?= ucfirst($fb['fuel_type']) ?></div><div class="sl">Fuel</div></div>
-                        <?php endif; ?>
-                    </div>
-                    <div style="display:flex;gap:12px;flex-wrap:wrap">
-                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fb['id'] ?>" class="btn-lx">View Details</a>
-                        <?php if ($__waClean): ?>
-                        <a href="https://wa.me/<?= $__waClean ?>?text=<?= $fbWa ?>" target="_blank" rel="noopener" class="btn-lx-ghost-dark">Enquire</a>
-                        <?php endif; ?>
-                    </div>
+                    <?php if ($ccSpecs): ?>
+                    <div class="c3d-specs"><?= implode(' &middot; ', $ccSpecs) ?></div>
+                    <?php endif; ?>
                 </div>
-            </div>
+            </a>
             <?php endforeach; ?>
-        </div>
 
-        <div style="text-align:center;margin-top:52px">
-            <a href="<?= $vehiclesUrl ?>" class="btn-lx-ghost-dark">View All Vehicles</a>
+            <?php if (count($carouselCars) > 1): ?>
+            <button type="button" class="c3d-nav c3d-prev" id="c3dPrev" aria-label="Previous vehicle"><i class="fa fa-chevron-left"></i></button>
+            <button type="button" class="c3d-nav c3d-next" id="c3dNext" aria-label="Next vehicle"><i class="fa fa-chevron-right"></i></button>
+            <?php endif; ?>
         </div>
+        <div class="c3d-dots" id="c3dDots"></div>
+    </div>
+
+    <div class="lx-wrap rv" style="text-align:center;margin-top:40px">
+        <a href="<?= $vehiclesUrl ?>" class="btn-lx-ghost-dark">View All Vehicles</a>
     </div>
 </section>
 <?php endif; ?>
@@ -170,12 +175,12 @@ include __DIR__ . '/header.php';
 ═══════════════════════════════════════════════════════════════ -->
 <section id="story" style="background:var(--white);padding:110px 0;text-align:center">
     <div class="lx-wrap" style="max-width:900px">
-        <h2 class="lx-h2" style="font-size:clamp(30px,4.6vw,54px)">
+        <h2 class="lx-h2 rv" style="font-size:clamp(30px,4.6vw,54px)">
             Sourced worldwide.<br>
             Inspected in Nairobi.<br>
             Ready for your road.
         </h2>
-        <p style="font-size:16px;color:var(--ink-2);line-height:1.8;max-width:560px;margin:28px auto 0">
+        <p class="rv rv-d1" style="font-size:16px;color:var(--ink-2);line-height:1.8;max-width:560px;margin:28px auto 0">
             Every vehicle at <?= htmlspecialchars($companyName) ?> passes a thorough multi-point
             inspection before it reaches the showroom floor. What you see is exactly what you get —
             no hidden fees, no surprises.
@@ -184,12 +189,12 @@ include __DIR__ . '/header.php';
 
     <div class="lx-wrap" style="margin-top:64px">
         <div class="lx-promo-grid">
-            <a href="<?= $vehiclesUrl ?>?sort=price_asc" class="lx-promo">
+            <a href="<?= $vehiclesUrl ?>?sort=price_asc" class="lx-promo rv">
                 <div class="lx-label" style="margin-bottom:10px">Current Offers</div>
                 <div class="t">Explore vehicles on offer</div>
                 <span class="arr"><i class="fa fa-arrow-right"></i></span>
             </a>
-            <a href="<?= BASE_URL ?>/showroom/contact.php" class="lx-promo">
+            <a href="<?= BASE_URL ?>/showroom/contact.php" class="lx-promo rv rv-d1">
                 <div class="lx-label" style="margin-bottom:10px">Visit Us</div>
                 <div class="t">Find our showroom</div>
                 <span class="arr"><i class="fa fa-arrow-right"></i></span>
@@ -209,11 +214,11 @@ include __DIR__ . '/header.php';
     </div>
     <div class="lx-film-shade"></div>
     <div class="lx-film-caption">
-        <div class="lx-label" style="color:rgba(255,255,255,.65);margin-bottom:14px">The Mascardi Experience</div>
-        <h2 style="font-size:clamp(26px,3.6vw,44px);font-weight:300;color:#fff;margin:0 0 26px;line-height:1.15">
+        <div class="lx-label rv" style="color:rgba(255,255,255,.65);margin-bottom:14px">The Mascardi Experience</div>
+        <h2 class="rv rv-d1" style="font-size:clamp(26px,3.6vw,44px);font-weight:300;color:#fff;margin:0 0 26px;line-height:1.15">
             A new standard for<br>car buying in Kenya
         </h2>
-        <a href="<?= $vehiclesUrl ?>" class="btn-lx-light">Browse the Collection</a>
+        <a href="<?= $vehiclesUrl ?>" class="btn-lx-light rv rv-d2" style="display:inline-flex">Browse the Collection</a>
     </div>
 </section>
 
@@ -222,7 +227,7 @@ include __DIR__ . '/header.php';
 ═══════════════════════════════════════════════════════════════ -->
 <section style="background:var(--white);padding:100px 0">
     <div class="lx-wrap">
-        <div style="text-align:center;margin-bottom:64px">
+        <div class="rv" style="text-align:center;margin-bottom:64px">
             <div class="lx-label" style="margin-bottom:14px">Our Commitment</div>
             <h2 class="lx-h2">Why choose <?= htmlspecialchars($companyName) ?></h2>
         </div>
@@ -235,7 +240,7 @@ include __DIR__ . '/header.php';
                 ['fa-headset',       'Expert Guidance',     'Our team guides you through every step of the purchase, from viewing to logbook transfer.'],
                 ['fa-truck',         'Nationwide Delivery', 'We arrange safe delivery of your vehicle to any location across the country.'],
             ] as [$ico, $title, $desc]): ?>
-            <div class="lx-value">
+            <div class="lx-value rv">
                 <i class="fa <?= $ico ?>"></i>
                 <div class="t"><?= $title ?></div>
                 <p><?= $desc ?></p>
@@ -251,7 +256,7 @@ include __DIR__ . '/header.php';
 <section id="book-service" style="background:var(--paper);padding:96px 0;border-top:1px solid var(--line)">
     <div class="lx-wrap">
         <div class="row g-5 align-items-center">
-            <div class="col-lg-5">
+            <div class="col-lg-5 rv">
                 <div class="lx-label" style="margin-bottom:14px">Ownership</div>
                 <h2 class="lx-h2" style="margin-bottom:18px">Book your vehicle<br>service online</h2>
                 <p style="font-size:15px;color:var(--ink-2);line-height:1.75;margin:0 0 36px;max-width:420px">
@@ -264,7 +269,7 @@ include __DIR__ . '/header.php';
                     <?php endforeach; ?>
                 </div>
             </div>
-            <div class="col-lg-7">
+            <div class="col-lg-7 rv rv-d1">
                 <div style="background:var(--white);border:1px solid var(--line);border-radius:var(--r);padding:40px 36px">
                     <div class="lx-label" style="margin-bottom:6px">Quick Booking</div>
                     <p style="font-size:13px;color:var(--ink-3);margin:0 0 26px">Fill in your details and we'll get back to you right away.</p>
@@ -316,9 +321,9 @@ include __DIR__ . '/header.php';
 ═══════════════════════════════════════════════════════════════ -->
 <section style="background:var(--black);padding:88px 0;text-align:center">
     <div class="lx-wrap">
-        <h2 style="font-size:clamp(26px,3.6vw,44px);font-weight:300;color:#fff;margin:0 0 14px">Ready to find your car?</h2>
-        <p style="font-size:15px;color:rgba(255,255,255,.55);margin:0 0 36px">Talk to our team today. We're here to help.</p>
-        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+        <h2 class="rv" style="font-size:clamp(26px,3.6vw,44px);font-weight:300;color:#fff;margin:0 0 14px">Ready to find your car?</h2>
+        <p class="rv rv-d1" style="font-size:15px;color:rgba(255,255,255,.55);margin:0 0 36px">Talk to our team today. We're here to help.</p>
+        <div class="rv rv-d2" style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
             <?php if ($__waClean): ?>
             <a href="https://wa.me/<?= $__waClean ?>" target="_blank" rel="noopener" class="btn-lx-light">
                 <i class="fa-brands fa-whatsapp"></i> Chat on WhatsApp
