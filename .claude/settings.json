@@ -12,7 +12,8 @@
       "Bash(php -l modules/chat/index.php)",
       "Bash(sed -i '1084,1088d' modules/chat/index.php)",
       "Bash(sed -i \"1083r /c/PROGRA~1/KMSpico/temp/claude/c--Mascardi-Systems-mascardi-system/7bbf88ed-4575-4967-86fd-bb6c6124d353/scratchpad/emoji_rows.txt\" modules/chat/index.php)",
-      "Bash(php -l includes/header.php)"
+      "Bash(php -l includes/header.php)",
+      "Bash(sed -i \"s/const VERSION    = 'v9';/const VERSION    = 'v10';/\" sw.js)"
     ]
   }
 }

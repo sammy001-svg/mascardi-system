@@ -1870,19 +1870,56 @@ const Chat = window.Chat = {
         incoming?show(el('btnAccept')):hide(el('btnAccept'));
         type==='video'?show(el('btnCam')):hide(el('btnCam'));
         this.isMuted=false; el('btnMute').innerHTML='<i class="fa fa-microphone"></i>'; el('btnMute').classList.remove('muted');
+        // Ring on the RECEIVER side; caller hears a softer ringback tone
+        incoming ? this._startRing(true) : this._startRing(false);
+    },
+    /* ── Ringtone: repeating two-tone ring until answered/ended ── */
+    _ringInt:null,
+    _ringCtx() {
+        if (!this.__rctx) { const AC=window.AudioContext||window.webkitAudioContext; if (AC) try{this.__rctx=new AC();}catch(e){} }
+        if (this.__rctx && this.__rctx.state==='suspended') try{this.__rctx.resume();}catch(e){}
+        return this.__rctx;
+    },
+    _startRing(loud) {
+        this._stopRing();
+        const burst=()=>{ const ctx=this._ringCtx(); if(!ctx||ctx.state!=='running') return;
+            try {
+                const t=ctx.currentTime, vol=loud?0.22:0.08;
+                for (let p=0;p<2;p++){ const t0=t+p*0.5;
+                    [440,480].forEach(f=>{ const o=ctx.createOscillator(),g=ctx.createGain();
+                        o.type='sine'; o.frequency.value=loud?f*2:f;
+                        g.gain.setValueAtTime(0.0001,t0);
+                        g.gain.exponentialRampToValueAtTime(vol,t0+0.03);
+                        g.gain.exponentialRampToValueAtTime(0.0001,t0+0.42);
+                        o.connect(g); g.connect(ctx.destination); o.start(t0); o.stop(t0+0.45); });
+                }
+            } catch(e){}
+        };
+        burst();
+        this._ringInt=setInterval(burst, 2000);
+        // System notification so a backgrounded tab still alerts the receiver
+        if (loud && 'Notification' in window && Notification.permission==='granted' && document.hidden) {
+            try { new Notification('Incoming call', { body:'Someone is calling you on Team Chat', tag:'msc-call' }); } catch(e){}
+        }
+    },
+    _stopRing() {
+        if (this._ringInt) { clearInterval(this._ringInt); this._ringInt=null; }
     },
     _hideCall() {
+        this._stopRing();
         hide(el('callOv'));
         ['remoteVid','localVid'].forEach(id=>{const v=el(id);if(v){v.srcObject=null;hide(v);}});
         hide(el('btnAccept')); hide(el('btnCam'));
     },
     _endCall() {
+        this._stopRing();
         clearInterval(this.callPoll); clearInterval(this.callTimerInt);
         this.peerConn?.close(); this.peerConn=null;
         this.localStream?.getTracks().forEach(t=>t.stop()); this.localStream=null;
         this.activeCallId=null; this.isMuted=false; this.isCamOff=false; this.pendingIce=[];
     },
     _startCallTimer() {
+        this._stopRing();
         let s=0; const timerEl=el('callTimer');
         this.callTimerInt=setInterval(()=>{ timerEl.textContent=fmtDur(++s); },1000);
     },
@@ -2578,7 +2615,8 @@ $(document).on('click', '#upList .up-item', function(e) {
      avatars + bold sender names, and reworks the composer into Slack's bordered box. -->
 <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-.chat-root, .chat-root * { font-family: 'Lato', 'Inter', -apple-system, sans-serif; }
+/* Lato everywhere EXCEPT <i> elements — those carry Font Awesome's icon font */
+.chat-root, .chat-root *:not(i) { font-family: 'Lato', 'Inter', -apple-system, sans-serif; }
 
 /* ── Sidebar → Slack aubergine ─────────────────────────────── */
 .cp-left { background: #3F0E40 !important; border-right: none !important; }
