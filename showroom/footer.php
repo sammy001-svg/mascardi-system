@@ -35,9 +35,9 @@
             <div class="col-sm-6 col-lg-2">
                 <div class="ft-head">Vehicles</div>
                 <?php foreach ([
-                    ['All Inventory',  BASE_URL . '/showroom/#inventory'],
-                    ['New Arrivals',   BASE_URL . '/showroom/?sort=newest#inventory'],
-                    ['Current Offers', BASE_URL . '/showroom/?sort=price_asc#inventory'],
+                    ['All Vehicles',   BASE_URL . '/showroom/vehicles.php'],
+                    ['New Arrivals',   BASE_URL . '/showroom/vehicles.php?sort=newest'],
+                    ['Current Offers', BASE_URL . '/showroom/vehicles.php?sort=price_asc'],
                     ['Compare',        BASE_URL . '/showroom/compare.php'],
                 ] as [$lbl, $url]): ?>
                 <a class="ft-link" href="<?= $url ?>"><?= $lbl ?></a>
