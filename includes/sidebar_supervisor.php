@@ -1,7 +1,9 @@
 <?php
 /**
  * Focused sidebar rendered for supervisor role.
- * Supervisor sees only their assigned location's data.
+ * Cars, service bookings, quick assessments, team and location reports are
+ * scoped to the supervisor's assigned location. Quotations, Invoices, and
+ * Payments/Receipts are intentionally company-wide (all locations).
  * Included from sidebar.php via early-exit pattern.
  */
 $__uri    = $_SERVER['REQUEST_URI'];
@@ -123,6 +125,14 @@ try {
            data-label="Invoices">
             <i class="fa fa-file-invoice-dollar"></i><span>Invoices</span>
         </a>
+
+        <?php if (canAccess('payments')): ?>
+        <a href="<?= BASE_URL ?>/modules/payments/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/payments/') ? 'active' : '' ?>"
+           data-label="Payments">
+            <i class="fa fa-receipt"></i><span>Payments &amp; Receipts</span>
+        </a>
+        <?php endif; ?>
 
         <!-- ══ CRM (shown when admin grants crm permission) ════════ -->
         <?php if (canAccess('crm')): ?>

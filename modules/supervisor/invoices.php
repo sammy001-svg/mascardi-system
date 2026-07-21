@@ -3,19 +3,14 @@ require_once __DIR__ . '/../../includes/functions.php';
 requireRole('supervisor');
 $pageTitle = 'Invoices';
 $db    = getDB();
-$locId = supervisorLocationId();
 
-if (!$locId) { header('Location: ' . BASE_URL . '/modules/supervisor/dashboard.php'); exit; }
-
-$location = $db->prepare("SELECT name FROM locations WHERE id=?");
-$location->execute([$locId]);
-$locName = $location->fetchColumn() ?: 'Location';
-
+// Supervisors see ALL invoices company-wide (not location-scoped) —
+// unlike cars/bookings/assessments, which remain scoped to their location.
 $fStatus = $_GET['status'] ?? '';
 $fSearch  = trim($_GET['q'] ?? '');
 
-$where  = "c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?)";
-$params = [$locId, $locId];
+$where  = "1=1";
+$params = [];
 if ($fStatus) { $where .= " AND i.status=?"; $params[] = $fStatus; }
 if ($fSearch) {
     $where .= " AND (i.invoice_number LIKE ? OR i.client_name LIKE ?)";
@@ -40,8 +35,8 @@ include __DIR__ . '/../../includes/header.php';
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
-        <h5 class="mb-0"><i class="fa fa-file-invoice-dollar me-2 text-primary"></i>Invoices — <span class="text-primary"><?= e($locName) ?></span></h5>
-        <div class="text-muted small"><?= count($invoices) ?> invoice<?= count($invoices) !== 1 ? 's' : '' ?></div>
+        <h5 class="mb-0"><i class="fa fa-file-invoice-dollar me-2 text-primary"></i>Invoices — <span class="text-primary">All Locations</span></h5>
+        <div class="text-muted small"><?= count($invoices) ?> invoice<?= count($invoices) !== 1 ? 's' : '' ?> company-wide</div>
     </div>
     <a href="<?= BASE_URL ?>/modules/supervisor/dashboard.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Dashboard</a>
 </div>
@@ -99,7 +94,7 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endforeach; ?>
                     <?php if (empty($invoices)): ?>
                     <tr><td colspan="7" class="text-center py-5 text-muted">
-                        <i class="fa fa-file-invoice fa-2x mb-2 d-block opacity-25"></i>No invoices found for this location.
+                        <i class="fa fa-file-invoice fa-2x mb-2 d-block opacity-25"></i>No invoices found.
                     </td></tr>
                     <?php endif; ?>
                 </tbody>

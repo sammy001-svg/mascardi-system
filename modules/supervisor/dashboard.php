@@ -70,34 +70,21 @@ try {
     $stats['qa_today'] = (int)$qaStmt->fetchColumn();
 } catch (\Throwable $_) { $stats['qa_today'] = 0; }
 
-// Quotations — scope via car location only
+// Quotations — company-wide (supervisors see all quotations, not just their location)
 try {
-    $qStmt = $db->prepare("
-        SELECT COUNT(*) FROM quotations q
-        LEFT JOIN cars c ON c.id = q.car_id
-        WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND q.status IN ('draft','sent')
-    ");
-    $qStmt->execute([$locId, $locId]);
+    $qStmt = $db->query("SELECT COUNT(*) FROM quotations WHERE status IN ('draft','sent')");
     $stats['active_quotations'] = (int)$qStmt->fetchColumn();
 } catch (\Throwable $_) { $stats['active_quotations'] = 0; }
 
-// Invoices — scope via car location only
+// Invoices — company-wide (supervisors see all invoices, not just their location)
 try {
-    $invStmt = $db->prepare("
-        SELECT COUNT(*) FROM invoices i
-        LEFT JOIN cars c ON c.id = i.car_id
-        WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND i.status='unpaid'
-    ");
-    $invStmt->execute([$locId, $locId]);
+    $invStmt = $db->query("SELECT COUNT(*) FROM invoices WHERE status='unpaid'");
     $stats['unpaid_invoices'] = (int)$invStmt->fetchColumn();
 
-    $revStmt = $db->prepare("
-        SELECT COALESCE(SUM(i.total),0) FROM invoices i
-        LEFT JOIN cars c ON c.id = i.car_id
-        WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND i.status='paid'
-          AND MONTH(i.created_at)=MONTH(NOW()) AND YEAR(i.created_at)=YEAR(NOW())
+    $revStmt = $db->query("
+        SELECT COALESCE(SUM(total),0) FROM invoices
+        WHERE status='paid' AND MONTH(created_at)=MONTH(NOW()) AND YEAR(created_at)=YEAR(NOW())
     ");
-    $revStmt->execute([$locId, $locId]);
     $stats['revenue_month'] = (float)$revStmt->fetchColumn();
 } catch (\Throwable $_) { $stats['unpaid_invoices'] = 0; $stats['revenue_month'] = 0; }
 
