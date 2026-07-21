@@ -13,7 +13,7 @@ $where  = "1=1";
 $params = [];
 if ($fStatus) { $where .= " AND i.status=?"; $params[] = $fStatus; }
 if ($fSearch) {
-    $where .= " AND (i.invoice_number LIKE ? OR i.client_name LIKE ?)";
+    $where .= " AND (i.invoice_number LIKE ? OR i.customer_name LIKE ?)";
     $s = "%{$fSearch}%";
     $params = array_merge($params, [$s, $s]);
 }
@@ -80,7 +80,7 @@ include __DIR__ . '/../../includes/header.php';
                     <?php foreach ($invoices as $inv): ?>
                     <tr>
                         <td class="ps-3"><code style="font-size:11px"><?= e($inv['invoice_number'] ?? '—') ?></code></td>
-                        <td class="fw-medium small"><?= e($inv['client_name'] ?? '—') ?></td>
+                        <td class="fw-medium small"><?= e($inv['customer_name'] ?? '—') ?></td>
                         <td class="small text-muted"><?= e(trim($inv['make'] . ' ' . $inv['model'])) ?: '—' ?></td>
                         <td class="fw-semibold small"><?= money($inv['total'] ?? 0) ?></td>
                         <td><?= statusBadge($inv['status']) ?></td>

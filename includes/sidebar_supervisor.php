@@ -134,6 +134,14 @@ try {
         </a>
         <?php endif; ?>
 
+        <?php if (canAccess('clients')): ?>
+        <a href="<?= BASE_URL ?>/modules/clients/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/clients/') ? 'active' : '' ?>"
+           data-label="Clients">
+            <i class="fa fa-address-book"></i><span>Clients</span>
+        </a>
+        <?php endif; ?>
+
         <!-- ══ CRM (shown when admin grants crm permission) ════════ -->
         <?php if (canAccess('crm')): ?>
         <div class="nav-section">CRM</div>
@@ -173,6 +181,38 @@ try {
            data-label="Sales Pipeline">
             <i class="fa fa-chart-line"></i><span>Sales Pipeline</span>
         </a>
+        <?php endif; ?>
+
+        <!-- ══ COMMUNICATION ════════════════════════════════════════ -->
+        <?php if (canAccess('chat')): ?>
+        <div class="nav-section">Communication</div>
+
+        <a href="<?= BASE_URL ?>/modules/chat/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/chat/') ? 'active' : '' ?>"
+           data-label="Team Chat"
+           style="position:relative">
+            <i class="fa fa-comments"></i><span>Team Chat</span>
+            <span id="chatNavBadge" style="display:none;position:absolute;top:6px;right:8px;
+                  background:#25d366;color:#fff;border-radius:10px;font-size:10px;
+                  font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
+        </a>
+        <script>
+        (function(){
+            var badge = document.getElementById('chatNavBadge');
+            if (!badge) return;
+            function poll(){
+                fetch('<?= BASE_URL ?>/modules/chat/api/unread.php')
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        var n = d.count || 0;
+                        if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
+                        else { badge.style.display = 'none'; }
+                    }).catch(function(){});
+            }
+            poll();
+            setInterval(poll, 15000);
+        }());
+        </script>
         <?php endif; ?>
 
         <!-- ══ TEAM ═══════════════════════════════════════════════ -->

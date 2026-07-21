@@ -13,7 +13,7 @@ $where  = "1=1";
 $params = [];
 if ($fStatus) { $where .= " AND q.status=?"; $params[] = $fStatus; }
 if ($fSearch) {
-    $where .= " AND (q.quote_number LIKE ? OR q.client_name LIKE ?)";
+    $where .= " AND (q.quotation_number LIKE ? OR q.customer_name LIKE ?)";
     $s = "%{$fSearch}%";
     $params = array_merge($params, [$s, $s]);
 }
@@ -79,8 +79,8 @@ include __DIR__ . '/../../includes/header.php';
                 <tbody>
                     <?php foreach ($quotations as $q): ?>
                     <tr>
-                        <td class="ps-3"><code style="font-size:11px"><?= e($q['quote_number'] ?? '—') ?></code></td>
-                        <td class="fw-medium small"><?= e($q['client_name'] ?? '—') ?></td>
+                        <td class="ps-3"><code style="font-size:11px"><?= e($q['quotation_number'] ?? '—') ?></code></td>
+                        <td class="fw-medium small"><?= e($q['customer_name'] ?? '—') ?></td>
                         <td class="small text-muted"><?= e(trim($q['make'] . ' ' . $q['model'])) ?: '—' ?></td>
                         <td class="fw-semibold small"><?= money($q['total'] ?? 0) ?></td>
                         <td><?= statusBadge($q['status']) ?></td>
