@@ -9,7 +9,7 @@
  *   API / POST    → Network-only (never cached)
  */
 
-const VERSION    = 'v10';
+const VERSION    = 'v11';
 const CACHE_NAME = 'mascardi-' + VERSION;
 const BASE       = self.location.pathname.replace(/\/sw\.js$/, '');
 const OFFLINE    = BASE + '/offline.php';

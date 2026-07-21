@@ -119,6 +119,7 @@ body > .modal-backdrop,
 .cp-left {
     width: 360px; min-width: 360px;
     display: flex; flex-direction: column;
+    min-height: 0;   /* let conv-list scroll internally instead of overflowing the flex row */
     background: #fff;
     border-right: 1px solid #e9edef;
 }
@@ -147,7 +148,7 @@ body > .modal-backdrop,
     position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
     color: #8696a0; font-size: 13px; pointer-events: none;
 }
-.conv-list { flex: 1; overflow-y: auto; }
+.conv-list { flex: 1; min-height: 0; overflow-y: auto; }
 .conv-list::-webkit-scrollbar { width: 4px; }
 .conv-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
 

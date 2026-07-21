@@ -13,7 +13,12 @@
       "Bash(sed -i '1084,1088d' modules/chat/index.php)",
       "Bash(sed -i \"1083r /c/PROGRA~1/KMSpico/temp/claude/c--Mascardi-Systems-mascardi-system/7bbf88ed-4575-4967-86fd-bb6c6124d353/scratchpad/emoji_rows.txt\" modules/chat/index.php)",
       "Bash(php -l includes/header.php)",
-      "Bash(sed -i \"s/const VERSION    = 'v9';/const VERSION    = 'v10';/\" sw.js)"
+      "Bash(sed -i \"s/const VERSION    = 'v9';/const VERSION    = 'v10';/\" sw.js)",
+      "Bash(echo \"node: $?\")",
+      "Bash(awk 'NR==226,NR==425' includes/header.php)",
+      "Bash(sed -n '226,425p' includes/header.php)",
+      "Read(//c/Users/Shanfix/**)",
+      "Bash(node --check 'C:\\\\Users\\\\Shanfix/notif_script.js')"
     ]
   }
 }
