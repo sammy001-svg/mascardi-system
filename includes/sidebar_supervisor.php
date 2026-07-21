@@ -49,10 +49,13 @@ try {
     </div>
     <?php endif; ?>
 
-    <!-- Navigation -->
+    <!-- Navigation ────────────────────────────────────────────────────────
+         Grouped for the way a supervisor actually works through the day:
+         Overview → Operations (my location, right now) → Customers →
+         Finance → Sales → Team → Communication → Analytics → Account. -->
     <nav class="sidebar-nav">
 
-        <!-- ══ DASHBOARD ════════════════════════════════════════ -->
+        <!-- ══ OVERVIEW ═════════════════════════════════════════════ -->
         <div class="nav-section">Overview</div>
 
         <a href="<?= BASE_URL ?>/modules/supervisor/dashboard.php"
@@ -61,8 +64,8 @@ try {
             <i class="fa fa-gauge-high"></i><span>Dashboard</span>
         </a>
 
-        <!-- ══ FLEET ═════════════════════════════════════════════ -->
-        <div class="nav-section">Fleet</div>
+        <!-- ══ OPERATIONS (scoped to my location) ══════════════════ -->
+        <div class="nav-section">Operations</div>
 
         <a href="<?= BASE_URL ?>/modules/supervisor/cars.php"
            class="nav-item <?= str_contains($__uri, '/modules/supervisor/cars') ? 'active' : '' ?>"
@@ -82,9 +85,6 @@ try {
                 </span>
             <?php endif; }} catch (\Throwable $_) {} ?>
         </a>
-
-        <!-- ══ OPERATIONS ════════════════════════════════════════ -->
-        <div class="nav-section">Operations</div>
 
         <a href="<?= BASE_URL ?>/modules/supervisor/service_bookings.php"
            class="nav-item <?= str_contains($__uri, '/modules/supervisor/service_bookings') ? 'active' : '' ?>"
@@ -106,46 +106,16 @@ try {
         </a>
 
         <a href="<?= BASE_URL ?>/modules/supervisor/quick_assessments.php"
-           class="nav-item <?= str_contains($__uri, '/modules/supervisor/quick_assessments') ? 'active' : '' ?>"
+           class="nav-item <?= str_contains($__uri, '/modules/supervisor/quick_assessments') || str_contains($__uri, '/modules/quick_assessments/') ? 'active' : '' ?>"
            data-label="Quick Assessments">
             <i class="fa fa-magnifying-glass-chart"></i><span>Quick Assessments</span>
         </a>
 
-        <!-- ══ FINANCE ════════════════════════════════════════════ -->
-        <div class="nav-section">Finance</div>
+        <!-- ══ CUSTOMERS ════════════════════════════════════════════ -->
+        <?php if (canAccess('crm') || canAccess('clients')): ?>
+        <div class="nav-section">Customers</div>
 
-        <a href="<?= BASE_URL ?>/modules/supervisor/quotations.php"
-           class="nav-item <?= str_contains($__uri, '/modules/supervisor/quotations') ? 'active' : '' ?>"
-           data-label="Quotations">
-            <i class="fa fa-file-lines"></i><span>Quotations</span>
-        </a>
-
-        <a href="<?= BASE_URL ?>/modules/supervisor/invoices.php"
-           class="nav-item <?= str_contains($__uri, '/modules/supervisor/invoices') ? 'active' : '' ?>"
-           data-label="Invoices">
-            <i class="fa fa-file-invoice-dollar"></i><span>Invoices</span>
-        </a>
-
-        <?php if (canAccess('payments')): ?>
-        <a href="<?= BASE_URL ?>/modules/payments/index.php"
-           class="nav-item <?= str_contains($__uri, '/modules/payments/') ? 'active' : '' ?>"
-           data-label="Payments">
-            <i class="fa fa-receipt"></i><span>Payments &amp; Receipts</span>
-        </a>
-        <?php endif; ?>
-
-        <?php if (canAccess('clients')): ?>
-        <a href="<?= BASE_URL ?>/modules/clients/index.php"
-           class="nav-item <?= str_contains($__uri, '/modules/clients/') ? 'active' : '' ?>"
-           data-label="Clients">
-            <i class="fa fa-address-book"></i><span>Clients</span>
-        </a>
-        <?php endif; ?>
-
-        <!-- ══ CRM (shown when admin grants crm permission) ════════ -->
         <?php if (canAccess('crm')): ?>
-        <div class="nav-section">CRM</div>
-
         <a href="<?= BASE_URL ?>/modules/crm/leads.php"
            class="nav-item <?= (str_contains($__uri, '/modules/crm/leads') || str_contains($__uri, '/modules/crm/view_lead') || str_contains($__uri, '/modules/crm/add_lead') || str_contains($__uri, '/modules/crm/convert_lead')) ? 'active' : '' ?>"
            data-label="Leads"
@@ -172,6 +142,38 @@ try {
         </a>
         <?php endif; ?>
 
+        <?php if (canAccess('clients')): ?>
+        <a href="<?= BASE_URL ?>/modules/clients/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/clients/') ? 'active' : '' ?>"
+           data-label="Clients">
+            <i class="fa fa-address-book"></i><span>Clients</span>
+        </a>
+        <?php endif; ?>
+        <?php endif; ?>
+
+        <!-- ══ FINANCE (company-wide) ══════════════════════════════ -->
+        <div class="nav-section">Finance</div>
+
+        <a href="<?= BASE_URL ?>/modules/supervisor/quotations.php"
+           class="nav-item <?= str_contains($__uri, '/modules/supervisor/quotations') ? 'active' : '' ?>"
+           data-label="Quotations">
+            <i class="fa fa-file-lines"></i><span>Quotations</span>
+        </a>
+
+        <a href="<?= BASE_URL ?>/modules/supervisor/invoices.php"
+           class="nav-item <?= str_contains($__uri, '/modules/supervisor/invoices') ? 'active' : '' ?>"
+           data-label="Invoices">
+            <i class="fa fa-file-invoice-dollar"></i><span>Invoices</span>
+        </a>
+
+        <?php if (canAccess('payments')): ?>
+        <a href="<?= BASE_URL ?>/modules/payments/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/payments/') ? 'active' : '' ?>"
+           data-label="Payments">
+            <i class="fa fa-receipt"></i><span>Payments &amp; Receipts</span>
+        </a>
+        <?php endif; ?>
+
         <!-- ══ SALES PIPELINE (shown when admin grants sales permission) ═ -->
         <?php if (canAccess('sales')): ?>
         <div class="nav-section">Sales</div>
@@ -183,10 +185,17 @@ try {
         </a>
         <?php endif; ?>
 
+        <!-- ══ TEAM ═══════════════════════════════════════════════ -->
+        <div class="nav-section">Team</div>
+
+        <a href="<?= BASE_URL ?>/modules/supervisor/team.php"
+           class="nav-item <?= str_contains($__uri, '/modules/supervisor/team') ? 'active' : '' ?>"
+           data-label="My Team">
+            <i class="fa fa-people-group"></i><span>My Team</span>
+        </a>
+
         <!-- ══ COMMUNICATION ════════════════════════════════════════ -->
         <?php if (canAccess('chat')): ?>
-        <div class="nav-section">Communication</div>
-
         <a href="<?= BASE_URL ?>/modules/chat/index.php"
            class="nav-item <?= str_contains($__uri, '/modules/chat/') ? 'active' : '' ?>"
            data-label="Team Chat"
@@ -215,16 +224,7 @@ try {
         </script>
         <?php endif; ?>
 
-        <!-- ══ TEAM ═══════════════════════════════════════════════ -->
-        <div class="nav-section">Team</div>
-
-        <a href="<?= BASE_URL ?>/modules/supervisor/team.php"
-           class="nav-item <?= str_contains($__uri, '/modules/supervisor/team') ? 'active' : '' ?>"
-           data-label="My Team">
-            <i class="fa fa-people-group"></i><span>My Team</span>
-        </a>
-
-        <!-- ══ REPORTS ════════════════════════════════════════════ -->
+        <!-- ══ ANALYTICS ════════════════════════════════════════════ -->
         <div class="nav-section">Analytics</div>
 
         <a href="<?= BASE_URL ?>/modules/supervisor/reports.php"

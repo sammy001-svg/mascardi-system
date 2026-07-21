@@ -214,7 +214,7 @@ function canWrite(string $module): bool {
     }
     $map = [
         'general_manager'   => ['quotations','invoices','sales','imports'],
-        'supervisor'        => [], // read-only by default
+        'supervisor'        => ['quick_assessments'], // read-only elsewhere; can log assessments at their own location
         'finance_manager'   => ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo','imports'],
         'accountant'        => ['payments','invoices','quotations','expenses','sales','installments'],
         'cashier'           => ['payments','installments'],

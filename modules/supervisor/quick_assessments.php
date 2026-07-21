@@ -41,7 +41,12 @@ include __DIR__ . '/../../includes/header.php';
         <h5 class="mb-0"><i class="fa fa-magnifying-glass-chart me-2 text-primary"></i>Quick Assessments — <span class="text-primary"><?= e($locName) ?></span></h5>
         <div class="text-muted small"><?= count($assessments) ?> record<?= count($assessments) !== 1 ? 's' : '' ?></div>
     </div>
-    <a href="<?= BASE_URL ?>/modules/supervisor/dashboard.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Dashboard</a>
+    <div class="d-flex gap-2">
+        <?php if (canWrite('quick_assessments')): ?>
+        <a href="<?= BASE_URL ?>/modules/quick_assessments/add.php" class="btn btn-sm btn-primary"><i class="fa fa-plus me-1"></i>New Assessment</a>
+        <?php endif; ?>
+        <a href="<?= BASE_URL ?>/modules/supervisor/dashboard.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Dashboard</a>
+    </div>
 </div>
 
 <form method="GET" class="card card-body mb-3 py-2">
