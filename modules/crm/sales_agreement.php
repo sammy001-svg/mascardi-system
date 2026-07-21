@@ -362,58 +362,58 @@ include __DIR__ . '/../../includes/header.php';
         <!-- ── 4. Delivery, Vehicle Insurance and Transfer of Risk ─────────── -->
         <div class="sa-clause">
             <div class="sa-clause-title">4. Delivery, Vehicle Insurance and Transfer of Risk</div>
-            <p>Upon receipt of the agreed payment, the Seller shall deliver the vehicle to the Buyer.
-            The risk and liability of the vehicle shall be transferred to the Buyer upon delivery, and the
-            Buyer shall be responsible for obtaining comprehensive vehicle insurance from this point
-            onwards prior to taking delivery of the vehicle.</p>
+            <p>Upon receipt of the agreed payment, the Seller shall deliver the vehicle to the Buyer. 
+            The risk and liability of the vehicle shall be transferred to the Buyer upon delivery, and 
+            the Buyer shall be responsible for obtaining comprehensive vehicle insurance from this 
+            point onwards prior to taking delivery of the vehicle.</p>
         </div>
 
         <!-- ── 5. Ownership and Retention of Title ─────────────────────────── -->
         <div class="sa-clause">
             <div class="sa-clause-title">5. Ownership and Retention of Title</div>
-            <p>Title to the vehicle shall not pass to the Buyer until the full Purchase Price has been
-            received in cleared funds by the Seller. Until such time, the Seller retains full ownership
-            and the right to repossess the vehicle without prior notice if payment obligations are not
-            met. The Buyer acknowledges and consents to the installation and/or retention of a tracking
-            device on the vehicle, which the Seller reserves the right to activate for the purposes of
-            locating and recovering the vehicle in the event of non-payment, default, or any breach of
-            this Agreement by the Buyer.</p>
+            <p>The Seller shall retain full ownership and title of the vehicle until the Buyer 
+            has completed all payments in full as agreed. Should the Buyer fail to meet the 
+            payment terms by the specified due date, the Seller retains the right to immediately 
+            repossess the vehicle without prior notice or legal proceedings. The Buyer shall bear 
+            all costs associated with the repossession, including but not limited to legal fees, 
+            transportation, and administrative expenses. Furthermore, any partial payments made by 
+            the Buyer prior to repossession shall be deemed non-refundable and retained by the 
+            Seller as liquidated damages. Both parties hereby agree that a tracking device will 
+            be installed in the vehicle at the expense of the buyer.</p>
         </div>
 
         <!-- ── 6. Vehicle Condition Disclaimer ─────────────────────────────── -->
         <div class="sa-clause">
             <div class="sa-clause-title">6. Vehicle Condition Disclaimer</div>
-            <p>The vehicle is sold on an <strong>"AS IS, WHERE IS"</strong> basis. The Seller makes no
-            representations or warranties, express or implied, as to the condition, merchantability, or
-            fitness for any particular purpose of the vehicle. The Buyer confirms that they have had the
-            opportunity to inspect the vehicle prior to executing this Agreement and accepts it in its
-            present condition.</p>
+            <p>The vehicle is sold on an <strong>"AS IS, WHERE IS"</strong> IS' basis, with no 
+            warranties, either express or implied, as to the condition or functionality of the 
+            vehicle after it leaves the Seller’s premises. The Buyer acknowledges and accepts 
+            that the vehicle meets their requirements upon purchase. The Seller confirms the 
+            car to be in abidance with the Kenyan roadworthy regulations as of the date of 
+            sale.</p>
         </div>
 
         <!-- ── 7. Transfer of Ownership ─────────────────────────────────────── -->
         <div class="sa-clause">
             <div class="sa-clause-title">7. Transfer of Ownership</div>
-            <p>Upon receipt of full payment, the Seller shall provide the Buyer with the duly executed
-            transfer forms and the vehicle's Logbook (Registration Certificate). The Buyer shall bear all
-            costs associated with effecting the transfer of ownership at the relevant government authority,
-            including registration fees, stamp duties, and any other applicable charges.</p>
+            <p>Upon receipt of full payment, the Seller shall provide the Buyer with duly executed 
+            transfer forms and the Logbook. The Buyer shall be responsible for any transfer charges.</p>
         </div>
 
         <!-- ── 8. Amendments or Attachments ─────────────────────────────────── -->
         <div class="sa-clause">
             <div class="sa-clause-title">8. Amendments or Attachments</div>
-            <p>Any amendment, modification, or addendum to this Agreement must be made in writing and
-            duly signed by both parties. Any schedules or attachments appended hereto shall form an
-            integral part of this Agreement and shall be equally binding on both parties.</p>
+            <p>Any amendments to this agreement or any additional agreements may be attached as 
+            an addendum to this agreement. These addenda shall be considered part of this Agreement 
+            and enforceable as such.</p>
         </div>
 
         <!-- ── 9. Binding Agreement ──────────────────────────────────────────── -->
         <div class="sa-clause">
             <div class="sa-clause-title">9. Binding Agreement</div>
-            <p>This Agreement constitutes the entire and binding agreement between the parties with
-            respect to the subject matter hereof and supersedes all prior negotiations, representations,
-            warranties, and understandings. This Agreement shall be governed by, and construed in
-            accordance with, the laws of the Republic of Kenya.</p>
+            <p>This Agreement represents the entire understanding between the Parties regarding this 
+            transaction. Both Parties have entered into this Agreement freely and accept to be bound 
+            by its terms.</p>
         </div>
 
         <!-- ── Signatures ─────────────────────────────────────────────────────── -->

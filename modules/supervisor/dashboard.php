@@ -24,14 +24,16 @@ $location = $location->fetch();
 $stats = [];
 
 // Cars at location + sub-locations by status
-$carsStmt = $db->prepare("SELECT status, COUNT(*) AS cnt FROM cars WHERE location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) GROUP BY status");
-$carsStmt->execute([$locId, $locId]);
 $carsByStatus = [];
 $totalCars = 0;
-foreach ($carsStmt->fetchAll() as $r) {
-    $carsByStatus[$r['status']] = (int)$r['cnt'];
-    $totalCars += (int)$r['cnt'];
-}
+try {
+    $carsStmt = $db->prepare("SELECT status, COUNT(*) AS cnt FROM cars WHERE location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) GROUP BY status");
+    $carsStmt->execute([$locId, $locId]);
+    foreach ($carsStmt->fetchAll() as $r) {
+        $carsByStatus[$r['status']] = (int)$r['cnt'];
+        $totalCars += (int)$r['cnt'];
+    }
+} catch (\Throwable $_) {}
 
 $stats['total_cars']       = $totalCars;
 $stats['available_cars']   = ($carsByStatus['completed'] ?? 0) + ($carsByStatus['arrived'] ?? 0);
@@ -43,17 +45,17 @@ try {
     $sbStmt = $db->prepare("
         SELECT COUNT(*) FROM service_bookings sb
         LEFT JOIN cars c ON c.id = sb.car_id
-        WHERE (c.location_id=? OR sb.intake_location_id=?) AND sb.status='pending'
+        WHERE (c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) OR sb.intake_location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?)) AND sb.status='pending'
     ");
-    $sbStmt->execute([$locId, $locId]);
+    $sbStmt->execute([$locId, $locId, $locId, $locId]);
     $stats['pending_bookings'] = (int)$sbStmt->fetchColumn();
 
     $sbTodayStmt = $db->prepare("
         SELECT COUNT(*) FROM service_bookings sb
         LEFT JOIN cars c ON c.id = sb.car_id
-        WHERE (c.location_id=? OR sb.intake_location_id=?) AND sb.preferred_date=CURDATE()
+        WHERE (c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) OR sb.intake_location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?)) AND sb.preferred_date=CURDATE()
     ");
-    $sbTodayStmt->execute([$locId, $locId]);
+    $sbTodayStmt->execute([$locId, $locId, $locId, $locId]);
     $stats['bookings_today'] = (int)$sbTodayStmt->fetchColumn();
 } catch (\Throwable $_) { $stats['pending_bookings'] = 0; $stats['bookings_today'] = 0; }
 
@@ -62,9 +64,9 @@ try {
     $qaStmt = $db->prepare("
         SELECT COUNT(*) FROM quick_assessments qa
         LEFT JOIN cars c ON c.id = qa.car_id
-        WHERE c.location_id=? AND qa.assessment_date=CURDATE()
+        WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND qa.assessment_date=CURDATE()
     ");
-    $qaStmt->execute([$locId]);
+    $qaStmt->execute([$locId, $locId]);
     $stats['qa_today'] = (int)$qaStmt->fetchColumn();
 } catch (\Throwable $_) { $stats['qa_today'] = 0; }
 
@@ -73,9 +75,9 @@ try {
     $qStmt = $db->prepare("
         SELECT COUNT(*) FROM quotations q
         LEFT JOIN cars c ON c.id = q.car_id
-        WHERE c.location_id=? AND q.status IN ('draft','sent')
+        WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND q.status IN ('draft','sent')
     ");
-    $qStmt->execute([$locId]);
+    $qStmt->execute([$locId, $locId]);
     $stats['active_quotations'] = (int)$qStmt->fetchColumn();
 } catch (\Throwable $_) { $stats['active_quotations'] = 0; }
 
@@ -84,18 +86,18 @@ try {
     $invStmt = $db->prepare("
         SELECT COUNT(*) FROM invoices i
         LEFT JOIN cars c ON c.id = i.car_id
-        WHERE c.location_id=? AND i.status='unpaid'
+        WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND i.status='unpaid'
     ");
-    $invStmt->execute([$locId]);
+    $invStmt->execute([$locId, $locId]);
     $stats['unpaid_invoices'] = (int)$invStmt->fetchColumn();
 
     $revStmt = $db->prepare("
         SELECT COALESCE(SUM(i.total),0) FROM invoices i
         LEFT JOIN cars c ON c.id = i.car_id
-        WHERE c.location_id=? AND i.status='paid'
+        WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND i.status='paid'
           AND MONTH(i.created_at)=MONTH(NOW()) AND YEAR(i.created_at)=YEAR(NOW())
     ");
-    $revStmt->execute([$locId]);
+    $revStmt->execute([$locId, $locId]);
     $stats['revenue_month'] = (float)$revStmt->fetchColumn();
 } catch (\Throwable $_) { $stats['unpaid_invoices'] = 0; $stats['revenue_month'] = 0; }
 
@@ -107,9 +109,11 @@ try {
 } catch (\Throwable $_) { $stats['team_count'] = 0; }
 
 // Recent cars at location + sub-locations
-$recentCars = $db->prepare("SELECT c.*, l.name AS loc_name FROM cars c LEFT JOIN locations l ON l.id=c.location_id WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) ORDER BY c.updated_at DESC LIMIT 6");
-$recentCars->execute([$locId, $locId]);
-$recentCars = $recentCars->fetchAll();
+try {
+    $recentCars = $db->prepare("SELECT c.*, l.name AS loc_name FROM cars c LEFT JOIN locations l ON l.id=c.location_id WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) ORDER BY c.updated_at DESC LIMIT 6");
+    $recentCars->execute([$locId, $locId]);
+    $recentCars = $recentCars->fetchAll();
+} catch (\Throwable $_) { $recentCars = []; }
 
 // Upcoming bookings — use intake_location_id as the location column on service_bookings
 try {
@@ -117,13 +121,13 @@ try {
         SELECT sb.*, c.make, c.model
         FROM service_bookings sb
         LEFT JOIN cars c ON c.id = sb.car_id
-        WHERE (c.location_id=? OR sb.intake_location_id=?)
+        WHERE (c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) OR sb.intake_location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?))
           AND sb.status IN ('pending','confirmed')
           AND (sb.preferred_date IS NULL OR sb.preferred_date >= CURDATE())
         ORDER BY sb.preferred_date ASC, sb.created_at ASC
         LIMIT 5
     ");
-    $upcomingStmt->execute([$locId, $locId]);
+    $upcomingStmt->execute([$locId, $locId, $locId, $locId]);
     $upcomingBookings = $upcomingStmt->fetchAll();
 } catch (\Throwable $_) { $upcomingBookings = []; }
 
@@ -136,10 +140,10 @@ for ($i = 5; $i >= 0; $i--) {
         $rs = $db->prepare("
             SELECT COALESCE(SUM(i.total),0) FROM invoices i
             LEFT JOIN cars c ON c.id = i.car_id
-            WHERE c.location_id=? AND i.status='paid'
+            WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND i.status='paid'
               AND DATE_FORMAT(i.created_at,'%Y-%m')=?
         ");
-        $rs->execute([$locId, $ym]);
+        $rs->execute([$locId, $locId, $ym]);
         $revData[] = (float)$rs->fetchColumn();
     } catch (\Throwable $_) { $revData[] = 0; }
 }

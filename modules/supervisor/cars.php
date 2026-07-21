@@ -26,20 +26,24 @@ if ($fSearch) {
     $params = array_merge($params, [$s, $s, $s, $s]);
 }
 
-$stmt = $db->prepare("
-    SELECT c.*, l.name AS loc_name
-    FROM cars c
-    LEFT JOIN locations l ON l.id = c.location_id
-    {$where}
-    ORDER BY c.updated_at DESC
-");
-$stmt->execute($params);
-$cars = $stmt->fetchAll();
+try {
+    $stmt = $db->prepare("
+        SELECT c.*, l.name AS loc_name
+        FROM cars c
+        LEFT JOIN locations l ON l.id = c.location_id
+        {$where}
+        ORDER BY c.updated_at DESC
+    ");
+    $stmt->execute($params);
+    $cars = $stmt->fetchAll();
+} catch (\Throwable $_) { $cars = []; }
 
 // Distinct statuses across location + sub-locations for filter dropdown
-$statuses = $db->prepare("SELECT DISTINCT status FROM cars WHERE location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) ORDER BY status");
-$statuses->execute([$locId, $locId]);
-$statuses = array_column($statuses->fetchAll(), 'status');
+try {
+    $statuses = $db->prepare("SELECT DISTINCT status FROM cars WHERE location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) ORDER BY status");
+    $statuses->execute([$locId, $locId]);
+    $statuses = array_column($statuses->fetchAll(), 'status');
+} catch (\Throwable $_) { $statuses = []; }
 
 include __DIR__ . '/../../includes/header.php';
 ?>

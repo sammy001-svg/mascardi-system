@@ -14,8 +14,8 @@ $locName = $location->fetchColumn() ?: 'Location';
 $fStatus = $_GET['status'] ?? '';
 $fSearch  = trim($_GET['q'] ?? '');
 
-$where  = "c.location_id=?";
-$params = [$locId];
+$where  = "c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?)";
+$params = [$locId, $locId];
 if ($fStatus) { $where .= " AND i.status=?"; $params[] = $fStatus; }
 if ($fSearch) {
     $where .= " AND (i.invoice_number LIKE ? OR i.client_name LIKE ?)";

@@ -137,7 +137,7 @@ try {
             try {
                 $__locId2 = supervisorLocationId();
                 if ($__locId2) {
-                    $__s = getDB()->prepare("SELECT COUNT(*) FROM leads l LEFT JOIN users u ON u.id=l.assigned_to WHERE u.location_id=? AND l.status NOT IN ('converted','lost','dead')");
+                    $__s = getDB()->prepare("SELECT COUNT(*) FROM crm_leads l LEFT JOIN users u ON u.id=l.assigned_to WHERE u.location_id=? AND l.stage NOT IN ('lost','delivered')");
                     $__s->execute([$__locId2]);
                     $__leadCount = (int)$__s->fetchColumn();
                     if ($__leadCount > 0): ?>

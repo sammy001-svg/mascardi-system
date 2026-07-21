@@ -18,8 +18,8 @@ for ($i = 11; $i >= 0; $i--) {
     $ym = date('Y-m', strtotime("-{$i} months"));
     $revLabels[] = date('M Y', strtotime($ym . '-01'));
     try {
-        $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id=? AND i.status='paid' AND DATE_FORMAT(i.created_at,'%Y-%m')=?");
-        $s->execute([$locId, $ym]);
+        $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND i.status='paid' AND DATE_FORMAT(i.created_at,'%Y-%m')=?");
+        $s->execute([$locId, $locId, $ym]);
         $revData[] = (float)$s->fetchColumn();
     } catch (\Throwable $_) { $revData[] = 0; }
 }
@@ -45,23 +45,23 @@ try {
 // ── Quotation conversion ──────────────────────────────────────────────────
 $quotStats = ['total' => 0, 'accepted' => 0, 'sent' => 0, 'draft' => 0, 'rejected' => 0, 'expired' => 0];
 try {
-    $s = $db->prepare("SELECT status, COUNT(*) AS cnt FROM quotations q LEFT JOIN cars c ON c.id=q.car_id WHERE c.location_id=? GROUP BY status");
-    $s->execute([$locId]);
+    $s = $db->prepare("SELECT q.status, COUNT(*) AS cnt FROM quotations q LEFT JOIN cars c ON c.id=q.car_id WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) GROUP BY q.status");
+    $s->execute([$locId, $locId]);
     foreach ($s->fetchAll() as $r) { $quotStats[$r['status']] = (int)$r['cnt']; $quotStats['total'] += (int)$r['cnt']; }
 } catch (\Throwable $_) {}
 $convRate = $quotStats['total'] > 0 ? round($quotStats['accepted'] / $quotStats['total'] * 100, 1) : 0;
 
 // ── Revenue summary ───────────────────────────────────────────────────────
 try {
-    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id=? AND i.status='paid' AND MONTH(i.created_at)=MONTH(NOW()) AND YEAR(i.created_at)=YEAR(NOW())");
-    $s->execute([$locId]); $revMTD = (float)$s->fetchColumn();
+    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND i.status='paid' AND MONTH(i.created_at)=MONTH(NOW()) AND YEAR(i.created_at)=YEAR(NOW())");
+    $s->execute([$locId, $locId]); $revMTD = (float)$s->fetchColumn();
 
-    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id=? AND i.status='paid' AND YEAR(i.created_at)=YEAR(NOW())");
-    $s->execute([$locId]); $revYTD = (float)$s->fetchColumn();
+    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND i.status='paid' AND YEAR(i.created_at)=YEAR(NOW())");
+    $s->execute([$locId, $locId]); $revYTD = (float)$s->fetchColumn();
 
     $lm = date('Y-m', strtotime('-1 month'));
-    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id=? AND i.status='paid' AND DATE_FORMAT(i.created_at,'%Y-%m')=?");
-    $s->execute([$locId, $lm]); $revLastMonth = (float)$s->fetchColumn();
+    $s = $db->prepare("SELECT COALESCE(SUM(i.total),0) FROM invoices i LEFT JOIN cars c ON c.id=i.car_id WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND i.status='paid' AND DATE_FORMAT(i.created_at,'%Y-%m')=?");
+    $s->execute([$locId, $locId, $lm]); $revLastMonth = (float)$s->fetchColumn();
     $revTrend = $revLastMonth > 0 ? round((($revMTD - $revLastMonth) / $revLastMonth) * 100, 1) : null;
 } catch (\Throwable $_) { $revMTD = $revYTD = $revLastMonth = 0; $revTrend = null; }
 
