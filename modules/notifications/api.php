@@ -27,6 +27,8 @@ switch ($action) {
             'sale'      => ['icon' => 'fa-tag',                      'color' => '#0f172a'],
             'info'      => ['icon' => 'fa-info-circle',             'color' => '#64748b'],
             'doc_expiry'=> ['icon' => 'fa-file-circle-exclamation', 'color' => '#d97706'],
+            'alert'     => ['icon' => 'fa-bell',                    'color' => '#dc2626'],
+            'warning'   => ['icon' => 'fa-triangle-exclamation',    'color' => '#d97706'],
         ];
         foreach ($items as &$n) {
             $meta = $typeIcons[$n['type']] ?? $typeIcons['info'];

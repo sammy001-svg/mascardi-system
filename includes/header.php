@@ -134,14 +134,14 @@ window.addEventListener('beforeinstallprompt', function(e) {
             </button>
             <div class="dropdown-menu dropdown-menu-end notif-panel p-0"
                  aria-labelledby="notifBell" style="width:360px;max-height:500px;overflow-y:auto">
-                <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-white sticky-top">
+                <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom sticky-top" style="background:inherit">
                     <span class="fw-semibold" style="font-size:13px">Notifications</span>
                     <button class="btn btn-xs btn-outline-secondary" id="markAllRead">Mark all read</button>
                 </div>
                 <div id="notifList">
                     <div class="notif-empty"><i class="fa fa-bell-slash fa-lg mb-2 d-block"></i>No notifications yet</div>
                 </div>
-                <div class="sticky-bottom bg-white border-top text-center py-2">
+                <div class="sticky-bottom border-top text-center py-2" style="background:inherit">
                     <a href="<?= BASE_URL ?>/modules/notifications/index.php"
                        class="text-primary small fw-medium text-decoration-none">
                         View all notifications <i class="fa fa-arrow-right ms-1" style="font-size:10px"></i>
@@ -230,12 +230,14 @@ window.addEventListener('beforeinstallprompt', function(e) {
     var typeColors = {
         booking:   '#2563eb', payment: '#16a34a', low_stock: '#d97706',
         issue:     '#dc2626', lpo:     '#0284c7', job:       '#9333ea',
-        sale:      '#0f172a', info:    '#64748b'
+        sale:      '#0f172a', info:    '#64748b',
+        alert:     '#dc2626', warning: '#d97706'
     };
     var typeIcons = {
         booking: 'fa-calendar-check', payment: 'fa-money-bill-wave',
         low_stock: 'fa-boxes-stacked', issue: 'fa-triangle-exclamation',
-        lpo: 'fa-truck', job: 'fa-toolbox', sale: 'fa-tag', info: 'fa-info-circle'
+        lpo: 'fa-truck', job: 'fa-toolbox', sale: 'fa-tag', info: 'fa-info-circle',
+        alert: 'fa-bell', warning: 'fa-triangle-exclamation'
     };
 
     function setBadge(n) {
@@ -401,7 +403,7 @@ window.addEventListener('beforeinstallprompt', function(e) {
         var item = e.target.closest && e.target.closest('.notif-item');
         if (!item || !item.dataset.id) return;
         var id = item.dataset.id;
-        fetch(apiUrl + '?action=mark_read', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'id='+id })
+        fetch(apiUrl + '?action=mark_read', { method:'POST', keepalive:true, headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'id='+id })
             .then(function(r){ return r.json(); })
             .then(function(d){ item.classList.remove('unread'); setBadge(d.count); })
             .catch(function(){});

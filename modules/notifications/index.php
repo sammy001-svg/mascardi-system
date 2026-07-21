@@ -43,8 +43,6 @@ if ($type)                { $where[] = 'type = ?'; $params[] = $type; }
 $whereStr = 'WHERE ' . implode(' AND ', $where);
 
 try {
-    $total = (int)$db->prepare("SELECT COUNT(*) FROM notifications $whereStr")
-                     ->execute($params) ? $db->prepare("SELECT COUNT(*) FROM notifications $whereStr")->execute($params) : 0;
     $countStmt = $db->prepare("SELECT COUNT(*) FROM notifications $whereStr");
     $countStmt->execute($params);
     $total = (int)$countStmt->fetchColumn();
@@ -71,6 +69,8 @@ $typeMeta = [
     'sale'      => ['icon' => 'fa-tag',                   'color' => '#0f172a', 'bg' => '#f8fafc', 'label' => 'Sale'],
     'info'      => ['icon' => 'fa-info-circle',           'color' => '#64748b', 'bg' => '#f8fafc', 'label' => 'Info'],
     'doc_expiry'=> ['icon' => 'fa-file-circle-exclamation','color' => '#d97706', 'bg' => '#fffbeb', 'label' => 'Document'],
+    'alert'     => ['icon' => 'fa-bell',                   'color' => '#dc2626', 'bg' => '#fef2f2', 'label' => 'Alert'],
+    'warning'   => ['icon' => 'fa-triangle-exclamation',  'color' => '#d97706', 'bg' => '#fffbeb', 'label' => 'Warning'],
 ];
 
 function notifMeta(string $type, array $typeMeta): array {

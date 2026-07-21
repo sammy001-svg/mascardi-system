@@ -373,7 +373,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             notifyRoles(['super_admin'], 'alert',
                 "Reservation Approval Needed: {$lead['name']}",
                 "Submitted by {$me['name']}. Deposit: " . money($depositAmt) . " — review and approve.",
-                BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+                BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '&dp_open=1'
             );
             logActivity('update', 'crm_leads', $id, "Reservation submitted for approval by {$me['name']}. Deposit: " . number_format($depositAmt, 2));
             setFlash('success', 'Reservation submitted — awaiting Super Admin approval.');
@@ -400,7 +400,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         notifyRoles(['sales_manager','sales_officer','customer_relations','supervisor'], 'sale',
             "Reservation Approved: {$lead['name']}",
             "Approved by {$me['name']}. The vehicle is now reserved.",
-            BASE_URL . '/modules/crm/view_lead.php?id=' . $id
+            BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '&dp_open=1'
         );
         logActivity('update', 'crm_leads', $id, "Reservation approved by Super Admin ({$me['name']}).");
         setFlash('success', 'Reservation approved. The vehicle is now reserved.');
@@ -438,6 +438,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dp = $st->fetch() ?: [];
 
         $leadUrl  = BASE_URL . '/modules/crm/view_lead.php?id=' . $id;
+        $leadUrlDp = $leadUrl . '&dp_open=1';
         $isCR     = in_array($me['role'], ['customer_relations', 'super_admin', 'admin']);
         $isSales  = in_array($me['role'], ['sales_person', 'super_admin', 'admin']);
         $step1Done = !empty($dp['s1_approved_at']) || $lead['stage'] === 'reserved' || $lead['stage'] === 'delivered';
@@ -454,7 +455,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 notifyRoles(['super_admin','supervisor','sales_officer'], 'alert',
                     "B3 Reservation Approval: {$lead['name']}",
                     "20% deposit confirmed (KES " . number_format($totalDeposit) . " of KES " . number_format($dpPrice) . "). Approval needed.",
-                    $leadUrl);
+                    $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, 'Delivery Protocol: moved to B3 Reservation, awaiting approval.');
                 setFlash('success', 'Moved to B3 Reservation — Super Admin, Supervisor and Sales Office have been notified.');
                 break;
@@ -469,7 +470,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $db->prepare("UPDATE cars SET status = 'reserved', updated_at = NOW() WHERE id = ?")->execute([(int)$lead['pinned_car_id']]);
                 }
                 notifyRoles(['customer_relations','sales_officer','supervisor'], 'sale',
-                    "B3 Approved: {$lead['name']}", "The vehicle is now Reserved. Proceed to Service when ready.", $leadUrl);
+                    "B3 Approved: {$lead['name']}", "The vehicle is now Reserved. Proceed to Service when ready.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, 'Delivery Protocol: B3 reservation approved.');
                 setFlash('success', 'B3 approved — the vehicle is now Reserved.');
                 break;
@@ -480,7 +481,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($dp['s2_service_at']))         $fail('Service step already started.');
                 $db->prepare("UPDATE crm_delivery_protocol SET s2_service_at = NOW() WHERE lead_id = ?")->execute([$id]);
                 notifyRoles(['sales_person'], 'info',
-                    "Service Requested: {$lead['name']}", "Confirm and move the vehicle to the workshop.", $leadUrl);
+                    "Service Requested: {$lead['name']}", "Confirm and move the vehicle to the workshop.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, 'Delivery Protocol: proceed to Service — Sales Person notified.');
                 setFlash('success', 'Service requested — Sales Person has been notified.');
                 break;
@@ -491,7 +492,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($dp['s2_confirmed_at']))       $fail('Already confirmed.');
                 $db->prepare("UPDATE crm_delivery_protocol SET s2_confirmed_at = NOW() WHERE lead_id = ?")->execute([$id]);
                 notifyRoles(['workshop_manager'], 'info',
-                    "Vehicle Incoming: {$lead['name']}", "Reserved vehicle confirmed for workshop service.", $leadUrl);
+                    "Vehicle Incoming: {$lead['name']}", "Reserved vehicle confirmed for workshop service.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, 'Delivery Protocol: confirmed — vehicle moved to workshop.');
                 setFlash('success', 'Confirmed — vehicle moved to workshop.');
                 break;
@@ -502,7 +503,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($dp['s2_workshop_done_at']))   $fail('Already checked out.');
                 $db->prepare("UPDATE crm_delivery_protocol SET s2_workshop_done_at = NOW() WHERE lead_id = ?")->execute([$id]);
                 notifyRoles(['customer_relations'], 'info',
-                    "Workshop Complete: {$lead['name']}", "Vehicle checked out of workshop. You may proceed to Registration & Payment.", $leadUrl);
+                    "Workshop Complete: {$lead['name']}", "Vehicle checked out of workshop. You may proceed to Registration & Payment.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, 'Delivery Protocol: vehicle checked out of workshop.');
                 setFlash('success', 'Vehicle checked out of workshop — Step 3 unlocked.');
                 break;
@@ -513,7 +514,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($dp['s3_requested_at']))       $fail('Registration already requested.');
                 $db->prepare("UPDATE crm_delivery_protocol SET s3_requested_at = NOW() WHERE lead_id = ?")->execute([$id]);
                 notifyRoles(['super_admin'], 'alert',
-                    "Vehicle Registration Needed: {$lead['name']}", "Register the vehicle, enter the registration number, and confirm full payment.", $leadUrl);
+                    "Vehicle Registration Needed: {$lead['name']}", "Register the vehicle, enter the registration number, and confirm full payment.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, 'Delivery Protocol: registration & full-payment confirmation requested.');
                 setFlash('success', 'Super Admin has been notified to register the vehicle and confirm full payment.');
                 break;
@@ -530,7 +531,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     try { $db->prepare("UPDATE cars SET registration_number = ?, updated_at = NOW() WHERE id = ?")->execute([$regNo, (int)$lead['pinned_car_id']]); } catch (\Throwable $_) {}
                 }
                 notifyRoles(['customer_relations','sales_person'], 'sale',
-                    "Registered & Paid: {$lead['name']}", "Reg No. {$regNo}. Full payment confirmed — proceed to PDI.", $leadUrl);
+                    "Registered & Paid: {$lead['name']}", "Reg No. {$regNo}. Full payment confirmed — proceed to PDI.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, "Delivery Protocol: vehicle registered ({$regNo}), full payment confirmed.");
                 setFlash('success', 'Registration and full payment confirmed — Step 4 (PDI) unlocked.');
                 break;
@@ -541,7 +542,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($dp['s4_requested_at']))       $fail('PDI already requested.');
                 $db->prepare("UPDATE crm_delivery_protocol SET s4_requested_at = NOW() WHERE lead_id = ?")->execute([$id]);
                 notifyRoles(['sales_person'], 'info',
-                    "PDI Requested: {$lead['name']}", "Confirm and carry out the Pre-Delivery Inspection.", $leadUrl);
+                    "PDI Requested: {$lead['name']}", "Confirm and carry out the Pre-Delivery Inspection.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, 'Delivery Protocol: PDI requested.');
                 setFlash('success', 'PDI requested — Sales Person has been notified.');
                 break;
@@ -561,7 +562,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($dp['s4_completed_at']))       $fail('PDI already completed.');
                 $db->prepare("UPDATE crm_delivery_protocol SET s4_completed_at = NOW() WHERE lead_id = ?")->execute([$id]);
                 notifyRoles(['customer_relations'], 'sale',
-                    "PDI Completed: {$lead['name']}", "Proceed to the Delivery Experience step.", $leadUrl);
+                    "PDI Completed: {$lead['name']}", "Proceed to the Delivery Experience step.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, 'Delivery Protocol: PDI completed.');
                 setFlash('success', 'PDI completed — Step 5 (Delivery Experience) unlocked.');
                 break;
@@ -585,7 +586,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($dp['s6_requested_at']))       $fail('Delivery note confirmation already requested.');
                 $db->prepare("UPDATE crm_delivery_protocol SET s6_requested_at = NOW() WHERE lead_id = ?")->execute([$id]);
                 notifyRoles(['super_admin','supervisor'], 'alert',
-                    "Delivery Note Confirmation: {$lead['name']}", "Confirm so Customer Relations can print the delivery note.", $leadUrl);
+                    "Delivery Note Confirmation: {$lead['name']}", "Confirm so Customer Relations can print the delivery note.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, 'Delivery Protocol: delivery note confirmation requested.');
                 setFlash('success', 'Super Admin and Supervisor have been notified to confirm the delivery note.');
                 break;
@@ -601,7 +602,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $db->prepare("UPDATE cars SET status='delivered', show_on_website=0, updated_at=NOW() WHERE id=?")->execute([(int)$lead['pinned_car_id']]);
                 }
                 notifyRoles(['customer_relations','sales_person','sales_manager'], 'sale',
-                    "Delivery Note Confirmed: {$lead['name']}", "Confirmed by {$me['name']}. The delivery note can now be printed.", $leadUrl);
+                    "Delivery Note Confirmed: {$lead['name']}", "Confirmed by {$me['name']}. The delivery note can now be printed.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, "Delivery Protocol: delivery note confirmed by {$me['name']}. Lead marked Delivered.");
                 setFlash('success', 'Delivery note confirmed — Customer Relations can now print it.');
                 break;
@@ -1577,7 +1578,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
 
         <!-- Pending reservation approval banner -->
         <?php if (($lead['reservation_status'] ?? '') === 'pending_approval'): ?>
-        <div class="card mb-4" style="border-color:#f59e0b;border-width:2px">
+        <div id="reservationApprovalBanner" class="card mb-4" style="border-color:#f59e0b;border-width:2px">
             <div class="card-body d-flex align-items-center gap-3 flex-wrap" style="background:#fffbeb">
                 <i class="fa fa-hourglass-half" style="font-size:22px;color:#d97706"></i>
                 <div class="flex-grow-1">
@@ -3020,6 +3021,24 @@ document.addEventListener('DOMContentLoaded', function () {
         var el = document.getElementById(id);
         if (el && el.parentNode !== document.body) document.body.appendChild(el);
     });
+});
+</script>
+
+<script>
+// Delivery-protocol deep link: a notification may send the user here with ?dp_open=1 —
+// auto-open the Delivery Protocol modal, or scroll the pending-approval banner into view.
+document.addEventListener('DOMContentLoaded', function () {
+    var dpOpen = new URLSearchParams(window.location.search).get('dp_open');
+    if (dpOpen === '1') {
+        var dpModalEl = document.getElementById('deliveryProtocolModal');
+        if (dpModalEl) {
+            bootstrap.Modal.getOrCreateInstance(dpModalEl).show();
+        }
+        var approvalBanner = document.getElementById('reservationApprovalBanner');
+        if (approvalBanner) {
+            approvalBanner.scrollIntoView({behavior: 'smooth', block: 'center'});
+        }
+    }
 });
 </script>
 

@@ -9,7 +9,7 @@ function createNotification(int $userId, string $type, string $title, string $me
         getDB()->prepare(
             "INSERT INTO notifications (user_id, type, title, message, link) VALUES (?,?,?,?,?)"
         )->execute([$userId, $type, $title ?: 'Notification', $message, $link]);
-    } catch (\Throwable $e) {}
+    } catch (\Throwable $e) { error_log('notifications: createNotification: ' . $e->getMessage()); }
 }
 
 function notifyRoles(array $roles, string $type, string $title, string $message = '', string $link = ''): void {
@@ -21,7 +21,7 @@ function notifyRoles(array $roles, string $type, string $title, string $message 
         foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) as $uid) {
             createNotification((int)$uid, $type, $title, $message, $link);
         }
-    } catch (\Throwable $e) {}
+    } catch (\Throwable $e) { error_log('notifications: notifyRoles: ' . $e->getMessage()); }
 }
 
 function getUnreadNotificationCount(int $userId): int {
@@ -29,7 +29,7 @@ function getUnreadNotificationCount(int $userId): int {
         $s = getDB()->prepare("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0");
         $s->execute([$userId]);
         return (int)$s->fetchColumn();
-    } catch (\Throwable $e) { return 0; }
+    } catch (\Throwable $e) { error_log('notifications: getUnreadNotificationCount: ' . $e->getMessage()); return 0; }
 }
 
 function getRecentNotifications(int $userId, int $limit = 20): array {
@@ -37,5 +37,5 @@ function getRecentNotifications(int $userId, int $limit = 20): array {
         $s = getDB()->prepare("SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT ?");
         $s->execute([$userId, $limit]);
         return $s->fetchAll();
-    } catch (\Throwable $e) { return []; }
+    } catch (\Throwable $e) { error_log('notifications: getRecentNotifications: ' . $e->getMessage()); return []; }
 }
