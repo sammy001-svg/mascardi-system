@@ -1281,7 +1281,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                                 }
                                 d.cars.forEach(function (c) {
                                     var row = document.createElement('div');
-                                    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:12.5px';
+                                    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:12.5px;color:#212529';
                                     row.onmouseover = function () { row.style.background = '#f0f6ff'; };
                                     row.onmouseout  = function () { row.style.background = ''; };
 
