@@ -1087,7 +1087,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
         foreach ($pinnedCarImages as $_img) { if ($_img['is_primary']) { $_primaryImg = $_img; break; } }
         if (!$_primaryImg && !empty($pinnedCarImages)) $_primaryImg = $pinnedCarImages[0];
         ?>
-        <div class="card mb-3">
+        <div class="card mb-3" style="position:relative;z-index:2">
             <div class="card-header fw-semibold d-flex justify-content-between align-items-center py-2">
                 <span><i class="fa fa-car me-2 text-primary"></i>Linked Vehicle</span>
                 <?php if ($pinnedCar && canWrite('crm')): ?>
