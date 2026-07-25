@@ -37,7 +37,7 @@ try {
     $db = getDB();
 
     // Verify car exists and is in showroom
-    $car = $db->prepare("SELECT id, make, model, year FROM cars WHERE id=? AND car_type='inventory' AND asking_price>0");
+    $car = $db->prepare("SELECT id, make, model, year FROM cars WHERE id=? AND car_type IN ('inventory','sale_on_behalf') AND asking_price>0");
     $car->execute([$carId]);
     $car = $car->fetch(PDO::FETCH_ASSOC);
     if (!$car) { echo json_encode(['success' => false, 'error' => 'Vehicle not found.']); exit; }

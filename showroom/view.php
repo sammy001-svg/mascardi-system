@@ -15,7 +15,7 @@ $stmt = $db->prepare("
     FROM cars c
     LEFT JOIN locations l  ON l.id  = c.location_id
     LEFT JOIN locations pl ON pl.id = l.parent_id
-    WHERE c.id = ? AND c.car_type = 'inventory' AND c.show_on_website = 1
+    WHERE c.id = ? AND c.car_type IN ('inventory','sale_on_behalf') AND c.show_on_website = 1
       AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
 ");
 $stmt->execute([$id]);
@@ -33,7 +33,7 @@ $similar = $db->prepare("
     SELECT c.id, c.make, c.model, c.year, c.asking_price, c.offer_price, c.body_type, c.transmission, c.fuel_type,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image
     FROM cars c
-    WHERE c.car_type='inventory' AND c.show_on_website = 1 AND c.id != ?
+    WHERE c.car_type IN ('inventory','sale_on_behalf') AND c.show_on_website = 1 AND c.id != ?
       AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
       AND (c.make = ? OR c.body_type = ?)
     ORDER BY c.featured DESC, c.created_at DESC LIMIT 3

@@ -13,7 +13,7 @@ $allCars = $db->query("
            c.engine_cc, c.featured, c.created_at, c.status,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image
     FROM cars c
-    WHERE c.car_type='inventory' AND c.show_on_website = 1
+    WHERE c.car_type IN ('inventory','sale_on_behalf') AND c.show_on_website = 1
       AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
     ORDER BY c.featured DESC, c.created_at DESC
 ")->fetchAll(PDO::FETCH_ASSOC);

@@ -75,6 +75,21 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
             <i class="fa fa-truck"></i><span>Delivered Cars</span>
         </a>
 
+        <a href="<?= BASE_URL ?>/modules/trade_in/index.php"
+           class="nav-item <?= isActive('/modules/trade_in/') ?>"
+           data-label="Trade-In &amp; Sale on Behalf"
+           style="position:relative">
+            <i class="fa fa-handshake"></i><span>Trade-In &amp; Sale on Behalf</span>
+            <?php
+            try {
+                $__consignCount = (int)getDB()->query("SELECT COUNT(*) FROM consignments WHERE status='active'")->fetchColumn();
+                if ($__consignCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#0ea5e9;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__consignCount > 99 ? '99+' : $__consignCount ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+
         <a href="<?= BASE_URL ?>/modules/crm/index.php"
            class="nav-item <?= isActive('/modules/crm/') ?>"
            data-label="Sales Pipeline">

@@ -18,7 +18,7 @@ $stmt = $db->prepare("
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
     FROM cars c
     LEFT JOIN locations l ON l.id = c.location_id
-    WHERE c.id IN ($placeholders) AND c.car_type='inventory' AND c.show_on_website=1
+    WHERE c.id IN ($placeholders) AND c.car_type IN ('inventory','sale_on_behalf') AND c.show_on_website=1
     ORDER BY FIELD(c.id,$placeholders)
 ");
 $stmt->execute(array_merge($ids, $ids));

@@ -31,7 +31,7 @@ $__navMakes = [];
 try {
     $__navMakes = getDB()->query("
         SELECT make, COUNT(*) AS n FROM cars
-        WHERE car_type='inventory' AND show_on_website=1
+        WHERE car_type IN ('inventory','sale_on_behalf') AND show_on_website=1
           AND (status IS NULL OR status NOT IN ('delivered','sold'))
           AND make IS NOT NULL AND make != ''
         GROUP BY make ORDER BY n DESC, make ASC LIMIT 10

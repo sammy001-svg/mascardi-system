@@ -78,6 +78,18 @@ function tradeInMigrate(PDO $db): void {
 
     // Added after the table shipped — no-op on fresh installs.
     try { $db->exec("ALTER TABLE consignments ADD COLUMN payout_paid DECIMAL(15,2) NOT NULL DEFAULT 0"); } catch (\Throwable $_) {}
+
+    // Flag lapsed agreements so they surface in the module. Website visibility is
+    // deliberately left alone — renewing a lapsed agreement is common, and silently
+    // pulling a live listing would be more surprising than a warning banner.
+    try {
+        $db->exec("UPDATE consignments
+                   SET status = 'expired'
+                   WHERE status = 'active'
+                     AND deal_type = 'sale_on_behalf'
+                     AND expiry_date IS NOT NULL
+                     AND expiry_date < CURDATE()");
+    } catch (\Throwable $_) {}
 }
 
 /** Deal-type labels/colours, used for badges across the module. */
