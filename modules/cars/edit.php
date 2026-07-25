@@ -118,13 +118,23 @@ include __DIR__ . '/../../includes/header.php';
                     <select name="car_type" id="car_type" class="form-select" required>
                         <option value="inventory" <?= ($car['car_type'] ?? 'inventory') === 'inventory' ? 'selected' : '' ?>>Inventory (Imported)</option>
                         <option value="client" <?= ($car['car_type'] ?? '') === 'client' ? 'selected' : '' ?>>Client (Repair/Service)</option>
+                        <!-- Consignment types are listed so the value round-trips on save;
+                             the deal itself is managed in the Trade-In module. -->
+                        <option value="sale_on_behalf" <?= ($car['car_type'] ?? '') === 'sale_on_behalf' ? 'selected' : '' ?>>Sale on Behalf (Customer-owned)</option>
+                        <option value="trade_in" <?= ($car['car_type'] ?? '') === 'trade_in' ? 'selected' : '' ?>>Trade-In (Part-exchange)</option>
                     </select>
+                    <?php if (in_array($car['car_type'] ?? '', ['sale_on_behalf','trade_in'], true)): ?>
+                    <div class="form-text">
+                        <i class="fa fa-handshake me-1"></i>Owner &amp; commission are managed in
+                        <a href="<?= BASE_URL ?>/modules/trade_in/index.php">Trade-In &amp; Sale on Behalf</a>.
+                    </div>
+                    <?php endif; ?>
                 </div>
-                <div class="col-md-4 owner-fields" style="<?= ($car['car_type'] ?? '') === 'client' ? '' : 'display:none' ?>">
+                <div class="col-md-4 owner-fields" style="<?= in_array($car['car_type'] ?? '', ['client','sale_on_behalf','trade_in'], true) ? '' : 'display:none' ?>">
                     <label class="form-label">Owner Name <span class="text-danger">*</span></label>
                     <input type="text" name="owner_name" class="form-control" value="<?= e($car['owner_name'] ?? '') ?>" placeholder="Customer Name">
                 </div>
-                <div class="col-md-4 owner-fields" style="<?= ($car['car_type'] ?? '') === 'client' ? '' : 'display:none' ?>">
+                <div class="col-md-4 owner-fields" style="<?= in_array($car['car_type'] ?? '', ['client','sale_on_behalf','trade_in'], true) ? '' : 'display:none' ?>">
                     <label class="form-label">Owner Phone</label>
                     <input type="text" name="owner_phone" class="form-control" value="<?= e($car['owner_phone'] ?? '') ?>" placeholder="Customer Phone">
                 </div>
@@ -219,7 +229,7 @@ include __DIR__ . '/../../includes/header.php';
 
 <script>
 document.getElementById('car_type').addEventListener('change', function() {
-    const isClient = this.value === 'client';
+    const isClient = ['client','sale_on_behalf','trade_in'].includes(this.value);
     document.querySelectorAll('.owner-fields').forEach(el => {
         el.style.display = isClient ? 'block' : 'none';
         const input = el.querySelector('input');
