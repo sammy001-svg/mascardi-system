@@ -40,9 +40,30 @@ function tradeInMigrate(PDO $db): void {
         } catch (\Throwable $_) {}
     }
 
-    // Columns the showroom relies on (already added by cars module, repeated for safety).
+    // Showroom-facing columns (migration 023). Repeated here because a consignment
+    // vehicle is priced and advertised through exactly these fields, and 023 uses
+    // MySQL-incompatible "ADD COLUMN IF NOT EXISTS" so it may never have run.
+    // Each statement is independent and harmlessly errors if the column exists.
+    try { $db->exec("ALTER TABLE cars ADD COLUMN asking_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+    try { $db->exec("ALTER TABLE cars ADD COLUMN mileage INT UNSIGNED NULL DEFAULT NULL"); }      catch (\Throwable $_) {}
+    try { $db->exec("ALTER TABLE cars ADD COLUMN engine_cc INT UNSIGNED NULL DEFAULT NULL"); }    catch (\Throwable $_) {}
+    try { $db->exec("ALTER TABLE cars ADD COLUMN featured TINYINT(1) NOT NULL DEFAULT 0"); }      catch (\Throwable $_) {}
     try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
     try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
+
+    // cars.status must accept 'sold' / 'reserved'. Both are already written by the
+    // sales and reservations flows and read by the showroom, but the base schema
+    // omits them — without strict SQL mode MariaDB silently stores an empty string.
+    try {
+        $row  = $db->query("SHOW COLUMNS FROM cars LIKE 'status'")->fetch(PDO::FETCH_ASSOC);
+        $type = strtolower($row['Type'] ?? '');
+        if ($type && !str_contains($type, "'sold'")) {
+            $db->exec("ALTER TABLE cars MODIFY COLUMN status
+                       ENUM('in_transit','arrived','in_assessment','in_workshop',
+                            'completed','delivered','reserved','sold')
+                       DEFAULT 'in_transit'");
+        }
+    } catch (\Throwable $_) {}
 
     try {
         $db->exec("CREATE TABLE IF NOT EXISTS consignments (
