@@ -101,10 +101,10 @@ if (authRole() === 'supervisor') {
             <i class="fa fa-handshake"></i><span>Trade-In &amp; Sale on Behalf</span>
             <?php
             try {
-                $__soб = (int)getDB()->query("SELECT COUNT(*) FROM consignments WHERE status='active'")->fetchColumn();
-                if ($__soб > 0): ?>
+                $__consignCount = (int)getDB()->query("SELECT COUNT(*) FROM consignments WHERE status='active'")->fetchColumn();
+                if ($__consignCount > 0): ?>
             <span style="position:absolute;top:6px;right:8px;background:#0ea5e9;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
-                <?= $__soб > 99 ? '99+' : $__soб ?>
+                <?= $__consignCount > 99 ? '99+' : $__consignCount ?>
             </span>
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
