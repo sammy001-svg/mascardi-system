@@ -8,6 +8,21 @@
  * owner, commission, agreement dates, settlement — lives in `consignments`.
  */
 
+/**
+ * True when cars.car_type already accepts the consignment values.
+ * Used to skip a needless ALTER, and to warn if the migration never applied.
+ */
+function tradeInEnumReady(PDO $db): bool {
+    try {
+        $row = $db->query("SHOW COLUMNS FROM cars LIKE 'car_type'")->fetch(PDO::FETCH_ASSOC);
+        if (!$row) return false;
+        $type = strtolower($row['Type'] ?? '');
+        return str_contains($type, 'sale_on_behalf') && str_contains($type, 'trade_in');
+    } catch (\Throwable $_) {
+        return false;
+    }
+}
+
 /** Inline migrations. Runs once per request; every statement is a silent no-op if already applied. */
 function tradeInMigrate(PDO $db): void {
     static $done = false;
@@ -15,11 +30,15 @@ function tradeInMigrate(PDO $db): void {
     $done = true;
 
     // Extend car_type so consignment vehicles flow through existing features.
-    try {
-        $db->exec("ALTER TABLE cars MODIFY COLUMN car_type
-                   ENUM('inventory','client','trade_in','sale_on_behalf')
-                   NOT NULL DEFAULT 'inventory'");
-    } catch (\Throwable $_) {}
+    // Deliberately a pure widening of the enum: nullability and default are left
+    // exactly as the original schema had them, so this cannot fail on legacy rows.
+    if (!tradeInEnumReady($db)) {
+        try {
+            $db->exec("ALTER TABLE cars MODIFY COLUMN car_type
+                       ENUM('inventory','client','trade_in','sale_on_behalf')
+                       DEFAULT 'inventory'");
+        } catch (\Throwable $_) {}
+    }
 
     // Columns the showroom relies on (already added by cars module, repeated for safety).
     try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
@@ -130,13 +149,22 @@ function consignmentPayout(array $c, ?float $salePrice = null): float {
     return round(max(0, $price - consignmentCommission($c, $price)), 2);
 }
 
-/** Next reference number, e.g. SOB-0007 / TRD-0007. */
+/**
+ * Next reference number, e.g. SOB-0007 / TRD-0007.
+ * Derived from the highest existing number (like nextNumber() elsewhere in the
+ * app) rather than a row count, so deleting a record can't cause a duplicate.
+ */
 function consignmentNextRef(PDO $db, string $dealType): string {
     $prefix = $dealType === 'trade_in' ? 'TRD' : 'SOB';
+    $next   = 1;
     try {
-        $n = (int)$db->query("SELECT COUNT(*) FROM consignments WHERE deal_type = " . $db->quote($dealType))->fetchColumn();
-    } catch (\Throwable $_) { $n = 0; }
-    return $prefix . '-' . str_pad((string)($n + 1), 4, '0', STR_PAD_LEFT);
+        $s = $db->prepare("SELECT MAX(CAST(SUBSTRING(reference, ?) AS UNSIGNED))
+                           FROM consignments
+                           WHERE deal_type = ? AND reference LIKE ?");
+        $s->execute([strlen($prefix) + 2, $dealType, $prefix . '-%']);
+        $next = max(1, (int)$s->fetchColumn() + 1);
+    } catch (\Throwable $_) {}
+    return $prefix . '-' . str_pad((string)$next, 4, '0', STR_PAD_LEFT);
 }
 
 /** Load a consignment joined with its vehicle. Returns null when not found. */

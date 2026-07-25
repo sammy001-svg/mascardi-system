@@ -164,6 +164,18 @@ include __DIR__ . '/../../includes/header.php';
 [data-theme="dark"] .ti-actions{ background:var(--surface-alt); border-top-color:var(--border); }
 </style>
 
+<?php if (!tradeInEnumReady($db)): ?>
+<div class="alert alert-danger">
+    <i class="fa fa-triangle-exclamation me-1"></i>
+    <strong>Database not ready.</strong>
+    The <code>cars.car_type</code> column could not be widened automatically, so new
+    trade-in / sale-on-behalf vehicles cannot be saved. Ask your database administrator
+    to run:
+    <pre class="mt-2 mb-0" style="font-size:11.5px;white-space:pre-wrap">ALTER TABLE cars MODIFY COLUMN car_type
+  ENUM('inventory','client','trade_in','sale_on_behalf') DEFAULT 'inventory';</pre>
+</div>
+<?php endif; ?>
+
 <!-- ── Banner ──────────────────────────────────────────────────────────────── -->
 <div class="ti-banner <?= $tab === 'trade_in' ? 'trade' : '' ?>">
     <div class="ti-banner-title">
