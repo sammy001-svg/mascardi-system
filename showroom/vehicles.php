@@ -79,8 +79,13 @@ $isFiltered = $filterMake || $filterBody || $filterFuel || $filterTrans || $filt
            || $filterYearMin || $filterYearMax || $filterMileMax || $search;
 $companyName = getSetting('company_name', 'Mascardi Car Yard');
 $__waClean   = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSetting('company_phone', '')));
-$pageTitle   = $filterMake ? $filterMake . ' Vehicles' : 'Available Vehicles';
-$metaDesc    = "Browse {$totalStock} quality vehicles at {$companyName}. Transparent pricing, flexible financing.";
+$pageTitle   = $filterMake ? $filterMake . ' Vehicles for Sale' : 'Available Vehicles';
+$metaDesc    = $filterMake
+             ? "Browse {$filteredCount} {$filterMake} vehicles for sale at {$companyName}. Transparent pricing, flexible financing."
+             : "Browse {$totalStock} quality vehicles at {$companyName}. Transparent pricing, flexible financing.";
+// Filter combinations collapse to a clean canonical (base, or the make-only variant)
+// to avoid duplicate-content across the many possible filter permutations.
+$canonicalUrl = rtrim(BASE_URL, '/') . '/showroom/vehicles.php' . ($filterMake ? '?make=' . urlencode($filterMake) : '');
 
 // URL for the current query minus the given params (used by filter chips)
 function sv_url_without(array $drop): string {

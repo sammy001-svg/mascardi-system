@@ -55,9 +55,61 @@ $saveAmt  = ($hasOffer && $hasPrice && $car['asking_price'] > $car['offer_price'
 $carTitle = $car['year'] . ' ' . $car['make'] . ' ' . $car['model'];
 $waMsg    = urlencode("Hi, I'm interested in the {$carTitle}" . ($displayPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? " . BASE_URL . "/showroom/view.php?id={$id}");
 
-$pageTitle = $carTitle;
-$metaDesc  = "Buy this {$carTitle} at {$companyName}." . ($displayPrice ? " {$priceStr}." : '') . " Finance available.";
-if ($primaryImg) $ogImage = $primaryImg;
+// ── SEO: per-car overrides, falling back to auto-generated values ──────────
+$canonicalUrl = rtrim(BASE_URL, '/') . '/showroom/view.php?id=' . $id;
+$fullTitle    = trim((string)($car['meta_title'] ?? '')) !== ''
+              ? $car['meta_title']
+              : "{$carTitle} for Sale in Kenya | {$companyName}";
+$autoDesc     = "Buy this {$carTitle} at {$companyName}." . ($displayPrice ? " {$priceStr}." : '') . " Finance available.";
+if (!empty($car['description'])) $autoDesc = trim($car['description']) . ' ' . $autoDesc;
+$metaDesc     = trim((string)($car['meta_description'] ?? '')) !== ''
+              ? $car['meta_description']
+              : mb_substr($autoDesc, 0, 300);
+$ogImage      = trim((string)($car['meta_image'] ?? '')) !== '' ? $car['meta_image'] : ($primaryImg ?: null);
+$ogType       = 'product';
+
+// ── Structured data (schema.org Car + Offer + Breadcrumb) ──────────────────
+$__ldFeatures = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string)($car['features'] ?? '')))));
+$__ld = [
+    '@context' => 'https://schema.org',
+    '@graph'   => [
+        [
+            '@type'                => 'Car',
+            'name'                 => $carTitle,
+            'brand'                => $car['make'],
+            'model'                => $car['model'],
+            'vehicleModelDate'     => (string)$car['year'],
+            'url'                  => $canonicalUrl,
+            'description'          => $metaDesc,
+        ],
+        [
+            '@type'           => 'BreadcrumbList',
+            'itemListElement' => [
+                ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home',     'item' => rtrim(BASE_URL, '/') . '/showroom/'],
+                ['@type' => 'ListItem', 'position' => 2, 'name' => 'Vehicles', 'item' => rtrim(BASE_URL, '/') . '/showroom/vehicles.php'],
+                ['@type' => 'ListItem', 'position' => 3, 'name' => $carTitle,  'item' => $canonicalUrl],
+            ],
+        ],
+    ],
+];
+if ($ogImage) $__ld['@graph'][0]['image'] = $ogImage;
+if (!empty($car['color']))        $__ld['@graph'][0]['color'] = $car['color'];
+if (!empty($car['mileage']))      $__ld['@graph'][0]['mileageFromOdometer'] = ['@type' => 'QuantitativeValue', 'value' => (int)$car['mileage'], 'unitCode' => 'KMT'];
+if (!empty($car['fuel_type']))    $__ld['@graph'][0]['fuelType'] = ucfirst($car['fuel_type']);
+if (!empty($car['transmission'])) $__ld['@graph'][0]['vehicleTransmission'] = ucfirst($car['transmission']);
+if (!empty($car['body_type']))    $__ld['@graph'][0]['bodyType'] = $car['body_type'];
+if ($__ldFeatures)                $__ld['@graph'][0]['vehicleSpecialUsage'] = implode(', ', $__ldFeatures);
+if ($displayPrice) {
+    $__ld['@graph'][0]['offers'] = [
+        '@type'           => 'Offer',
+        'price'           => (string)(int)$displayPrice,
+        'priceCurrency'   => 'KES',
+        'availability'    => $isReserved ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+        'itemCondition'   => 'https://schema.org/UsedCondition',
+        'url'             => $canonicalUrl,
+    ];
+}
+$jsonLd = json_encode($__ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
 include __DIR__ . '/header.php';
 ?>

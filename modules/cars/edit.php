@@ -14,6 +14,9 @@ try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFA
 try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN description TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN features TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN meta_title VARCHAR(255) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN meta_description VARCHAR(500) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN meta_image VARCHAR(500) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
@@ -36,6 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'notes'               => trim($_POST['notes'] ?? ''),
         'description'         => trim($_POST['description'] ?? ''),
         'features'            => trim($_POST['features'] ?? ''),
+        'meta_title'          => trim($_POST['meta_title'] ?? ''),
+        'meta_description'    => trim($_POST['meta_description'] ?? ''),
+        'meta_image'          => trim($_POST['meta_image'] ?? ''),
         'asking_price'        => ($_POST['asking_price'] ?? '') !== '' ? (float)$_POST['asking_price'] : null,
         'mileage'             => ($_POST['mileage']      ?? '') !== '' ? (int)$_POST['mileage']        : null,
         'engine_cc'           => ($_POST['engine_cc']    ?? '') !== '' ? (int)$_POST['engine_cc']      : null,
@@ -48,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$data['model'])          $errors[] = 'Model is required.';
 
     if (empty($errors)) {
-        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,description=?,features=?,asking_price=?,mileage=?,engine_cc=?,featured=?,offer_price=?,show_on_website=? WHERE id=?")
+        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,description=?,features=?,meta_title=?,meta_description=?,meta_image=?,asking_price=?,mileage=?,engine_cc=?,featured=?,offer_price=?,show_on_website=? WHERE id=?")
            ->execute([...array_values($data), $id]);
         logActivity('update', 'cars', $id, "Updated car: {$data['make']} {$data['model']} ({$data['chassis_number']})");
         setFlash('success','Car updated successfully.');
@@ -181,6 +187,46 @@ include __DIR__ . '/../../includes/header.php';
                     <label class="form-label">Features <small class="text-muted">(one per line — shown as a feature list on the website)</small></label>
                     <textarea name="features" class="form-control" rows="4" placeholder="Sunroof&#10;Leather Seats&#10;Reverse Camera&#10;Alloy Wheels"><?= e($car['features'] ?? '') ?></textarea>
                 </div>
+
+                <!-- ── SEO ───────────────────────────────────────── -->
+                <div class="col-12 mt-2">
+                    <div class="form-section-title">
+                        <i class="fa fa-magnifying-glass me-1 text-primary"></i>Search Engine Optimization (SEO)
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Meta Title <small class="text-muted">(~60 characters recommended)</small></label>
+                    <input type="text" name="meta_title" id="metaTitleInput" class="form-control" maxlength="255"
+                           value="<?= e($car['meta_title'] ?? '') ?>"
+                           placeholder="Auto-generated from Year, Make &amp; Model if left blank">
+                    <div class="form-text"><span id="metaTitleCount">0</span> characters</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Meta Image <small class="text-muted">(optional — defaults to the vehicle's primary photo)</small></label>
+                    <input type="text" name="meta_image" id="metaImageInput" class="form-control"
+                           value="<?= e($car['meta_image'] ?? '') ?>" placeholder="https://... (leave blank to auto-use primary photo)">
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Meta Description <small class="text-muted">(~160 characters recommended)</small></label>
+                    <textarea name="meta_description" id="metaDescInput" class="form-control" rows="2" maxlength="500"
+                              placeholder="Auto-generated from vehicle details if left blank"><?= e($car['meta_description'] ?? '') ?></textarea>
+                    <div class="form-text"><span id="metaDescCount">0</span> characters</div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small text-muted mb-2"><i class="fa fa-eye me-1"></i>Search Engine Preview</label>
+                    <div id="serpPreview" style="max-width:600px;padding:16px 20px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;font-family:arial,sans-serif">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <div style="width:22px;height:22px;border-radius:50%;background:#e2e8f0;flex-shrink:0"></div>
+                            <div>
+                                <div id="serpSite" style="font-size:13px;color:#202124;line-height:1.3"></div>
+                                <div id="serpUrl" style="font-size:12px;color:#4d5156;line-height:1.3"></div>
+                            </div>
+                        </div>
+                        <div id="serpTitle" style="font-size:19px;line-height:1.3;color:#1a0dab;margin:2px 0 3px"></div>
+                        <div id="serpDesc" style="font-size:13.5px;line-height:1.5;color:#4d5156"></div>
+                    </div>
+                </div>
+
                 <div class="col-md-3">
                     <label class="form-label">Asking Price <small class="text-muted">(KES — leave blank to hide price)</small></label>
                     <div class="input-group">
@@ -255,5 +301,49 @@ document.getElementById('client_id').addEventListener('change', function() {
         document.getElementsByName('owner_phone')[0].value = opt.getAttribute('data-phone');
     }
 });
+
+// ── Live Google search-result preview ──────────────────────────────
+(function () {
+    var f = {
+        make:      document.querySelector('[name="make"]'),
+        model:     document.querySelector('[name="model"]'),
+        year:      document.querySelector('[name="year"]'),
+        price:     document.querySelector('[name="asking_price"]'),
+        desc:      document.querySelector('[name="description"]'),
+        metaTitle: document.getElementById('metaTitleInput'),
+        metaDesc:  document.getElementById('metaDescInput'),
+    };
+    var companyName = <?= json_encode(getSetting('company_name', 'Mascardi Car Yard')) ?>;
+    var pageUrl      = <?= json_encode(rtrim(BASE_URL, '/') . '/showroom/view.php?id=' . (int)$id) ?>;
+
+    function slugify(s) {
+        return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    }
+    function autoTitle() {
+        var parts = [f.year.value.trim(), f.make.value.trim(), f.model.value.trim()].filter(Boolean).join(' ');
+        return parts ? parts + ' for Sale in Kenya | ' + companyName : companyName;
+    }
+    function autoDesc() {
+        var vehicle = [f.year.value.trim(), f.make.value.trim(), f.model.value.trim()].filter(Boolean).join(' ') || 'This vehicle';
+        var out = vehicle + ' is available at ' + companyName + '.';
+        if (f.price.value) out += ' Price: KES ' + Number(f.price.value).toLocaleString() + '.';
+        if (f.desc.value.trim()) out += ' ' + f.desc.value.trim();
+        return out.slice(0, 160);
+    }
+    function render() {
+        var title = f.metaTitle.value.trim() || autoTitle();
+        var desc  = f.metaDesc.value.trim()  || autoDesc();
+        document.getElementById('metaTitleCount').textContent = f.metaTitle.value.length;
+        document.getElementById('metaDescCount').textContent  = f.metaDesc.value.length;
+        document.getElementById('serpSite').textContent = companyName;
+        document.getElementById('serpUrl').textContent  = pageUrl + (f.make.value || f.model.value ? ' › ' + slugify(f.make.value + '-' + f.model.value) : '');
+        document.getElementById('serpTitle').textContent = title.length > 60 ? title.slice(0, 57) + '…' : title;
+        document.getElementById('serpDesc').textContent  = desc.length > 160 ? desc.slice(0, 157) + '…' : desc;
+    }
+    [f.make, f.model, f.year, f.price, f.desc, f.metaTitle, f.metaDesc].forEach(function (el) {
+        if (el) el.addEventListener('input', render);
+    });
+    render();
+}());
 </script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

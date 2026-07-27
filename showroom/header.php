@@ -20,9 +20,23 @@ $__logoSrc      = ($__logo && file_exists(BASE_PATH . '/assets/images/' . $__log
                 : null;
 
 $__waClean = preg_replace('/[^0-9]/', '', $__whatsapp);
-$__pageTitle = isset($pageTitle)
-    ? $pageTitle . ' — ' . $__companyName
-    : $__companyName . ' — Quality Vehicles';
+// $fullTitle (set by a page before including this file) is used verbatim, with no
+// " — Company Name" suffix — used for car pages that already craft a full SEO title.
+$__pageTitle = isset($fullTitle)
+    ? $fullTitle
+    : (isset($pageTitle) ? $pageTitle . ' — ' . $__companyName : $__companyName . ' — Quality Vehicles');
+
+$__seoDefaultDesc  = getSetting('seo_default_description', 'Browse quality imported vehicles at ' . $__companyName . '. Finance available. Visit our showroom today.');
+$__seoDefaultImage = getSetting('seo_og_image_url', '');
+$__metaDescription = isset($metaDesc) && trim((string)$metaDesc) !== '' ? $metaDesc : $__seoDefaultDesc;
+$__ogImageFinal    = isset($ogImage) && trim((string)$ogImage) !== '' ? $ogImage : $__seoDefaultImage;
+$__ogTypeFinal     = $ogType ?? 'website';
+$__canonicalUrl    = isset($canonicalUrl) ? $canonicalUrl : (rtrim(BASE_URL, '/') . strtok($_SERVER['REQUEST_URI'] ?? '/', '?'));
+
+$__allowIndexing = getSetting('seo_allow_indexing', '1') !== '0';
+$__forceNoIndex  = !empty($noIndex);
+$__googleVerify  = getSetting('seo_google_verification', '');
+$__gaId          = getSetting('seo_ga_id', '');
 
 $__navOverlay = !empty($navOverlay);
 
@@ -44,14 +58,51 @@ try {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title><?= htmlspecialchars($__pageTitle) ?></title>
-<meta name="description" content="<?= isset($metaDesc) ? htmlspecialchars($metaDesc) : 'Browse quality imported vehicles at ' . htmlspecialchars($__companyName) . '. Finance available. Visit our showroom today.' ?>">
-<?php if (isset($ogImage)): ?>
-<meta property="og:image"       content="<?= htmlspecialchars($ogImage) ?>">
+<meta name="description" content="<?= htmlspecialchars($__metaDescription) ?>">
+<link rel="canonical" href="<?= htmlspecialchars($__canonicalUrl) ?>">
+<?php if (!$__allowIndexing || $__forceNoIndex): ?>
+<meta name="robots" content="noindex,nofollow">
+<?php else: ?>
+<meta name="robots" content="index,follow">
 <?php endif; ?>
+<?php if ($__googleVerify): ?>
+<meta name="google-site-verification" content="<?= htmlspecialchars($__googleVerify) ?>">
+<?php endif; ?>
+
+<!-- Open Graph -->
+<meta property="og:site_name"   content="<?= htmlspecialchars($__companyName) ?>">
 <meta property="og:title"       content="<?= htmlspecialchars($__pageTitle) ?>">
-<meta property="og:description" content="Quality vehicles. Transparent pricing. Finance available.">
-<meta property="og:type"        content="website">
+<meta property="og:description" content="<?= htmlspecialchars($__metaDescription) ?>">
+<meta property="og:type"        content="<?= htmlspecialchars($__ogTypeFinal) ?>">
+<meta property="og:url"         content="<?= htmlspecialchars($__canonicalUrl) ?>">
+<?php if ($__ogImageFinal): ?>
+<meta property="og:image"       content="<?= htmlspecialchars($__ogImageFinal) ?>">
+<?php endif; ?>
+
+<!-- Twitter Card -->
+<meta name="twitter:card"        content="<?= $__ogImageFinal ? 'summary_large_image' : 'summary' ?>">
+<meta name="twitter:title"       content="<?= htmlspecialchars($__pageTitle) ?>">
+<meta name="twitter:description" content="<?= htmlspecialchars($__metaDescription) ?>">
+<?php if ($__ogImageFinal): ?>
+<meta name="twitter:image"       content="<?= htmlspecialchars($__ogImageFinal) ?>">
+<?php endif; ?>
+
 <meta name="theme-color"        content="#0c0c0c">
+
+<?php if (!empty($jsonLd)): ?>
+<script type="application/ld+json"><?= $jsonLd ?></script>
+<?php endif; ?>
+
+<?php if ($__gaId): ?>
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=<?= urlencode($__gaId) ?>"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', <?= json_encode($__gaId) ?>);
+</script>
+<?php endif; ?>
 
 <!-- PWA -->
 <link rel="manifest"    href="<?= BASE_URL ?>/manifest.php">

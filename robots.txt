@@ -1,0 +1,26 @@
+User-agent: *
+Allow: /showroom/
+Allow: /assets/
+Allow: /uploads/cars/
+Allow: /manifest.php
+Disallow: /modules/
+Disallow: /includes/
+Disallow: /config/
+Disallow: /database/
+Disallow: /scripts/
+Disallow: /scratch/
+Disallow: /backups/
+Disallow: /portal/
+Disallow: /login.php
+Disallow: /logout.php
+Disallow: /index.php
+Disallow: /profile.php
+Disallow: /run_migration.php
+Disallow: /debug_access.php
+Disallow: /check_tables.php
+Disallow: /git_fix.php
+Disallow: /test_cars.php
+Disallow: /test_delete.php
+Disallow: /test_job_insert.php
+
+Sitemap: https://mascardi.co.ke/sitemap.php

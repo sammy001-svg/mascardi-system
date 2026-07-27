@@ -36,6 +36,12 @@ $defaults = [
     'mpesa_shortcode'       => '',
     'mpesa_passkey'         => '',
     'mpesa_callback_url'    => '',
+    'seo_default_title'       => '',
+    'seo_default_description' => '',
+    'seo_og_image_url'        => '',
+    'seo_google_verification' => '',
+    'seo_ga_id'                => '',
+    'seo_allow_indexing'       => '1',
 ];
 
 $rows     = $db->query("SELECT setting_key, setting_value FROM settings")->fetchAll();
@@ -132,6 +138,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         'mpesa_shortcode'       => trim($_POST['mpesa_shortcode']       ?? ''),
         'mpesa_passkey'         => trim($_POST['mpesa_passkey']         ?? ''),
         'mpesa_callback_url'    => trim($_POST['mpesa_callback_url']    ?? ''),
+        // SEO
+        'seo_default_title'       => trim($_POST['seo_default_title']       ?? ''),
+        'seo_default_description' => trim($_POST['seo_default_description'] ?? ''),
+        'seo_og_image_url'        => trim($_POST['seo_og_image_url']        ?? ''),
+        'seo_google_verification' => trim($_POST['seo_google_verification'] ?? ''),
+        'seo_ga_id'               => trim($_POST['seo_ga_id']               ?? ''),
+        'seo_allow_indexing'      => isset($_POST['seo_allow_indexing']) ? '1' : '0',
     ];
     // Only update password if provided (don't blank it out)
     if (!empty($_POST['smtp_pass'])) {
@@ -217,6 +230,7 @@ include __DIR__ . '/../../includes/header.php';
         'documents'    => ['fa-file-lines',        'Documents'],
         'email'        => ['fa-envelope',          'Email'],
         'integrations' => ['fa-mobile-screen-button','Integrations'],
+        'seo'          => ['fa-magnifying-glass',  'SEO'],
         'permissions'  => ['fa-shield-halved',     'Permissions'],
         'system'       => ['fa-server',            'System'],
     ];
@@ -609,6 +623,116 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
 </div>
 </form>
 </div><!-- /integrations pane -->
+
+<!-- ══ SEO ═══════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade <?= $activeTab === 'seo' ? 'show active' : '' ?>" id="pane-seo" role="tabpanel">
+<form method="POST">
+<input type="hidden" name="action" value="save">
+<input type="hidden" name="_tab" value="seo">
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card mb-4">
+            <div class="card-header"><i class="fa fa-globe me-2"></i>Default Website Meta Tags</div>
+            <div class="card-body">
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Used as the fallback title/description for pages that don't set their own
+                    (e.g. the homepage). Each vehicle can still override these on its own Add/Edit page.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Default Meta Title <small class="text-muted">(~60 characters)</small></label>
+                    <input type="text" name="seo_default_title" id="seoTitleInput" class="form-control" maxlength="255"
+                           value="<?= e($settings['seo_default_title'] ?? '') ?>"
+                           placeholder="<?= e(($settings['company_name'] ?? 'Mascardi Car Yard') . ' — Quality Imported Vehicles in Kenya') ?>">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Default Meta Description <small class="text-muted">(~160 characters)</small></label>
+                    <textarea name="seo_default_description" id="seoDescInput" class="form-control" rows="2" maxlength="500"
+                              placeholder="Browse quality vehicles at Mascardi Car Yard. Transparent pricing, flexible financing."><?= e($settings['seo_default_description'] ?? '') ?></textarea>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label">Default Social Share Image (OG Image) <small class="text-muted">(absolute URL)</small></label>
+                    <input type="url" name="seo_og_image_url" class="form-control"
+                           value="<?= e($settings['seo_og_image_url'] ?? '') ?>" placeholder="https://yourdomain.com/assets/images/og-default.jpg">
+                    <div class="form-text">Shown when the homepage or a page without its own image is shared on Facebook/WhatsApp/Twitter.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><i class="fa fa-chart-line me-2"></i>Search Console &amp; Analytics</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Google Search Console Verification Code</label>
+                        <input type="text" name="seo_google_verification" class="form-control font-monospace"
+                               value="<?= e($settings['seo_google_verification'] ?? '') ?>" placeholder="e.g. AbCdEf123...">
+                        <div class="form-text">The "content" value from the meta tag Google gives you when verifying ownership.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Google Analytics (GA4) Measurement ID</label>
+                        <input type="text" name="seo_ga_id" class="form-control font-monospace"
+                               value="<?= e($settings['seo_ga_id'] ?? '') ?>" placeholder="G-XXXXXXXXXX">
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input type="checkbox" name="seo_allow_indexing" id="seoAllowIndexChk" class="form-check-input"
+                                   value="1" <?= ($settings['seo_allow_indexing'] ?? '1') === '1' ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="seoAllowIndexChk">
+                                Allow search engines to index this website
+                                <div class="text-muted fw-normal" style="font-size:11.5px">
+                                    Uncheck only while the site is under construction or on a staging domain — this blocks the whole site from Google.
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header"><i class="fa fa-eye me-2"></i>Google Search Result Preview</div>
+            <div class="card-body">
+                <div id="serpPreview" style="padding:16px 20px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;font-family:arial,sans-serif">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <div style="width:22px;height:22px;border-radius:50%;background:#e2e8f0;flex-shrink:0"></div>
+                        <div>
+                            <div id="serpSite" style="font-size:13px;color:#202124;line-height:1.3"><?= e($settings['company_name'] ?? 'Mascardi Car Yard') ?></div>
+                            <div id="serpUrl" style="font-size:12px;color:#4d5156;line-height:1.3"><?= e(rtrim(BASE_URL, '/')) ?>/showroom/</div>
+                        </div>
+                    </div>
+                    <div id="serpTitle" style="font-size:19px;line-height:1.3;color:#1a0dab;margin:2px 0 3px"></div>
+                    <div id="serpDesc" style="font-size:13.5px;line-height:1.5;color:#4d5156"></div>
+                </div>
+                <div class="form-text mt-2">This is how your homepage may appear in Google search results.</div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="mt-4">
+    <button type="submit" class="btn btn-primary px-5"><i class="fa fa-check me-2"></i>Save SEO Settings</button>
+</div>
+</form>
+<script>
+(function () {
+    var titleEl = document.getElementById('seoTitleInput');
+    var descEl  = document.getElementById('seoDescInput');
+    var fallbackTitle = <?= json_encode(($settings['company_name'] ?? 'Mascardi Car Yard') . ' — Quality Imported Vehicles in Kenya') ?>;
+    var fallbackDesc  = <?= json_encode('Browse quality vehicles at ' . ($settings['company_name'] ?? 'Mascardi Car Yard') . '. Transparent pricing, flexible financing.') ?>;
+    function render() {
+        var title = titleEl.value.trim() || fallbackTitle;
+        var desc  = descEl.value.trim()  || fallbackDesc;
+        document.getElementById('serpTitle').textContent = title.length > 60 ? title.slice(0, 57) + '…' : title;
+        document.getElementById('serpDesc').textContent  = desc.length > 160 ? desc.slice(0, 157) + '…' : desc;
+    }
+    titleEl.addEventListener('input', render);
+    descEl.addEventListener('input', render);
+    render();
+}());
+</script>
+</div><!-- /seo pane -->
 
 <!-- ══ PERMISSIONS ════════════════════════════════════════════════════════════ -->
 <div class="tab-pane fade <?= $activeTab === 'permissions' ? 'show active' : '' ?>" id="pane-permissions" role="tabpanel">

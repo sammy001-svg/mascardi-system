@@ -27,10 +27,25 @@ foreach ($allCars as $c) {
     $catCounts[$bt] = ($catCounts[$bt] ?? 0) + 1;
 }
 
-$companyName = getSetting('company_name', 'Mascardi Car Yard');
-$__waClean   = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSetting('company_phone', '')));
-$pageTitle   = 'Quality Vehicles';
-$metaDesc    = "Browse {$totalStock} quality vehicles at {$companyName}. Transparent pricing, flexible financing. Find your dream car today.";
+$companyName   = getSetting('company_name', 'Mascardi Car Yard');
+$companyPhone  = getSetting('company_phone', '');
+$companyEmail  = getSetting('company_email', '');
+$companyAddr   = getSetting('company_address', '');
+$__waClean     = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', $companyPhone));
+$fullTitle     = getSetting('seo_default_title', "{$companyName} — Quality Imported Vehicles in Kenya");
+$metaDesc      = getSetting('seo_default_description', "Browse {$totalStock} quality vehicles at {$companyName}. Transparent pricing, flexible financing. Find your dream car today.");
+$canonicalUrl  = rtrim(BASE_URL, '/') . '/showroom/';
+
+$__orgLd = array_filter([
+    '@context'  => 'https://schema.org',
+    '@type'     => 'AutomotiveBusiness',
+    'name'      => $companyName,
+    'url'       => $canonicalUrl,
+    'telephone' => $companyPhone ?: null,
+    'email'     => $companyEmail ?: null,
+    'address'   => $companyAddr ? ['@type' => 'PostalAddress', 'streetAddress' => $companyAddr] : null,
+]);
+$jsonLd = json_encode($__orgLd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
 // 3D showcase carousel — ONLY vehicles that have a photo. Featured cars first,
 // topped up with other photographed inventory when there aren't enough.

@@ -18,7 +18,12 @@
       "Bash(awk 'NR==226,NR==425' includes/header.php)",
       "Bash(sed -n '226,425p' includes/header.php)",
       "Read(//c/Users/Shanfix/**)",
-      "Bash(node --check 'C:\\\\Users\\\\Shanfix/notif_script.js')"
+      "Bash(node --check 'C:\\\\Users\\\\Shanfix/notif_script.js')",
+      "Bash(php -l \"c:/Mascardi Systems/mascardi-system/modules/cars/add.php\")",
+      "Bash(php -l \"c:/Mascardi Systems/mascardi-system/modules/cars/edit.php\")",
+      "Bash(php -l \"c:/Mascardi Systems/mascardi-system/showroom/header.php\")",
+      "Bash(php -l \"c:/Mascardi Systems/mascardi-system/showroom/view.php\")",
+      "Bash(php -l \"c:/Mascardi Systems/mascardi-system/showroom/index.php\")"
     ]
   }
 }
