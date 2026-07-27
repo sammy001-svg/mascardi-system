@@ -163,30 +163,30 @@ include __DIR__ . '/../../includes/header.php';
     border-radius:10px; overflow:hidden;
     box-shadow:0 10px 40px rgba(15,23,42,.08);
     font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;
-    font-size:12.5px; color:var(--ink); line-height:1.6;
+    font-size:11px; color:var(--ink); line-height:1.42;
 }
 /* ── Clause layout ───────────────────────────────────────────────────────── */
-.sa-clause { margin-bottom:16px; }
+.sa-clause { margin-bottom:8px; }
 .sa-clause-title {
-    font-weight:700; font-size:10.5px; margin-bottom:8px;
-    text-transform:uppercase; letter-spacing:.08em; color:var(--ink);
-    padding-left:10px; border-left:3px solid var(--accent);
+    font-weight:700; font-size:9.5px; margin-bottom:4px;
+    text-transform:uppercase; letter-spacing:.07em; color:var(--ink);
+    padding-left:9px; border-left:3px solid var(--accent);
 }
-.sa-clause p { margin:0; font-size:12.5px; line-height:1.85; color:var(--ink-2); }
+.sa-clause p { margin:0; font-size:11px; line-height:1.48; color:var(--ink-2); }
 /* ── Data tables ─────────────────────────────────────────────────────────── */
-.sa-table { width:100%; border-collapse:collapse; margin:6px 0; }
+.sa-table { width:100%; border-collapse:collapse; margin:4px 0; }
 .sa-table td, .sa-table th {
-    border:none; border-bottom:1px solid var(--line); padding:8px 6px;
-    font-size:12.5px; vertical-align:top;
+    border:none; border-bottom:1px solid var(--line); padding:4px 6px;
+    font-size:11px; vertical-align:top;
 }
 .sa-table th {
     background:none; font-weight:600; width:34%; white-space:nowrap;
-    color:var(--ink-2); text-transform:uppercase; font-size:9.5px; letter-spacing:.06em;
+    color:var(--ink-2); text-transform:uppercase; font-size:8.5px; letter-spacing:.06em;
 }
 .sa-table td { color:var(--ink); font-weight:500; }
 .sa-table tr:last-child td, .sa-table tr:last-child th { border-bottom:none; }
 /* ── Signature lines ─────────────────────────────────────────────────────── */
-.sig-line { border-bottom:1.5px solid var(--ink); min-height:38px; margin-bottom:4px; }
+.sig-line { border-bottom:1.5px solid var(--ink); min-height:26px; margin-bottom:3px; }
 /* ── Running print footer (position:fixed repeats on every printed page) ──── */
 .sa-print-footer {
     position:fixed; left:0; right:0; bottom:6mm; text-align:center;
@@ -226,42 +226,42 @@ include __DIR__ . '/../../includes/header.php';
 <div id="salesDoc">
 
     <!-- ══ HEADER: clean wordmark + document title/ref ═══════════════════════ -->
-    <div style="padding:26px 30px 18px;display:flex;justify-content:space-between;
-                align-items:flex-start;gap:16px;border-bottom:3px solid var(--ink)">
+    <div style="padding:14px 26px 10px;display:flex;justify-content:space-between;
+                align-items:flex-start;gap:16px;border-bottom:2px solid var(--ink)">
         <div>
-            <div style="font-size:25px;font-weight:800;letter-spacing:4px;color:var(--ink)">MASCARDI</div>
-            <div style="font-size:10px;letter-spacing:.25em;color:var(--ink-3);
-                        text-transform:uppercase;margin-top:3px">Ventures Limited</div>
+            <div style="font-size:19px;font-weight:800;letter-spacing:3px;color:var(--ink)">MASCARDI</div>
+            <div style="font-size:8.5px;letter-spacing:.22em;color:var(--ink-3);
+                        text-transform:uppercase;margin-top:2px">Ventures Limited</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-            <div style="display:inline-block;background:var(--ink);color:#fff;font-size:10.5px;
-                        font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-                        padding:7px 16px;border-radius:3px;white-space:nowrap">
+            <div style="display:inline-block;background:var(--ink);color:#fff;font-size:9.5px;
+                        font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+                        padding:5px 13px;border-radius:3px;white-space:nowrap">
                 Car Sales Agreement
             </div>
-            <div style="font-size:11px;color:var(--ink-2);margin-top:9px">Ref: <?= e($agmtRef) ?></div>
+            <div style="font-size:9.5px;color:var(--ink-2);margin-top:5px">Ref: <?= e($agmtRef) ?></div>
         </div>
     </div>
 
     <!-- ══ DOCUMENT BODY ═══════════════════════════════════════════════════════ -->
-    <div class="sa-body" style="padding:22px 30px 28px">
+    <div class="sa-body" style="padding:12px 26px 14px">
 
         <!-- Opening paragraph -->
-        <p style="margin:0 0 16px;font-size:12.5px;line-height:1.8">
+        <p style="margin:0 0 9px;font-size:11px;line-height:1.5">
             This Car Sale Agreement (<strong>"Agreement"</strong>) is made and entered into on this
             <strong><?= e($agmtDate) ?></strong>, by and between:
         </p>
 
         <!-- ── Parties ──────────────────────────────────────────────────────── -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
 
             <!-- Seller -->
             <div class="sa-avoid-break" style="border:1px solid var(--line);border-top:3px solid var(--ink);
-                        border-radius:6px;padding:14px 16px">
-                <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;
-                            letter-spacing:.1em;color:var(--ink-3);margin-bottom:8px">The Seller</div>
-                <div style="font-weight:700;font-size:13.5px;margin-bottom:5px;color:var(--ink)">Mascardi Ventures Limited</div>
-                <div style="font-size:12px;color:var(--ink-2);line-height:1.8">
+                        border-radius:6px;padding:8px 11px">
+                <div style="font-size:8.5px;font-weight:700;text-transform:uppercase;
+                            letter-spacing:.1em;color:var(--ink-3);margin-bottom:4px">The Seller</div>
+                <div style="font-weight:700;font-size:11.5px;margin-bottom:2px;color:var(--ink)">Mascardi Ventures Limited</div>
+                <div style="font-size:10.5px;color:var(--ink-2);line-height:1.45">
                     Reg. No. PVT-ZQUXL55<br>
                     291 Kabete Lane Spring Valley<br>
                     P.O.Box 1391-00606<br>
@@ -272,11 +272,11 @@ include __DIR__ . '/../../includes/header.php';
 
             <!-- Buyer -->
             <div class="sa-avoid-break" style="border:1px solid var(--line);border-top:3px solid var(--accent);
-                        border-radius:6px;padding:14px 16px">
-                <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;
-                            letter-spacing:.1em;color:var(--ink-3);margin-bottom:8px">The Buyer</div>
-                <div style="font-weight:700;font-size:13.5px;margin-bottom:5px;color:var(--ink)"><?= e($buyerName) ?></div>
-                <div style="font-size:12px;color:var(--ink-2);line-height:1.8">
+                        border-radius:6px;padding:8px 11px">
+                <div style="font-size:8.5px;font-weight:700;text-transform:uppercase;
+                            letter-spacing:.1em;color:var(--ink-3);margin-bottom:4px">The Buyer</div>
+                <div style="font-weight:700;font-size:11.5px;margin-bottom:2px;color:var(--ink)"><?= e($buyerName) ?></div>
+                <div style="font-size:10.5px;color:var(--ink-2);line-height:1.45">
                     <?php if ($buyerKraPin): ?>Pin: <?= e($buyerKraPin) ?><br><?php endif; ?>
                     P.O Box: <?= e($buyerPoBox ?: '___________________') ?><br>
                     <?php if ($buyerEmail): ?><?= e($buyerEmail) ?><br><?php endif; ?>
@@ -320,9 +320,9 @@ include __DIR__ . '/../../includes/header.php';
         <div class="sa-clause sa-avoid-break">
             <div class="sa-clause-title">2. Purchase Price</div>
             <?php if ($agreedPrice > 0): ?>
-            <div style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 14px">
-                <div style="font-size:16px;font-weight:800;color:var(--ink)">KSH <?= number_format($agreedPrice, 0) ?>/-</div>
-                <div style="font-size:11.5px;color:var(--ink-2);margin-top:2px">[Ksh <?= numWords($agreedPrice) ?>]</div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 11px">
+                <div style="font-size:13.5px;font-weight:800;color:var(--ink)">KSH <?= number_format($agreedPrice, 0) ?>/-</div>
+                <div style="font-size:10px;color:var(--ink-2);margin-top:1px">[Ksh <?= numWords($agreedPrice) ?>]</div>
             </div>
             <?php else: ?>
             <p><em>To be confirmed</em></p>
@@ -332,7 +332,7 @@ include __DIR__ . '/../../includes/header.php';
         <!-- ── 3. Payment Terms ─────────────────────────────────────────────── -->
         <div class="sa-clause">
             <div class="sa-clause-title">3. Payment Terms</div>
-            <table class="sa-table" style="margin-bottom:8px">
+            <table class="sa-table" style="margin-bottom:4px">
                 <tr>
                     <th>Full Amount</th>
                     <td><?= $agreedPrice > 0 ? 'KSH ' . number_format($agreedPrice, 0) . '/-' : '—' ?></td>
@@ -343,7 +343,7 @@ include __DIR__ . '/../../includes/header.php';
                         <?php if ($deposit > 0): ?>
                             KSH <?= number_format($deposit, 0) ?>/-
                             <?php if ($depDate): ?>
-                                <span style="color:#555;font-size:11.5px">
+                                <span style="color:var(--ink-2);font-size:10px">
                                     (received <?= (new DateTime($depDate))->format('d M Y') ?>)
                                 </span>
                             <?php endif; ?>
@@ -374,9 +374,6 @@ include __DIR__ . '/../../includes/header.php';
             subject to standard company t&amp;c:
             https://www.mascardi.co/terms-of-service</p>
         </div>
-
-        <!-- ── Page break: clauses 4–9 + signatures on page 2 ──────────────── -->
-        <div class="sa-page-break"></div>
 
         <!-- ── 4. Delivery, Vehicle Insurance and Transfer of Risk ─────────── -->
         <div class="sa-clause">
@@ -436,21 +433,21 @@ include __DIR__ . '/../../includes/header.php';
         </div>
 
         <!-- ── Signatures ─────────────────────────────────────────────────────── -->
-        <div class="sa-avoid-break" style="margin-top:20px;border-top:3px solid var(--ink);padding-top:18px">
+        <div class="sa-avoid-break" style="margin-top:10px;border-top:2px solid var(--ink);padding-top:10px">
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:18px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:10px">
 
                 <!-- Buyer signature block -->
                 <div>
                     <div class="sig-line"></div>
-                    <div style="font-size:11.5px;margin-top:4px;color:var(--ink)"><strong>Buyer Signature</strong></div>
-                    <div style="margin-top:12px;font-size:11.5px;color:var(--ink-2)">Date: _____________________</div>
-                    <div style="margin-top:16px">
+                    <div style="font-size:10.5px;margin-top:3px;color:var(--ink)"><strong>Buyer Signature</strong></div>
+                    <div style="margin-top:7px;font-size:10.5px;color:var(--ink-2)">Date: _____________________</div>
+                    <div style="margin-top:9px">
                         <div class="sig-line"></div>
-                        <div style="font-size:11.5px;margin-top:4px;color:var(--ink-2)">
+                        <div style="font-size:10.5px;margin-top:3px;color:var(--ink-2)">
                             Name: <?= e($buyerName) ?>
                         </div>
-                        <div style="font-size:11.5px;margin-top:3px;color:var(--ink-2)">
+                        <div style="font-size:10.5px;margin-top:2px;color:var(--ink-2)">
                             ID No.: <?= e($buyerIdNo ?: '_______________________') ?>
                         </div>
                     </div>
@@ -459,30 +456,30 @@ include __DIR__ . '/../../includes/header.php';
                 <!-- Seller signature block -->
                 <div>
                     <div class="sig-line"></div>
-                    <div style="font-size:11.5px;margin-top:4px;color:var(--ink)"><strong>Seller Signature</strong></div>
-                    <div style="margin-top:12px;font-size:11.5px;color:var(--ink-2)">Date: _____________________</div>
-                    <div style="margin-top:16px">
+                    <div style="font-size:10.5px;margin-top:3px;color:var(--ink)"><strong>Seller Signature</strong></div>
+                    <div style="margin-top:7px;font-size:10.5px;color:var(--ink-2)">Date: _____________________</div>
+                    <div style="margin-top:9px">
                         <div class="sig-line"></div>
-                        <div style="font-size:11.5px;margin-top:4px;color:var(--ink-2)">Name: _____________________</div>
-                        <div style="font-size:11.5px;margin-top:3px;color:var(--ink-2)">ID No.: ___________________</div>
+                        <div style="font-size:10.5px;margin-top:3px;color:var(--ink-2)">Name: _____________________</div>
+                        <div style="font-size:10.5px;margin-top:2px;color:var(--ink-2)">ID No.: ___________________</div>
                     </div>
                 </div>
             </div>
 
             <!-- Witness row -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;
-                        padding-top:12px;border-top:1px dashed var(--line)">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;
+                        padding-top:8px;border-top:1px dashed var(--line)">
                 <div>
                     <div class="sig-line"></div>
-                    <div style="font-size:11px;margin-top:4px;color:var(--ink-2)">Witness (Buyer)</div>
-                    <div style="font-size:11px;margin-top:8px;color:var(--ink-2)">
+                    <div style="font-size:10px;margin-top:3px;color:var(--ink-2)">Witness (Buyer)</div>
+                    <div style="font-size:10px;margin-top:5px;color:var(--ink-2)">
                         ID No.: ___________________
                     </div>
                 </div>
                 <div>
                     <div class="sig-line"></div>
-                    <div style="font-size:11px;margin-top:4px;color:var(--ink-2)">Witness (Seller)</div>
-                    <div style="font-size:11px;margin-top:8px;color:var(--ink-2)">
+                    <div style="font-size:10px;margin-top:3px;color:var(--ink-2)">Witness (Seller)</div>
+                    <div style="font-size:10px;margin-top:5px;color:var(--ink-2)">
                         ID No.: ___________________
                     </div>
                 </div>
@@ -490,35 +487,30 @@ include __DIR__ . '/../../includes/header.php';
 
         </div><!-- /signatures -->
 
-        <!-- ── Attachments: Buyer ID card (front/back) ─────────────────────────── -->
-        <?php if (!empty($lead['id_card_front'])): ?>
+        <!-- ── Attachments: Buyer ID card (front + back share a single page) ───── -->
+        <?php if (!empty($lead['id_card_front']) || !empty($lead['id_card_back'])): ?>
         <div class="sa-page-break"></div>
         <div class="sa-avoid-break" style="padding-top:10px">
-            <div style="text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:3px solid var(--ink)">
-                <div style="font-size:14px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--ink)">
-                    Attachment — ID Card (Front)
+            <div style="text-align:center;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--ink)">
+                <div style="font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)">
+                    Attachment — Buyer ID Card
                 </div>
             </div>
-            <div style="text-align:center">
-                <img src="<?= BASE_URL ?>/uploads/leads/<?= e($lead['id_card_front']) ?>"
-                     style="max-width:100%;max-height:650px;border:1px solid var(--line);border-radius:6px">
-            </div>
+        </div>
+        <?php if (!empty($lead['id_card_front'])): ?>
+        <div class="sa-avoid-break" style="text-align:center;margin-bottom:14px">
+            <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);margin-bottom:5px">Front</div>
+            <img src="<?= BASE_URL ?>/uploads/leads/<?= e($lead['id_card_front']) ?>"
+                 style="max-width:100%;max-height:400px;border:1px solid var(--line);border-radius:6px">
         </div>
         <?php endif; ?>
-
         <?php if (!empty($lead['id_card_back'])): ?>
-        <div class="sa-page-break"></div>
-        <div class="sa-avoid-break" style="padding-top:10px">
-            <div style="text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:3px solid var(--ink)">
-                <div style="font-size:14px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--ink)">
-                    Attachment — ID Card (Back)
-                </div>
-            </div>
-            <div style="text-align:center">
-                <img src="<?= BASE_URL ?>/uploads/leads/<?= e($lead['id_card_back']) ?>"
-                     style="max-width:100%;max-height:650px;border:1px solid var(--line);border-radius:6px">
-            </div>
+        <div class="sa-avoid-break" style="text-align:center">
+            <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);margin-bottom:5px">Back</div>
+            <img src="<?= BASE_URL ?>/uploads/leads/<?= e($lead['id_card_back']) ?>"
+                 style="max-width:100%;max-height:400px;border:1px solid var(--line);border-radius:6px">
         </div>
+        <?php endif; ?>
         <?php endif; ?>
 
     </div><!-- /body padding -->
