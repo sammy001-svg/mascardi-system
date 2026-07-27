@@ -186,6 +186,9 @@ $extraJs = <<<JS
 </script>
 JS;
 
+require_once __DIR__ . '/../../includes/notifications.php';
+$dpPendingItems = getPendingDeliveryProtocolActions('customer_relations', $uid);
+
 include __DIR__ . '/../../includes/header.php';
 
 $initials = implode('', array_map(fn($w) => strtoupper($w[0]), array_slice(explode(' ', $me['name']), 0, 2)));
@@ -364,6 +367,8 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good
         </a>
     </div>
 </div>
+
+<?php include __DIR__ . '/../../includes/dp_pending_banner.php'; ?>
 
 <!-- KPI Cards -->
 <div class="crm-kpi-grid">

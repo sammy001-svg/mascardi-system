@@ -188,6 +188,9 @@ $extraJs = <<<JS
 </script>
 JS;
 
+require_once __DIR__ . '/../../includes/notifications.php';
+$dpPendingItems = getPendingDeliveryProtocolActions('supervisor');
+
 include __DIR__ . '/../../includes/header.php';
 ?>
 
@@ -221,6 +224,8 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+
+<?php include __DIR__ . '/../../includes/dp_pending_banner.php'; ?>
 
 <!-- ── KPI Cards ────────────────────────────────────────────────────────────── -->
 <div class="row g-3 mb-4">

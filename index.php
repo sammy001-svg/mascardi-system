@@ -106,11 +106,17 @@ if ($role === 'mechanic') {
         } catch (\Throwable $_) { $pendingReservations = []; }
     }
 
+    require_once __DIR__ . '/includes/notifications.php';
+    $dpPendingItems = getPendingDeliveryProtocolActions($role);
+
 } elseif ($role === 'sales_person') {
     $stats['total_clients']    = (int)$db->query("SELECT COUNT(*) FROM clients")->fetchColumn();
     $stats['qa_today']         = (int)$db->query("SELECT COUNT(*) FROM quick_assessments WHERE assessment_date=CURDATE()")->fetchColumn();
     $stats['pending_bookings'] = (int)$db->query("SELECT COUNT(*) FROM service_bookings WHERE status='pending'")->fetchColumn();
     $stats['available_cars']   = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status IN ('arrived','completed')")->fetchColumn();
+
+    require_once __DIR__ . '/includes/notifications.php';
+    $dpPendingItems = getPendingDeliveryProtocolActions($role);
 
 } elseif ($role === 'sales_officer') {
     $stats['revenue_month']    = (float)$db->query("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid' AND MONTH(created_at)=MONTH(NOW()) AND YEAR(created_at)=YEAR(NOW())")->fetchColumn();
@@ -349,6 +355,8 @@ include __DIR__ . '/includes/header.php';
     </div>
 </div>
 <?php endif; ?>
+
+<?php include __DIR__ . '/includes/dp_pending_banner.php'; ?>
 
 <!-- ── Stat Cards Row 1 ───────────────────────────────────────────────────── -->
 <?php if ($role === 'super_admin'): ?>
