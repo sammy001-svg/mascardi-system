@@ -122,9 +122,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect(BASE_URL . '/modules/trade_in/view.php?id=' . $consId);
         } catch (\Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();
-            $errors[] = ($e instanceof PDOException && $e->getCode() === '23000')
-                ? 'That chassis number already exists in the system.'
-                : 'Could not save: ' . $e->getMessage();
+            // A 23000 here isn't necessarily the chassis number — it's whatever
+            // unique/FK constraint fired first across both the cars and
+            // consignments inserts. Look up the real conflict instead of
+            // guessing, so a misattributed error can't send someone chasing a
+            // vehicle that was never actually the problem.
+            if ($e instanceof PDOException && $e->getCode() === '23000') {
+                $existing = $db->prepare("SELECT id, make, model, car_type, status FROM cars WHERE chassis_number=?");
+                $existing->execute([$d['chassis_number']]);
+                $existing = $existing->fetch();
+                if ($existing) {
+                    $errors[] = 'Chassis number already exists — car #' . $existing['id'] . ' ('
+                        . trim($existing['make'] . ' ' . $existing['model']) . ', type: ' . $existing['car_type']
+                        . ', status: ' . $existing['status'] . '). Open '
+                        . BASE_URL . '/modules/cars/view.php?id=' . $existing['id']
+                        . ' — if you tried to delete it, it likely still has invoices, quotations, or jobs linked to it.';
+                } else {
+                    $errors[] = 'Could not save — a database constraint was violated, but not the chassis number '
+                        . '(no existing car uses "' . $d['chassis_number'] . '"). Technical detail: ' . $e->getMessage();
+                }
+            } else {
+                $errors[] = 'Could not save: ' . $e->getMessage();
+            }
         }
     }
 }

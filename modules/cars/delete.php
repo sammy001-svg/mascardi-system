@@ -23,6 +23,12 @@ if ($id) {
         'invoices'        => 'invoice(s)',
         'quotations'      => 'quotation(s)',
         'workshop_jobs'   => 'workshop job(s)',
+        // consignments has no FK to cars (by design — see modules/trade_in/_bootstrap.php),
+        // so it wouldn't stop the DELETE on its own; it's checked here to stop it
+        // anyway, since deleting the car would orphan the trade-in/sale-on-behalf
+        // deal record (consignmentFind()'s INNER JOIN to cars would make it
+        // permanently unreachable, silently losing the owner/commission record).
+        'consignments'    => 'trade-in/sale-on-behalf record(s)',
     ];
     $found = [];
     foreach ($blockers as $table => $label) {
