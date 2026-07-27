@@ -4,17 +4,26 @@ $pageTitle = 'Cars';
 $db = getDB();
 
 $section = $_GET['section'] ?? 'inventory';
-if (!in_array($section, ['inventory', 'client', 'workshop', 'consignment'])) $section = 'inventory';
+if (!in_array($section, ['inventory', 'client', 'workshop', 'consignment', 'archive'])) $section = 'inventory';
+
+// Archive reuses the inventory column layout (location/price are still relevant
+// on a sold car), so header cells and the DataTables column config must agree —
+// a mismatch here is what triggers "Incorrect column count" warnings.
+$usesInventoryLayout = in_array($section, ['inventory', 'archive'], true);
 
 // Location scope for supervisors
 $supLocId  = supervisorLocationId();
 $locFilter = $supLocId ? " AND location_id = $supLocId" : '';
 
-// Three lightweight COUNT queries for tab badges — scoped for supervisors
+// Tab badge counts — scoped for supervisors
 $cntInv  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='inventory' AND (status IS NULL OR status NOT IN ('delivered','sold'))$locFilter")->fetchColumn();
 $cntCli  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='client'$locFilter")->fetchColumn();
 $cntWork = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status='in_workshop'$locFilter")->fetchColumn();
 $cntCons = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type IN ('trade_in','sale_on_behalf')$locFilter")->fetchColumn();
+// Sold/delivered inventory cars match none of the tabs above, so without this
+// they are invisible everywhere in the module — unreachable to view or delete,
+// while still holding their (unique) chassis number.
+$cntArch = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='inventory' AND status IN ('delivered','sold')$locFilter")->fetchColumn();
 
 // Filter dropdowns — only needed on inventory tab, scoped for supervisors
 $invMakes     = [];
@@ -58,7 +67,7 @@ $extraJs = '<script>
                 }
             }
         },
-        columns: ' . ($section === 'inventory'
+        columns: ' . ($usesInventoryLayout
             ? '[{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:false}]'
             : '[{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:false}]') . ',
         order      : [[0, "asc"]],
@@ -92,7 +101,8 @@ include __DIR__ . '/../../includes/header.php';
         <i class="fa fa-car-side me-2 text-primary"></i>
         <?= $section === 'inventory' ? 'Mascardi Inventory'
           : ($section === 'client'   ? 'Client Cars'
-          : ($section === 'consignment' ? 'Trade-In & Sale on Behalf' : 'Workshop')) ?>
+          : ($section === 'consignment' ? 'Trade-In & Sale on Behalf'
+          : ($section === 'archive' ? 'Archive — Sold &amp; Delivered' : 'Workshop'))) ?>
     </h5>
     <div class="d-flex gap-2 flex-wrap">
         <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#stockTakeModal">
@@ -134,7 +144,24 @@ include __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
     </a>
     <?php endif; ?>
+    <a href="?section=archive"
+       class="btn btn-lg <?= $section === 'archive' ? 'btn-secondary' : 'btn-outline-secondary' ?> flex-fill text-center" style="min-width:160px">
+        <i class="fa fa-box-archive me-2"></i>Sold / Delivered
+        <?php if ($cntArch): ?>
+        <span class="badge <?= $section === 'archive' ? 'bg-white text-dark' : 'bg-secondary' ?> ms-1"><?= $cntArch ?></span>
+        <?php endif; ?>
+    </a>
 </div>
+
+<?php if ($section === 'archive'): ?>
+<div class="alert alert-secondary py-2 small d-flex align-items-center gap-2">
+    <i class="fa fa-circle-info"></i>
+    <span>
+        Vehicles already <strong>sold</strong> or <strong>delivered</strong>. They stay in the system for record-keeping
+        and still hold their chassis number — so if re-registering a chassis is blocked, the vehicle will be listed here.
+    </span>
+</div>
+<?php endif; ?>
 
 <?php if ($section === 'consignment'): ?>
 <div class="alert alert-info py-2 small d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -192,7 +219,7 @@ include __DIR__ . '/../../includes/header.php';
                 <tr>
                     <th class="ps-3">Vehicle</th>
                     <th>Chassis</th>
-                    <?php if ($section === 'inventory'): ?>
+                    <?php if ($usesInventoryLayout): ?>
                     <th>Mileage</th>
                     <th>Location</th>
                     <th>Price</th>

@@ -22,8 +22,11 @@ try { $db->exec("ALTER TABLE cars ADD INDEX idx_cars_status (status)");  }      
 try { $db->exec("ALTER TABLE car_images ADD INDEX idx_ci_primary (car_id, is_primary)"); } catch (\Throwable $_) {}
 
 // ── Params ───────────────────────────────────────────────────────────────────
-$section = in_array($_GET['section'] ?? '', ['inventory', 'client', 'workshop', 'consignment'])
+$section = in_array($_GET['section'] ?? '', ['inventory', 'client', 'workshop', 'consignment', 'archive'])
          ? $_GET['section'] : 'inventory';
+
+// 'archive' renders the same columns as 'inventory' (see modules/cars/index.php).
+$usesInventoryLayout = in_array($section, ['inventory', 'archive'], true);
 
 $draw           = (int)($_GET['draw']   ?? 1);
 $start          = (int)($_GET['start']  ?? 0);
@@ -39,7 +42,7 @@ $supLocId = supervisorLocationId();
 if ($supLocId) $filterLocation = $supLocId;
 
 // Map column index → SQL expression — differs by section
-if ($section === 'inventory') {
+if ($usesInventoryLayout) {
     $colMap = [
         0 => 'c.make',
         1 => 'c.chassis_number',
@@ -66,6 +69,10 @@ if ($section === 'workshop') {
     $baseWhere = "c.status = 'in_workshop'";
 } elseif ($section === 'inventory') {
     $baseWhere = "c.car_type = 'inventory' AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))";
+} elseif ($section === 'archive') {
+    // Retired stock. Without this section these rows match no tab at all and are
+    // unreachable in the UI, even though they still occupy their chassis number.
+    $baseWhere = "c.car_type = 'inventory' AND c.status IN ('delivered','sold')";
 } elseif ($section === 'consignment') {
     $baseWhere = "c.car_type IN ('trade_in','sale_on_behalf')";
 } else {
@@ -115,7 +122,7 @@ if ($allFilterParams) {
 // ── Data query ───────────────────────────────────────────────────────────────
 // Uses a correlated subquery for primary image (indexed on car_id + is_primary)
 // and LEFT JOIN for location. Only fetches columns actually needed.
-if ($section === 'inventory') {
+if ($usesInventoryLayout) {
     $sql = "
         SELECT c.id,
                c.make, c.model, c.year, c.color,
@@ -208,7 +215,7 @@ foreach ($rows as $car) {
     }
     $acts .= '</div>';
 
-    if ($section === 'inventory') {
+    if ($usesInventoryLayout) {
         $mileage = $car['mileage']
                  ? '<span class="small text-nowrap">' . number_format((int)$car['mileage']) . ' km</span>'
                  : '<span class="text-muted">—</span>';

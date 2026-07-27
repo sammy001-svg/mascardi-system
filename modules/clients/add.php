@@ -47,10 +47,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$d['car_year']) $errors[] = 'Car Year is required if adding vehicle details.';
         
         if ($d['car_chassis']) {
-            $checkChassis = $db->prepare("SELECT COUNT(*) FROM cars WHERE chassis_number = ?");
+            // Name the conflicting vehicle instead of just rejecting. Sold/delivered
+            // cars are archived rather than removed, and deleting a client only
+            // detaches its cars (cars.client_id is ON DELETE SET NULL) — so the
+            // blocking record is often one the user believes they already deleted.
+            $checkChassis = $db->prepare("SELECT id, make, model, car_type, status FROM cars WHERE chassis_number = ?");
             $checkChassis->execute([$d['car_chassis']]);
-            if ($checkChassis->fetchColumn() > 0) {
-                $errors[] = 'Chassis number already exists in the system.';
+            if ($clash = $checkChassis->fetch()) {
+                $isArchived = in_array($clash['status'], ['delivered', 'sold'], true);
+                $errors[] = 'Chassis number already exists — car #' . $clash['id'] . ' ('
+                    . trim($clash['make'] . ' ' . $clash['model']) . ', ' . $clash['car_type']
+                    . ', status: ' . $clash['status'] . ').'
+                    . ($isArchived
+                        ? ' It is retired stock, listed under Cars → "Sold / Delivered".'
+                        : ' Open Cars → ' . ($clash['car_type'] === 'client' ? '"Client Cars"' : '"Mascardi Inventory"') . ' to review it.')
+                    . ' Deleting a client does not delete their vehicle — the car must be deleted separately.';
             }
         }
     }
