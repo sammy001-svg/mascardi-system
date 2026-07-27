@@ -214,6 +214,12 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<div class="d-print-none alert alert-light border small mb-4" style="font-size:12px">
+    <i class="fa fa-circle-info me-1 text-muted"></i>
+    For a clean printout with no browser date/title line, open <strong>More settings</strong> in the print
+    dialog and untick <strong>Headers and footers</strong>.
+</div>
+
 <!-- ═══════════════════════════════════════════════════════════════════════════
      PRINTABLE SALES AGREEMENT DOCUMENT
 ════════════════════════════════════════════════════════════════════════════ -->
@@ -522,5 +528,17 @@ include __DIR__ . '/../../includes/header.php';
 <div class="sa-print-footer">Mascardi Ventures Limited &middot; Car Sales Agreement &middot; Ref: <?= e($agmtRef) ?></div>
 
 <div class="d-print-none mt-4 mb-4"></div>
+
+<script>
+// Browsers print their own date/title header line using document.title when
+// "Headers and footers" is left on — shorten it to just the doc name so that
+// fallback line reads clean instead of "Sales Agreement — Name — Company".
+(function () {
+    var original = document.title;
+    var printTitle = 'Car Sales Agreement — ' + <?= json_encode($agmtRef) ?>;
+    window.addEventListener('beforeprint', function () { document.title = printTitle; });
+    window.addEventListener('afterprint', function () { document.title = original; });
+}());
+</script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
