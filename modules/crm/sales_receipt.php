@@ -112,6 +112,10 @@ include __DIR__ . '/../../includes/header.php';
 <style>
 @page { size: A4; margin: 0; }
 @media print {
+    /* Neutralize dark-mode's color-scheme:dark on <html>, which otherwise
+       paints the print canvas with a dark UA fill — the "black margin"
+       that shows around the page when printing from dark mode. */
+    html { background:#fff !important; color-scheme:light !important; }
     .d-print-none { display:none !important; }
     .app-sidebar,.topbar,.sidebar-overlay,.app-topbar,
     header.app-topbar,#sidebarBackdrop,.fab-wa,.fab-chat,

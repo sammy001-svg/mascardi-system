@@ -1493,6 +1493,12 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
    PRINT
    ───────────────────────────────────────────────────────── */
 @media print {
+    /* Dark mode sets color-scheme:dark on <html> with no explicit background —
+       Chromium then paints the @page margin area (outside the content box)
+       with a dark UA canvas fill, showing up as a black border around every
+       printed page. Forcing light color-scheme + explicit white backgrounds
+       on both html and body neutralizes it regardless of the active theme. */
+    html { background: #fff !important; color-scheme: light !important; }
     .app-sidebar, .app-topbar, .no-print, .sidebar-backdrop, .toast-stack,
     .pwa-overlay { display: none !important; }
     .page-body { padding: 0 !important; animation: none !important; }
