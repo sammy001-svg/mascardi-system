@@ -72,11 +72,30 @@ function getPendingDeliveryProtocolActions(string $role, int $assignedToUserId =
         };
 
         if ($role === 'super_admin') {
+            // Super Admin can act on every step in the pipeline (a company-wide
+            // fallback approver), not just the 3 steps gated to them alone — so
+            // their banner is the union of every role's pending items, in case
+            // the intended recipient hasn't acted yet.
             if (!empty($r['s1_moved_at']) && empty($r['s1_approved_at'])) {
                 $add('B3 Reservation', '20% deposit confirmed — approve to reserve the vehicle.');
             }
+            if (!empty($r['s2_service_at']) && empty($r['s2_confirmed_at'])) {
+                $add('Confirm Workshop Move', 'Confirm and move the reserved vehicle to the workshop (normally Sales Person).');
+            }
+            if (!empty($r['s2_confirmed_at']) && empty($r['s2_workshop_done_at'])) {
+                $add('Vehicle Incoming', 'Reserved vehicle confirmed for workshop service (normally Workshop Manager).');
+            }
+            if (!empty($r['s2_workshop_done_at']) && empty($r['s3_requested_at'])) {
+                $add('Workshop Complete', 'Vehicle checked out — proceed to Registration & Payment (normally Customer Relations).');
+            }
             if (!empty($r['s3_requested_at']) && empty($r['s3_completed_at'])) {
                 $add('Registration & Payment', 'Register the vehicle and confirm full payment.');
+            }
+            if (!empty($r['s4_requested_at']) && empty($r['s4_confirmed_at'])) {
+                $add('Pre-Delivery Inspection', 'Confirm and carry out the PDI (normally Sales Person).');
+            }
+            if (!empty($r['s4_completed_at']) && empty($r['s5_confirmed_at'])) {
+                $add('PDI Completed', 'Proceed to the Delivery Experience step (normally Customer Relations).');
             }
             if (!empty($r['s6_requested_at']) && empty($r['s6_approved_at'])) {
                 $add('Delivery Note', 'Confirm so Customer Relations can print the delivery note.');
