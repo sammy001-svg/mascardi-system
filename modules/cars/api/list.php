@@ -43,10 +43,11 @@ if ($section === 'inventory') {
     $colMap = [
         0 => 'c.make',
         1 => 'c.chassis_number',
-        2 => 'l.name',
-        3 => 'c.asking_price',
-        4 => 'c.offer_price',
-        5 => 'c.status',
+        2 => 'c.mileage',
+        3 => 'l.name',
+        4 => 'c.asking_price',
+        5 => 'c.offer_price',
+        6 => 'c.status',
     ];
 } else {
     // client / workshop: Vehicle, Chassis, Owner, Owner's Number, Status
@@ -119,6 +120,7 @@ if ($section === 'inventory') {
         SELECT c.id,
                c.make, c.model, c.year, c.color,
                c.registration_number, c.chassis_number,
+               c.mileage,
                IFNULL(c.asking_price, 0) AS asking_price,
                c.offer_price,
                c.status,
@@ -207,6 +209,9 @@ foreach ($rows as $car) {
     $acts .= '</div>';
 
     if ($section === 'inventory') {
+        $mileage = $car['mileage']
+                 ? '<span class="small text-nowrap">' . number_format((int)$car['mileage']) . ' km</span>'
+                 : '<span class="text-muted">—</span>';
         $location = '<span class="small text-muted"><i class="fa fa-location-dot me-1"></i>'
                   . e($car['location_name'] ?: '—') . '</span>';
         $p     = (float)$car['asking_price'];
@@ -217,7 +222,7 @@ foreach ($rows as $car) {
         $offer = $op !== null && $op > 0
                ? '<span class="fw-semibold text-nowrap text-success">KES ' . number_format($op, 2) . '</span>'
                : '<span class="text-muted">—</span>';
-        $data[] = [$vehicle, $chassis, $location, $price, $offer, $status, $acts];
+        $data[] = [$vehicle, $chassis, $mileage, $location, $price, $offer, $status, $acts];
     } else {
         $owner = e($car['owner_name'] ?: '—');
         $phone = $car['owner_phone']

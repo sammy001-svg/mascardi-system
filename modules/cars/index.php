@@ -59,7 +59,7 @@ $extraJs = '<script>
             }
         },
         columns: ' . ($section === 'inventory'
-            ? '[{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:false}]'
+            ? '[{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:false}]'
             : '[{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:true},{orderable:false}]') . ',
         order      : [[0, "asc"]],
         pageLength : 25,
@@ -193,6 +193,7 @@ include __DIR__ . '/../../includes/header.php';
                     <th class="ps-3">Vehicle</th>
                     <th>Chassis</th>
                     <?php if ($section === 'inventory'): ?>
+                    <th>Mileage</th>
                     <th>Location</th>
                     <th>Price</th>
                     <th>Offer / Sale Price</th>
