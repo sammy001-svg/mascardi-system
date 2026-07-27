@@ -103,59 +103,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'remov
 }
 
 // ── Main settings save ────────────────────────────────────────────────────
+// Each tab only submits its own fields, so $updates is scoped per-tab —
+// otherwise saving e.g. Email would blank out Branding/M-Pesa/SEO fields
+// that simply weren't present in that tab's <form>.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save') {
-    $updates = [
-        // Branding
-        'company_name'      => trim($_POST['company_name'] ?? ''),
-        'company_address'   => trim($_POST['company_address'] ?? ''),
-        'company_phone'     => trim($_POST['company_phone'] ?? ''),
-        'company_email'     => trim($_POST['company_email'] ?? ''),
-        'company_pin'       => trim($_POST['company_pin'] ?? ''),
-        // Financial
-        'vat_rate'          => trim($_POST['vat_rate'] ?? '16'),
-        'currency'          => trim($_POST['currency'] ?? 'KES'),
-        // Prefixes
-        'invoice_prefix'    => strtoupper(trim($_POST['invoice_prefix']    ?? 'INV')),
-        'quotation_prefix'  => strtoupper(trim($_POST['quotation_prefix']  ?? 'QT')),
-        'lpo_prefix'        => strtoupper(trim($_POST['lpo_prefix']        ?? 'LPO')),
-        'job_prefix'        => strtoupper(trim($_POST['job_prefix']        ?? 'JOB')),
-        'booking_prefix'    => strtoupper(trim($_POST['booking_prefix']    ?? 'BK')),
-        'payment_prefix'    => strtoupper(trim($_POST['payment_prefix']    ?? 'PAY')),
-        'sale_prefix'       => strtoupper(trim($_POST['sale_prefix']       ?? 'SALE')),
-        'issue_prefix'      => strtoupper(trim($_POST['issue_prefix']      ?? 'ISS')),
-        'assessment_prefix' => strtoupper(trim($_POST['assessment_prefix'] ?? 'ASS')),
-        // Email
-        'smtp_host'         => trim($_POST['smtp_host']       ?? ''),
-        'smtp_port'         => trim($_POST['smtp_port']       ?? '587'),
-        'smtp_user'         => trim($_POST['smtp_user']       ?? ''),
-        'smtp_from_email'   => trim($_POST['smtp_from_email'] ?? ''),
-        'smtp_from_name'    => trim($_POST['smtp_from_name']  ?? ''),
-        'smtp_encryption'   => in_array($_POST['smtp_encryption'] ?? '', ['none','tls','ssl']) ? $_POST['smtp_encryption'] : 'tls',
-        // M-Pesa
-        'mpesa_env'             => in_array($_POST['mpesa_env'] ?? '', ['sandbox','production']) ? $_POST['mpesa_env'] : 'sandbox',
-        'mpesa_consumer_key'    => trim($_POST['mpesa_consumer_key']    ?? ''),
-        'mpesa_consumer_secret' => trim($_POST['mpesa_consumer_secret'] ?? ''),
-        'mpesa_shortcode'       => trim($_POST['mpesa_shortcode']       ?? ''),
-        'mpesa_passkey'         => trim($_POST['mpesa_passkey']         ?? ''),
-        'mpesa_callback_url'    => trim($_POST['mpesa_callback_url']    ?? ''),
-        // SEO
-        'seo_default_title'       => trim($_POST['seo_default_title']       ?? ''),
-        'seo_default_description' => trim($_POST['seo_default_description'] ?? ''),
-        'seo_og_image_url'        => trim($_POST['seo_og_image_url']        ?? ''),
-        'seo_google_verification' => trim($_POST['seo_google_verification'] ?? ''),
-        'seo_ga_id'               => trim($_POST['seo_ga_id']               ?? ''),
-        'seo_allow_indexing'      => isset($_POST['seo_allow_indexing']) ? '1' : '0',
-    ];
-    // Only update password if provided (don't blank it out)
-    if (!empty($_POST['smtp_pass'])) {
-        $updates['smtp_pass'] = $_POST['smtp_pass'];
+    $activeTab = $_POST['_tab'] ?? 'branding';
+    $updates = [];
+
+    if ($activeTab === 'branding') {
+        $updates = [
+            'company_name'    => trim($_POST['company_name'] ?? ''),
+            'company_address' => trim($_POST['company_address'] ?? ''),
+            'company_phone'   => trim($_POST['company_phone'] ?? ''),
+            'company_email'   => trim($_POST['company_email'] ?? ''),
+            'company_pin'     => trim($_POST['company_pin'] ?? ''),
+        ];
+        if (!$updates['company_name']) $errors[] = 'Company name is required.';
+
+    } elseif ($activeTab === 'documents') {
+        $updates = [
+            'vat_rate'          => trim($_POST['vat_rate'] ?? '16'),
+            'currency'          => trim($_POST['currency'] ?? 'KES'),
+            'invoice_prefix'    => strtoupper(trim($_POST['invoice_prefix']    ?? 'INV')),
+            'quotation_prefix'  => strtoupper(trim($_POST['quotation_prefix']  ?? 'QT')),
+            'lpo_prefix'        => strtoupper(trim($_POST['lpo_prefix']        ?? 'LPO')),
+            'job_prefix'        => strtoupper(trim($_POST['job_prefix']        ?? 'JOB')),
+            'booking_prefix'    => strtoupper(trim($_POST['booking_prefix']    ?? 'BK')),
+            'payment_prefix'    => strtoupper(trim($_POST['payment_prefix']    ?? 'PAY')),
+            'sale_prefix'       => strtoupper(trim($_POST['sale_prefix']       ?? 'SALE')),
+            'issue_prefix'      => strtoupper(trim($_POST['issue_prefix']      ?? 'ISS')),
+            'assessment_prefix' => strtoupper(trim($_POST['assessment_prefix'] ?? 'ASS')),
+        ];
+
+    } elseif ($activeTab === 'email') {
+        $updates = [
+            'smtp_host'       => trim($_POST['smtp_host']       ?? ''),
+            'smtp_port'       => trim($_POST['smtp_port']       ?? '587'),
+            'smtp_user'       => trim($_POST['smtp_user']       ?? ''),
+            'smtp_from_email' => trim($_POST['smtp_from_email'] ?? ''),
+            'smtp_from_name'  => trim($_POST['smtp_from_name']  ?? ''),
+            'smtp_encryption' => in_array($_POST['smtp_encryption'] ?? '', ['none','tls','ssl']) ? $_POST['smtp_encryption'] : 'tls',
+        ];
+        // Only update password if provided (don't blank it out)
+        if (!empty($_POST['smtp_pass'])) {
+            $updates['smtp_pass'] = $_POST['smtp_pass'];
+        }
+
+    } elseif ($activeTab === 'integrations') {
+        $updates = [
+            'mpesa_env'             => in_array($_POST['mpesa_env'] ?? '', ['sandbox','production']) ? $_POST['mpesa_env'] : 'sandbox',
+            'mpesa_consumer_key'    => trim($_POST['mpesa_consumer_key']    ?? ''),
+            'mpesa_consumer_secret' => trim($_POST['mpesa_consumer_secret'] ?? ''),
+            'mpesa_shortcode'       => trim($_POST['mpesa_shortcode']       ?? ''),
+            'mpesa_passkey'         => trim($_POST['mpesa_passkey']         ?? ''),
+            'mpesa_callback_url'    => trim($_POST['mpesa_callback_url']    ?? ''),
+        ];
+
+    } elseif ($activeTab === 'seo') {
+        $updates = [
+            'seo_default_title'       => trim($_POST['seo_default_title']       ?? ''),
+            'seo_default_description' => trim($_POST['seo_default_description'] ?? ''),
+            'seo_og_image_url'        => trim($_POST['seo_og_image_url']        ?? ''),
+            'seo_google_verification' => trim($_POST['seo_google_verification'] ?? ''),
+            'seo_ga_id'               => trim($_POST['seo_ga_id']               ?? ''),
+            'seo_allow_indexing'      => isset($_POST['seo_allow_indexing']) ? '1' : '0',
+        ];
     }
 
-    $activeTab = $_POST['_tab'] ?? 'branding';
-
-    if (!$updates['company_name']) {
-        $errors[] = 'Company name is required.';
-    } else {
+    if (empty($errors)) {
         $uStmt = $db->prepare("INSERT INTO settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
         foreach ($updates as $k => $v) { $uStmt->execute([$k, $v]); }
         $settings = array_merge($settings, $updates);
