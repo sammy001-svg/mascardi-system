@@ -131,6 +131,7 @@ include __DIR__ . '/../../includes/header.php';
         padding: 1cm !important;
         box-shadow: none !important;
         border: none !important;
+        border-radius: 0 !important;
         overflow: hidden;
     }
     #pf-desc {
@@ -141,17 +142,24 @@ include __DIR__ . '/../../includes/header.php';
     .pf-spacer { min-height: 0 !important; }
 }
 
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+#proformaDoc {
+    --ink: #0f172a; --ink-2: #475569; --ink-3: #94a3b8;
+    --line: #dbe2ea; --surface: #f8fafc; --accent: #b45309;
+}
 /* ── Screen base ─────────────────────────────────────────────────────────── */
 #proformaDoc {
     max-width: 760px;
     margin: 0 auto;
     background: #fff;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: 'Helvetica Neue', Arial, Helvetica, sans-serif;
     font-size: 12.5px;
-    color: #000;
+    color: var(--ink);
     line-height: 1.4;
-    box-shadow: 0 4px 20px rgba(0,0,0,.1);
-    border: 1px solid #999;
+    box-shadow: 0 10px 40px rgba(15,23,42,.08);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
     /* Flex column — lets #pf-desc grow to fill A4 on print */
     display: flex;
     flex-direction: column;
@@ -159,14 +167,14 @@ include __DIR__ . '/../../includes/header.php';
 
 /* ── Top header table ────────────────────────────────────────────────────── */
 #pf-top { flex-shrink: 0; border-collapse: collapse; width: 100%; }
-#pf-top td, #pf-top th { border: 1px solid #000; padding: 4px 8px; vertical-align: top; }
+#pf-top td, #pf-top th { border: 1px solid var(--line); padding: 5px 9px; vertical-align: top; }
 
 /* ── Description flex section ────────────────────────────────────────────── */
 #pf-desc {
     flex: 1;
     display: flex;
     flex-direction: column;
-    border: 1px solid #000;
+    border: 1px solid var(--line);
     border-top: none;        /* top table's bottom border serves as the top */
     min-height: 320px;       /* screen minimum so it looks reasonable */
 }
@@ -175,20 +183,22 @@ include __DIR__ . '/../../includes/header.php';
 .pf-row {
     display: flex;
     flex-shrink: 0;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--line);
 }
 .pf-col-d {            /* Description column */
     flex: 1;
-    padding: 4px 10px;
-    border-right: 1px solid #000;
+    padding: 5px 12px;
+    border-right: 1px solid var(--line);
     font-size: 12.5px;
+    color: var(--ink);
 }
 .pf-col-a {            /* Amount column */
     width: 130px;
     flex-shrink: 0;
-    padding: 4px 10px;
+    padding: 5px 12px;
     font-size: 12.5px;
     text-align: right;
+    color: var(--ink);
 }
 /* Elastic spacer — absorbs remaining height, keeping TOTAL pinned to bottom */
 .pf-spacer {
@@ -196,7 +206,7 @@ include __DIR__ . '/../../includes/header.php';
     display: flex;
     min-height: 50px;   /* screen: at least visible */
 }
-.pf-spacer-d { flex: 1; border-right: 1px solid #000; }
+.pf-spacer-d { flex: 1; border-right: 1px solid var(--line); }
 .pf-spacer-a { width: 130px; flex-shrink: 0; }
 </style>
 
@@ -234,64 +244,56 @@ include __DIR__ . '/../../includes/header.php';
 ════════════════════════════════════════════════════════════════════════ -->
 <div id="proformaDoc">
 
-    <!-- ══ TOP: client info (left) + MASCARDI branding (right) ════════════════ -->
+    <!-- ══ TOP: MASCARDI wordmark (left) + client info & meta (right) ═════════ -->
     <table id="pf-top">
         <tr>
-            <!-- LEFT: client box + invoice meta -->
-            <td style="width:42%;padding:0;vertical-align:top">
+            <!-- LEFT: wordmark + company contact -->
+            <td style="width:42%;padding:16px 18px;vertical-align:top;border-bottom:3px solid var(--ink)">
+                <div style="font-size:22px;font-weight:800;letter-spacing:3px;color:var(--ink)">MASCARDI</div>
+                <div style="font-size:9px;letter-spacing:.22em;color:var(--ink-3);
+                            text-transform:uppercase;margin:2px 0 10px">Ventures Limited</div>
+                <div style="font-size:11px;color:var(--ink-2);line-height:1.8">
+                    P O Box 1391, Nairobi 00606<br>
+                    Tel: <?= e($companyPhone) ?><br>
+                    Email: <?= e($companyEmail) ?>
+                </div>
+            </td>
 
-                <!-- Client info box -->
-                <div style="border-bottom:1px solid #000;padding:8px 10px">
-                    <strong>Client Name: <?= e($customerName) ?></strong><br>
-                    I.D No: <?= e($customerIdNo ?: '&nbsp;') ?><br>
-                    P.O Box: _____, Nairobi
+            <!-- RIGHT: document title + client + meta -->
+            <td style="width:58%;padding:0;border-left:1px solid var(--line);border-bottom:3px solid var(--ink)">
+                <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line)">
+                    <span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)">Proforma Invoice</span>
+                    <span style="font-size:11px;color:var(--ink-2)">Ref: <?= e($proformaNum) ?></span>
+                </div>
+                <div style="padding:8px 14px">
+                    <strong style="font-size:12.5px;color:var(--ink)">Client: <?= e($customerName) ?></strong><br>
+                    <span style="font-size:11.5px;color:var(--ink-2)">I.D No: <?= e($customerIdNo ?: '&nbsp;') ?></span><br>
+                    <span style="font-size:11.5px;color:var(--ink-2)">P.O Box: _____, Nairobi</span>
                 </div>
 
-                <!-- Invoice meta table (shares cell-border grid) -->
+                <!-- Invoice meta -->
                 <table style="border-collapse:collapse;width:100%;margin:0">
                     <tr>
-                        <td style="border:1px solid #000;padding:4px 8px;font-weight:bold;white-space:nowrap">
-                            Proforma Invoice:
+                        <td style="border:1px solid var(--line);padding:4px 10px;font-weight:600;white-space:nowrap;font-size:11px;color:var(--ink-2)">
+                            Vehicle Make
                         </td>
-                        <td style="border:1px solid #000;padding:4px 8px"><?= e($proformaNum) ?></td>
+                        <td style="border:1px solid var(--line);padding:4px 10px;font-size:12px;color:var(--ink)"><?= e($carMakeModel ?: '—') ?></td>
                     </tr>
                     <tr>
-                        <td style="border:1px solid #000;padding:4px 8px;font-weight:bold">Vehicle Make</td>
-                        <td style="border:1px solid #000;padding:4px 8px"><?= e($carMakeModel ?: '—') ?></td>
-                    </tr>
-                    <tr>
-                        <td style="border:1px solid #000;padding:4px 8px;font-weight:bold">Registration No</td>
-                        <td style="border:1px solid #000;padding:4px 8px">
+                        <td style="border:1px solid var(--line);padding:4px 10px;font-weight:600;font-size:11px;color:var(--ink-2)">Registration No</td>
+                        <td style="border:1px solid var(--line);padding:4px 10px;font-size:12px;color:var(--ink)">
                             <?= $car ? e($car['registration_number'] ?: 'New') : '—' ?>
                         </td>
                     </tr>
                     <tr>
-                        <td style="border:1px solid #000;padding:4px 8px;font-weight:bold">Date:</td>
-                        <td style="border:1px solid #000;padding:4px 8px"><?= e($today) ?></td>
+                        <td style="border:1px solid var(--line);padding:4px 10px;font-weight:600;font-size:11px;color:var(--ink-2)">Date</td>
+                        <td style="border:1px solid var(--line);padding:4px 10px;font-size:12px;color:var(--ink)"><?= e($today) ?></td>
                     </tr>
                     <tr>
-                        <td style="border:1px solid #000;padding:4px 8px;font-weight:bold">Order Number:</td>
-                        <td style="border:1px solid #000;padding:4px 8px"><?= $leadId ?></td>
+                        <td style="border:1px solid var(--line);padding:4px 10px;font-weight:600;font-size:11px;color:var(--ink-2)">Order Number</td>
+                        <td style="border:1px solid var(--line);padding:4px 10px;font-size:12px;color:var(--ink)"><?= $leadId ?></td>
                     </tr>
                 </table>
-            </td>
-
-            <!-- RIGHT: large italic serif company name + contact -->
-            <td style="width:58%;padding:10px 16px;border-left:1px solid #000">
-                <div style="font-family:'Times New Roman',Times,Georgia,serif;
-                            font-style:italic;font-size:50px;font-weight:normal;
-                            line-height:1.05;color:#000;letter-spacing:-1px">
-                    MASCARDI<br>
-                    VENTURES<br>
-                    LIMITED
-                </div>
-                <div style="text-align:right;font-size:11.5px;margin-top:6px;line-height:1.7;color:#000">
-                    P O Box 1391<br>
-                    Nairobi<br>
-                    00606<br>
-                    Tel: <?= e($companyPhone) ?><br>
-                    Email:<?= e($companyEmail) ?>
-                </div>
             </td>
         </tr>
     </table>
@@ -300,10 +302,10 @@ include __DIR__ . '/../../includes/header.php';
     <div id="pf-desc">
 
         <!-- Column headers -->
-        <div class="pf-row">
-            <div class="pf-col-d" style="font-weight:bold;text-align:center">Description</div>
-            <div class="pf-col-a" style="font-weight:bold;text-align:center;white-space:nowrap">
-                KENYA SHILLINGS
+        <div class="pf-row" style="background:var(--surface)">
+            <div class="pf-col-d" style="font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.08em;font-size:10.5px;color:var(--ink-2)">Description</div>
+            <div class="pf-col-a" style="font-weight:700;text-align:center;white-space:nowrap;text-transform:uppercase;letter-spacing:.08em;font-size:10.5px;color:var(--ink-2)">
+                Kenya Shillings
             </div>
         </div>
 
@@ -415,10 +417,10 @@ include __DIR__ . '/../../includes/header.php';
         </div>
 
         <!-- TOTAL row — pinned at the bottom of #pf-desc -->
-        <div style="display:flex;flex-shrink:0;border-top:1px solid #000">
-            <div style="flex:1;padding:6px 10px;font-weight:bold;text-align:right;
-                        border-right:1px solid #000">TOTAL</div>
-            <div style="width:130px;flex-shrink:0;padding:6px 10px;font-weight:bold;text-align:right">
+        <div style="display:flex;flex-shrink:0;border-top:2px solid var(--ink);background:var(--surface)">
+            <div style="flex:1;padding:8px 12px;font-weight:700;text-align:right;
+                        border-right:1px solid var(--line);text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--ink-2)">Total</div>
+            <div style="width:130px;flex-shrink:0;padding:8px 12px;font-weight:800;text-align:right;font-size:13.5px;color:var(--ink)">
                 <?= $price > 0 ? number_format((int)$price, 0) . '/-' : '' ?>
             </div>
         </div>
@@ -427,8 +429,7 @@ include __DIR__ . '/../../includes/header.php';
 
     <!-- ══ FOOTER NOTE ═════════════════════════════════════════════════════════ -->
     <div id="pf-footer"
-         style="flex-shrink:0;padding:7px 10px;font-weight:bold;font-size:12px;
-                border:1px solid #000;border-top:none">
+         style="flex-shrink:0;padding:9px 14px;font-weight:600;font-size:11.5px;color:#fff;background:var(--accent)">
         The vehicle belongs to Mascardi Ventures Limited until payment is received in full.
     </div>
 

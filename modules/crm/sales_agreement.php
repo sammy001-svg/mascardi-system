@@ -147,33 +147,47 @@ include __DIR__ . '/../../includes/header.php';
     .sa-print-footer { display:block; }
 }
 .sa-print-footer { display:none; }
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+#salesDoc {
+    --ink: #0f172a; --ink-2: #475569; --ink-3: #94a3b8;
+    --line: #e2e8f0; --surface: #f8fafc; --accent: #b45309;
+}
 /* ── Document shell ──────────────────────────────────────────────────────── */
 #salesDoc {
     max-width:800px; margin:0 auto;
-    background:#fff; border:1px solid #ccc;
-    border-radius:6px; overflow:hidden;
-    box-shadow:0 4px 20px rgba(0,0,0,.1);
-    font-family:Arial,Helvetica,sans-serif;
-    font-size:12.5px; color:#1a1a1a; line-height:1.6;
+    background:#fff; border:1px solid var(--line);
+    border-radius:10px; overflow:hidden;
+    box-shadow:0 10px 40px rgba(15,23,42,.08);
+    font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;
+    font-size:12.5px; color:var(--ink); line-height:1.6;
 }
 /* ── Clause layout ───────────────────────────────────────────────────────── */
-.sa-clause { margin-bottom:13px; }
-.sa-clause-title { font-weight:700; font-size:13px; margin-bottom:5px; }
-.sa-clause p { margin:0; font-size:12.5px; line-height:1.8; }
+.sa-clause { margin-bottom:16px; }
+.sa-clause-title {
+    font-weight:700; font-size:10.5px; margin-bottom:8px;
+    text-transform:uppercase; letter-spacing:.08em; color:var(--ink);
+    padding-left:10px; border-left:3px solid var(--accent);
+}
+.sa-clause p { margin:0; font-size:12.5px; line-height:1.85; color:var(--ink-2); }
 /* ── Data tables ─────────────────────────────────────────────────────────── */
-.sa-table { width:100%; border-collapse:collapse; margin:5px 0; }
+.sa-table { width:100%; border-collapse:collapse; margin:6px 0; }
 .sa-table td, .sa-table th {
-    border:1px solid #ccc; padding:5px 10px;
+    border:none; border-bottom:1px solid var(--line); padding:8px 6px;
     font-size:12.5px; vertical-align:top;
 }
-.sa-table th { background:#f0f0f0; font-weight:700; width:38%; white-space:nowrap; }
+.sa-table th {
+    background:none; font-weight:600; width:34%; white-space:nowrap;
+    color:var(--ink-2); text-transform:uppercase; font-size:9.5px; letter-spacing:.06em;
+}
+.sa-table td { color:var(--ink); font-weight:500; }
+.sa-table tr:last-child td, .sa-table tr:last-child th { border-bottom:none; }
 /* ── Signature lines ─────────────────────────────────────────────────────── */
-.sig-line { border-bottom:1.5px solid #333; min-height:38px; margin-bottom:4px; }
+.sig-line { border-bottom:1.5px solid var(--ink); min-height:38px; margin-bottom:4px; }
 /* ── Running print footer (position:fixed repeats on every printed page) ──── */
 .sa-print-footer {
     position:fixed; left:0; right:0; bottom:6mm; text-align:center;
-    font-size:8.5px; color:#999; letter-spacing:.02em;
-    border-top:1px solid #ddd; padding-top:5px; font-family:Arial,Helvetica,sans-serif;
+    font-size:8.5px; color:var(--ink-3); letter-spacing:.02em;
+    border-top:1px solid var(--line); padding-top:5px; font-family:Arial,Helvetica,sans-serif;
 }
 </style>
 
@@ -201,33 +215,26 @@ include __DIR__ . '/../../includes/header.php';
 ════════════════════════════════════════════════════════════════════════════ -->
 <div id="salesDoc">
 
-    <!-- ══ HEADER: black background + layered grey diagonal accent (top-right) ══ -->
-    <div style="background:#111111;position:relative;overflow:hidden;min-height:86px;display:flex;align-items:center">
-        <!-- Grey diagonal bands — three layers for depth -->
-        <div style="position:absolute;right:0;top:0;bottom:0;width:260px;
-                    background:#666666;clip-path:polygon(28% 0,100% 0,100% 100%,0% 100%)"></div>
-        <div style="position:absolute;right:0;top:0;bottom:0;width:180px;
-                    background:#8a8a8a;clip-path:polygon(35% 0,100% 0,100% 100%,0% 100%)"></div>
-        <div style="position:absolute;right:0;top:0;bottom:0;width:100px;
-                    background:#b0b0b0;clip-path:polygon(40% 0,100% 0,100% 100%,0% 100%)"></div>
-        <!-- Mascardi logo text -->
-        <div style="position:relative;z-index:2;padding:18px 28px;color:#ffffff">
-            <div style="font-size:30px;font-weight:900;letter-spacing:6px;line-height:1;
-                        font-family:'Arial Black',Arial,sans-serif">MASCARDI</div>
-            <div style="font-size:10px;letter-spacing:2px;color:#bbbbbb;margin-top:4px;
-                        text-transform:uppercase">Ventures Limited</div>
+    <!-- ══ HEADER: clean wordmark + document title/ref ═══════════════════════ -->
+    <div style="padding:26px 30px 18px;display:flex;justify-content:space-between;
+                align-items:flex-start;gap:16px;border-bottom:3px solid var(--ink)">
+        <div>
+            <div style="font-size:25px;font-weight:800;letter-spacing:4px;color:var(--ink)">MASCARDI</div>
+            <div style="font-size:10px;letter-spacing:.25em;color:var(--ink-3);
+                        text-transform:uppercase;margin-top:3px">Ventures Limited</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+            <div style="display:inline-block;background:var(--ink);color:#fff;font-size:10.5px;
+                        font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+                        padding:7px 16px;border-radius:3px;white-space:nowrap">
+                Car Sales Agreement
+            </div>
+            <div style="font-size:11px;color:var(--ink-2);margin-top:9px">Ref: <?= e($agmtRef) ?></div>
         </div>
     </div>
 
     <!-- ══ DOCUMENT BODY ═══════════════════════════════════════════════════════ -->
     <div class="sa-body" style="padding:22px 30px 28px">
-
-        <!-- Title -->
-        <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111111">
-            <div style="font-size:16px;font-weight:900;letter-spacing:3px;text-transform:uppercase">
-                Car Sales Agreement
-            </div>
-        </div>
 
         <!-- Opening paragraph -->
         <p style="margin:0 0 16px;font-size:12.5px;line-height:1.8">
@@ -236,14 +243,15 @@ include __DIR__ . '/../../includes/header.php';
         </p>
 
         <!-- ── Parties ──────────────────────────────────────────────────────── -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
 
             <!-- Seller -->
-            <div class="sa-avoid-break" style="border:1px solid #cccccc;padding:12px 14px">
+            <div class="sa-avoid-break" style="border:1px solid var(--line);border-top:3px solid var(--ink);
+                        border-radius:6px;padding:14px 16px">
                 <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;
-                            letter-spacing:.08em;color:#777777;margin-bottom:7px">The Seller</div>
-                <div style="font-weight:700;font-size:13px;margin-bottom:4px">Mascardi Ventures Limited</div>
-                <div style="font-size:12px;color:#333333;line-height:1.75">
+                            letter-spacing:.1em;color:var(--ink-3);margin-bottom:8px">The Seller</div>
+                <div style="font-weight:700;font-size:13.5px;margin-bottom:5px;color:var(--ink)">Mascardi Ventures Limited</div>
+                <div style="font-size:12px;color:var(--ink-2);line-height:1.8">
                     Reg. No. PVT-ZQUXL55<br>
                     291 Kabete Lane Spring Valley<br>
                     P.O.Box 1391-00606<br>
@@ -253,11 +261,12 @@ include __DIR__ . '/../../includes/header.php';
             </div>
 
             <!-- Buyer -->
-            <div class="sa-avoid-break" style="border:1px solid #cccccc;padding:12px 14px">
+            <div class="sa-avoid-break" style="border:1px solid var(--line);border-top:3px solid var(--accent);
+                        border-radius:6px;padding:14px 16px">
                 <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;
-                            letter-spacing:.08em;color:#777777;margin-bottom:7px">The Buyer</div>
-                <div style="font-weight:700;font-size:13px;margin-bottom:4px"><?= e($buyerName) ?></div>
-                <div style="font-size:12px;color:#333333;line-height:1.75">
+                            letter-spacing:.1em;color:var(--ink-3);margin-bottom:8px">The Buyer</div>
+                <div style="font-weight:700;font-size:13.5px;margin-bottom:5px;color:var(--ink)"><?= e($buyerName) ?></div>
+                <div style="font-size:12px;color:var(--ink-2);line-height:1.8">
                     <?php if ($buyerKraPin): ?>Pin: <?= e($buyerKraPin) ?><br><?php endif; ?>
                     P.O Box: <?= e($buyerPoBox ?: '___________________') ?><br>
                     <?php if ($buyerEmail): ?><?= e($buyerEmail) ?><br><?php endif; ?>
@@ -298,16 +307,16 @@ include __DIR__ . '/../../includes/header.php';
         </div>
 
         <!-- ── 2. Purchase Price ────────────────────────────────────────────── -->
-        <div class="sa-clause">
+        <div class="sa-clause sa-avoid-break">
             <div class="sa-clause-title">2. Purchase Price</div>
-            <p>
-                <?php if ($agreedPrice > 0): ?>
-                    <strong>KSH. <?= number_format($agreedPrice, 0) ?>/-
-                    [Ksh <?= numWords($agreedPrice) ?>]</strong>
-                <?php else: ?>
-                    <em>To be confirmed</em>
-                <?php endif; ?>
-            </p>
+            <?php if ($agreedPrice > 0): ?>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 14px">
+                <div style="font-size:16px;font-weight:800;color:var(--ink)">KSH <?= number_format($agreedPrice, 0) ?>/-</div>
+                <div style="font-size:11.5px;color:var(--ink-2);margin-top:2px">[Ksh <?= numWords($agreedPrice) ?>]</div>
+            </div>
+            <?php else: ?>
+            <p><em>To be confirmed</em></p>
+            <?php endif; ?>
         </div>
 
         <!-- ── 3. Payment Terms ─────────────────────────────────────────────── -->
@@ -417,21 +426,21 @@ include __DIR__ . '/../../includes/header.php';
         </div>
 
         <!-- ── Signatures ─────────────────────────────────────────────────────── -->
-        <div class="sa-avoid-break" style="margin-top:18px;border-top:2px solid #111111;padding-top:16px">
+        <div class="sa-avoid-break" style="margin-top:20px;border-top:3px solid var(--ink);padding-top:18px">
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:18px">
 
                 <!-- Buyer signature block -->
                 <div>
                     <div class="sig-line"></div>
-                    <div style="font-size:11.5px;margin-top:4px"><strong>Buyer Signature</strong></div>
-                    <div style="margin-top:12px;font-size:11.5px">Date: _____________________</div>
+                    <div style="font-size:11.5px;margin-top:4px;color:var(--ink)"><strong>Buyer Signature</strong></div>
+                    <div style="margin-top:12px;font-size:11.5px;color:var(--ink-2)">Date: _____________________</div>
                     <div style="margin-top:16px">
                         <div class="sig-line"></div>
-                        <div style="font-size:11.5px;margin-top:4px">
+                        <div style="font-size:11.5px;margin-top:4px;color:var(--ink-2)">
                             Name: <?= e($buyerName) ?>
                         </div>
-                        <div style="font-size:11.5px;margin-top:3px">
+                        <div style="font-size:11.5px;margin-top:3px;color:var(--ink-2)">
                             ID No.: <?= e($buyerIdNo ?: '_______________________') ?>
                         </div>
                     </div>
@@ -440,30 +449,30 @@ include __DIR__ . '/../../includes/header.php';
                 <!-- Seller signature block -->
                 <div>
                     <div class="sig-line"></div>
-                    <div style="font-size:11.5px;margin-top:4px"><strong>Seller Signature</strong></div>
-                    <div style="margin-top:12px;font-size:11.5px">Date: _____________________</div>
+                    <div style="font-size:11.5px;margin-top:4px;color:var(--ink)"><strong>Seller Signature</strong></div>
+                    <div style="margin-top:12px;font-size:11.5px;color:var(--ink-2)">Date: _____________________</div>
                     <div style="margin-top:16px">
                         <div class="sig-line"></div>
-                        <div style="font-size:11.5px;margin-top:4px">Name: _____________________</div>
-                        <div style="font-size:11.5px;margin-top:3px">ID No.: ___________________</div>
+                        <div style="font-size:11.5px;margin-top:4px;color:var(--ink-2)">Name: _____________________</div>
+                        <div style="font-size:11.5px;margin-top:3px;color:var(--ink-2)">ID No.: ___________________</div>
                     </div>
                 </div>
             </div>
 
             <!-- Witness row -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;
-                        padding-top:12px;border-top:1px dashed #bbbbbb">
+                        padding-top:12px;border-top:1px dashed var(--line)">
                 <div>
                     <div class="sig-line"></div>
-                    <div style="font-size:11px;margin-top:4px;color:#444444">Witness (Buyer)</div>
-                    <div style="font-size:11px;margin-top:8px;color:#444444">
+                    <div style="font-size:11px;margin-top:4px;color:var(--ink-2)">Witness (Buyer)</div>
+                    <div style="font-size:11px;margin-top:8px;color:var(--ink-2)">
                         ID No.: ___________________
                     </div>
                 </div>
                 <div>
                     <div class="sig-line"></div>
-                    <div style="font-size:11px;margin-top:4px;color:#444444">Witness (Seller)</div>
-                    <div style="font-size:11px;margin-top:8px;color:#444444">
+                    <div style="font-size:11px;margin-top:4px;color:var(--ink-2)">Witness (Seller)</div>
+                    <div style="font-size:11px;margin-top:8px;color:var(--ink-2)">
                         ID No.: ___________________
                     </div>
                 </div>
@@ -475,14 +484,14 @@ include __DIR__ . '/../../includes/header.php';
         <?php if (!empty($lead['id_card_front'])): ?>
         <div class="sa-page-break"></div>
         <div class="sa-avoid-break" style="padding-top:10px">
-            <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111111">
-                <div style="font-size:16px;font-weight:900;letter-spacing:3px;text-transform:uppercase">
+            <div style="text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:3px solid var(--ink)">
+                <div style="font-size:14px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--ink)">
                     Attachment — ID Card (Front)
                 </div>
             </div>
             <div style="text-align:center">
                 <img src="<?= BASE_URL ?>/uploads/leads/<?= e($lead['id_card_front']) ?>"
-                     style="max-width:100%;max-height:650px;border:1px solid #ccc;border-radius:4px">
+                     style="max-width:100%;max-height:650px;border:1px solid var(--line);border-radius:6px">
             </div>
         </div>
         <?php endif; ?>
@@ -490,14 +499,14 @@ include __DIR__ . '/../../includes/header.php';
         <?php if (!empty($lead['id_card_back'])): ?>
         <div class="sa-page-break"></div>
         <div class="sa-avoid-break" style="padding-top:10px">
-            <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111111">
-                <div style="font-size:16px;font-weight:900;letter-spacing:3px;text-transform:uppercase">
+            <div style="text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:3px solid var(--ink)">
+                <div style="font-size:14px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--ink)">
                     Attachment — ID Card (Back)
                 </div>
             </div>
             <div style="text-align:center">
                 <img src="<?= BASE_URL ?>/uploads/leads/<?= e($lead['id_card_back']) ?>"
-                     style="max-width:100%;max-height:650px;border:1px solid #ccc;border-radius:4px">
+                     style="max-width:100%;max-height:650px;border:1px solid var(--line);border-radius:6px">
             </div>
         </div>
         <?php endif; ?>

@@ -123,21 +123,31 @@ include __DIR__ . '/../../includes/header.php';
         max-width:100% !important; padding:1.5cm 1.8cm !important;
     }
 }
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+#srDoc {
+    --ink: #0f172a; --ink-2: #475569; --ink-3: #94a3b8;
+    --line: #e2e8f0; --surface: #f8fafc; --accent: #b45309;
+}
 #srDoc {
     max-width:700px; margin:0 auto;
-    background:#fff; border:1px solid #ccc; border-radius:6px;
-    font-family:Arial,Helvetica,sans-serif;
-    font-size:12.5px; color:#000; line-height:1.5;
-    box-shadow:0 4px 20px rgba(0,0,0,.1);
-    padding:28px 32px;
+    background:#fff; border:1px solid var(--line); border-radius:10px;
+    font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;
+    font-size:12.5px; color:var(--ink); line-height:1.5;
+    box-shadow:0 10px 40px rgba(15,23,42,.08);
+    padding:30px 34px;
 }
 .sr-table { width:100%; border-collapse:collapse; margin:8px 0; }
 .sr-table td, .sr-table th {
-    border:1px solid #333; padding:7px 11px;
+    border:none; border-bottom:1px solid var(--line); padding:8px 4px;
     font-size:12.5px; vertical-align:top;
 }
-.sr-table th { background:#f5f5f5; font-weight:700; width:36%; white-space:nowrap; }
-.sig-line { border-bottom:1.5px solid #333; min-height:44px; margin-bottom:5px; }
+.sr-table th {
+    background:none; font-weight:600; width:36%; white-space:nowrap;
+    color:var(--ink-2); text-transform:uppercase; font-size:9.5px; letter-spacing:.06em;
+}
+.sr-table td { color:var(--ink); font-weight:500; }
+.sr-table tr:last-child td, .sr-table tr:last-child th { border-bottom:none; }
+.sig-line { border-bottom:1.5px solid var(--ink); min-height:44px; margin-bottom:5px; }
 </style>
 
 <!-- Action bar -->
@@ -157,15 +167,16 @@ include __DIR__ . '/../../includes/header.php';
 
     <!-- ── Header ──────────────────────────────────────────────────────────── -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;
-                padding-bottom:14px;border-bottom:2px solid #111;margin-bottom:18px">
+                padding-bottom:16px;border-bottom:3px solid var(--ink);margin-bottom:20px">
         <!-- Company -->
         <div>
-            <div style="font-family:'Times New Roman',Times,Georgia,serif;
-                        font-style:italic;font-size:28px;font-weight:normal;
-                        line-height:1.1;color:#000">
-                MASCARDI<br>VENTURES LIMITED
+            <div style="font-size:24px;font-weight:800;letter-spacing:3px;color:var(--ink)">
+                MASCARDI
             </div>
-            <div style="font-size:11px;color:#444;margin-top:6px;line-height:1.7">
+            <div style="font-size:9.5px;letter-spacing:.22em;color:var(--ink-3);text-transform:uppercase;margin:2px 0 8px">
+                Ventures Limited
+            </div>
+            <div style="font-size:11px;color:var(--ink-2);line-height:1.7">
                 291 Kabete Lane, Spring Valley<br>
                 P.O.Box 1391-00606, Nairobi Kenya<br>
                 Sales@mascardi.co
@@ -173,11 +184,14 @@ include __DIR__ . '/../../includes/header.php';
         </div>
         <!-- Title + ref -->
         <div style="text-align:right">
-            <div style="font-size:22px;font-weight:900;letter-spacing:2px;
-                        text-transform:uppercase;color:#111">SALES RECEIPT</div>
-            <div style="font-size:12px;color:#555;margin-top:8px;line-height:1.9">
-                Receipt No: <strong><?= e($receiptNo) ?></strong><br>
-                Date: <strong><?= e($today) ?></strong>
+            <div style="display:inline-block;background:#15803d;color:#fff;font-size:11px;
+                        font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+                        padding:7px 16px;border-radius:3px;white-space:nowrap">
+                Sales Receipt
+            </div>
+            <div style="font-size:12px;color:var(--ink-2);margin-top:10px;line-height:1.9">
+                Receipt No: <strong style="color:var(--ink)"><?= e($receiptNo) ?></strong><br>
+                Date: <strong style="color:var(--ink)"><?= e($today) ?></strong>
             </div>
         </div>
     </div>
@@ -246,7 +260,7 @@ include __DIR__ . '/../../includes/header.php';
             <td style="color:#15803d">
                 KES <?= number_format($deposit, 0) ?>/-
                 <?php if ($depDate): ?>
-                <span style="font-size:11px;color:#555">
+                <span style="font-size:11px;color:var(--ink-2)">
                     (received <?= (new DateTime($depDate))->format('d M Y') ?>)
                 </span>
                 <?php endif; ?>
@@ -290,7 +304,7 @@ include __DIR__ . '/../../includes/header.php';
     <?php endif; ?>
 
     <!-- ── Note ────────────────────────────────────────────────────────────── -->
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;
                 padding:9px 14px;margin-top:14px;font-size:12px;color:#14532d">
         <strong>Note:</strong> This receipt confirms receipt of the above payment for the
         vehicle described. Ownership of the vehicle transfers to the buyer upon receipt of
@@ -298,18 +312,19 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 
     <!-- ── Signatures ──────────────────────────────────────────────────────── -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:28px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:28px;
+                border-top:1px solid var(--line);padding-top:20px">
         <div>
             <div class="sig-line"></div>
             <div style="font-size:11.5px;font-weight:600">Customer Signature</div>
-            <div style="font-size:11px;color:#555;margin-top:2px"><?= e($buyerName) ?></div>
-            <div style="font-size:11px;color:#555;margin-top:10px">Date: _______________</div>
+            <div style="font-size:11px;color:var(--ink-2);margin-top:2px"><?= e($buyerName) ?></div>
+            <div style="font-size:11px;color:var(--ink-2);margin-top:10px">Date: _______________</div>
         </div>
         <div>
             <div class="sig-line"></div>
             <div style="font-size:11.5px;font-weight:600">Authorized Signatory</div>
-            <div style="font-size:11px;color:#555;margin-top:2px">For Mascardi Ventures Limited</div>
-            <div style="font-size:11px;color:#555;margin-top:10px">Date: _______________</div>
+            <div style="font-size:11px;color:var(--ink-2);margin-top:2px">For Mascardi Ventures Limited</div>
+            <div style="font-size:11px;color:var(--ink-2);margin-top:10px">Date: _______________</div>
         </div>
     </div>
 

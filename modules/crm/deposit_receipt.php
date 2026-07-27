@@ -121,21 +121,31 @@ include __DIR__ . '/../../includes/header.php';
         max-width:100% !important; padding:1.5cm 1.8cm !important;
     }
 }
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+#drDoc {
+    --ink: #0f172a; --ink-2: #475569; --ink-3: #94a3b8;
+    --line: #e2e8f0; --surface: #f8fafc; --accent: #b45309;
+}
 #drDoc {
     max-width:700px; margin:0 auto;
-    background:#fff; border:1px solid #ccc; border-radius:6px;
-    font-family:Arial,Helvetica,sans-serif;
-    font-size:12.5px; color:#000; line-height:1.5;
-    box-shadow:0 4px 20px rgba(0,0,0,.1);
-    padding:28px 32px;
+    background:#fff; border:1px solid var(--line); border-radius:10px;
+    font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;
+    font-size:12.5px; color:var(--ink); line-height:1.5;
+    box-shadow:0 10px 40px rgba(15,23,42,.08);
+    padding:30px 34px;
 }
 .dr-table { width:100%; border-collapse:collapse; margin:8px 0; }
 .dr-table td, .dr-table th {
-    border:1px solid #333; padding:7px 11px;
+    border:none; border-bottom:1px solid var(--line); padding:8px 4px;
     font-size:12.5px; vertical-align:top;
 }
-.dr-table th { background:#f5f5f5; font-weight:700; width:36%; white-space:nowrap; }
-.sig-line { border-bottom:1.5px solid #333; min-height:44px; margin-bottom:5px; }
+.dr-table th {
+    background:none; font-weight:600; width:36%; white-space:nowrap;
+    color:var(--ink-2); text-transform:uppercase; font-size:9.5px; letter-spacing:.06em;
+}
+.dr-table td { color:var(--ink); font-weight:500; }
+.dr-table tr:last-child td, .dr-table tr:last-child th { border-bottom:none; }
+.sig-line { border-bottom:1.5px solid var(--ink); min-height:44px; margin-bottom:5px; }
 </style>
 
 <!-- Action bar -->
@@ -155,15 +165,16 @@ include __DIR__ . '/../../includes/header.php';
 
     <!-- ── Header ──────────────────────────────────────────────────────────── -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;
-                padding-bottom:14px;border-bottom:2px solid #111;margin-bottom:18px">
+                padding-bottom:16px;border-bottom:3px solid var(--ink);margin-bottom:20px">
         <!-- Company -->
         <div>
-            <div style="font-family:'Times New Roman',Times,Georgia,serif;
-                        font-style:italic;font-size:28px;font-weight:normal;
-                        line-height:1.1;color:#000">
-                MASCARDI<br>VENTURES LIMITED
+            <div style="font-size:24px;font-weight:800;letter-spacing:3px;color:var(--ink)">
+                MASCARDI
             </div>
-            <div style="font-size:11px;color:#444;margin-top:6px;line-height:1.7">
+            <div style="font-size:9.5px;letter-spacing:.22em;color:var(--ink-3);text-transform:uppercase;margin:2px 0 8px">
+                Ventures Limited
+            </div>
+            <div style="font-size:11px;color:var(--ink-2);line-height:1.7">
                 291 Kabete Lane, Spring Valley<br>
                 P.O.Box 1391-00606, Nairobi Kenya<br>
                 Sales@mascardi.co
@@ -171,11 +182,14 @@ include __DIR__ . '/../../includes/header.php';
         </div>
         <!-- Title + ref -->
         <div style="text-align:right">
-            <div style="font-size:22px;font-weight:900;letter-spacing:2px;
-                        text-transform:uppercase;color:#111">DEPOSIT RECEIPT</div>
-            <div style="font-size:12px;color:#555;margin-top:8px;line-height:1.9">
-                Receipt No: <strong><?= e($receiptNo) ?></strong><br>
-                Date: <strong><?= e($today) ?></strong>
+            <div style="display:inline-block;background:var(--ink);color:#fff;font-size:11px;
+                        font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+                        padding:7px 16px;border-radius:3px;white-space:nowrap">
+                Deposit Receipt
+            </div>
+            <div style="font-size:12px;color:var(--ink-2);margin-top:10px;line-height:1.9">
+                Receipt No: <strong style="color:var(--ink)"><?= e($receiptNo) ?></strong><br>
+                Date: <strong style="color:var(--ink)"><?= e($today) ?></strong>
             </div>
         </div>
     </div>
@@ -204,13 +218,13 @@ include __DIR__ . '/../../includes/header.php';
     <table class="dr-table" style="margin-top:12px">
         <tr>
             <th>Amount (Figures)</th>
-            <td style="font-size:16px;font-weight:700">
+            <td style="font-size:17px;font-weight:800;color:var(--ink)">
                 KES <?= number_format($deposit, 0) ?>/-
             </td>
         </tr>
         <tr>
             <th>Amount (Words)</th>
-            <td style="font-style:italic"><?= drNumWords($deposit) ?></td>
+            <td style="font-style:italic;color:var(--ink-2)"><?= drNumWords($deposit) ?></td>
         </tr>
         <tr>
             <th>Being Payment For</th>
@@ -218,13 +232,13 @@ include __DIR__ . '/../../includes/header.php';
                 <?= ($lead['stage'] ?? '') === 'import_order' ? 'Import Order deposit for' : 'Reservation deposit for' ?>
                 <strong><?= e($carDesc) ?></strong>
                 <?php if ($car && !empty($car['chassis_number'])): ?>
-                <br><span style="font-size:11.5px;color:#444">Chassis: <?= e($car['chassis_number']) ?></span>
+                <br><span style="font-size:11.5px;color:var(--ink-2)">Chassis: <?= e($car['chassis_number']) ?></span>
                 <?php endif; ?>
                 <?php if (!empty($lead['expected_arrival_date'])): ?>
-                <br><span style="font-size:11.5px;color:#444">Expected Arrival: <?= (new DateTime($lead['expected_arrival_date']))->format('d M Y') ?></span>
+                <br><span style="font-size:11.5px;color:var(--ink-2)">Expected Arrival: <?= (new DateTime($lead['expected_arrival_date']))->format('d M Y') ?></span>
                 <?php endif; ?>
                 <?php if (!empty($lead['deposit_notes'])): ?>
-                <br><span style="font-size:11.5px;color:#444">Ref: <?= e($lead['deposit_notes']) ?></span>
+                <br><span style="font-size:11.5px;color:var(--ink-2)">Ref: <?= e($lead['deposit_notes']) ?></span>
                 <?php endif; ?>
             </td>
         </tr>
@@ -249,7 +263,7 @@ include __DIR__ . '/../../includes/header.php';
             <td style="color:#c2410c;font-weight:700">
                 KES <?= number_format($balance, 0) ?>/-
                 <?php if ($dueDate): ?>
-                <span style="font-size:11px;color:#555;font-weight:normal">
+                <span style="font-size:11px;color:var(--ink-2);font-weight:normal">
                     — due by <?= e($dueDate) ?>
                 </span>
                 <?php endif; ?>
@@ -259,7 +273,7 @@ include __DIR__ . '/../../includes/header.php';
 
     <!-- ── Vehicle details ─────────────────────────────────────────────────── -->
     <?php if ($car): ?>
-    <div style="background:#f8f8f8;border:1px solid #ddd;border-radius:4px;
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:6px;
                 padding:10px 14px;margin-top:14px;font-size:12px">
         <div style="font-weight:700;margin-bottom:6px;font-size:12.5px">Vehicle Details</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 24px;line-height:1.9">
@@ -283,7 +297,7 @@ include __DIR__ . '/../../includes/header.php';
     <?php endif; ?>
 
     <!-- ── Note ────────────────────────────────────────────────────────────── -->
-    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:4px;
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;
                 padding:9px 14px;margin-top:14px;font-size:12px;color:#78350f">
         <strong>Note:</strong> This receipt is valid as proof of deposit payment.
         The vehicle remains the property of Mascardi Ventures Limited until full
@@ -291,8 +305,8 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 
     <!-- ── Terms & Conditions ─────────────────────────────────────────────── -->
-    <div style="margin-top:16px;border:1px solid #e2e8f0;border-radius:4px;padding:12px 15px;font-size:11px;color:#374151;line-height:1.65">
-        <div style="font-weight:700;font-size:11.5px;color:#111;margin-bottom:8px;border-bottom:1px solid #e2e8f0;padding-bottom:5px">
+    <div style="margin-top:16px;border:1px solid var(--line);border-radius:6px;padding:12px 15px;font-size:11px;color:var(--ink-2);line-height:1.65">
+        <div style="font-weight:700;font-size:11.5px;color:var(--ink);margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:5px">
             Terms &amp; Conditions:
         </div>
         <ul style="margin:0;padding-left:16px;list-style:disc">
@@ -317,16 +331,17 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 
     <!-- ── Signatures ──────────────────────────────────────────────────────── -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:28px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:28px;
+                border-top:1px solid var(--line);padding-top:20px">
         <div>
             <div class="sig-line"></div>
             <div style="font-size:11.5px;font-weight:600">Customer Signature</div>
-            <div style="font-size:11px;color:#555;margin-top:2px"><?= e($buyerName) ?></div>
+            <div style="font-size:11px;color:var(--ink-2);margin-top:2px"><?= e($buyerName) ?></div>
         </div>
         <div>
             <div class="sig-line"></div>
             <div style="font-size:11.5px;font-weight:600">Authorized Signatory</div>
-            <div style="font-size:11px;color:#555;margin-top:2px">For Mascardi Ventures Limited</div>
+            <div style="font-size:11px;color:var(--ink-2);margin-top:2px">For Mascardi Ventures Limited</div>
         </div>
     </div>
 
