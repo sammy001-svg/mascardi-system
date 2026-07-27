@@ -172,11 +172,26 @@ include __DIR__ . '/header.php';
                         </div>
                     </details>
 
-                    <?php if (!empty($car['notes'])): ?>
-                    <details class="dv-acc">
+                    <?php $publicDescription = trim($car['description'] ?? '') ?: trim($car['notes'] ?? ''); ?>
+                    <?php if (!empty($publicDescription)): ?>
+                    <details class="dv-acc" open>
                         <summary>About This Vehicle <i class="fa fa-plus"></i></summary>
                         <div class="dv-acc-body">
-                            <p class="dv-notes"><?= nl2br(htmlspecialchars($car['notes'])) ?></p>
+                            <p class="dv-notes"><?= nl2br(htmlspecialchars($publicDescription)) ?></p>
+                        </div>
+                    </details>
+                    <?php endif; ?>
+
+                    <?php $featureList = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string)($car['features'] ?? ''))))); ?>
+                    <?php if (!empty($featureList)): ?>
+                    <details class="dv-acc" open>
+                        <summary>Features &amp; Equipment <i class="fa fa-plus"></i></summary>
+                        <div class="dv-acc-body">
+                            <ul class="dv-features-list">
+                                <?php foreach ($featureList as $feat): ?>
+                                <li><i class="fa fa-check"></i><?= htmlspecialchars($feat) ?></li>
+                                <?php endforeach; ?>
+                            </ul>
                         </div>
                     </details>
                     <?php endif; ?>
@@ -496,6 +511,20 @@ include __DIR__ . '/header.php';
 .dv-spec-row strong { color: var(--ink); font-weight: 500; text-align: right; }
 
 .dv-notes { color: var(--ink-2); line-height: 1.8; font-size: 14px; margin: 0; }
+
+.dv-features-list {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px;
+}
+.dv-features-list li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 0; border-bottom: 1px solid var(--paper);
+    font-size: 13.5px; color: var(--ink-2);
+}
+.dv-features-list li i { color: var(--ink); font-size: 11px; flex-shrink: 0; }
+@media (max-width: 640px) {
+    .dv-features-list { grid-template-columns: 1fr; }
+}
 
 .dv-own-row { display: flex; gap: 18px; padding: 14px 0; }
 .dv-own-row i { font-size: 16px; color: var(--ink); flex-shrink: 0; margin-top: 3px; width: 20px; text-align: center; }

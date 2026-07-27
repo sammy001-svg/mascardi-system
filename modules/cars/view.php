@@ -224,6 +224,27 @@ if (in_array($car['status'], ['delivered','sold']))     $activeStep = 6;
             </div>
         </div>
 
+        <?php
+        $viewFeatureList = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string)($car['features'] ?? '')))));
+        ?>
+        <?php if (!empty($car['description']) || !empty($viewFeatureList)): ?>
+        <div class="card mt-3">
+            <div class="card-header"><i class="fa fa-globe me-2"></i>Website Description &amp; Features</div>
+            <div class="card-body" style="font-size:13.5px">
+                <?php if (!empty($car['description'])): ?>
+                <p class="mb-<?= $viewFeatureList ? '3' : '0' ?>"><?= nl2br(e($car['description'])) ?></p>
+                <?php endif; ?>
+                <?php if ($viewFeatureList): ?>
+                <div class="d-flex flex-wrap gap-2">
+                    <?php foreach ($viewFeatureList as $feat): ?>
+                    <span class="badge bg-light text-dark border"><i class="fa fa-check text-success me-1"></i><?= e($feat) ?></span>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Quick links -->
         <?php 
         $hasAnyAction = canAccess('intake') || canAccess('assessments') || canAccess('jobs') || canAccess('quotations');

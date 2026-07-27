@@ -12,6 +12,8 @@ $errors = [];
 // Inline migrations — silent no-op if columns already exist
 try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN description TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN features TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
@@ -32,6 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'body_type'           => trim($_POST['body_type'] ?? ''),
         'status'              => $_POST['status'] ?? 'in_transit',
         'notes'               => trim($_POST['notes'] ?? ''),
+        'description'         => trim($_POST['description'] ?? ''),
+        'features'            => trim($_POST['features'] ?? ''),
         'asking_price'        => ($_POST['asking_price'] ?? '') !== '' ? (float)$_POST['asking_price'] : null,
         'mileage'             => ($_POST['mileage']      ?? '') !== '' ? (int)$_POST['mileage']        : null,
         'engine_cc'           => ($_POST['engine_cc']    ?? '') !== '' ? (int)$_POST['engine_cc']      : null,
@@ -44,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$data['model'])          $errors[] = 'Model is required.';
 
     if (empty($errors)) {
-        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,asking_price=?,mileage=?,engine_cc=?,featured=?,offer_price=?,show_on_website=? WHERE id=?")
+        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,description=?,features=?,asking_price=?,mileage=?,engine_cc=?,featured=?,offer_price=?,show_on_website=? WHERE id=?")
            ->execute([...array_values($data), $id]);
         logActivity('update', 'cars', $id, "Updated car: {$data['make']} {$data['model']} ({$data['chassis_number']})");
         setFlash('success','Car updated successfully.');
@@ -161,13 +165,21 @@ include __DIR__ . '/../../includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-12"><label class="form-label">Notes / Description</label><textarea name="notes" class="form-control" rows="2" placeholder="Internal notes or public description used on the showroom"><?= e($car['notes'] ?? '') ?></textarea></div>
+                <div class="col-12"><label class="form-label">Internal Notes</label><textarea name="notes" class="form-control" rows="2" placeholder="Internal notes — not shown to customers"><?= e($car['notes'] ?? '') ?></textarea></div>
 
                 <!-- ── Showroom / Sales ───────────────────────────── -->
                 <div class="col-12 mt-2">
                     <div class="form-section-title">
                         <i class="fa fa-store me-1 text-primary"></i>Showroom &amp; Pricing
                     </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Description <small class="text-muted">(shown on the public showroom listing)</small></label>
+                    <textarea name="description" class="form-control" rows="3" placeholder="e.g. Well maintained, single owner, full service history..."><?= e($car['description'] ?? '') ?></textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Features <small class="text-muted">(one per line — shown as a feature list on the website)</small></label>
+                    <textarea name="features" class="form-control" rows="4" placeholder="Sunroof&#10;Leather Seats&#10;Reverse Camera&#10;Alloy Wheels"><?= e($car['features'] ?? '') ?></textarea>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Asking Price <small class="text-muted">(KES — leave blank to hide price)</small></label>
