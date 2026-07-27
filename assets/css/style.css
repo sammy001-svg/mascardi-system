@@ -2171,6 +2171,13 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
     border-color: #e2e8f0 !important;
 }
 
+/* Google SERP preview widget (car add/edit, SEO settings) — always
+   mimics a real light-mode search result, regardless of app theme. */
+[data-theme="dark"] #serpPreview {
+    background: #fff !important;
+    border-color: #e2e8f0 !important;
+}
+
 /* ── Accessibility + print guards ───────────────────────── */
 @media (prefers-reduced-motion: reduce) {
     [data-theme="dark"] .card::before, [data-theme="dark"] .card::after,
