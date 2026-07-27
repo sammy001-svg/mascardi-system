@@ -71,7 +71,9 @@ function getPendingDeliveryProtocolActions(string $role, int $assignedToUserId =
             $items[] = ['lead_id' => $r['lead_id'], 'lead_name' => $r['lead_name'], 'step' => $step, 'message' => $message, 'link' => $link];
         };
 
-        if ($role === 'super_admin') {
+        // 'admin' and 'super_admin' are the same authority level (see auth.php);
+        // which one exists depends on the deployment's users.role ENUM.
+        if ($role === 'super_admin' || $role === 'admin') {
             // Super Admin can act on every step in the pipeline (a company-wide
             // fallback approver), not just the 3 steps gated to them alone — so
             // their banner is the union of every role's pending items, in case

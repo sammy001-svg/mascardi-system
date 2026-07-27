@@ -258,6 +258,25 @@ $extraJs = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.
 }());
 </script>';
 
+// Approvals waiting on this admin. index.php redirects 'admin' straight here, so
+// these banners must live on this dashboard — otherwise a top-level approver never
+// sees anything actionable and reservations stall at "awaiting approval".
+require_once __DIR__ . '/../../includes/notifications.php';
+$dpPendingItems = getPendingDeliveryProtocolActions(authUser()['role'] ?? '');
+$pendingReservations = [];
+try {
+    $pendingReservations = $db->query("
+        SELECT cl.id, cl.name, cl.deposit_amount, cl.agreed_sale_price,
+               c.make, c.model, c.registration_number,
+               u.name AS assigned_name
+        FROM crm_leads cl
+        LEFT JOIN cars c  ON c.id = cl.pinned_car_id
+        LEFT JOIN users u ON u.id = cl.assigned_to
+        WHERE cl.reservation_status = 'pending_approval'
+        ORDER BY cl.updated_at DESC
+    ")->fetchAll();
+} catch (\Throwable $_) { $pendingReservations = []; }
+
 include __DIR__ . '/../../includes/header.php';
 
 function fmtMoney($v) { return 'KSh ' . number_format($v, 0); }
@@ -311,6 +330,47 @@ function fmtMoney($v) { return 'KSh ' . number_format($v, 0); }
         </button>
     </div>
 </div>
+
+<!-- Reservations awaiting approval -->
+<?php if (!empty($pendingReservations)): ?>
+<div class="card mb-4" style="border-color:#f59e0b;border-width:2px">
+    <div class="card-body" style="background:#fffbeb">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="fa fa-hourglass-half" style="font-size:20px;color:#d97706"></i>
+            <div class="fw-bold" style="color:#92400e">
+                <?= count($pendingReservations) ?> reservation<?= count($pendingReservations) !== 1 ? 's' : '' ?> awaiting your approval
+            </div>
+        </div>
+        <?php foreach ($pendingReservations as $i => $r): ?>
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 py-2"
+             style="<?= $i < count($pendingReservations) - 1 ? 'border-bottom:1px solid #fde68a' : '' ?>">
+            <div>
+                <a href="<?= BASE_URL ?>/modules/crm/view_lead.php?id=<?= (int)$r['id'] ?>&dp_open=1"
+                   class="fw-semibold text-decoration-none" style="color:#92400e"><?= e($r['name']) ?></a>
+                <div class="small" style="color:#b45309">
+                    <?= e(trim(($r['make'] ?? '') . ' ' . ($r['model'] ?? ''))) ?: 'No vehicle linked' ?>
+                    <?= $r['registration_number'] ? ' (' . e($r['registration_number']) . ')' : '' ?>
+                    &middot; Deposit: <?= money((float)($r['deposit_amount'] ?? 0)) ?>
+                    <?= $r['assigned_name'] ? ' · Submitted by ' . e($r['assigned_name']) : '' ?>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="<?= BASE_URL ?>/modules/crm/view_lead.php?id=<?= (int)$r['id'] ?>&dp_open=1"
+                   class="btn btn-sm btn-outline-secondary"><i class="fa fa-eye me-1"></i>Review</a>
+                <form method="POST" action="<?= BASE_URL ?>/modules/crm/view_lead.php?id=<?= (int)$r['id'] ?>" class="d-inline"
+                      onsubmit="return confirm('Approve this reservation for <?= e($r['name']) ?>?')">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="action" value="approve_reservation">
+                    <button type="submit" class="btn btn-sm btn-success"><i class="fa fa-check me-1"></i>Approve</button>
+                </form>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php include __DIR__ . '/../../includes/dp_pending_banner.php'; ?>
 
 <!-- ── KPI Row 1 ──────────────────────────────────────────────────────────── -->
 <div class="row g-3 mb-3">

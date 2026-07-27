@@ -344,6 +344,7 @@ include __DIR__ . '/includes/header.php';
                 </a>
                 <form method="POST" action="<?= BASE_URL ?>/modules/crm/view_lead.php?id=<?= (int)$r['id'] ?>" class="d-inline"
                       onsubmit="return confirm('Approve this reservation for <?= e($r['name']) ?>?')">
+                    <?= csrfField() ?>
                     <input type="hidden" name="action" value="approve_reservation">
                     <button type="submit" class="btn btn-sm btn-success">
                         <i class="fa fa-check me-1"></i>Approve

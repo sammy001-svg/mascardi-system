@@ -31,6 +31,26 @@ function hasRole(string|array $roles): bool {
     return in_array($user['role'], $roles);
 }
 
+/**
+ * Top-level approver check.
+ *
+ * 'admin' and 'super_admin' are the same authority level everywhere in this app
+ * (see hasRole/canAccess/canWrite above). Which one a deployment actually uses
+ * depends on its users.role ENUM — this install only has 'admin'. Always use
+ * this helper rather than comparing to 'super_admin' directly, or the check
+ * silently matches nobody and gates become impossible to pass.
+ */
+function isSuperAdmin(): bool {
+    $user = authUser();
+    if (!$user) return false;
+    return $user['role'] === 'admin' || $user['role'] === 'super_admin';
+}
+
+/** Roles that should receive "needs top-level approval" notifications. */
+function superAdminRoles(): array {
+    return ['super_admin', 'admin'];
+}
+
 function requireRole(string|array $roles): void {
     requireLogin();
     if (!hasRole($roles)) {
