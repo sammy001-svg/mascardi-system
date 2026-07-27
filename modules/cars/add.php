@@ -61,7 +61,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect(BASE_URL . '/modules/cars/view.php?id=' . $carId);
         } catch (PDOException $e) {
             if ($e->getCode() === '23000') {
-                $errors[] = 'Chassis number already exists.';
+                // Point straight at the conflicting record — a "deleted" car that
+                // still has invoices/quotations/jobs attached won't actually be
+                // removed (delete is blocked to protect those records), so the
+                // chassis number is still genuinely in use.
+                $existing = $db->prepare("SELECT id, make, model, status FROM cars WHERE chassis_number=?");
+                $existing->execute([$chassis]);
+                $existing = $existing->fetch();
+                if ($existing) {
+                    $errors[] = 'Chassis number already exists — car #' . $existing['id'] . ' ('
+                        . trim($existing['make'] . ' ' . $existing['model']) . ', status: ' . $existing['status']
+                        . '). Open ' . BASE_URL . '/modules/cars/view.php?id=' . $existing['id']
+                        . ' — if you tried to delete it, it likely still has invoices, quotations, or jobs linked to it.';
+                } else {
+                    $errors[] = 'Chassis number already exists.';
+                }
             } else {
                 $errors[] = 'Database error: ' . $e->getMessage();
             }

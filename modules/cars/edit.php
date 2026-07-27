@@ -54,11 +54,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$data['model'])          $errors[] = 'Model is required.';
 
     if (empty($errors)) {
-        $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,description=?,features=?,meta_title=?,meta_description=?,meta_image=?,asking_price=?,mileage=?,engine_cc=?,featured=?,offer_price=?,show_on_website=? WHERE id=?")
-           ->execute([...array_values($data), $id]);
-        logActivity('update', 'cars', $id, "Updated car: {$data['make']} {$data['model']} ({$data['chassis_number']})");
-        setFlash('success','Car updated successfully.');
-        redirect(BASE_URL.'/modules/cars/view.php?id='.$id);
+        try {
+            $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,description=?,features=?,meta_title=?,meta_description=?,meta_image=?,asking_price=?,mileage=?,engine_cc=?,featured=?,offer_price=?,show_on_website=? WHERE id=?")
+               ->execute([...array_values($data), $id]);
+            logActivity('update', 'cars', $id, "Updated car: {$data['make']} {$data['model']} ({$data['chassis_number']})");
+            setFlash('success','Car updated successfully.');
+            redirect(BASE_URL.'/modules/cars/view.php?id='.$id);
+        } catch (PDOException $e) {
+            if ($e->getCode() === '23000') {
+                $existing = $db->prepare("SELECT id, make, model, status FROM cars WHERE chassis_number=? AND id!=?");
+                $existing->execute([$data['chassis_number'], $id]);
+                $existing = $existing->fetch();
+                if ($existing) {
+                    $errors[] = 'Chassis number already exists — car #' . $existing['id'] . ' ('
+                        . trim($existing['make'] . ' ' . $existing['model']) . ', status: ' . $existing['status']
+                        . '). Open ' . BASE_URL . '/modules/cars/view.php?id=' . $existing['id']
+                        . ' — if you tried to delete it, it likely still has invoices, quotations, or jobs linked to it.';
+                } else {
+                    $errors[] = 'Chassis number already exists.';
+                }
+            } else {
+                $errors[] = 'Database error: ' . $e->getMessage();
+            }
+        }
     }
     $car = array_merge($car, $data);
 }
