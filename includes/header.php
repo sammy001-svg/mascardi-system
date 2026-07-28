@@ -95,6 +95,44 @@ window.addEventListener('beforeinstallprompt', function(e) {
 <div id="appShell" style="display:flex;min-height:100vh">
 
 <?php include __DIR__ . '/sidebar.php'; ?>
+<script>
+/* Keep the sidebar where the user left it.
+   Every page here is a full server render, so the sidebar rebuilt scrolled to
+   the top on each navigation — click a module near the bottom of a long menu
+   and the next page threw you back to the top to find your place again.
+   This restores the previous scroll offset.
+
+   Deliberately inline and placed immediately after the sidebar markup rather
+   than in main.js: at this point the menu is parsed and stylesheets (in <head>)
+   have applied, so the offset is set before the first paint and there is no
+   visible jump. Running it on DOMContentLoaded would flash at the top first.
+
+   sessionStorage, not localStorage — the position should follow the current
+   working session per tab, not persist for days. */
+(function () {
+    var KEY = 'msc_sidebar_scroll';
+    var el  = document.querySelector('.app-sidebar');
+    if (!el) return;
+
+    try {
+        var y = parseInt(sessionStorage.getItem(KEY) || '0', 10);
+        // Browsers clamp an over-large value, so a shorter menu on the next
+        // page (e.g. a different role's sidebar) is handled automatically.
+        if (y > 0) el.scrollTop = y;
+    } catch (e) { /* private mode / storage disabled — just start at the top */ }
+
+    // Throttle writes to one per frame; the scroll event fires very rapidly.
+    var queued = false;
+    el.addEventListener('scroll', function () {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(function () {
+            queued = false;
+            try { sessionStorage.setItem(KEY, String(el.scrollTop)); } catch (e) {}
+        });
+    }, { passive: true });
+}());
+</script>
 <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
 <div class="main-wrap" style="flex:1;min-width:0;display:flex;flex-direction:column">
