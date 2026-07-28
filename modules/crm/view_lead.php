@@ -171,17 +171,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->prepare("UPDATE crm_leads SET converted_at=NOW() WHERE id=? AND converted_at IS NULL")->execute([$id]);
             }
             logActivity('update','crm_leads',$id,"Stage changed to: $newStage");
-            // Sync car status when lead stage moves through reserved
+            // Sync the linked vehicle with the lead's new stage.
+            //
+            // Delivery used to be handled inside an `elseif ($lead['stage'] === 'reserved')`
+            // branch, with the UPDATE further restricted by `AND status='reserved'`.
+            // Both guards had to pass, so a lead that reached Delivered without
+            // going through Reserved — or whose car sat in any other status —
+            // left the vehicle untouched and still sitting in inventory. That is
+            // why delivered cars kept appearing in the inventory list.
+            //
+            // Delivery now retires the vehicle unconditionally, and matches what
+            // the delivery-protocol path does (status + pulled from the website).
             $pinnedCarId = (int)($lead['pinned_car_id'] ?? 0);
             if ($pinnedCarId) {
-                if ($newStage === 'reserved') {
+                if ($newStage === 'delivered') {
+                    $db->prepare("UPDATE cars SET status='delivered', show_on_website=0, updated_at=NOW() WHERE id=?")
+                       ->execute([$pinnedCarId]);
+                } elseif ($newStage === 'reserved') {
                     $db->prepare("UPDATE cars SET status='reserved', updated_at=NOW() WHERE id=?")->execute([$pinnedCarId]);
                 } elseif ($lead['stage'] === 'reserved') {
-                    if ($newStage === 'delivered') {
-                        $db->prepare("UPDATE cars SET status='sold', updated_at=NOW() WHERE id=? AND status='reserved'")->execute([$pinnedCarId]);
-                    } else {
-                        $db->prepare("UPDATE cars SET status='arrived', updated_at=NOW() WHERE id=? AND status='reserved'")->execute([$pinnedCarId]);
-                    }
+                    // Moving back out of Reserved (to anything other than Delivered)
+                    // releases the vehicle for sale again.
+                    $db->prepare("UPDATE cars SET status='arrived', updated_at=NOW() WHERE id=? AND status='reserved'")->execute([$pinnedCarId]);
                 }
             }
             require_once __DIR__ . '/../../includes/notifications.php';

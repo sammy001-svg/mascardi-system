@@ -11,6 +11,46 @@ if (!in_array($section, ['inventory', 'client', 'workshop', 'consignment', 'arch
 // a mismatch here is what triggers "Incorrect column count" warnings.
 $usesInventoryLayout = in_array($section, ['inventory', 'archive'], true);
 
+// ── Delivered-but-still-in-inventory reconciliation ──────────────────────────
+// Historically a lead could reach Delivered without its linked vehicle being
+// retired (see the stage-sync note in modules/crm/view_lead.php), leaving sold
+// stock sitting in the inventory list. New deliveries no longer do this; this
+// surfaces and repairs the existing backlog. Deliberately user-initiated rather
+// than an automatic bulk update, since it changes vehicle records.
+$staleDelivered = 0;
+try {
+    $staleDelivered = (int)$db->query("
+        SELECT COUNT(DISTINCT c.id)
+        FROM cars c
+        JOIN crm_leads l ON l.pinned_car_id = c.id
+        WHERE l.stage = 'delivered'
+          AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
+    ")->fetchColumn();
+} catch (\Throwable $_) { $staleDelivered = 0; }
+
+// POST only: verifyCsrf() returns early on GET, so a link would carry no
+// protection for what is a bulk state change.
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && ($_POST['action'] ?? '') === 'reconcile_delivered'
+    && $staleDelivered > 0 && isSuperAdmin()) {
+    verifyCsrf();
+    try {
+        $n = $db->exec("
+            UPDATE cars c
+            JOIN crm_leads l ON l.pinned_car_id = c.id
+            SET c.status = 'delivered', c.show_on_website = 0, c.updated_at = NOW()
+            WHERE l.stage = 'delivered'
+              AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
+        ");
+        logActivity('update', 'cars', 0, "Reconciled {$n} delivered vehicle(s) out of inventory");
+        setFlash('success', $n . ' delivered vehicle(s) moved out of inventory. They are now under "Sold / Delivered".');
+    } catch (\Throwable $e) {
+        error_log('cars reconcile_delivered: ' . $e->getMessage());
+        setFlash('error', 'Could not reconcile delivered vehicles: ' . $e->getMessage());
+    }
+    redirect(BASE_URL . '/modules/cars/index.php?section=inventory');
+}
+
 // Location scope for supervisors
 $supLocId  = supervisorLocationId();
 $locFilter = $supLocId ? " AND location_id = $supLocId" : '';
@@ -152,6 +192,28 @@ include __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
     </a>
 </div>
+
+<?php if ($section === 'inventory' && $staleDelivered > 0): ?>
+<div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap gap-2 py-2">
+    <span class="small">
+        <i class="fa fa-triangle-exclamation me-1"></i>
+        <strong><?= $staleDelivered ?></strong> vehicle<?= $staleDelivered !== 1 ? 's are' : ' is' ?>
+        linked to a lead marked <strong>Delivered</strong> but still listed in inventory.
+    </span>
+    <?php if (isSuperAdmin()): ?>
+    <form method="POST" action="?section=inventory" class="d-inline"
+          onsubmit="return confirm('Move <?= $staleDelivered ?> delivered vehicle(s) out of inventory?\n\nThey will be set to Delivered, hidden from the website, and listed under \'Sold / Delivered\'.\n\nNo records are deleted.')">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="reconcile_delivered">
+        <button type="submit" class="btn btn-sm btn-warning">
+            <i class="fa fa-wand-magic-sparkles me-1"></i>Move them out of inventory
+        </button>
+    </form>
+    <?php else: ?>
+    <span class="small text-muted">Ask a Super Admin to reconcile these.</span>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <?php if ($section === 'archive'): ?>
 <div class="alert alert-secondary py-2 small d-flex align-items-center gap-2">
