@@ -192,12 +192,35 @@ include __DIR__ . '/../../includes/header.php';
     background: var(--surface, #fff);
     box-shadow: 0 1px 4px rgba(0,0,0,.05);
 }
+/* Was a fixed light gradient (#f8fafc → #eff6ff). Being a class, the app's
+   dark-mode overrides — which only rewrite inline style backgrounds — never
+   touched it, so the header stayed light while the theme switched the agent
+   name to light text: invisible. A translucent tint works on both themes. */
 .agent-card-header {
-    background: linear-gradient(to right, #f8fafc, #eff6ff);
+    background: var(--surface-alt, #f8fafc);
+    background-image: linear-gradient(to right, transparent, rgba(59,130,246,.10));
     border-bottom: 1px solid var(--border, #e2e8f0);
     padding: 14px 20px;
     display: flex; align-items: center; gap: 12px;
 }
+.agent-role { font-size: 12px; color: var(--text-3, #64748b); }
+
+/* Callout / badge: translucent background + a text colour that reads on either
+   theme. The previous pairs (light bg + dark text) broke in dark mode because
+   only the background was overridden, leaving dark text on a dark surface. */
+.tg-callout {
+    background: rgba(59,130,246,.10);
+    border: 1px solid rgba(59,130,246,.28);
+    border-radius: 12px;
+    color: var(--text, #1e40af);
+}
+.tg-badge-set {
+    background: rgba(34,197,94,.15);
+    color: #16a34a;
+    font-size: 11px;
+    padding: 5px 10px;
+}
+[data-theme="dark"] .tg-badge-set { color: #4ade80; }
 .agent-card-body { padding: 20px; }
 .month-nav-btn {
     display: inline-flex; align-items: center; gap: 6px;
@@ -211,9 +234,9 @@ include __DIR__ . '/../../includes/header.php';
     transition: background .15s, border-color .15s;
 }
 .month-nav-btn:hover {
-    background: #eff6ff;
-    border-color: #bfdbfe;
-    color: #1d4ed8;
+    background: rgba(59,130,246,.12);
+    border-color: rgba(59,130,246,.35);
+    color: var(--text, #1d4ed8);
     text-decoration: none;
 }
 </style>
@@ -240,8 +263,7 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <!-- Info callout -->
-<div class="d-flex align-items-start gap-3 mb-4 px-4 py-3"
-     style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;color:#1e40af">
+<div class="d-flex align-items-start gap-3 mb-4 px-4 py-3 tg-callout">
     <i class="fa fa-circle-info fa-lg mt-1" style="flex-shrink:0"></i>
     <p class="mb-0" style="font-size:13.5px;line-height:1.5">
         Set monthly targets for each CRM agent. Agents see their own progress on their dashboard.
@@ -293,11 +315,11 @@ include __DIR__ . '/../../includes/header.php';
             <div class="agent-avatar"><?= e($initials) ?></div>
             <div>
                 <div class="fw-bold" style="font-size:15px"><?= e($agent['name']) ?></div>
-                <div style="font-size:12px;color:#64748b">Customer Relations Agent</div>
+                <div class="agent-role">Customer Relations Agent</div>
             </div>
             <?php if (!empty($saved)): ?>
             <div class="ms-auto">
-                <span class="badge" style="background:#dcfce7;color:#166534;font-size:11px;padding:5px 10px">
+                <span class="badge tg-badge-set">
                     <i class="fa fa-check me-1"></i>Targets set
                 </span>
             </div>
