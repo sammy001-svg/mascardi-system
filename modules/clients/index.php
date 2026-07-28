@@ -49,7 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
 
         $msg = "{$made} delivered lead(s) converted to clients";
         if ($cars)   $msg .= ", {$cars} vehicle(s) registered to them";
-        if ($failed) $msg .= ". {$failed} could not be converted (missing name or contact details)";
+        if ($failed) {
+            $why  = crmLastConvertError();
+            $msg .= ". {$failed} could not be converted"
+                  . ($why ? ' — last error: ' . $why : ' (missing name or contact details)');
+        }
         setFlash($failed ? 'warning' : 'success', $msg . '.');
     } catch (\Throwable $e) {
         error_log('clients convert_delivered: ' . $e->getMessage());

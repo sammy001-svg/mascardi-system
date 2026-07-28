@@ -203,6 +203,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($__clientId) {
                     setFlash('success', 'Lead delivered. ' . e($lead['name'])
                         . ' is now a client and the vehicle is registered to them.');
+                } else {
+                    // Do not fail silently — the delivery itself succeeded, but the
+                    // handover to Clients did not, and that needs to be visible.
+                    $__why = crmLastConvertError();
+                    setFlash('warning', 'Lead marked delivered, but it could not be added to Clients automatically'
+                        . ($__why ? ' (' . e($__why) . ')' : '')
+                        . '. You can convert it from the Clients page.');
                 }
             }
             require_once __DIR__ . '/../../includes/notifications.php';

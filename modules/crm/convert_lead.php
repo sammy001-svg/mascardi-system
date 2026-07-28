@@ -78,6 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($errors)) {
             try {
+                // Original schema had clients.email / phone as NOT NULL, so a buyer
+                // with only a phone number could not be converted at all
+                // ("Column 'email' cannot be null"). Relax to match reality.
+                try { $db->exec("ALTER TABLE clients MODIFY COLUMN email VARCHAR(150) NULL"); } catch (\Throwable $_) {}
+                try { $db->exec("ALTER TABLE clients MODIFY COLUMN phone VARCHAR(50)  NULL"); } catch (\Throwable $_) {}
+
                 $db->beginTransaction();
 
                 // Create new client

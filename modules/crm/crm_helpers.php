@@ -183,6 +183,16 @@ function crmDeliverLeadToClient(PDO $db, array $lead): int
     // Columns added by inline migrations elsewhere; tolerate their absence.
     try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL"); } catch (\Throwable $_) {}
 
+    // Some installs still carry the original schema where clients.email/phone are
+    // NOT NULL. A buyer legitimately may have only a phone number (or only an
+    // email), so inserting NULL there raised
+    //   "Integrity constraint violation: 1048 Column 'email' cannot be null"
+    // and every such conversion failed. Relax the columns to match reality.
+    // NULL is used rather than '' on purpose: if an install has a UNIQUE index on
+    // email, repeated empty strings would collide whereas multiple NULLs do not.
+    try { $db->exec("ALTER TABLE clients MODIFY COLUMN email VARCHAR(150) NULL"); } catch (\Throwable $_) {}
+    try { $db->exec("ALTER TABLE clients MODIFY COLUMN phone VARCHAR(50)  NULL"); } catch (\Throwable $_) {}
+
     $clientId = (int)($lead['client_id'] ?? 0);
 
     try {
@@ -235,7 +245,19 @@ function crmDeliverLeadToClient(PDO $db, array $lead): int
 
         return $clientId;
     } catch (\Throwable $e) {
+        // Record the reason so callers can show it. Previously this returned 0
+        // silently, so a failing conversion looked exactly like "nothing to do"
+        // and the problem was invisible on screen.
+        crmLastConvertError($e->getMessage());
         error_log('crmDeliverLeadToClient: ' . $e->getMessage());
         return 0;
     }
+}
+
+/** Last conversion failure reason — set by crmDeliverLeadToClient(), read by callers. */
+function crmLastConvertError(?string $set = null): string
+{
+    static $err = '';
+    if ($set !== null) $err = $set;
+    return $err;
 }
