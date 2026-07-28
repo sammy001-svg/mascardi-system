@@ -540,9 +540,17 @@ if (authRole() === 'supervisor') {
         <?php if (canAccess('reports')): ?>
         <div class="nav-section">Analytics</div>
         <a href="<?= BASE_URL ?>/modules/reports/index.php"
-           class="nav-item <?= isActive('/modules/reports/') ?>"
+           <?php // exclude kpi.php so both links don't highlight (isActive is a substring match) ?>
+           class="nav-item <?= (str_contains($__uri, '/modules/reports/') && !str_contains($__uri, 'kpi.php')) ? 'active' : '' ?>"
            data-label="Reports">
             <i class="fa fa-chart-bar"></i><span>Reports</span>
+        </a>
+        <?php // Company KPI targets (revenue, cars sold, leads, jobs). The page was
+              // fully built but linked from nowhere, so nobody could reach it. ?>
+        <a href="<?= BASE_URL ?>/modules/reports/kpi.php"
+           class="nav-item <?= isActive('/modules/reports/kpi.php') ?>"
+           data-label="KPI Targets">
+            <i class="fa fa-bullseye"></i><span>KPI Targets</span>
         </a>
         <?php endif; ?>
 

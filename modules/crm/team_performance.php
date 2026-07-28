@@ -104,6 +104,65 @@ try {
     $actMap = [];
 }
 
+// ── Targets for the selected period ──────────────────────────────────────────
+// crm_targets holds one row per agent per calendar month, but this page also
+// offers multi-month ranges. Comparing a 3-month actual against a single
+// month's target would be meaningless, so the monthly targets for every month
+// the range covers are summed.
+//
+// "Last 30 days" is deliberately excluded: it straddles two partial months, and
+// adding two whole monthly targets would overstate the goal. Better to show no
+// target than a wrong one.
+$targetMap      = [];
+$targetsApply   = ($period !== 'last_30_days');
+$targetMonths   = [];
+$targetsAnySet  = false;
+
+if ($targetsApply) {
+    $cursor = strtotime(date('Y-m-01', strtotime($dateFrom)));
+    $endM   = strtotime(date('Y-m-01', strtotime($dateTo)));
+    while ($cursor <= $endM) {
+        $targetMonths[] = date('Y-m', $cursor);
+        $cursor = strtotime('+1 month', $cursor);
+    }
+
+    if ($targetMonths) {
+        try {
+            $ph = implode(',', array_fill(0, count($targetMonths), '?'));
+            $ts = $db->prepare("SELECT user_id,
+                                       SUM(target_deliveries) AS t_deliveries,
+                                       SUM(target_activities) AS t_activities,
+                                       SUM(target_calls)      AS t_calls,
+                                       SUM(target_new_leads)  AS t_new_leads
+                                FROM crm_targets
+                                WHERE month IN ({$ph})
+                                GROUP BY user_id");
+            $ts->execute($targetMonths);
+            foreach ($ts->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $targetMap[(int)$r['user_id']] = [
+                    'deliveries' => (int)$r['t_deliveries'],
+                    'activities' => (int)$r['t_activities'],
+                    'calls'      => (int)$r['t_calls'],
+                    'new_leads'  => (int)$r['t_new_leads'],
+                ];
+                if ((int)$r['t_deliveries'] > 0) $targetsAnySet = true;
+            }
+        } catch (\Throwable $_) { $targetMap = []; }   // table not created yet
+    }
+}
+
+/**
+ * Expected progress through the period, used to say whether someone is behind
+ * *pace* rather than simply short of the full-period goal — being at 40% on day
+ * 12 of a month is fine, on day 28 it is not.
+ */
+$periodElapsed = 1.0;
+$fromTs = strtotime($dateFrom . ' 00:00:00');
+$toTs   = strtotime($dateTo   . ' 23:59:59');
+if ($toTs > time() && $toTs > $fromTs) {
+    $periodElapsed = max(0.01, min(1, (time() - $fromTs) / ($toTs - $fromTs)));
+}
+
 try {
     // 3. Overall period totals
     $totalActive = (int)$db->query(
@@ -295,6 +354,70 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<?php
+// ── Team roll-up against target ──────────────────────────────────────────────
+$teamTarget = 0;
+foreach ($targetMap as $t) { $teamTarget += (int)$t['deliveries']; }
+$teamPct      = $teamTarget > 0 ? (int)round($totalDelivered / $teamTarget * 100) : null;
+$teamExpected = $teamTarget * $periodElapsed;
+$noTargetsYet = $targetsApply && !$targetsAnySet;
+?>
+
+<?php if ($targetsApply && $teamTarget > 0): ?>
+<?php
+    if ($teamPct >= 100)                      { $tc='success'; $tl='Target met'; }
+    elseif ($totalDelivered >= $teamExpected) { $tc='info';    $tl='On pace'; }
+    elseif ($teamPct >= 50)                   { $tc='warning'; $tl='Behind pace'; }
+    else                                      { $tc='danger';  $tl='Well behind'; }
+?>
+<div class="card mb-4 border-top border-3 border-<?= $tc ?>">
+    <div class="card-body py-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div>
+                <div class="text-muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em">
+                    Team delivery target — <?= e($periodLabel) ?>
+                </div>
+                <div class="d-flex align-items-baseline gap-2 mt-1">
+                    <span class="fw-bold" style="font-size:24px"><?= $totalDelivered ?></span>
+                    <span class="text-muted">of <?= $teamTarget ?> deliveries</span>
+                    <span class="badge bg-<?= $tc ?> bg-opacity-10 text-<?= $tc ?> fw-semibold ms-1"><?= $teamPct ?>%</span>
+                    <span class="badge bg-<?= $tc ?>"><?= $tl ?></span>
+                </div>
+            </div>
+            <div style="min-width:240px;flex:1;max-width:420px">
+                <div class="progress" style="height:12px;border-radius:100px;background:#f1f5f9">
+                    <div class="progress-bar bg-<?= $tc ?>" role="progressbar"
+                         style="width:<?= min(100, max(0, $teamPct)) ?>%;border-radius:100px"></div>
+                </div>
+                <?php if ($periodElapsed < 1): ?>
+                <div class="text-muted mt-1" style="font-size:11px">
+                    <?= round($periodElapsed * 100) ?>% of the period elapsed —
+                    <?= (int)round($teamExpected) ?> expected by now
+                </div>
+                <?php endif; ?>
+            </div>
+            <a href="targets.php" class="btn btn-sm btn-outline-secondary">
+                <i class="fa fa-bullseye me-1"></i>Manage targets
+            </a>
+        </div>
+    </div>
+</div>
+<?php elseif ($noTargetsYet): ?>
+<div class="alert alert-light border d-flex align-items-center justify-content-between flex-wrap gap-2 py-2">
+    <span class="small text-muted">
+        <i class="fa fa-bullseye me-1"></i>
+        No delivery targets set for <?= e($periodLabel) ?>, so performance below has nothing to be measured against.
+    </span>
+    <a href="targets.php" class="btn btn-sm btn-primary"><i class="fa fa-bullseye me-1"></i>Set targets</a>
+</div>
+<?php elseif (!$targetsApply): ?>
+<div class="alert alert-light border py-2 small text-muted">
+    <i class="fa fa-circle-info me-1"></i>
+    Targets are set per calendar month, so they are not shown for “Last 30 days”.
+    Choose <strong>This Month</strong> or <strong>Last Month</strong> to compare against target.
+</div>
+<?php endif; ?>
+
 <!-- ── Agents table + Bar chart ────────────────────────────────────────────── -->
 <div class="row g-4 mb-4">
 
@@ -321,6 +444,10 @@ include __DIR__ . '/../../includes/header.php';
                                 <th>Agent</th>
                                 <th class="text-center">Active</th>
                                 <th class="text-center">Delivered &#9989;</th>
+                                <?php if ($targetsApply): ?>
+                                <th class="text-center">Target</th>
+                                <th style="min-width:150px">vs Target</th>
+                                <?php endif; ?>
                                 <th class="text-center">Lost &#10060;</th>
                                 <th class="text-center">Activities</th>
                                 <th class="text-center">Overdue &#9888;</th>
@@ -362,6 +489,39 @@ include __DIR__ . '/../../includes/header.php';
                                 <span class="text-muted">0</span>
                                 <?php endif; ?>
                             </td>
+                            <?php if ($targetsApply):
+                                $tgt = (int)($targetMap[(int)$agent['id']]['deliveries'] ?? 0);
+                                // Achievement against the whole period, and against
+                                // how much of the period has actually elapsed — a
+                                // manager needs the second to intervene in time.
+                                $pct     = $tgt > 0 ? (int)round($delivered / $tgt * 100) : null;
+                                $expected= $tgt > 0 ? $tgt * $periodElapsed : 0;
+                                $onPace  = $tgt > 0 && $delivered >= $expected;
+                                if ($pct === null)      { $cls='secondary'; $lbl='No target'; }
+                                elseif ($pct >= 100)    { $cls='success';   $lbl='Target met'; }
+                                elseif ($onPace)        { $cls='info';      $lbl='On pace'; }
+                                elseif ($pct >= 50)     { $cls='warning';   $lbl='Behind pace'; }
+                                else                    { $cls='danger';    $lbl='Well behind'; }
+                            ?>
+                            <td class="text-center">
+                                <?= $tgt > 0 ? '<span class="fw-semibold">'.$tgt.'</span>' : '<span class="text-muted">—</span>' ?>
+                            </td>
+                            <td>
+                                <?php if ($tgt > 0): ?>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="progress flex-grow-1" style="height:8px;border-radius:100px;background:#f1f5f9">
+                                        <div class="progress-bar bg-<?= $cls ?>" role="progressbar"
+                                             style="width:<?= min(100, max(0, $pct)) ?>%;border-radius:100px"></div>
+                                    </div>
+                                    <span class="badge bg-<?= $cls ?> bg-opacity-10 text-<?= $cls ?> fw-semibold"
+                                          style="font-size:10.5px" title="<?= $lbl ?>"><?= $pct ?>%</span>
+                                </div>
+                                <div class="text-muted" style="font-size:10.5px"><?= $lbl ?></div>
+                                <?php else: ?>
+                                <a href="targets.php" class="small text-muted">Set a target</a>
+                                <?php endif; ?>
+                            </td>
+                            <?php endif; ?>
                             <td class="text-center">
                                 <?php if ($lost > 0): ?>
                                 <span class="badge bg-danger bg-opacity-10 text-danger fw-semibold"><?= $lost ?></span>
