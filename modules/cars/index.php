@@ -4,12 +4,11 @@ $pageTitle = 'Cars';
 $db = getDB();
 
 $section = $_GET['section'] ?? 'inventory';
-if (!in_array($section, ['inventory', 'client', 'workshop', 'consignment', 'archive'])) $section = 'inventory';
+if (!in_array($section, ['inventory', 'client', 'workshop', 'consignment'])) $section = 'inventory';
 
-// Archive reuses the inventory column layout (location/price are still relevant
-// on a sold car), so header cells and the DataTables column config must agree —
-// a mismatch here is what triggers "Incorrect column count" warnings.
-$usesInventoryLayout = in_array($section, ['inventory', 'archive'], true);
+// Header cells and the DataTables column config must agree — a mismatch is what
+// triggers "Incorrect column count" warnings.
+$usesInventoryLayout = ($section === 'inventory');
 
 // ── Delivered-but-still-in-inventory reconciliation ──────────────────────────
 // Historically a lead could reach Delivered without its linked vehicle being
@@ -43,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
               AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
         ");
         logActivity('update', 'cars', 0, "Reconciled {$n} delivered vehicle(s) out of inventory");
-        setFlash('success', $n . ' delivered vehicle(s) moved out of inventory. They are now under "Sold / Delivered".');
+        setFlash('success', $n . ' delivered vehicle(s) moved out of inventory. They now appear under Delivered Cars.');
     } catch (\Throwable $e) {
         error_log('cars reconcile_delivered: ' . $e->getMessage());
         setFlash('error', 'Could not reconcile delivered vehicles: ' . $e->getMessage());
@@ -60,10 +59,6 @@ $cntInv  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='inventory'
 $cntCli  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='client'$locFilter")->fetchColumn();
 $cntWork = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status='in_workshop'$locFilter")->fetchColumn();
 $cntCons = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type IN ('trade_in','sale_on_behalf')$locFilter")->fetchColumn();
-// Sold/delivered inventory cars match none of the tabs above, so without this
-// they are invisible everywhere in the module — unreachable to view or delete,
-// while still holding their (unique) chassis number.
-$cntArch = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='inventory' AND status IN ('delivered','sold')$locFilter")->fetchColumn();
 
 // Filter dropdowns — only needed on inventory tab, scoped for supervisors
 $invMakes     = [];
@@ -141,8 +136,7 @@ include __DIR__ . '/../../includes/header.php';
         <i class="fa fa-car-side me-2 text-primary"></i>
         <?= $section === 'inventory' ? 'Mascardi Inventory'
           : ($section === 'client'   ? 'Client Cars'
-          : ($section === 'consignment' ? 'Trade-In & Sale on Behalf'
-          : ($section === 'archive' ? 'Archive — Sold &amp; Delivered' : 'Workshop'))) ?>
+          : ($section === 'consignment' ? 'Trade-In & Sale on Behalf' : 'Workshop')) ?>
     </h5>
     <div class="d-flex gap-2 flex-wrap">
         <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#stockTakeModal">
@@ -184,13 +178,6 @@ include __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
     </a>
     <?php endif; ?>
-    <a href="?section=archive"
-       class="btn btn-lg <?= $section === 'archive' ? 'btn-secondary' : 'btn-outline-secondary' ?> flex-fill text-center" style="min-width:160px">
-        <i class="fa fa-box-archive me-2"></i>Sold / Delivered
-        <?php if ($cntArch): ?>
-        <span class="badge <?= $section === 'archive' ? 'bg-white text-dark' : 'bg-secondary' ?> ms-1"><?= $cntArch ?></span>
-        <?php endif; ?>
-    </a>
 </div>
 
 <?php if ($section === 'inventory' && $staleDelivered > 0): ?>
@@ -212,16 +199,6 @@ include __DIR__ . '/../../includes/header.php';
     <?php else: ?>
     <span class="small text-muted">Ask a Super Admin to reconcile these.</span>
     <?php endif; ?>
-</div>
-<?php endif; ?>
-
-<?php if ($section === 'archive'): ?>
-<div class="alert alert-secondary py-2 small d-flex align-items-center gap-2">
-    <i class="fa fa-circle-info"></i>
-    <span>
-        Vehicles already <strong>sold</strong> or <strong>delivered</strong>. They stay in the system for record-keeping
-        and still hold their chassis number — so if re-registering a chassis is blocked, the vehicle will be listed here.
-    </span>
 </div>
 <?php endif; ?>
 
