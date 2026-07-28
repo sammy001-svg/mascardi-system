@@ -7,6 +7,19 @@ $db = getDB();
 $errors = [];
 
 // Inline migrations — silent no-op if columns already exist
+// The vehicle-type dropdown offers Sale on Behalf / Trade-In, but those values
+// only exist in the car_type ENUM once the Trade-In module has been opened
+// (see modules/trade_in/_bootstrap.php). With MySQL strict mode off, saving a
+// value the ENUM does not know is silently coerced to '' — the car then matches
+// no tab at all and disappears from the system. Widen it here, where the values
+// are actually offered, so the save cannot lose data.
+try {
+    $__ct = $db->query("SHOW COLUMNS FROM cars LIKE 'car_type'")->fetch(PDO::FETCH_ASSOC);
+    if ($__ct && !str_contains(strtolower($__ct['Type']), 'sale_on_behalf')) {
+        $db->exec("ALTER TABLE cars MODIFY COLUMN car_type
+                   ENUM('inventory','client','trade_in','sale_on_behalf') DEFAULT 'inventory'");
+    }
+} catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN description TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}

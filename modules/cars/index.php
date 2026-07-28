@@ -50,6 +50,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     redirect(BASE_URL . '/modules/cars/index.php?section=inventory');
 }
 
+// ── Vehicles with an unrecognised car_type ───────────────────────────────────
+// Before the ENUM was widened, saving "Sale on Behalf"/"Trade-In" from the car
+// edit form stored '' (MySQL coerces unknown ENUM values when strict mode is
+// off). Those rows match no tab and are unreachable in the UI. Detect them so
+// they can be brought back and re-assigned.
+$orphanTypes = 0;
+try {
+    $orphanTypes = (int)$db->query("
+        SELECT COUNT(*) FROM cars
+        WHERE car_type IS NULL
+           OR car_type NOT IN ('inventory','client','trade_in','sale_on_behalf')
+    ")->fetchColumn();
+} catch (\Throwable $_) { $orphanTypes = 0; }
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && ($_POST['action'] ?? '') === 'fix_car_types'
+    && $orphanTypes > 0 && isSuperAdmin()) {
+    verifyCsrf();
+    try {
+        // Widen the ENUM first, otherwise the repair itself cannot store a value.
+        $__ct = $db->query("SHOW COLUMNS FROM cars LIKE 'car_type'")->fetch(PDO::FETCH_ASSOC);
+        if ($__ct && !str_contains(strtolower($__ct['Type']), 'sale_on_behalf')) {
+            $db->exec("ALTER TABLE cars MODIFY COLUMN car_type
+                       ENUM('inventory','client','trade_in','sale_on_behalf') DEFAULT 'inventory'");
+        }
+        // The original choice is unrecoverable — the value never reached the
+        // database. Return them to Inventory so they are visible and editable,
+        // then the correct type can be set again (and will now stick).
+        $n = $db->exec("
+            UPDATE cars SET car_type = 'inventory', updated_at = NOW()
+            WHERE car_type IS NULL
+               OR car_type NOT IN ('inventory','client','trade_in','sale_on_behalf')
+        ");
+        logActivity('update', 'cars', 0, "Restored {$n} vehicle(s) with an invalid car_type back to Inventory");
+        setFlash('success', $n . ' vehicle(s) restored to Inventory. Re-set their vehicle type — it will now save correctly.');
+    } catch (\Throwable $e) {
+        error_log('cars fix_car_types: ' . $e->getMessage());
+        setFlash('error', 'Could not restore vehicles: ' . $e->getMessage());
+    }
+    redirect(BASE_URL . '/modules/cars/index.php?section=inventory');
+}
+
 // Location scope for supervisors
 $supLocId  = supervisorLocationId();
 $locFilter = $supLocId ? " AND location_id = $supLocId" : '';
@@ -179,6 +221,27 @@ include __DIR__ . '/../../includes/header.php';
     </a>
     <?php endif; ?>
 </div>
+
+<?php if ($orphanTypes > 0): ?>
+<div class="alert alert-danger d-flex align-items-center justify-content-between flex-wrap gap-2 py-2">
+    <span class="small">
+        <i class="fa fa-triangle-exclamation me-1"></i>
+        <strong><?= $orphanTypes ?></strong> vehicle<?= $orphanTypes !== 1 ? 's have' : ' has' ?> an unrecognised
+        vehicle type and <?= $orphanTypes !== 1 ? 'are' : 'is' ?> not showing under any tab.
+        This happened when "Sale on Behalf" / "Trade-In" was saved before the database accepted those values.
+    </span>
+    <?php if (isSuperAdmin()): ?>
+    <form method="POST" action="?section=inventory" class="d-inline"
+          onsubmit="return confirm('Restore <?= $orphanTypes ?> vehicle(s) to Inventory?\n\nTheir original type could not be saved, so it cannot be recovered — they will return to Inventory where you can set the correct type again.\n\nNothing is deleted.')">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="fix_car_types">
+        <button type="submit" class="btn btn-sm btn-danger">
+            <i class="fa fa-rotate-left me-1"></i>Restore them
+        </button>
+    </form>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <?php if ($section === 'inventory' && $staleDelivered > 0): ?>
 <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap gap-2 py-2">
