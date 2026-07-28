@@ -564,8 +564,20 @@ function applyFavFilter() {
     });
 }
 
-/* ── Compare ────────────────────────────────────────────────────────────── */
+/* ── Compare ──────────────────────────────────────────────────────────────
+   Persisted, so a selection survives clicking into a vehicle and coming back —
+   previously this was in-memory only and silently reset on every navigation. */
+var CMP_KEY = 'msc_compare';
 var compareIds = [], compareNames = {};
+try {
+    var _saved = JSON.parse(localStorage.getItem(CMP_KEY) || '{"ids":[],"names":{}}');
+    compareIds   = Array.isArray(_saved.ids) ? _saved.ids.map(Number) : [];
+    compareNames = _saved.names || {};
+} catch (e) { compareIds = []; compareNames = {}; }
+
+function persistCompare() {
+    try { localStorage.setItem(CMP_KEY, JSON.stringify({ ids: compareIds, names: compareNames })); } catch (e) {}
+}
 
 function toggleCompare(id, btn) {
     var idx = compareIds.indexOf(id);
@@ -578,6 +590,7 @@ function toggleCompare(id, btn) {
         var card = document.querySelector('.sv-card[data-car-id="'+id+'"]');
         compareNames[id] = card ? card.dataset.carName : 'Car '+id;
     }
+    persistCompare();
     syncCompareUI();
 }
 
@@ -610,11 +623,13 @@ function syncCompareUI() {
 
 function clearCompare() {
     compareIds = []; compareNames = {};
+    persistCompare();
     syncCompareUI();
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     syncFavUI();
+    syncCompareUI();
 });
 </script>
 

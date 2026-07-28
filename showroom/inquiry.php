@@ -35,9 +35,16 @@ $ip = $_SERVER['REMOTE_ADDR'] ?? '';
 
 try {
     $db = getDB();
+    require_once __DIR__ . '/_leads_bootstrap.php';
+    showroomLeadsMigrate($db);
 
-    // Verify car exists and is in showroom
-    $car = $db->prepare("SELECT id, make, model, year FROM cars WHERE id=? AND car_type IN ('inventory','sale_on_behalf') AND asking_price>0");
+    // Verify car exists and is on the showroom.
+    // Note: no asking_price filter — "Price on request" vehicles still show an
+    // enquiry form, and requiring a price made those submissions fail with a
+    // misleading "Vehicle not found", silently killing the highest-intent leads.
+    $car = $db->prepare("SELECT id, make, model, year FROM cars
+                         WHERE id=? AND car_type IN ('inventory','sale_on_behalf')
+                           AND show_on_website = 1");
     $car->execute([$carId]);
     $car = $car->fetch(PDO::FETCH_ASSOC);
     if (!$car) { echo json_encode(['success' => false, 'error' => 'Vehicle not found.']); exit; }
@@ -50,29 +57,36 @@ try {
         exit;
     }
 
-    // Insert inquiry
+    // Insert inquiry — NOT wrapped in a silent catch: if we cannot record the
+    // enquiry we must not tell the visitor it was sent.
     $db->prepare("INSERT INTO showroom_inquiries (car_id, inquiry_name, inquiry_phone, inquiry_email, message) VALUES (?,?,?,?,?)")
        ->execute([$carId, $name, $phone ?: null, $email ?: null, $message ?: null]);
 
     $inquiryId = (int)$db->lastInsertId();
+    $carLabel  = "{$car['year']} {$car['make']} {$car['model']}";
 
-    // Fire notification to admin users if notifications table exists
-    try {
-        $admins = $db->query("SELECT id FROM users WHERE role='admin' AND status='active'")->fetchAll(PDO::FETCH_COLUMN);
-        $carLabel = "{$car['year']} {$car['make']} {$car['model']}";
-        $notifStmt = $db->prepare("INSERT INTO notifications (user_id, type, title, message, link) VALUES (?,?,?,?,?)");
-        foreach ($admins as $uid) {
-            $notifStmt->execute([
-                $uid,
-                'info',
-                'New Showroom Inquiry',
-                "{$name} enquired about the {$carLabel}",
-                BASE_URL . '/modules/showroom/index.php?id=' . $inquiryId,
-            ]);
-        }
-    } catch (Exception $e) {
-        // Notifications table may not exist yet — not fatal
+    // Push into the CRM so the enquiry enters the normal lead pipeline
+    // instead of sitting in a side table nobody works from.
+    $leadId = showroomCreateLead(
+        $db, $name, $phone ?: null, $email ?: null,
+        $carLabel,
+        "Website enquiry for {$carLabel}" . ($message ? ' — ' . $message : '')
+    );
+    if ($leadId) {
+        try { $db->prepare("UPDATE showroom_inquiries SET lead_id=? WHERE id=?")->execute([$leadId, $inquiryId]); }
+        catch (\Throwable $_) {}
     }
+
+    // Notify the roles that actually work inbound leads (was admin-only before).
+    showroomNotifyNewLead(
+        'New Website Enquiry',
+        "{$name} enquired about the {$carLabel}"
+            . ($phone ? " · {$phone}" : '')
+            . ($leadId ? '' : ' (CRM lead not created — review manually)'),
+        $leadId
+            ? BASE_URL . '/modules/crm/view_lead.php?id=' . $leadId
+            : BASE_URL . '/modules/showroom/index.php?id=' . $inquiryId
+    );
 
     // Send email notification if mailer is configured
     try {

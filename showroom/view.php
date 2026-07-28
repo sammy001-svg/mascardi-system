@@ -318,7 +318,67 @@ include __DIR__ . '/header.php';
                             <i class="fa fa-phone"></i> <?= htmlspecialchars($companyPhone) ?>
                         </a>
                         <?php endif; ?>
+                        <button type="button" id="dvSaveBtn" class="btn-lx-ghost-dark" style="width:100%" onclick="dvToggleSave()">
+                            <i class="fa-regular fa-heart" id="dvSaveIcon"></i> <span id="dvSaveLabel">Save this vehicle</span>
+                        </button>
                     </div>
+
+                    <?php if ($displayPrice): ?>
+                    <!-- ── Finance estimator ───────────────────────────────
+                         Indicative only: a flat-rate reducing-balance style
+                         monthly figure, computed client-side. Deliberately not
+                         presented as an offer or approval. -->
+                    <div class="dv-fin" id="dvFin"
+                         data-price="<?= (int)$displayPrice ?>"
+                         data-vehicle="<?= htmlspecialchars($carTitle) ?>"
+                         data-url="<?= htmlspecialchars($canonicalUrl) ?>"
+                         data-wa="<?= htmlspecialchars($whatsappPhone) ?>">
+                        <div class="lx-label" style="color:var(--ink);margin-bottom:14px">
+                            <i class="fa fa-calculator me-1"></i>Finance Estimator
+                        </div>
+
+                        <label class="dv-fin-row">
+                            <span>Deposit</span>
+                            <output id="finDepOut">30%</output>
+                        </label>
+                        <input type="range" id="finDep" min="10" max="80" step="5" value="30" class="dv-fin-range">
+
+                        <label class="dv-fin-row" style="margin-top:12px">
+                            <span>Repayment period</span>
+                            <output id="finTermOut">36 months</output>
+                        </label>
+                        <input type="range" id="finTerm" min="12" max="72" step="6" value="36" class="dv-fin-range">
+
+                        <label class="dv-fin-row" style="margin-top:12px">
+                            <span>Interest rate (p.a.)</span>
+                            <output id="finRateOut">14%</output>
+                        </label>
+                        <input type="range" id="finRate" min="8" max="24" step="0.5" value="14" class="dv-fin-range">
+
+                        <div class="dv-fin-result">
+                            <div class="dv-fin-monthly">
+                                <span class="l">Est. monthly</span>
+                                <strong id="finMonthly">—</strong>
+                            </div>
+                            <div class="dv-fin-breakdown">
+                                <span>Deposit <strong id="finDepAmt">—</strong></span>
+                                <span>Loan <strong id="finLoanAmt">—</strong></span>
+                            </div>
+                        </div>
+
+                        <p class="dv-fin-note">
+                            Indicative estimate only — not a quotation or credit approval.
+                            Final terms depend on the lender and your credit assessment.
+                        </p>
+
+                        <?php if ($whatsappPhone): ?>
+                        <a href="#" id="finWaBtn" target="_blank" rel="noopener"
+                           class="btn-lx-ghost-dark" style="width:100%;margin-top:4px">
+                            <i class="fa-brands fa-whatsapp"></i> Discuss this plan
+                        </a>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
 
                     <!-- Enquiry form -->
                     <div class="dv-form">
@@ -603,6 +663,42 @@ include __DIR__ . '/header.php';
 .dv-loc i { font-size: 12px; color: var(--ink-3); }
 .dv-ctas { display: flex; flex-direction: column; gap: 10px; padding-bottom: 26px; border-bottom: 1px solid var(--line); }
 .dv-form { padding-top: 24px; }
+
+/* ── Finance estimator ────────────────────────────────────── */
+.dv-fin { padding: 24px 0; border-bottom: 1px solid var(--line); }
+.dv-fin-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    font-size: 12.5px; color: var(--ink-2); margin-bottom: 6px;
+}
+.dv-fin-row output { font-weight: 600; color: var(--ink); font-size: 13px; }
+.dv-fin-range {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 3px; background: var(--line);
+    border-radius: 2px; outline: none; margin: 0;
+}
+.dv-fin-range::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink); cursor: pointer; border: none;
+}
+.dv-fin-range::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink); cursor: pointer; border: none;
+}
+.dv-fin-result {
+    margin-top: 20px; padding: 16px 18px;
+    background: var(--paper); border-radius: var(--r);
+}
+.dv-fin-monthly { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.dv-fin-monthly .l { font-size: 12px; color: var(--ink-2); }
+.dv-fin-monthly strong { font-size: 21px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
+.dv-fin-breakdown {
+    display: flex; justify-content: space-between; gap: 12px;
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+    font-size: 11.5px; color: var(--ink-3);
+}
+.dv-fin-breakdown strong { color: var(--ink-2); font-weight: 600; }
+.dv-fin-note { font-size: 11px; color: var(--ink-3); line-height: 1.6; margin: 12px 0 14px; }
 .dv-field { margin-bottom: 14px; }
 .dv-share { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
 .dv-share-btn {
@@ -757,6 +853,89 @@ document.getElementById('inquiryForm') && document.getElementById('inquiryForm')
             btn.disabled = false;
         });
 });
+
+/* ── Save / shortlist ───────────────────────────────────────────────────────
+   Shares the same localStorage key as the listing grid (vehicles.php), so a
+   vehicle saved here shows as saved there and counts toward the same total. */
+var MSC_FAV_KEY = 'msc_favs';
+var DV_CAR_ID   = <?= (int)$id ?>;
+
+function dvGetFavs() { try { return JSON.parse(localStorage.getItem(MSC_FAV_KEY) || '[]'); } catch (e) { return []; } }
+
+function dvSyncSave() {
+    var saved = dvGetFavs().indexOf(DV_CAR_ID) >= 0;
+    var icon  = document.getElementById('dvSaveIcon');
+    var label = document.getElementById('dvSaveLabel');
+    if (icon)  icon.className  = saved ? 'fa fa-heart' : 'fa-regular fa-heart';
+    if (label) label.textContent = saved ? 'Saved' : 'Save this vehicle';
+}
+
+function dvToggleSave() {
+    var favs = dvGetFavs(), i = favs.indexOf(DV_CAR_ID);
+    if (i >= 0) favs.splice(i, 1); else favs.push(DV_CAR_ID);
+    localStorage.setItem(MSC_FAV_KEY, JSON.stringify(favs));
+    dvSyncSave();
+}
+dvSyncSave();
+
+/* ── Finance estimator ───────────────────────────────────────────────────── */
+(function () {
+    var box = document.getElementById('dvFin');
+    if (!box) return;
+
+    var price = parseFloat(box.dataset.price) || 0;
+    var els = {
+        dep:      document.getElementById('finDep'),
+        term:     document.getElementById('finTerm'),
+        rate:     document.getElementById('finRate'),
+        depOut:   document.getElementById('finDepOut'),
+        termOut:  document.getElementById('finTermOut'),
+        rateOut:  document.getElementById('finRateOut'),
+        monthly:  document.getElementById('finMonthly'),
+        depAmt:   document.getElementById('finDepAmt'),
+        loanAmt:  document.getElementById('finLoanAmt'),
+        wa:       document.getElementById('finWaBtn')
+    };
+
+    function kes(n) { return 'KES ' + Math.round(n).toLocaleString(); }
+
+    function calc() {
+        var depPct = parseFloat(els.dep.value);
+        var months = parseInt(els.term.value, 10);
+        var annual = parseFloat(els.rate.value);
+
+        var deposit = price * depPct / 100;
+        var loan    = Math.max(0, price - deposit);
+        var r       = annual / 100 / 12;
+
+        // Standard amortising payment; falls back to simple division at 0%.
+        var monthly = r > 0
+            ? loan * r / (1 - Math.pow(1 + r, -months))
+            : loan / months;
+
+        els.depOut.textContent  = depPct + '%';
+        els.termOut.textContent = months + ' months';
+        els.rateOut.textContent = annual + '%';
+        els.monthly.textContent = loan > 0 ? kes(monthly) : kes(0);
+        els.depAmt.textContent  = kes(deposit);
+        els.loanAmt.textContent = kes(loan);
+
+        if (els.wa && box.dataset.wa) {
+            var msg = "Hi, I'd like to discuss financing for the " + box.dataset.vehicle + ".\n"
+                    + 'Price: ' + kes(price) + '\n'
+                    + 'Deposit: ' + depPct + '% (' + kes(deposit) + ')\n'
+                    + 'Period: ' + months + ' months\n'
+                    + 'Est. monthly: ' + kes(monthly) + '\n'
+                    + box.dataset.url;
+            els.wa.href = 'https://wa.me/' + box.dataset.wa + '?text=' + encodeURIComponent(msg);
+        }
+    }
+
+    ['dep', 'term', 'rate'].forEach(function (k) {
+        els[k].addEventListener('input', calc);
+    });
+    calc();
+}());
 </script>
 
 <?php include __DIR__ . '/footer.php'; ?>

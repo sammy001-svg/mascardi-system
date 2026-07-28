@@ -30,13 +30,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (empty($errors)) {
-        // Try to save to DB (non-fatal if table doesn't exist)
+        // Persist first, and treat failure as a real error. Previously this was
+        // wrapped in an empty catch against a table that was never created, so
+        // every message was discarded while the visitor was told it was sent.
+        $saved = false;
         try {
+            require_once __DIR__ . '/_leads_bootstrap.php';
+            showroomLeadsMigrate($db);
+
             $db->prepare("
                 INSERT INTO contact_messages (name, phone, email, subject, message, created_at)
                 VALUES (?,?,?,?,?,NOW())
             ")->execute([$d['name'], $d['phone'] ?: null, $d['email'] ?: null, $d['subject'] ?: null, $d['message']]);
-        } catch (\Throwable $e) {}
+            $msgId = (int)$db->lastInsertId();
+            $saved = true;
+
+            // Route into the CRM so contact enquiries are actually worked.
+            $leadId = showroomCreateLead(
+                $db, $d['name'], $d['phone'] ?: null, $d['email'] ?: null,
+                $d['subject'] ?: 'General enquiry',
+                'Website contact form'
+                    . ($d['subject'] ? " — {$d['subject']}" : '')
+                    . ($d['message'] ? ': ' . $d['message'] : '')
+            );
+            if ($leadId) {
+                try { $db->prepare("UPDATE contact_messages SET lead_id=? WHERE id=?")->execute([$leadId, $msgId]); }
+                catch (\Throwable $_) {}
+            }
+
+            showroomNotifyNewLead(
+                'New Contact Message',
+                $d['name'] . ($d['subject'] ? " — {$d['subject']}" : '')
+                    . ($d['phone'] ? " · {$d['phone']}" : ''),
+                $leadId
+                    ? BASE_URL . '/modules/crm/view_lead.php?id=' . $leadId
+                    : BASE_URL . '/modules/showroom/messages.php'
+            );
+        } catch (\Throwable $e) {
+            error_log('contact.php: could not save message: ' . $e->getMessage());
+        }
+
+        if (!$saved) {
+            // Never claim delivery we did not achieve — give them a way through.
+            $errors[] = 'Sorry, we could not send your message right now. '
+                      . 'Please call or WhatsApp us and we will assist you straight away.';
+        }
 
         // Notify admin via email
         try {
@@ -56,7 +94,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (\Throwable $e) {}
 
-        $success = true;
+        // Only confirm success when the message was actually recorded.
+        $success = $saved;
     }
 }
 

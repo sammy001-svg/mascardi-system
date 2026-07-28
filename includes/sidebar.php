@@ -387,7 +387,8 @@ if (authRole() === 'supervisor') {
 
         <?php if (hasRole(['admin','general_manager','sales_manager','sales_officer','sales_person','customer_relations','receptionist'])): ?>
         <a href="<?= BASE_URL ?>/modules/showroom/index.php"
-           class="nav-item <?= isActive('/modules/showroom/') ?>"
+           <?php // isActive() is a substring match, so exclude messages.php or both links highlight ?>
+           class="nav-item <?= (str_contains($__uri, '/modules/showroom/') && !str_contains($__uri, 'messages.php')) ? 'active' : '' ?>"
            data-label="Inquiries"
            style="position:relative">
             <i class="fa fa-inbox"></i><span>Inquiries</span>
@@ -397,6 +398,20 @@ if (authRole() === 'supervisor') {
                 if ($__inqCount > 0): ?>
             <span style="position:absolute;top:6px;right:8px;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
                 <?= $__inqCount > 99 ? '99+' : $__inqCount ?>
+            </span>
+            <?php endif; } catch (Exception $e) {} ?>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/showroom/messages.php"
+           class="nav-item <?= isActive('/modules/showroom/messages.php') ?>"
+           data-label="Messages"
+           style="position:relative">
+            <i class="fa fa-envelope-open-text"></i><span>Messages</span>
+            <?php
+            try {
+                $__msgCount = (int)getDB()->query("SELECT COUNT(*) FROM contact_messages WHERE status='new'")->fetchColumn();
+                if ($__msgCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__msgCount > 99 ? '99+' : $__msgCount ?>
             </span>
             <?php endif; } catch (Exception $e) {} ?>
         </a>
