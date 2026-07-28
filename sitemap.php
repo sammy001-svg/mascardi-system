@@ -18,6 +18,7 @@ $db   = getDB();
 $staticPages = [
     ['loc' => $base . '/showroom/',                  'priority' => '1.0', 'changefreq' => 'daily'],
     ['loc' => $base . '/showroom/vehicles.php',       'priority' => '0.9', 'changefreq' => 'daily'],
+    ['loc' => $base . '/showroom/in-shipment.php',     'priority' => '0.6', 'changefreq' => 'weekly'],
     ['loc' => $base . '/showroom/compare.php',        'priority' => '0.4', 'changefreq' => 'weekly'],
     ['loc' => $base . '/showroom/contact.php',        'priority' => '0.5', 'changefreq' => 'monthly'],
     ['loc' => $base . '/showroom/book-service.php',   'priority' => '0.5', 'changefreq' => 'monthly'],
@@ -29,7 +30,7 @@ try {
         SELECT id, updated_at
         FROM cars
         WHERE car_type IN ('inventory','sale_on_behalf') AND show_on_website = 1
-          AND (status IS NULL OR status NOT IN ('delivered','sold'))
+          AND (status IS NULL OR status NOT IN ('delivered','sold','in_transit'))
         ORDER BY updated_at DESC
     ")->fetchAll(PDO::FETCH_ASSOC);
 } catch (\Throwable $e) {
@@ -41,7 +42,7 @@ try {
     $makes = $db->query("
         SELECT DISTINCT make FROM cars
         WHERE car_type IN ('inventory','sale_on_behalf') AND show_on_website = 1 AND make != ''
-          AND (status IS NULL OR status NOT IN ('delivered','sold'))
+          AND (status IS NULL OR status NOT IN ('delivered','sold','in_transit'))
         ORDER BY make
     ")->fetchAll(PDO::FETCH_COLUMN);
 } catch (\Throwable $e) {

@@ -22,6 +22,13 @@ $stmt->execute([$id]);
 $car = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$car) { header('Location: ' . BASE_URL . '/showroom/'); exit; }
 
+// Vehicles still in shipment are listed on one dedicated page only and must not
+// surface as a normal listing anywhere else — including via a direct/stale link.
+if (($car['status'] ?? '') === 'in_transit') {
+    header('Location: ' . BASE_URL . '/showroom/in-shipment.php', true, 302);
+    exit;
+}
+
 // Images
 $images = $db->prepare("SELECT * FROM car_images WHERE car_id=? ORDER BY is_primary DESC, id ASC");
 $images->execute([$id]);
@@ -34,7 +41,7 @@ $similar = $db->prepare("
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image
     FROM cars c
     WHERE c.car_type IN ('inventory','sale_on_behalf') AND c.show_on_website = 1 AND c.id != ?
-      AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
+      AND (c.status IS NULL OR c.status NOT IN ('delivered','sold','in_transit'))
       AND (c.make = ? OR c.body_type = ?)
     ORDER BY c.featured DESC, c.created_at DESC LIMIT 3
 ");

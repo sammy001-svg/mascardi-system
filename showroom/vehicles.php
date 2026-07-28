@@ -19,23 +19,25 @@ $search        = trim($_GET['q']        ?? '');
 $totalStock = (int)$db->query("
     SELECT COUNT(*) FROM cars
     WHERE car_type IN ('inventory','sale_on_behalf') AND show_on_website = 1
-      AND (status IS NULL OR status NOT IN ('delivered','sold'))
+      AND (status IS NULL OR status NOT IN ('delivered','sold','in_transit'))
 ")->fetchColumn();
 
 // ── Make list + year range for filters ───────────────────────────────────────
 $makes = $db->query("
     SELECT DISTINCT make FROM cars
-    WHERE car_type IN ('inventory','sale_on_behalf') AND make != ''
+    WHERE car_type IN ('inventory','sale_on_behalf') AND make != '' AND show_on_website = 1
+      AND (status IS NULL OR status NOT IN ('delivered','sold','in_transit'))
     ORDER BY make
 ")->fetchAll(PDO::FETCH_COLUMN);
 
 $yearRange = $db->query("
     SELECT MIN(year) AS min_yr, MAX(year) AS max_yr
     FROM cars WHERE car_type IN ('inventory','sale_on_behalf') AND show_on_website=1 AND year > 0
+      AND (status IS NULL OR status NOT IN ('delivered','sold','in_transit'))
 ")->fetch(PDO::FETCH_ASSOC) ?: ['min_yr' => 2000, 'max_yr' => date('Y')];
 
 // ── Filtered inventory ────────────────────────────────────────────────────────
-$where  = ["c.car_type IN ('inventory','sale_on_behalf')", "c.show_on_website = 1", "(c.status IS NULL OR c.status NOT IN ('delivered','sold'))"];
+$where  = ["c.car_type IN ('inventory','sale_on_behalf')", "c.show_on_website = 1", "(c.status IS NULL OR c.status NOT IN ('delivered','sold','in_transit'))"];
 $params = [];
 if ($filterMake)  { $where[] = 'c.make = ?';          $params[] = $filterMake; }
 if ($filterBody)  { $where[] = 'c.body_type = ?';     $params[] = $filterBody; }

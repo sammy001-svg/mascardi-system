@@ -46,7 +46,7 @@ try {
     $__navMakes = getDB()->query("
         SELECT make, COUNT(*) AS n FROM cars
         WHERE car_type IN ('inventory','sale_on_behalf') AND show_on_website=1
-          AND (status IS NULL OR status NOT IN ('delivered','sold'))
+          AND (status IS NULL OR status NOT IN ('delivered','sold','in_transit'))
           AND make IS NOT NULL AND make != ''
         GROUP BY make ORDER BY n DESC, make ASC LIMIT 10
     ")->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -356,6 +356,7 @@ select.lx-input { cursor: pointer; }
                             <?php endif; ?>
                             <div class="drop-cta">
                                 <a href="<?= BASE_URL ?>/showroom/vehicles.php">View All Vehicles <i class="fa fa-arrow-right" style="font-size:10px"></i></a>
+                                <a href="<?= BASE_URL ?>/showroom/in-shipment.php"><i class="fa fa-ship" style="font-size:10px"></i> In Shipment</a>
                                 <a href="<?= BASE_URL ?>/showroom/vehicles.php?sort=newest">New Arrivals</a>
                                 <a href="<?= BASE_URL ?>/showroom/compare.php">Compare</a>
                             </div>
@@ -412,6 +413,7 @@ select.lx-input { cursor: pointer; }
         <a href="<?= BASE_URL ?>/showroom/vehicles.php?make=<?= urlencode($__mk) ?>"><?= htmlspecialchars($__mk) ?> <span style="color:var(--ink-3);font-size:12px">(<?= (int)$__n ?>)</span></a>
         <?php endforeach; ?>
         <a href="<?= BASE_URL ?>/showroom/vehicles.php">View All Vehicles</a>
+        <a href="<?= BASE_URL ?>/showroom/in-shipment.php"><i class="fa fa-ship" style="font-size:12px;width:18px"></i> In Shipment</a>
         <a href="<?= BASE_URL ?>/showroom/compare.php">Compare</a>
     </div>
     <div class="m-group">

@@ -19,6 +19,7 @@ $stmt = $db->prepare("
     FROM cars c
     LEFT JOIN locations l ON l.id = c.location_id
     WHERE c.id IN ($placeholders) AND c.car_type IN ('inventory','sale_on_behalf') AND c.show_on_website=1
+      AND (c.status IS NULL OR c.status NOT IN ('delivered','sold','in_transit'))
     ORDER BY FIELD(c.id,$placeholders)
 ");
 $stmt->execute(array_merge($ids, $ids));

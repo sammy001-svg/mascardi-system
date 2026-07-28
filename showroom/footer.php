@@ -36,6 +36,7 @@
                 <div class="ft-head">Vehicles</div>
                 <?php foreach ([
                     ['All Vehicles',   BASE_URL . '/showroom/vehicles.php'],
+                    ['In Shipment',    BASE_URL . '/showroom/in-shipment.php'],
                     ['New Arrivals',   BASE_URL . '/showroom/vehicles.php?sort=newest'],
                     ['Current Offers', BASE_URL . '/showroom/vehicles.php?sort=price_asc'],
                     ['Compare',        BASE_URL . '/showroom/compare.php'],
