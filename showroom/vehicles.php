@@ -540,7 +540,8 @@ include __DIR__ . '/header.php';
 .sv-chip-clear { border-color: var(--line); color: var(--ink-3); }
 
 /* ── Vehicle cards (Lucid available-vehicles anatomy) ───────── */
-.sv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.sv-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+.sv-grid > * { min-width: 0; }
 @media (max-width: 1100px) { .sv-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px)  { .sv-grid { grid-template-columns: 1fr; } }
 

@@ -529,16 +529,29 @@ include __DIR__ . '/header.php';
 .dv-back:hover { color: var(--ink); }
 .dv-back i { font-size: 11px; }
 
-.dv-layout { display: grid; grid-template-columns: 1fr 420px; gap: 44px; align-items: start; }
-@media (max-width: 1080px) { .dv-layout { grid-template-columns: 1fr; } }
+/* minmax(0,1fr) — NOT 1fr. A bare `1fr` means minmax(auto,1fr), and that `auto`
+   minimum refuses to shrink below the track's intrinsic content width. One
+   oversized photo therefore stretched this column to the image's natural width
+   (e.g. 4000px) and shoved the 420px summary panel off the right of the screen.
+   Note `img { max-width:100% }` cannot rescue this: 100% of an already-blown-out
+   track is still blown out. Allowing the track to shrink to 0 is what finally
+   gives max-width a bounded reference. */
+.dv-layout { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 44px; align-items: start; }
+.dv-layout > * { min-width: 0; }   /* same reason, for the grid children */
+@media (max-width: 1080px) { .dv-layout { grid-template-columns: minmax(0, 1fr); } }
 
 /* ── Gallery ──────────────────────────────────────────────── */
-.dv-gallery { margin-bottom: 0; }
+.dv-gallery { margin-bottom: 0; min-width: 0; }
+/* Catch-all: no image in the gallery may exceed its column, whatever its
+   natural size. Keeps the layout stable even for very large uploads. */
+.dv-gallery img { max-width: 100%; height: auto; }
 .dv-main {
     position: relative; aspect-ratio: 16/10; overflow: hidden; cursor: zoom-in;
     background: linear-gradient(180deg, #f7f7f5 0%, #ececea 100%);
     border: 1px solid var(--line); border-radius: var(--r);
 }
+/* Fixed frame + cover crop = every car shows at the same standard size,
+   regardless of whether the photo is portrait, panoramic or 12 MP. */
 .dv-main img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .dv-chip {
     position: absolute; top: 18px; left: 18px; z-index: 2;
@@ -572,7 +585,7 @@ include __DIR__ . '/header.php';
     opacity: 0; transition: opacity .25s var(--ease);
 }
 .dv-main:hover .dv-zoom { opacity: 1; }
-.dv-thumbs { display: flex; gap: 8px; padding-top: 10px; overflow-x: auto; scrollbar-width: thin; }
+.dv-thumbs { display: flex; gap: 8px; padding-top: 10px; overflow-x: auto; scrollbar-width: thin; min-width: 0; }
 .dv-thumb {
     flex-shrink: 0; width: 92px; height: 60px; border: 1px solid var(--line); border-radius: var(--r);
     overflow: hidden; cursor: pointer; padding: 0; background: none;
@@ -718,7 +731,8 @@ include __DIR__ . '/header.php';
 
 /* ── Similar vehicles ─────────────────────────────────────── */
 .dv-similar { margin-top: 88px; padding-top: 56px; border-top: 1px solid var(--line); }
-.dv-sim-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.dv-sim-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+.dv-sim-grid > * { min-width: 0; }
 @media (max-width: 991px) { .dv-sim-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .dv-sim-grid { grid-template-columns: 1fr; } }
 .dv-sim-card {

@@ -193,7 +193,8 @@ include __DIR__ . '/header.php';
 .ish-chip-on { background: var(--ink); color: #fff; border-color: var(--ink); }
 .ish-chip-on span { color: rgba(255,255,255,.6); }
 
-.ish-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.ish-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+.ish-grid > * { min-width: 0; }
 @media (max-width: 1100px) { .ish-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px)  { .ish-grid { grid-template-columns: 1fr; } }
 
