@@ -9,22 +9,36 @@ $db = getDB();
 // Conversion on delivery was added later, so buyers delivered before that are
 // still only CRM leads — the front desk has to re-register them and their
 // vehicle on the next service visit. This finds and converts them.
-require_once __DIR__ . '/../crm/crm_helpers.php';
+//
+// Everything here is optional extra on top of the normal client list, so it is
+// fully guarded: a missing helper file, an older auth.php without isSuperAdmin(),
+// or an install with no crm_leads table must never take this page down.
+$convertHelperReady = false;
+try {
+    $__h = __DIR__ . '/../crm/crm_helpers.php';
+    if (is_file($__h)) { require_once $__h; }
+    $convertHelperReady = function_exists('crmDeliverLeadToClient');
+} catch (\Throwable $_) { $convertHelperReady = false; }
+
+// Older deployments may not have isSuperAdmin() yet.
+$canConvert = function_exists('isSuperAdmin') ? isSuperAdmin() : hasRole('admin');
 
 $unconvertedDelivered = 0;
-try {
-    $unconvertedDelivered = (int)$db->query("
-        SELECT COUNT(*) FROM crm_leads
-        WHERE stage = 'delivered'
-          AND (client_id IS NULL OR client_id = 0)
-          AND name IS NOT NULL AND name <> ''
-    ")->fetchColumn();
-} catch (\Throwable $_) { $unconvertedDelivered = 0; }
+if ($convertHelperReady) {
+    try {
+        $unconvertedDelivered = (int)$db->query("
+            SELECT COUNT(*) FROM crm_leads
+            WHERE stage = 'delivered'
+              AND (client_id IS NULL OR client_id = 0)
+              AND name IS NOT NULL AND name <> ''
+        ")->fetchColumn();
+    } catch (\Throwable $_) { $unconvertedDelivered = 0; }
+}
 
 // POST only — verifyCsrf() ignores GET, and this creates client records in bulk.
 if ($_SERVER['REQUEST_METHOD'] === 'POST'
     && ($_POST['action'] ?? '') === 'convert_delivered'
-    && $unconvertedDelivered > 0 && isSuperAdmin()) {
+    && $unconvertedDelivered > 0 && $canConvert && $convertHelperReady) {
     verifyCsrf();
     $made = 0; $cars = 0; $failed = 0;
     try {
@@ -50,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         $msg = "{$made} delivered lead(s) converted to clients";
         if ($cars)   $msg .= ", {$cars} vehicle(s) registered to them";
         if ($failed) {
-            $why  = crmLastConvertError();
+            $why  = function_exists('crmLastConvertError') ? crmLastConvertError() : '';
             $msg .= ". {$failed} could not be converted"
                   . ($why ? ' — last error: ' . $why : ' (missing name or contact details)');
         }
@@ -95,7 +109,7 @@ include __DIR__ . '/../../includes/header.php';
         not yet in your client list. Converting <?= $unconvertedDelivered !== 1 ? 'them' : 'it' ?> registers the buyer
         and their vehicle, so a return service visit needs no re-registration.
     </span>
-    <?php if (isSuperAdmin()): ?>
+    <?php if ($canConvert): ?>
     <form method="POST" class="d-inline"
           onsubmit="return confirm('Convert <?= $unconvertedDelivered ?> delivered lead(s) into clients?\n\nEach buyer is added to Clients and their linked vehicle registered to them.\nExisting customers are matched on phone/email rather than duplicated.\n\nNothing is deleted.')">
         <?= csrfField() ?>
@@ -130,7 +144,7 @@ include __DIR__ . '/../../includes/header.php';
                 <?php foreach ($clients as $c): ?>
                 <tr>
                     <td class="ps-3 fw-medium"><?= e($c['name']) ?></td>
-                    <td class="text-muted small"><?= e($c['email']) ?></td>
+                    <td class="text-muted small"><?= e($c['email'] ?: '—') ?></td>
                     <td class="text-muted small"><?= e($c['phone'] ?? '—') ?></td>
                     <td><span class="badge bg-light text-dark border"><?= $c['car_count'] ?></span></td>
                     <td><span class="badge bg-light text-dark border"><?= $c['invoice_count'] ?></span></td>

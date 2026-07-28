@@ -31,8 +31,18 @@ function verifyCsrf(): void {
 }
 
 // ── Sanitize output ──────────────────────────────────────
-function e(string $val): string {
-    return htmlspecialchars($val, ENT_QUOTES, 'UTF-8');
+/**
+ * HTML-escape for output.
+ *
+ * Accepts null. The strict `string` hint used to throw
+ *   TypeError: e(): Argument #1 ($val) must be of type string, null given
+ * on any nullable column rendered without a `?? ''` guard — a single NULL in
+ * one row was enough to take a whole page down with a 500. Optional columns are
+ * common (email, phone, notes…), so tolerating null here removes an entire
+ * class of avoidable crash rather than requiring every call site to remember.
+ */
+function e(?string $val): string {
+    return htmlspecialchars((string)$val, ENT_QUOTES, 'UTF-8');
 }
 
 // ── Format currency ──────────────────────────────────────
