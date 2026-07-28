@@ -195,6 +195,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $db->prepare("UPDATE cars SET status='arrived', updated_at=NOW() WHERE id=? AND status='reserved'")->execute([$pinnedCarId]);
                 }
             }
+
+            // Delivery hands the buyer and their vehicle over to the client book,
+            // so a return visit for service does not require re-registering both.
+            if ($newStage === 'delivered') {
+                $__clientId = crmDeliverLeadToClient($db, $lead);
+                if ($__clientId) {
+                    setFlash('success', 'Lead delivered. ' . e($lead['name'])
+                        . ' is now a client and the vehicle is registered to them.');
+                }
+            }
             require_once __DIR__ . '/../../includes/notifications.php';
             if ($newStage === 'delivered') {
                 notifyRoles(['admin','sales_manager','general_manager'], 'sale',
@@ -616,10 +626,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($lead['pinned_car_id'])) {
                     $db->prepare("UPDATE cars SET status='delivered', show_on_website=0, updated_at=NOW() WHERE id=?")->execute([(int)$lead['pinned_car_id']]);
                 }
+                // Same handover as the stage-change path: the buyer becomes a
+                // client and the vehicle is registered to them, so a later
+                // service booking finds both already on file.
+                $__clientId = crmDeliverLeadToClient($db, $lead);
                 notifyRoles(['customer_relations','sales_person','sales_manager','super_admin','admin'], 'sale',
                     "Delivery Note Confirmed: {$lead['name']}", "Confirmed by {$me['name']}. The delivery note can now be printed.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, "Delivery Protocol: delivery note confirmed by {$me['name']}. Lead marked Delivered.");
-                setFlash('success', 'Delivery note confirmed — Customer Relations can now print it.');
+                setFlash('success', 'Delivery note confirmed — Customer Relations can now print it.'
+                    . ($__clientId ? ' ' . e($lead['name']) . ' has been added to Clients with their vehicle.' : ''));
                 break;
 
             default:

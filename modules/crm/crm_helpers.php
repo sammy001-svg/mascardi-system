@@ -151,3 +151,91 @@ function buildWhatsAppUrl(
 
     return 'https://wa.me/' . $digits . '?text=' . rawurlencode($message);
 }
+
+/**
+ * Hand a delivered lead over to the client book.
+ *
+ * Once a vehicle is delivered the buyer stops being a prospect and becomes a
+ * customer, so the record has to exist in `clients` — otherwise the next time
+ * they come in for a service the front desk has to re-register both the person
+ * and the car from scratch, and the vehicle's history starts over.
+ *
+ * This does three things:
+ *   1. resolves (or creates) the client record for the lead
+ *   2. links the lead to it
+ *   3. hands the linked vehicle to that client so it shows under Client Cars
+ *
+ * Safe to call repeatedly — an already-converted lead resolves to its existing
+ * client, and a buyer who returns for a second vehicle is matched on phone or
+ * email rather than duplicated.
+ *
+ * Returns the client id, or 0 if there was nothing usable to convert.
+ */
+function crmDeliverLeadToClient(PDO $db, array $lead): int
+{
+    $leadId = (int)($lead['id'] ?? 0);
+    $name   = trim((string)($lead['name'] ?? ''));
+    if (!$leadId || $name === '') return 0;
+
+    $phone = trim((string)($lead['phone'] ?? '')) ?: null;
+    $email = trim((string)($lead['email'] ?? '')) ?: null;
+
+    // Columns added by inline migrations elsewhere; tolerate their absence.
+    try { $db->exec("ALTER TABLE clients ADD COLUMN kra_pin VARCHAR(20) NULL"); } catch (\Throwable $_) {}
+
+    $clientId = (int)($lead['client_id'] ?? 0);
+
+    try {
+        // Already converted — reuse, never duplicate.
+        if (!$clientId && ($phone || $email)) {
+            $s = $db->prepare("SELECT id FROM clients
+                               WHERE (phone IS NOT NULL AND phone <> '' AND phone = ?)
+                                  OR (email IS NOT NULL AND email <> '' AND email = ?)
+                               ORDER BY id ASC LIMIT 1");
+            $s->execute([$phone ?? '', $email ?? '']);
+            $clientId = (int)($s->fetchColumn() ?: 0);
+        }
+
+        if (!$clientId) {
+            $db->prepare("INSERT INTO clients (name, phone, email, id_number, status, notes)
+                          VALUES (?,?,?,?, 'active', ?)")
+               ->execute([
+                   $name, $phone, $email,
+                   trim((string)($lead['id_number'] ?? '')) ?: null,
+                   'Created automatically on delivery of CRM lead #' . $leadId,
+               ]);
+            $clientId = (int)$db->lastInsertId();
+
+            // Optional column — only set when it exists and the lead carries one.
+            if (!empty($lead['kra_pin'])) {
+                try { $db->prepare("UPDATE clients SET kra_pin=? WHERE id=?")->execute([$lead['kra_pin'], $clientId]); }
+                catch (\Throwable $_) {}
+            }
+            logActivity('create', 'clients', $clientId, "Client created automatically from delivered lead #{$leadId}");
+        }
+
+        $db->prepare("UPDATE crm_leads SET client_id=?, updated_at=NOW() WHERE id=? AND (client_id IS NULL OR client_id=0)")
+           ->execute([$clientId, $leadId]);
+
+        // Hand the vehicle over. car_type is only switched for stock we owned —
+        // consignment vehicles (trade_in / sale_on_behalf) keep their type so the
+        // Trade-In module can still find and settle them.
+        $carId = (int)($lead['pinned_car_id'] ?? 0);
+        if ($carId) {
+            $db->prepare("UPDATE cars
+                          SET client_id = ?,
+                              car_type  = CASE WHEN car_type = 'inventory' THEN 'client' ELSE car_type END,
+                              owner_name  = COALESCE(NULLIF(owner_name,''), ?),
+                              owner_phone = COALESCE(NULLIF(owner_phone,''), ?),
+                              updated_at  = NOW()
+                          WHERE id = ?")
+               ->execute([$clientId, $name, $phone, $carId]);
+            logActivity('update', 'cars', $carId, "Vehicle assigned to client #{$clientId} on delivery of lead #{$leadId}");
+        }
+
+        return $clientId;
+    } catch (\Throwable $e) {
+        error_log('crmDeliverLeadToClient: ' . $e->getMessage());
+        return 0;
+    }
+}
