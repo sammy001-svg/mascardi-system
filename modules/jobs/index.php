@@ -75,6 +75,12 @@ include __DIR__ . '/../../includes/header.php';
                         <?php if (canWrite('jobs')): ?>
                         <a href="edit.php?id=<?= $j['id'] ?>" class="btn btn-xs btn-outline-secondary"><i class="fa fa-pen"></i></a>
                         <?php endif; ?>
+                        <?php if (isSuperAdmin()): ?>
+                        <a href="delete.php?id=<?= $j['id'] ?>" class="btn btn-xs btn-outline-danger" title="Delete job card"
+                           onclick="return confirm('Delete job card <?= e($j['job_number']) ?>?\n\nThis cannot be undone. It will be refused if the job still has quotations, invoices or LPOs attached.')">
+                            <i class="fa fa-trash"></i>
+                        </a>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>

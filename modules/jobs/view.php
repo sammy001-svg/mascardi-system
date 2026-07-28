@@ -50,6 +50,20 @@ include __DIR__ . '/../../includes/header.php';
         <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $job['car_id'] ?>&job_id=<?= $id ?>" class="btn btn-sm btn-outline-info"><i class="fa fa-file-lines me-1"></i>New Quotation</a>
         <a href="<?= BASE_URL ?>/modules/lpo/add.php?job_id=<?= $id ?>" class="btn btn-sm btn-outline-warning"><i class="fa fa-file-import me-1"></i>New LPO</a>
         <?php endif; ?>
+        <?php if (isSuperAdmin()): ?>
+        <?php
+            // Surface what would block the delete so it is clear before clicking,
+            // rather than only after the attempt bounces back.
+            $__blockCount = count($quotations) + count($invoices) + count($lpos);
+            $__jobLabel   = $job['job_number'] ?: ('#' . $id);
+        ?>
+        <a href="delete.php?id=<?= $id ?>" class="btn btn-sm btn-outline-danger"
+           onclick="return confirm(<?= $__blockCount
+               ? json_encode('This job card has ' . $__blockCount . " linked quotation/invoice/LPO record(s).\n\nThe delete will be refused to keep those records intact. Remove or reassign them first, or set the job status to Cancelled instead.\n\nTry anyway?")
+               : json_encode('Delete job card ' . $__jobLabel . "?\n\nThis cannot be undone.") ?>)">
+            <i class="fa fa-trash me-1"></i>Delete
+        </a>
+        <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
 </div>
