@@ -247,10 +247,24 @@ select.lx-input { cursor: pointer; }
     opacity: 0; visibility: hidden; pointer-events: none;
     transition: opacity .25s var(--ease), transform .25s var(--ease), visibility .25s;
 }
-.nav-item-open .nav-drop {
+/* Invisible bridge across the 14px gap above the panel. Without it the pointer
+   crosses dead space that belongs to neither the <li> nor the panel, firing
+   mouseleave and snapping the menu shut before it can be reached. Because it is
+   a child of .nav-drop it stays inside the <li> subtree, so mouseleave never
+   fires while travelling from the trigger to the menu. It also inherits the
+   panel's pointer-events:none while closed, so it never blocks clicks. */
+.nav-drop::before {
+    content: ''; position: absolute;
+    left: 0; right: 0; top: -16px; height: 16px;
+}
+/* :focus-within keeps the panel open for keyboard/screen-reader users tabbing
+   through its links — hover alone would drop them out mid-menu. */
+.nav-item-open .nav-drop,
+.nav-has-drop:focus-within .nav-drop {
     opacity: 1; visibility: visible; pointer-events: auto;
     transform: translateX(-50%) translateY(0);
 }
+.nav-has-drop:focus-within .drop-caret { transform: rotate(180deg); }
 .nav-drop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 36px; }
 .nav-drop .drop-head {
     grid-column: 1 / -1; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
@@ -425,21 +439,75 @@ select.lx-input { cursor: pointer; }
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
 
-    // Dropdowns: hover on desktop, click on touch
-    document.querySelectorAll('.nav-has-drop').forEach(function (li) {
+    // ── Dropdowns ────────────────────────────────────────────────────────────
+    // Hover-intent: opening is instant, but closing is deferred so a brief
+    // overshoot, a diagonal move toward a far link, or a wobble on the way down
+    // no longer snaps the menu shut mid-selection. Any re-entry cancels the
+    // pending close.
+    var HOVER_CLOSE_DELAY = 400;   // ms of grace after the pointer leaves
+    var dropItems = document.querySelectorAll('.nav-has-drop');
+
+    // Only wire hover on real pointing devices. On touch, mouseenter is
+    // synthesised alongside the tap and would fight the click toggle.
+    var canHover = !window.matchMedia
+                || window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+    function closeAll(except) {
+        dropItems.forEach(function (o) {
+            if (o !== except) {
+                o.classList.remove('nav-item-open');
+                if (o._closeTimer) { clearTimeout(o._closeTimer); o._closeTimer = null; }
+            }
+        });
+    }
+
+    dropItems.forEach(function (li) {
         var btn = li.querySelector('button');
-        li.addEventListener('mouseenter', function () { li.classList.add('nav-item-open'); });
-        li.addEventListener('mouseleave', function () { li.classList.remove('nav-item-open'); });
+        li._closeTimer = null;
+
+        function openNow() {
+            clearTimeout(li._closeTimer);
+            li._closeTimer = null;
+            closeAll(li);
+            li.classList.add('nav-item-open');
+        }
+        function closeSoon() {
+            clearTimeout(li._closeTimer);
+            li._closeTimer = setTimeout(function () {
+                li.classList.remove('nav-item-open');
+                li._closeTimer = null;
+            }, HOVER_CLOSE_DELAY);
+        }
+
+        if (canHover) {
+            li.addEventListener('mouseenter', openNow);
+            li.addEventListener('mouseleave', closeSoon);
+            // Re-entering anywhere in the panel cancels a pending close.
+            var panel = li.querySelector('.nav-drop');
+            if (panel) panel.addEventListener('mouseenter', function () {
+                clearTimeout(li._closeTimer);
+                li._closeTimer = null;
+            });
+        }
+
+        // Tap / click still toggles — the only interaction on touch devices.
         btn.addEventListener('click', function (e) {
             e.stopPropagation();
-            var open = li.classList.contains('nav-item-open');
-            document.querySelectorAll('.nav-has-drop').forEach(function (o) { o.classList.remove('nav-item-open'); });
-            if (!open) li.classList.add('nav-item-open');
+            var isOpen = li.classList.contains('nav-item-open');
+            closeAll();
+            if (!isOpen) { clearTimeout(li._closeTimer); li.classList.add('nav-item-open'); }
+        });
+
+        // Keyboard: Escape closes and returns focus to the trigger.
+        li.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && li.classList.contains('nav-item-open')) {
+                li.classList.remove('nav-item-open');
+                btn.focus();
+            }
         });
     });
-    document.addEventListener('click', function () {
-        document.querySelectorAll('.nav-has-drop').forEach(function (o) { o.classList.remove('nav-item-open'); });
-    });
+
+    document.addEventListener('click', function () { closeAll(); });
 
     // Mobile menu
     var toggle = document.getElementById('navToggle');
