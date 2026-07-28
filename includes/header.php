@@ -148,10 +148,12 @@ window.addEventListener('beforeinstallprompt', function(e) {
                        + '<span class="nav-group-dot" aria-hidden="true"></span>'
                        + '<i class="fa fa-chevron-down nav-caret" aria-hidden="true"></i>';
 
-        // The group holding the current page always opens, whatever was saved —
-        // the active module must never be hidden behind a collapsed heading.
+        // Closed by default. Only an explicit user action opens a group — the
+        // system never expands one on its own, including the group holding the
+        // current page (a dot on the heading marks that instead). A group the
+        // user opened stays open as they navigate, until they close it again.
         var hasActive = !!inner.querySelector('.nav-item.active');
-        var collapsed = hasActive ? false : (state[label] === 0);
+        var collapsed = state[label] !== 1;
 
         function apply(isCollapsed, save) {
             head.classList.toggle('is-collapsed', isCollapsed);

@@ -196,13 +196,20 @@ a:hover { text-decoration: underline; }
 }
 .nav-section.nav-group-head:hover { background: rgba(255,255,255,.04); color: rgba(255,255,255,.55); }
 .nav-section.nav-group-head:focus-visible { outline: 2px solid rgba(59,130,246,.6); outline-offset: 1px; }
-/* Marks a collapsed group that contains the current page */
+/* Groups are closed by default, so the heading has to show which one holds the
+   page you are on — otherwise the current module is invisible until you hunt
+   for it. Dot + brightened label, no auto-expanding. */
 .nav-section.nav-group-head .nav-group-dot {
-    width: 5px; height: 5px; border-radius: 50%;
+    width: 6px; height: 6px; border-radius: 50%;
     background: #3b82f6; flex-shrink: 0; opacity: 0;
+    box-shadow: 0 0 0 3px rgba(59,130,246,.18);
     transition: opacity .2s;
 }
 .nav-section.nav-group-head.has-active-hidden .nav-group-dot { opacity: 1; }
+.nav-section.nav-group-head.has-active-hidden {
+    color: rgba(255,255,255,.62);
+    background: rgba(59,130,246,.10);
+}
 .nav-caret {
     margin-left: auto; font-size: 9px; opacity: .45;
     transition: transform .24s cubic-bezier(.4,0,.2,1);
