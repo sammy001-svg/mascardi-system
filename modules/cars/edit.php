@@ -71,7 +71,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,description=?,features=?,meta_title=?,meta_description=?,meta_image=?,asking_price=?,mileage=?,engine_cc=?,featured=?,offer_price=?,show_on_website=? WHERE id=?")
                ->execute([...array_values($data), $id]);
             logActivity('update', 'cars', $id, "Updated car: {$data['make']} {$data['model']} ({$data['chassis_number']})");
-            setFlash('success','Car updated successfully.');
+
+            // Switching a vehicle to Trade-In / Sale on Behalf only changed its
+            // car_type, so it showed on the Cars tab but never in the Trade-In &
+            // Sale on Behalf module — that module lists from `consignments`, and
+            // no such record existed. Open a stub deal here so the vehicle turns
+            // up there and the owner/commission details can be filled in.
+            $__flash = 'Car updated successfully.';
+            if (in_array($data['car_type'], ['trade_in','sale_on_behalf'], true)) {
+                try {
+                    require_once __DIR__ . '/../trade_in/_bootstrap.php';
+                    tradeInMigrate($db);
+
+                    $has = $db->prepare("SELECT COUNT(*) FROM consignments WHERE car_id = ?");
+                    $has->execute([$id]);
+                    if (!(int)$has->fetchColumn()) {
+                        $ref = consignmentNextRef($db, $data['car_type']);
+                        $db->prepare("INSERT INTO consignments
+                                (car_id, deal_type, reference, owner_name, owner_phone,
+                                 client_id, listing_price, commission_type, commission_value,
+                                 agreement_date, status, notes, created_by)
+                             VALUES (?,?,?,?,?,?,?, 'percent', 0, CURDATE(), 'active', ?, ?)")
+                           ->execute([
+                               $id, $data['car_type'], $ref,
+                               // owner_name is NOT NULL — fall back to a clear placeholder
+                               // rather than blocking the save on a field this form
+                               // does not always collect.
+                               $data['owner_name'] !== '' ? $data['owner_name'] : 'To be completed',
+                               $data['owner_phone'] ?: null,
+                               $data['client_id'] ?: null,
+                               $data['asking_price'],
+                               'Opened automatically when the vehicle type was changed in Cars. '
+                                 . 'Owner and commission details still need completing.',
+                               (int)(authUser()['id'] ?? 0),
+                           ]);
+                        $consId = (int)$db->lastInsertId();
+                        logActivity('create', 'trade_in', $consId,
+                            "Consignment {$ref} opened automatically for car #{$id}");
+                        $__flash = 'Car updated. A ' . ($data['car_type'] === 'trade_in' ? 'Trade-In' : 'Sale on Behalf')
+                                 . ' record (' . $ref . ') was opened — complete the owner and commission details in '
+                                 . 'Trade-In &amp; Sale on Behalf.';
+                    }
+                } catch (\Throwable $e) {
+                    error_log('cars/edit consignment autocreate: ' . $e->getMessage());
+                    $__flash = 'Car updated, but the Trade-In / Sale on Behalf record could not be opened automatically ('
+                             . $e->getMessage() . '). Add it from the Trade-In module.';
+                }
+            }
+
+            setFlash('success', $__flash);
             redirect(BASE_URL.'/modules/cars/view.php?id='.$id);
         } catch (PDOException $e) {
             if ($e->getCode() === '23000') {

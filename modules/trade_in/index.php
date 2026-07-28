@@ -10,6 +10,56 @@ tradeInMigrate($db);
 $types    = consignmentTypes();
 $statuses = consignmentStatuses();
 
+// ── Vehicles marked consignment in Cars but with no deal record ──────────────
+// This module lists from `consignments`. Changing a vehicle's type in the Cars
+// module only sets cars.car_type, so those vehicles showed on the Cars tab but
+// never here — leaving nowhere to enter the owner and commission details.
+$missingDeals = [];
+try {
+    $missingDeals = $db->query("
+        SELECT c.id, c.make, c.model, c.year, c.chassis_number, c.registration_number,
+               c.car_type, c.owner_name, c.owner_phone, c.client_id, c.asking_price
+        FROM cars c
+        LEFT JOIN consignments cs ON cs.car_id = c.id
+        WHERE c.car_type IN ('trade_in','sale_on_behalf')
+          AND cs.id IS NULL
+        ORDER BY c.id DESC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $_) { $missingDeals = []; }
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && ($_POST['action'] ?? '') === 'open_missing_deals'
+    && $missingDeals && canWrite('trade_in')) {
+    verifyCsrf();
+    $made = 0;
+    try {
+        foreach ($missingDeals as $c) {
+            $ref = consignmentNextRef($db, $c['car_type']);
+            $db->prepare("INSERT INTO consignments
+                    (car_id, deal_type, reference, owner_name, owner_phone, client_id,
+                     listing_price, commission_type, commission_value, agreement_date,
+                     status, notes, created_by)
+                 VALUES (?,?,?,?,?,?,?, 'percent', 0, CURDATE(), 'active', ?, ?)")
+               ->execute([
+                   (int)$c['id'], $c['car_type'], $ref,
+                   trim((string)$c['owner_name']) !== '' ? $c['owner_name'] : 'To be completed',
+                   $c['owner_phone'] ?: null,
+                   $c['client_id'] ?: null,
+                   $c['asking_price'],
+                   'Opened from the Cars module — owner and commission details still need completing.',
+                   (int)(authUser()['id'] ?? 0),
+               ]);
+            $made++;
+        }
+        logActivity('create', 'trade_in', 0, "Opened {$made} consignment record(s) for vehicles already marked as consignment");
+        setFlash('success', $made . ' record(s) opened. Complete the owner and commission details on each.');
+    } catch (\Throwable $e) {
+        error_log('trade_in open_missing_deals: ' . $e->getMessage());
+        setFlash('error', 'Could not open records: ' . $e->getMessage());
+    }
+    redirect(BASE_URL . '/modules/trade_in/index.php');
+}
+
 // ── Tab / filters ─────────────────────────────────────────────────────────────
 $tab = $_GET['tab'] ?? 'sale_on_behalf';
 if (!isset($types[$tab])) $tab = 'sale_on_behalf';
@@ -215,6 +265,36 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+
+<?php if ($missingDeals): ?>
+<div class="alert alert-warning py-2">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="small">
+            <i class="fa fa-triangle-exclamation me-1"></i>
+            <strong><?= count($missingDeals) ?></strong> vehicle<?= count($missingDeals) !== 1 ? 's are' : ' is' ?>
+            marked as Trade-In / Sale on Behalf in the Cars module but <?= count($missingDeals) !== 1 ? 'have' : 'has' ?>
+            no deal record here, so the owner and commission details cannot be entered.
+        </span>
+        <?php if (canWrite('trade_in')): ?>
+        <form method="POST" class="d-inline"
+              onsubmit="return confirm('Open <?= count($missingDeals) ?> record(s)?\n\nEach vehicle gets a deal you can then complete with owner and commission details.\n\nNothing is deleted.')">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="open_missing_deals">
+            <button type="submit" class="btn btn-sm btn-warning">
+                <i class="fa fa-plus me-1"></i>Open records for them
+            </button>
+        </form>
+        <?php endif; ?>
+    </div>
+    <div class="small text-muted mt-1">
+        <?php foreach (array_slice($missingDeals, 0, 5) as $md): ?>
+            <span class="me-2">• <?= e(trim($md['year'].' '.$md['make'].' '.$md['model'])) ?>
+                (<?= e($md['registration_number'] ?: $md['chassis_number']) ?>)</span>
+        <?php endforeach; ?>
+        <?php if (count($missingDeals) > 5): ?><span>and <?= count($missingDeals) - 5 ?> more…</span><?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- ── Tabs + add ──────────────────────────────────────────────────────────── -->
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
