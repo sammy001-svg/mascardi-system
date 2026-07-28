@@ -16,6 +16,23 @@ if (!canAccess('cars')) {
 header('Content-Type: application/json; charset=utf-8');
 $db = getDB();
 
+/**
+ * Which vehicles a physical stock take should ask staff to verify.
+ *
+ * The queries below previously filtered on location alone, so every car ever
+ * assigned to a yard was listed — including ones long gone. Counting stock that
+ * cannot be found produces a shortfall on every single count.
+ *
+ *   delivered / sold  — handed over, no longer on the premises
+ *   reserved          — committed to a buyer and excluded from the count
+ *   in_transit        — not arrived yet, so nothing to physically verify
+ *
+ * Defined once and used by BOTH the list and the total, so the two can never
+ * drift apart and manufacture a false variance.
+ */
+define('STOCKTAKE_STATUS_FILTER',
+    "(c.status IS NULL OR c.status NOT IN ('delivered','sold','reserved','in_transit'))");
+
 // Auto-create tables on first use
 try {
     $db->exec("CREATE TABLE IF NOT EXISTS stock_takes (
@@ -68,6 +85,7 @@ if ($method === 'GET') {
                c.chassis_number, c.color, c.status, c.car_type
         FROM   cars c
         WHERE  c.location_id = ?
+          AND  " . STOCKTAKE_STATUS_FILTER . "
         ORDER  BY c.make ASC, c.model ASC, c.year DESC
     ");
     $cars->execute([$locationId]);
@@ -104,7 +122,10 @@ if ($method === 'POST') {
         exit;
     }
 
-    $totalStmt = $db->prepare("SELECT COUNT(*) FROM cars WHERE location_id = ?");
+    // Must use the SAME filter as the list above — if the counted total were
+    // drawn from a wider set than the vehicles actually shown, every stock take
+    // would record a phantom shortfall.
+    $totalStmt = $db->prepare("SELECT COUNT(*) FROM cars c WHERE c.location_id = ? AND " . STOCKTAKE_STATUS_FILTER);
     $totalStmt->execute([$locationId]);
     $totalInSystem = (int)$totalStmt->fetchColumn();
 
