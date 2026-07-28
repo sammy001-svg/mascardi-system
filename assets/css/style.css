@@ -180,6 +180,50 @@ a:hover { text-decoration: underline; }
     color: rgba(255,255,255,.2);
 }
 
+/* ── Collapsible nav groups ──────────────────────────────────
+   Section headings double as accordion toggles so long menus
+   stay scannable. Groups are built at runtime (see the script
+   after the sidebar markup in includes/header.php).          */
+.nav-section.nav-group-head {
+    display: flex; align-items: center; gap: 8px;
+    margin: 6px 0 2px;
+    padding: 9px 10px 9px 11px;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    color: rgba(255,255,255,.3);
+    transition: background .15s, color .15s;
+}
+.nav-section.nav-group-head:hover { background: rgba(255,255,255,.04); color: rgba(255,255,255,.55); }
+.nav-section.nav-group-head:focus-visible { outline: 2px solid rgba(59,130,246,.6); outline-offset: 1px; }
+/* Marks a collapsed group that contains the current page */
+.nav-section.nav-group-head .nav-group-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #3b82f6; flex-shrink: 0; opacity: 0;
+    transition: opacity .2s;
+}
+.nav-section.nav-group-head.has-active-hidden .nav-group-dot { opacity: 1; }
+.nav-caret {
+    margin-left: auto; font-size: 9px; opacity: .45;
+    transition: transform .24s cubic-bezier(.4,0,.2,1);
+}
+.nav-section.is-collapsed .nav-caret { transform: rotate(-90deg); }
+
+/* 0fr→1fr animates cleanly without measuring heights in JS. */
+.nav-group-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows .26s cubic-bezier(.4,0,.2,1);
+}
+.nav-group-body.is-collapsed { grid-template-rows: 0fr; }
+.nav-group-inner { overflow: hidden; min-height: 0; }
+
+/* Icon-only sidebar hides the headings, so groups must never stay
+   collapsed there — otherwise those modules become unreachable. */
+.app-sidebar.collapsed .nav-group-body,
+.app-sidebar.collapsed .nav-group-body.is-collapsed { grid-template-rows: 1fr; }
+.app-sidebar.collapsed .nav-group-inner { overflow: visible; }
+
 .nav-item {
     display: flex;
     align-items: center;

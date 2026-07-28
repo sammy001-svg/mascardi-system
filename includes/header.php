@@ -96,6 +96,84 @@ window.addEventListener('beforeinstallprompt', function(e) {
 
 <?php include __DIR__ . '/sidebar.php'; ?>
 <script>
+/* ── Collapsible sidebar groups ────────────────────────────────────────────
+   Turns each section heading (Fleet, Workshop, Finance, …) into an accordion
+   so a long menu stays scannable instead of needing constant scrolling.
+
+   Built by walking the DOM rather than restructuring the sidebar PHP: every
+   item there sits behind its own canAccess() check and sections end implicitly
+   at the next heading, so hand-wrapping 13 sections in markup would be a lot of
+   nested-conditional surgery for no extra benefit. This adapts automatically as
+   sections are added or permissions hide them.
+
+   Runs inline immediately after the sidebar markup (before the scroll-restore
+   below) so collapsing happens before first paint — no flash of a fully
+   expanded menu, and the scroll offset is restored against the final height. */
+(function () {
+    var KEY = 'msc_sidebar_groups';
+    var nav = document.querySelector('.app-sidebar .sidebar-nav');
+    if (!nav) return;
+
+    var state = {};
+    try { state = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { state = {}; }
+
+    var heads = Array.prototype.slice.call(nav.querySelectorAll('.nav-section'));
+    if (!heads.length) return;
+
+    heads.forEach(function (head) {
+        // Collect everything up to the next section heading. <script> siblings
+        // (the chat / WhatsApp badge pollers) are deliberately left where they
+        // are — they have already executed and there is nothing to gain from
+        // relocating them inside a collapsible container.
+        var members = [], n = head.nextElementSibling;
+        while (n && !n.classList.contains('nav-section')) {
+            if (n.tagName !== 'SCRIPT') members.push(n);
+            n = n.nextElementSibling;
+        }
+        if (!members.length) { head.style.display = 'none'; return; }  // permissions emptied it
+
+        var label = (head.textContent || '').trim();
+        var body  = document.createElement('div');
+        var inner = document.createElement('div');
+        body.className  = 'nav-group-body';
+        inner.className = 'nav-group-inner';
+        body.appendChild(inner);
+        head.parentNode.insertBefore(body, head.nextSibling);
+        members.forEach(function (m) { inner.appendChild(m); });
+
+        head.classList.add('nav-group-head');
+        head.setAttribute('role', 'button');
+        head.setAttribute('tabindex', '0');
+        head.innerHTML = '<span>' + label + '</span>'
+                       + '<span class="nav-group-dot" aria-hidden="true"></span>'
+                       + '<i class="fa fa-chevron-down nav-caret" aria-hidden="true"></i>';
+
+        // The group holding the current page always opens, whatever was saved —
+        // the active module must never be hidden behind a collapsed heading.
+        var hasActive = !!inner.querySelector('.nav-item.active');
+        var collapsed = hasActive ? false : (state[label] === 0);
+
+        function apply(isCollapsed, save) {
+            head.classList.toggle('is-collapsed', isCollapsed);
+            body.classList.toggle('is-collapsed', isCollapsed);
+            head.setAttribute('aria-expanded', String(!isCollapsed));
+            head.classList.toggle('has-active-hidden', isCollapsed && hasActive);
+            if (save) {
+                state[label] = isCollapsed ? 0 : 1;
+                try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+            }
+        }
+        apply(collapsed, false);
+
+        function toggle() { apply(!body.classList.contains('is-collapsed'), true); }
+        head.addEventListener('click', toggle);
+        head.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+        });
+    });
+}());
+</script>
+<script>
 /* Keep the sidebar where the user left it.
    Every page here is a full server render, so the sidebar rebuilt scrolled to
    the top on each navigation — click a module near the bottom of a long menu
