@@ -16,15 +16,37 @@ if (isset($_GET['export'])) {
     } elseif ($type === 'clients') {
         $query = "SELECT id, name, phone, email, id_number, status, created_at FROM clients ORDER BY created_at DESC";
     } elseif ($type === 'inventory') {
-        $query = "SELECT id, part_number, part_name, category, cost_price, selling_price, quantity_in_stock, min_stock_level, location, status FROM inventory ORDER BY part_name ASC";
+        // Column names corrected to the real `inventory` schema. The previous
+        // list (cost_price, quantity_in_stock, min_stock_level, location, status)
+        // did not exist, so this export failed with a 500 every time.
+        $query = "SELECT id, part_number, part_name, category, description,
+                         unit, unit_price, selling_price, quantity, reorder_level, supplier_id, created_at
+                  FROM inventory ORDER BY part_name ASC";
     } elseif ($type === 'jobs') {
-        $query = "SELECT j.job_number, c.chassis_number, cl.name as client_name, j.status, j.total_cost, j.started_at, j.completed_at 
-                  FROM workshop_jobs j LEFT JOIN cars c ON c.id=j.car_id LEFT JOIN clients cl ON cl.id=j.client_id ORDER BY j.created_at DESC";
+        // Likewise: workshop_jobs has no total_cost/started_at/completed_at/client_id.
+        // The client is reached through the car, not stored on the job.
+        $query = "SELECT j.job_number, c.chassis_number, c.make, c.model,
+                         cl.name AS client_name, j.status, j.priority,
+                         j.start_date, j.end_date, j.description, j.created_at
+                  FROM workshop_jobs j
+                  LEFT JOIN cars    c  ON c.id  = j.car_id
+                  LEFT JOIN clients cl ON cl.id = c.client_id
+                  ORDER BY j.created_at DESC";
     }
     
     if ($query) {
-        $stmt = $db->query($query);
-        
+        // Run the query BEFORE sending download headers. If it fails we can still
+        // show a normal page with a readable message; once the CSV headers are
+        // out it is too late and the user gets a broken download or a raw 500.
+        try {
+            $stmt = $db->query($query);
+        } catch (\Throwable $e) {
+            error_log('data_tools/export (' . $type . '): ' . $e->getMessage());
+            setFlash('danger', 'That export could not be generated — the "' . htmlspecialchars($type)
+                . '" data does not match the expected format. The issue has been logged.');
+            redirect(BASE_URL . '/modules/data_tools/export.php');
+        }
+
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
         

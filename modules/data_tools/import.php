@@ -99,8 +99,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
     }
 }
 
-// Fetch recent imports
-$recentLogs = $db->query("SELECT l.*, u.name as user_name FROM import_logs l JOIN users u ON u.id=l.imported_by ORDER BY l.created_at DESC LIMIT 10")->fetchAll();
+// import_logs ships only as a standalone file (migrations/phase10_import_log.sql)
+// that has to be run by hand, so on installs where that never happened this
+// query threw and took the whole page down with a 500. Create it inline — the
+// convention used elsewhere in this codebase — then read defensively.
+try {
+    $db->exec("CREATE TABLE IF NOT EXISTS import_logs (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        imported_by   INT NOT NULL,
+        entity_type   VARCHAR(30) NOT NULL,
+        file_name     VARCHAR(255) NOT NULL,
+        rows_imported INT DEFAULT 0,
+        rows_skipped  INT DEFAULT 0,
+        errors        TEXT NULL,
+        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_entity (entity_type),
+        INDEX idx_date   (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (\Throwable $_) {}
+
+// Fetch recent imports. LEFT JOIN so a log whose user was since deleted still shows.
+$recentLogs = [];
+try {
+    $recentLogs = $db->query("SELECT l.*, u.name AS user_name
+                              FROM import_logs l
+                              LEFT JOIN users u ON u.id = l.imported_by
+                              ORDER BY l.created_at DESC LIMIT 10")->fetchAll();
+} catch (\Throwable $e) {
+    error_log('data_tools/import: ' . $e->getMessage());
+}
 
 $pageTitle = 'Data Imports';
 include __DIR__ . '/../../includes/header.php';

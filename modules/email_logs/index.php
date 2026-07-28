@@ -5,13 +5,39 @@ hasRole('admin') || die('Access denied.');
 $pageTitle = 'Email Logs';
 $db = getDB();
 
+// email_logs is created lazily — includes/mailer.php only creates it the first
+// time a mail is actually sent. On an install where SMTP was never configured
+// the table therefore does not exist, and this page died with a 500 instead of
+// simply showing "no logs yet". Create it up front, then read defensively.
+try {
+    $db->exec("CREATE TABLE IF NOT EXISTS email_logs (
+        id             INT AUTO_INCREMENT PRIMARY KEY,
+        to_email       VARCHAR(190) NOT NULL,
+        to_name        VARCHAR(150) NULL,
+        subject        VARCHAR(255) NULL,
+        status         VARCHAR(20)  NOT NULL DEFAULT 'sent',
+        error_message  TEXT NULL,
+        reference_type VARCHAR(50)  NULL,
+        reference_id   INT NULL,
+        sent_by        INT NULL,
+        created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_status  (status),
+        INDEX idx_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (\Throwable $_) {}
+
 $filter = $_GET['status'] ?? '';
 if ($filter && !in_array($filter, ['sent', 'failed'])) $filter = '';
-$stmt = $filter
-    ? $db->prepare("SELECT * FROM email_logs WHERE status=? ORDER BY created_at DESC LIMIT 200")
-    : $db->prepare("SELECT * FROM email_logs ORDER BY created_at DESC LIMIT 200");
-$filter ? $stmt->execute([$filter]) : $stmt->execute([]);
-$logs = $stmt->fetchAll();
+$logs = [];
+try {
+    $stmt = $filter
+        ? $db->prepare("SELECT * FROM email_logs WHERE status=? ORDER BY created_at DESC LIMIT 200")
+        : $db->prepare("SELECT * FROM email_logs ORDER BY created_at DESC LIMIT 200");
+    $filter ? $stmt->execute([$filter]) : $stmt->execute([]);
+    $logs = $stmt->fetchAll();
+} catch (\Throwable $e) {
+    error_log('email_logs: ' . $e->getMessage());
+}
 
 include __DIR__ . '/../../includes/header.php';
 ?>
