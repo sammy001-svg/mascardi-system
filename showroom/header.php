@@ -103,6 +103,21 @@ try {
   gtag('config', <?= json_encode($__gaId) ?>);
 </script>
 <?php endif; ?>
+<script>
+/* Conversion tracking. Always defined so callers never need to guard, but a
+   silent no-op until a GA4 Measurement ID is set in Settings → SEO. Lets the
+   pages below mark real conversions (enquiry sent, WhatsApp opened) rather than
+   leaving you with pageviews only. */
+window.mscTrack = function (name, params) {
+    if (typeof gtag === 'function') {
+        try { gtag('event', name, params || {}); } catch (e) {}
+    }
+};
+document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href*="wa.me/"]');
+    if (a) window.mscTrack('whatsapp_click', { link_url: a.href, page: location.pathname });
+}, true);
+</script>
 
 <!-- PWA -->
 <link rel="manifest"    href="<?= BASE_URL ?>/manifest.php">

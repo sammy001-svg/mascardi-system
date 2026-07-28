@@ -845,6 +845,12 @@ document.getElementById('inquiryForm') && document.getElementById('inquiryForm')
                 form.style.display = 'none';
                 document.getElementById('inquirySuccess').style.display = '';
                 document.getElementById('inquirySuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (window.mscTrack) window.mscTrack('generate_lead', {
+                    car_id: <?= (int)$id ?>,
+                    vehicle: <?= json_encode($carTitle) ?>,
+                    value: <?= (int)($displayPrice ?: 0) ?>,
+                    currency: 'KES'
+                });
             } else {
                 document.getElementById('inquiryError').textContent = res.error || 'Something went wrong. Please try again.';
                 document.getElementById('inquiryError').style.display = '';

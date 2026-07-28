@@ -54,6 +54,21 @@ if ($search) {
     $params  = array_merge($params, ["%$search%", "%$search%", "%$search%", "%$search%"]);
 }
 
+// "Saved" filter. Favourites live in the visitor's localStorage, so the ids are
+// passed up as a query param — doing this server-side (rather than hiding cards
+// with JS) is what keeps it correct once results are paginated, otherwise it
+// would only ever filter the page you happen to be looking at.
+$favIds = [];
+if (!empty($_GET['fav'])) {
+    $favIds = array_values(array_filter(array_map('intval', explode(',', (string)$_GET['fav']))));
+    $favIds = array_slice(array_unique($favIds), 0, 200); // bound the IN() list
+}
+$showingSaved = !empty($favIds);
+if ($showingSaved) {
+    $where[]  = 'c.id IN (' . implode(',', array_fill(0, count($favIds), '?')) . ')';
+    $params   = array_merge($params, $favIds);
+}
+
 // Price sorts put NULL/0 prices at the end (cars with price first)
 $orderBy = match($sort) {
     'price_asc'  => '(c.asking_price IS NULL OR c.asking_price = 0) ASC, c.asking_price ASC',
@@ -63,6 +78,21 @@ $orderBy = match($sort) {
     default      => 'c.featured DESC, c.created_at DESC',
 };
 
+// ── Pagination ────────────────────────────────────────────────────────────────
+// Previously every matching row was fetched and rendered in one page, so the
+// payload grew linearly with stock. Count first, then fetch only the page.
+$perPage = 24;
+$whereSql = implode(' AND ', $where);
+
+$countStmt = $db->prepare("SELECT COUNT(*) FROM cars c WHERE {$whereSql}");
+$countStmt->execute($params);
+$filteredCount = (int)$countStmt->fetchColumn();
+
+$totalPages = max(1, (int)ceil($filteredCount / $perPage));
+$page       = max(1, (int)($_GET['page'] ?? 1));
+if ($page > $totalPages) $page = $totalPages;
+$offset     = ($page - 1) * $perPage;
+
 $stmt = $db->prepare("
     SELECT c.id, c.make, c.model, c.year, c.color, c.body_type,
            c.transmission, c.fuel_type, c.asking_price, c.offer_price, c.mileage,
@@ -70,12 +100,20 @@ $stmt = $db->prepare("
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image,
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
     FROM cars c
-    WHERE " . implode(' AND ', $where) . "
+    WHERE {$whereSql}
     ORDER BY $orderBy
+    LIMIT {$perPage} OFFSET {$offset}
 ");
 $stmt->execute($params);
 $filteredCars = $stmt->fetchAll(PDO::FETCH_ASSOC);
-$filteredCount = count($filteredCars);
+
+// Page URL preserving every active filter/sort except the ones named.
+function sv_page_url(int $p): string {
+    $q = $_GET;
+    if ($p <= 1) unset($q['page']); else $q['page'] = $p;
+    $s = http_build_query($q);
+    return BASE_URL . '/showroom/vehicles.php' . ($s ? '?' . $s : '');
+}
 
 $isFiltered = $filterMake || $filterBody || $filterFuel || $filterTrans || $filterMin || $filterMax
            || $filterYearMin || $filterYearMax || $filterMileMax || $search;
@@ -233,9 +271,14 @@ include __DIR__ . '/header.php';
                 <a href="<?= BASE_URL ?>/showroom/vehicles.php" class="sv-chip sv-chip-clear">Clear all</a>
             </div>
             <?php endif; ?>
-            <button id="favFilterBtn" onclick="toggleFavFilter()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:var(--r);padding:6px 14px;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit">
-                <i class="fa fa-heart" style="font-size:11px"></i> Saved
-                <span id="favCount" style="display:none;background:var(--ink);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px">0</span>
+            <button id="favFilterBtn" onclick="toggleFavFilter()"
+                    style="margin-left:auto;border-radius:var(--r);padding:6px 14px;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;<?= $showingSaved
+                        ? 'background:var(--ink);color:#fff;border:1px solid var(--ink)'
+                        : 'background:none;color:var(--ink);border:1px solid var(--line)' ?>">
+                <i class="fa fa-heart" style="font-size:11px"></i> <?= $showingSaved ? 'Saved only' : 'Saved' ?>
+                <span id="favCount" style="display:none;<?= $showingSaved
+                    ? 'background:#fff;color:var(--ink)'
+                    : 'background:var(--ink);color:#fff' ?>;border-radius:10px;padding:1px 7px;font-size:10px">0</span>
             </button>
         </div>
     </div>
@@ -292,7 +335,10 @@ include __DIR__ . '/header.php';
                     <span class="sv-photos"><i class="fa fa-camera"></i> <?= $car['image_count'] ?></span>
                     <?php endif; ?>
                     <?php if ($img): ?>
-                    <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($car['make'].' '.$car['model']) ?>" loading="lazy" decoding="async">
+                    <?php // Explicit dimensions reserve the box before the image loads (Core Web Vitals / CLS).
+                          // 480x300 == the 16:10 ratio of .sv-card-img; CSS still controls rendered size. ?>
+                    <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($car['make'].' '.$car['model']) ?>"
+                         width="480" height="300" loading="lazy" decoding="async">
                     <?php else: ?>
                     <div class="lx-noimg"><i class="fa fa-car-side"></i></div>
                     <?php endif; ?>
@@ -365,12 +411,78 @@ include __DIR__ . '/header.php';
             <?php endforeach; ?>
         </div>
 
+        <?php if ($totalPages > 1): ?>
+        <nav class="sv-pager" aria-label="Vehicle pages">
+            <div class="sv-pager-info">
+                Showing <?= number_format($offset + 1) ?>–<?= number_format(min($offset + $perPage, $filteredCount)) ?>
+                of <?= number_format($filteredCount) ?>
+            </div>
+            <div class="sv-pager-links">
+                <?php if ($page > 1): ?>
+                <a href="<?= htmlspecialchars(sv_page_url($page - 1)) ?>" class="sv-pg" rel="prev" aria-label="Previous page">
+                    <i class="fa fa-chevron-left"></i>
+                </a>
+                <?php else: ?>
+                <span class="sv-pg sv-pg-off"><i class="fa fa-chevron-left"></i></span>
+                <?php endif; ?>
+
+                <?php
+                // Compact window: first, last, and neighbours of the current page.
+                $shown = [];
+                for ($p = 1; $p <= $totalPages; $p++) {
+                    if ($p === 1 || $p === $totalPages || abs($p - $page) <= 1) $shown[] = $p;
+                }
+                $prev = 0;
+                foreach ($shown as $p):
+                    if ($prev && $p - $prev > 1): ?>
+                        <span class="sv-pg-gap">…</span>
+                    <?php endif; ?>
+                    <?php if ($p === $page): ?>
+                        <span class="sv-pg sv-pg-on" aria-current="page"><?= $p ?></span>
+                    <?php else: ?>
+                        <a href="<?= htmlspecialchars(sv_page_url($p)) ?>" class="sv-pg"><?= $p ?></a>
+                    <?php endif; ?>
+                <?php $prev = $p; endforeach; ?>
+
+                <?php if ($page < $totalPages): ?>
+                <a href="<?= htmlspecialchars(sv_page_url($page + 1)) ?>" class="sv-pg" rel="next" aria-label="Next page">
+                    <i class="fa fa-chevron-right"></i>
+                </a>
+                <?php else: ?>
+                <span class="sv-pg sv-pg-off"><i class="fa fa-chevron-right"></i></span>
+                <?php endif; ?>
+            </div>
+        </nav>
+        <?php endif; ?>
+
         <?php endif; ?>
     </div>
 </section>
 
 <!-- ── Styles ──────────────────────────────────────────────────────────────── -->
 <style>
+/* ── Pagination ─────────────────────────────────────────────── */
+.sv-pager {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-top: 44px;
+    padding-top: 28px; border-top: 1px solid var(--line);
+}
+.sv-pager-info  { font-size: 12.5px; color: var(--ink-2); }
+.sv-pager-links { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sv-pg {
+    min-width: 38px; height: 38px; padding: 0 11px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); border-radius: var(--r);
+    font-size: 13px; font-weight: 500; color: var(--ink);
+    transition: border-color .25s var(--ease), background .25s var(--ease), color .25s var(--ease);
+}
+.sv-pg:hover  { border-color: var(--ink); color: var(--ink); }
+.sv-pg-on     { background: var(--ink); color: #fff; border-color: var(--ink); }
+.sv-pg-on:hover { color: #fff; }
+.sv-pg-off    { opacity: .3; pointer-events: none; }
+.sv-pg-gap    { color: var(--ink-3); padding: 0 2px; font-size: 13px; }
+@media (max-width: 640px) { .sv-pager { justify-content: center; } }
+
 /* ── Filter bar ─────────────────────────────────────────────── */
 .sv-filterbar-wrap { background: var(--white); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 18px 0; position: sticky; top: var(--nav-h); z-index: 100; }
 .sv-filterbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -533,7 +645,8 @@ function toggleFav(id, btn) {
     if (idx >= 0) favs.splice(idx,1); else favs.push(id);
     saveFavs(favs);
     syncFavUI();
-    if (showingFavs) applyFavFilter();
+    // While viewing the saved list, un-saving must re-query so paging stays correct.
+    if (SHOWING_SAVED) applyFavFilter();
 }
 
 function syncFavUI() {
@@ -548,22 +661,32 @@ function syncFavUI() {
     if (el) { el.textContent = cnt; el.style.display = cnt ? '' : 'none'; }
 }
 
-var showingFavs = false;
-function toggleFavFilter() {
-    showingFavs = !showingFavs;
-    applyFavFilter();
-    var btn = document.getElementById('favFilterBtn');
-    if (btn) {
-        btn.style.background  = showingFavs ? 'var(--ink)' : '';
-        btn.style.color       = showingFavs ? '#fff' : '';
-        btn.style.borderColor = showingFavs ? 'var(--ink)' : '';
-    }
-}
+/* Saved filter is server-side (?fav=<ids>) rather than hiding cards with JS.
+   Hiding only ever worked on the rows already rendered, which silently became
+   wrong once results are paginated — you'd see "3 saved" but only the ones that
+   happened to fall on the current page. */
+var SHOWING_SAVED = <?= $showingSaved ? 'true' : 'false' ?>;
+
 function applyFavFilter() {
     var favs = getFavs();
-    document.querySelectorAll('.sv-card').forEach(function(c) {
-        c.style.display = showingFavs && favs.indexOf(parseInt(c.dataset.carId)) < 0 ? 'none' : '';
-    });
+    var url  = new URL(window.location.href);
+    url.searchParams.delete('page');           // a new result set starts at page 1
+    if (favs.length) url.searchParams.set('fav', favs.join(','));
+    else             url.searchParams.delete('fav');
+    window.location.href = url.toString();
+}
+
+function toggleFavFilter() {
+    var url = new URL(window.location.href);
+    url.searchParams.delete('page');
+    if (SHOWING_SAVED) {
+        url.searchParams.delete('fav');
+    } else {
+        var favs = getFavs();
+        if (!favs.length) { alert('You have not saved any vehicles yet. Tap the heart on a car to save it.'); return; }
+        url.searchParams.set('fav', favs.join(','));
+    }
+    window.location.href = url.toString();
 }
 
 /* ── Compare ──────────────────────────────────────────────────────────────
