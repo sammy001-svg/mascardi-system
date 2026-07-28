@@ -1,5 +1,9 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+// This page had no auth check at all — unlike every sibling page in the module —
+// so uploading and deleting vehicle photos was reachable without logging in.
+requireWrite('cars');
+
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/cars/index.php');
 
@@ -11,25 +15,60 @@ if (!$car) { setFlash('error', 'Car not found.'); redirect(BASE_URL . '/modules/
 
 $errors = [];
 
-// Handle Upload
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['photo'])) {
-    try {
-        $filename = handleUpload($_FILES['photo'], __DIR__ . '/../../uploads/cars');
-        $caption = trim($_POST['caption'] ?? '');
-        
-        // If it's the first photo, make it primary
-        $existing = $db->prepare("SELECT COUNT(*) FROM car_images WHERE car_id=?");
-        $existing->execute([$id]);
-        $isPrimary = $existing->fetchColumn() == 0 ? 1 : 0;
+// Handle Upload — accepts one or many files in a single submission.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_FILES['photos']['name'][0])) {
+    $caption = trim($_POST['caption'] ?? '');
 
-        $db->prepare("INSERT INTO car_images (car_id, file_path, caption, is_primary) VALUES (?,?,?,?)")
-           ->execute([$id, $filename, $caption, $isPrimary]);
-        
-        logActivity('upload', 'media', $id, "Uploaded photo for vehicle: {$car['make']} {$car['model']} ($filename)");
-        setFlash('success', 'Photo uploaded successfully.');
+    // PHP hands multi-file inputs over as parallel arrays (name[], tmp_name[], …).
+    // Flatten them back into one array per file so handleUpload() can be reused
+    // unchanged, keeping its size/extension validation as the single gatekeeper.
+    $files = [];
+    foreach ($_FILES['photos']['name'] as $i => $name) {
+        if (($_FILES['photos']['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) continue;
+        $files[] = [
+            'name'     => $name,
+            'type'     => $_FILES['photos']['type'][$i]     ?? '',
+            'tmp_name' => $_FILES['photos']['tmp_name'][$i] ?? '',
+            'error'    => $_FILES['photos']['error'][$i]    ?? UPLOAD_ERR_NO_FILE,
+            'size'     => $_FILES['photos']['size'][$i]     ?? 0,
+        ];
+    }
+
+    // Read the existing count once; the first successful upload of a car that
+    // has no photos yet becomes the primary image.
+    $existing = $db->prepare("SELECT COUNT(*) FROM car_images WHERE car_id=?");
+    $existing->execute([$id]);
+    $photoCount = (int)$existing->fetchColumn();
+
+    $ok = 0;
+    $ins = $db->prepare("INSERT INTO car_images (car_id, file_path, caption, is_primary) VALUES (?,?,?,?)");
+
+    // Per-file try/catch: one oversized or wrong-format file must not discard
+    // the rest of the batch, which is easy to hit when selecting many at once.
+    foreach ($files as $file) {
+        try {
+            $filename  = handleUpload($file, __DIR__ . '/../../uploads/cars');
+            $isPrimary = ($photoCount === 0 && $ok === 0) ? 1 : 0;
+            $ins->execute([$id, $filename, $caption, $isPrimary]);
+            $ok++;
+        } catch (Exception $e) {
+            $errors[] = e($file['name']) . ': ' . $e->getMessage();
+        }
+    }
+
+    if ($ok > 0) {
+        logActivity('upload', 'media', $id,
+            "Uploaded {$ok} photo(s) for vehicle: {$car['make']} {$car['model']}");
+    }
+
+    if ($ok > 0 && !$errors) {
+        setFlash('success', $ok === 1 ? 'Photo uploaded successfully.' : "{$ok} photos uploaded successfully.");
         redirect("media.php?id=$id");
-    } catch (Exception $e) {
-        $errors[] = $e->getMessage();
+    }
+    if ($ok > 0 && $errors) {
+        // Partial success — keep the failures on screen rather than redirecting
+        // away, so it is clear which files still need attention.
+        setFlash('warning', "{$ok} photo(s) uploaded. " . count($errors) . " could not be uploaded — see below.");
     }
 }
 
@@ -76,19 +115,29 @@ include __DIR__ . '/../../includes/header.php';
     <!-- Upload Form -->
     <div class="col-md-4">
         <div class="card h-100">
-            <div class="card-header"><i class="fa fa-upload me-2"></i>Upload Photo</div>
+            <div class="card-header"><i class="fa fa-upload me-2"></i>Upload Photos</div>
             <div class="card-body">
-                <form method="POST" enctype="multipart/form-data">
+                <?php $__maxFiles = (int)ini_get('max_file_uploads') ?: 20; ?>
+                <form method="POST" enctype="multipart/form-data" id="photoUploadForm">
                     <div class="mb-3">
-                        <label class="form-label">Select Image</label>
-                        <input type="file" name="photo" class="form-control" accept="image/*" required>
-                        <div class="form-text text-muted">Max 20MB. Allowed: JPG, PNG, WEBP.</div>
+                        <label class="form-label">Select Images</label>
+                        <input type="file" name="photos[]" id="photoInput" class="form-control"
+                               accept="image/jpeg,image/png,image/webp" multiple required>
+                        <div class="form-text text-muted">
+                            Select several at once — hold <strong>Ctrl</strong> (or <strong>Cmd</strong>) while clicking,
+                            or drag a selection.<br>
+                            Max 20&nbsp;MB each, up to <?= $__maxFiles ?> files per upload. JPG, PNG or WEBP.
+                        </div>
+                        <div id="photoPickSummary" class="small mt-2" style="display:none"></div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Caption (optional)</label>
                         <input type="text" name="caption" class="form-control" placeholder="e.g. Front View, Interior">
+                        <div class="form-text text-muted">Applied to every image in this upload.</div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100"><i class="fa fa-cloud-upload me-1"></i>Upload Now</button>
+                    <button type="submit" class="btn btn-primary w-100" id="photoUploadBtn">
+                        <i class="fa fa-cloud-upload me-1"></i><span id="photoUploadLabel">Upload Now</span>
+                    </button>
                 </form>
             </div>
         </div>
@@ -140,5 +189,55 @@ include __DIR__ . '/../../includes/header.php';
 <style>
 .gallery-card:hover { transform: translateY(-5px); transition: 0.3s; }
 </style>
+
+<script>
+(function () {
+    var input   = document.getElementById('photoInput');
+    var form    = document.getElementById('photoUploadForm');
+    var summary = document.getElementById('photoPickSummary');
+    var btn     = document.getElementById('photoUploadBtn');
+    var label   = document.getElementById('photoUploadLabel');
+    if (!input || !form) return;
+
+    var MAX_FILES = <?= (int)($__maxFiles ?? 20) ?>;
+    var MAX_BYTES = 20 * 1024 * 1024;
+
+    input.addEventListener('change', function () {
+        var files = Array.prototype.slice.call(input.files || []);
+        if (!files.length) { summary.style.display = 'none'; label.textContent = 'Upload Now'; return; }
+
+        var total = files.reduce(function (s, f) { return s + f.size; }, 0);
+        var big   = files.filter(function (f) { return f.size > MAX_BYTES; });
+        var mb    = function (b) { return (b / 1048576).toFixed(1) + ' MB'; };
+
+        // Warn before the round-trip — the server rejects these anyway, but
+        // finding out after a long upload is a poor experience.
+        var notes = [];
+        if (files.length > MAX_FILES) {
+            notes.push('<div class="text-danger"><i class="fa fa-triangle-exclamation me-1"></i>'
+                     + files.length + ' selected, but the server accepts at most ' + MAX_FILES
+                     + ' per upload. Please upload in smaller batches.</div>');
+        }
+        if (big.length) {
+            notes.push('<div class="text-danger"><i class="fa fa-triangle-exclamation me-1"></i>'
+                     + big.length + ' file(s) exceed 20 MB and will be skipped: '
+                     + big.map(function (f) { return f.name; }).join(', ') + '</div>');
+        }
+
+        summary.innerHTML = '<span class="text-muted"><i class="fa fa-images me-1"></i>'
+                          + files.length + ' file(s) selected · ' + mb(total) + ' total</span>'
+                          + notes.join('');
+        summary.style.display = '';
+        label.textContent = files.length > 1 ? 'Upload ' + files.length + ' Photos' : 'Upload Now';
+    });
+
+    // Large batches take a while; make it obvious the upload is running so the
+    // button is not clicked twice.
+    form.addEventListener('submit', function () {
+        btn.disabled = true;
+        label.innerHTML = 'Uploading…';
+    });
+}());
+</script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
