@@ -43,6 +43,8 @@ $stmt = $db->prepare("
 ");
 $stmt->execute([$convId, $me['id'], $text, $replyToId]);
 $msgId = (int)$db->lastInsertId();
+// Watermark for the poll's change-detector — see chatConversationTouch().
+chatConversationTouch($db, $convId);
 
 // Update sender's last_read_msg_id to this message (they've "seen" it)
 $db->prepare("UPDATE chat_participants SET last_read_msg_id=? WHERE conversation_id=? AND user_id=?")

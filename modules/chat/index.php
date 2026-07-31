@@ -860,6 +860,23 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
                 </div>
             </div>
 
+            <style>
+.sr-panel{ max-height:230px; overflow-y:auto; border-top:1px solid var(--border,#e2e8f0);
+    background:var(--surface,#fff); }
+.sr-head{ padding:7px 14px; font-size:11px; font-weight:800; text-transform:uppercase;
+    letter-spacing:.5px; color:var(--text-2,#64748b); background:var(--surface-alt,#f8fafc); }
+.sr-item{ display:flex; gap:9px; align-items:baseline; width:100%; text-align:left; padding:8px 14px;
+    background:none; border:0; border-bottom:1px solid var(--border,#e2e8f0); cursor:pointer;
+    color:var(--text,#0f172a); font-size:12.5px; }
+.sr-item:hover{ background:var(--surface-alt,#f1f5f9); }
+.sr-who{ font-weight:700; white-space:nowrap; }
+.sr-txt{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    color:var(--text-2,#64748b); }
+.sr-when{ font-size:11px; color:var(--text-2,#94a3b8); white-space:nowrap; }
+@keyframes msgFlash{ 0%,100%{ background:transparent; } 30%{ background:rgba(37,99,235,.18); } }
+.msg-flash{ animation:msgFlash 1.6s ease; border-radius:8px; }
+</style>
+
             <!-- In-chat search bar -->
             <div class="chat-search-bar" id="chatSearchBar" style="display:none">
                 <div class="csb-inner">
@@ -870,6 +887,7 @@ mark.sh.active { background:#f59e0b; outline:2px solid rgba(245,158,11,.5); bord
                     <button class="csb-nav" id="searchNext" title="Next result"><i class="fa fa-chevron-down"></i></button>
                     <button class="csb-cls" id="searchClose" title="Close search"><i class="fa fa-xmark"></i></button>
                 </div>
+                <div class="sr-panel" id="searchResults" style="display:none"></div>
             </div>
 
             <!-- Messages -->
@@ -2183,7 +2201,7 @@ const Chat = window.Chat = {
             const d = await apiPost('group.php', { action:'leave', conversation_id: this.convId });
             if (d.ok) {
                 bootstrap.Modal.getOrCreateInstance(el('groupInfoModal')).hide();
-                clearInterval(this.pollTimer);
+                this.stopPolling();
                 this.convId = 0;
                 hide(el('chatActive'));
                 show(el('chatWelcome'));
@@ -2234,6 +2252,68 @@ const Chat = window.Chat = {
             this._activateSearchMatch();
         }
         this._updateSearchCount();
+
+        // The highlighting above only sees messages already rendered, which is
+        // the most recent page. Ask the server as well so older history is
+        // searchable without paging back through it by hand.
+        this._searchServer(q);
+    },
+
+    /* Debounced full-history search. */
+    _searchServer(q) {
+        clearTimeout(this._searchTimer);
+        const panel = el('searchResults');
+        if (!q || q.trim().length < 2) { if (panel) panel.style.display = 'none'; return; }
+
+        this._searchTimer = setTimeout(async () => {
+            let d;
+            try {
+                d = await apiGet('search.php', { q: q.trim(), conversation_id: this.convId });
+            } catch (e) { return; }
+            if (!panel) return;
+
+            // A slow response for an earlier keystroke must not overwrite the
+            // results for what is now in the box.
+            if ((el('searchInput').value || '').trim() !== (d.query || '')) return;
+
+            const loadedIds = new Set(
+                Array.from(el('chatMsgs').querySelectorAll('.msg-row[data-mid]')).map(n => n.dataset.mid)
+            );
+            const older = (d.results || []).filter(r => !loadedIds.has(String(r.id)));
+
+            if (!older.length) { panel.style.display = 'none'; return; }
+
+            panel.innerHTML = `<div class="sr-head">${older.length} match${older.length === 1 ? '' : 'es'} in older messages</div>`
+                + older.slice(0, 20).map(r => `
+                    <button class="sr-item" onclick="Chat.jumpToMessage(${parseInt(r.id)})">
+                        <span class="sr-who">${esc(r.sender_name)}</span>
+                        <span class="sr-txt">${esc((r.preview || '').slice(0, 90))}</span>
+                        <span class="sr-when">${esc(fmtDay(r.created_at) || '')}</span>
+                    </button>`).join('');
+            panel.style.display = '';
+        }, 300);
+    },
+
+    /* Loads older pages until the target message is rendered, then scrolls to it. */
+    async jumpToMessage(msgId) {
+        const box = el('chatMsgs');
+        let node = box.querySelector(`.msg-row[data-mid="${msgId}"]`);
+
+        // Bounded: a match thousands of messages back should not lock the UI in
+        // a paging loop. Ten pages is 500 messages, past that say so instead.
+        for (let i = 0; i < 10 && !node && this.hasMoreMsgs; i++) {
+            await this.loadMore();
+            node = box.querySelector(`.msg-row[data-mid="${msgId}"]`);
+        }
+        if (!node) {
+            if (window.showToast) showToast('That message is too far back to jump to — scroll up to load more.', 'info');
+            return;
+        }
+        node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        node.classList.add('msg-flash');
+        setTimeout(() => node.classList.remove('msg-flash'), 1600);
+        const panel = el('searchResults');
+        if (panel) panel.style.display = 'none';
     },
     searchNav(dir) {
         if (!this.searchMatches.length) return;
@@ -2272,6 +2352,10 @@ const Chat = window.Chat = {
         });
         this.searchMatches = [];
         this.searchIdx = -1;
+        // Drop any pending server search and its results panel.
+        clearTimeout(this._searchTimer);
+        const srp = el('searchResults');
+        if (srp) { srp.style.display = 'none'; srp.innerHTML = ''; }
         const inp = el('searchInput');
         if (inp) inp.value = '';
         this._updateSearchCount?.();
@@ -2393,7 +2477,7 @@ const Chat = window.Chat = {
         // Mobile back — hide right panel (cp-left shows naturally underneath)
         el('chBack').addEventListener('click',()=>{
             hide(el('cpRight'));
-            clearInterval(this.pollTimer);
+            this.stopPolling();
             this.convId = 0;
         });
 
