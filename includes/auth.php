@@ -172,7 +172,11 @@ function canAccess(string $module): bool {
             'showroom_transfers','key_handovers','dispatch','team','trade_in',
         ],
         'customer_relations' => [
-            'clients','crm','chat','cars',
+            // trade_in is read-only here (absent from canWrite below): CR agents
+            // sell consignment vehicles through leads, so they need to see the
+            // deal terms — owner, commission, agreement dates — but the deal
+            // itself stays owned by sales/management.
+            'clients','crm','chat','cars','trade_in',
         ],
 
         // ── Supervisor role ────────────────────────────────────────────────────

@@ -176,6 +176,15 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
            data-label="Delivered Cars">
             <i class="fa fa-truck"></i><span>Delivered Cars</span>
         </a>
+        <?php // Read-only: CR agents sell consignment stock through leads, so they
+              // need the owner and commission terms visible. ?>
+        <?php if (canAccess('trade_in')): ?>
+        <a href="<?= BASE_URL ?>/modules/trade_in/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/trade_in/') ? 'active' : '' ?>"
+           data-label="Trade-In / On Behalf">
+            <i class="fa fa-handshake"></i><span>Trade-In / On Behalf</span>
+        </a>
+        <?php endif; ?>
 
         <!-- ══ COMMUNICATION ══════════════════════════════════════ -->
         <div class="nav-section">Communication</div>
