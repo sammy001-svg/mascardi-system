@@ -1,6 +1,7 @@
 <?php
 // Chat API – Fetch messages for a conversation
 require_once __DIR__ . '/../../../includes/functions.php';
+require_once __DIR__ . '/../chat_bootstrap.php';
 
 header('Content-Type: application/json');
 
@@ -25,17 +26,7 @@ try {
     if (!$participant) { http_response_code(403); echo json_encode(['error'=>'Access denied']); exit; }
 
     // ── Schema upgrades (safe, idempotent) ────────────────────────────────
-    try { $db->exec("CREATE TABLE IF NOT EXISTS chat_reactions (
-        id         INT AUTO_INCREMENT PRIMARY KEY,
-        message_id INT NOT NULL,
-        user_id    INT NOT NULL,
-        emoji      VARCHAR(20) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uk_react (message_id, user_id),
-        KEY        idx_msg  (message_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $t) {}
 
-    try { $db->exec("ALTER TABLE users ADD COLUMN last_seen TIMESTAMP NULL DEFAULT NULL"); } catch (\Throwable $t) {}
 
     // Update caller's last_seen
     try { $db->prepare("UPDATE users SET last_seen = NOW() WHERE id = ?")->execute([$me['id']]); } catch (\Throwable $t) {}

@@ -1,6 +1,7 @@
 <?php
 // Chat API — Toggle a reaction on a message
 require_once __DIR__ . '/../../../includes/functions.php';
+require_once __DIR__ . '/../chat_bootstrap.php';
 
 header('Content-Type: application/json');
 
@@ -17,15 +18,6 @@ if (!$msgId || !$emoji) { http_response_code(400); echo json_encode(['error'=>'I
 
 try {
     // Ensure reactions table exists
-    $db->exec("CREATE TABLE IF NOT EXISTS chat_reactions (
-        id          INT AUTO_INCREMENT PRIMARY KEY,
-        message_id  INT NOT NULL,
-        user_id     INT NOT NULL,
-        emoji       VARCHAR(20) NOT NULL,
-        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY  uk_react (message_id, user_id),
-        KEY         idx_msg  (message_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     // Verify the user is a participant of the conversation that contains this message
     $access = $db->prepare("

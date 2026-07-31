@@ -1,6 +1,7 @@
 <?php
 // Chat API – Conversation list & create direct chat
 require_once __DIR__ . '/../../../includes/functions.php';
+require_once __DIR__ . '/../chat_bootstrap.php';
 
 header('Content-Type: application/json');
 
@@ -75,13 +76,6 @@ if ($method === 'GET') {
     } catch (Exception $e) {
         // Tables may not exist yet — auto-create silently and return empty list
         try {
-            foreach ([
-                "CREATE TABLE IF NOT EXISTS chat_conversations (id INT AUTO_INCREMENT PRIMARY KEY, type ENUM('direct','group') DEFAULT 'direct', name VARCHAR(150) NULL, created_by INT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                "CREATE TABLE IF NOT EXISTS chat_participants (conversation_id INT NOT NULL, user_id INT NOT NULL, last_read_msg_id INT NOT NULL DEFAULT 0, joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (conversation_id, user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                "CREATE TABLE IF NOT EXISTS chat_messages (id INT AUTO_INCREMENT PRIMARY KEY, conversation_id INT NOT NULL, sender_id INT NOT NULL, type ENUM('text','file','image','voice','call','system') DEFAULT 'text', content TEXT NULL, file_path VARCHAR(500) NULL, file_name VARCHAR(255) NULL, file_size BIGINT NULL, mime_type VARCHAR(100) NULL, duration SMALLINT NULL, reply_to_id INT NULL, is_deleted TINYINT(1) DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                "CREATE TABLE IF NOT EXISTS chat_calls (id INT AUTO_INCREMENT PRIMARY KEY, conversation_id INT NOT NULL, caller_id INT NOT NULL, callee_id INT NULL, call_type ENUM('audio','video') DEFAULT 'audio', status ENUM('ringing','active','ended','missed','rejected') DEFAULT 'ringing', offer_sdp MEDIUMTEXT NULL, answer_sdp MEDIUMTEXT NULL, caller_ice MEDIUMTEXT NULL, callee_ice MEDIUMTEXT NULL, started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, answered_at TIMESTAMP NULL, ended_at TIMESTAMP NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                "CREATE TABLE IF NOT EXISTS chat_typing (conversation_id INT NOT NULL, user_id INT NOT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (conversation_id, user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-            ] as $_sql) { $db->exec($_sql); }
         } catch (Exception $_ignored) {}
         echo json_encode(['conversations' => []]);
     }
@@ -123,11 +117,6 @@ if ($method === 'POST') {
             if ($db->inTransaction()) $db->rollBack();
             // Auto-create tables on first use, then retry once
             try {
-                foreach ([
-                    "CREATE TABLE IF NOT EXISTS chat_conversations (id INT AUTO_INCREMENT PRIMARY KEY, type ENUM('direct','group') DEFAULT 'direct', name VARCHAR(150) NULL, created_by INT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                    "CREATE TABLE IF NOT EXISTS chat_participants (conversation_id INT NOT NULL, user_id INT NOT NULL, last_read_msg_id INT NOT NULL DEFAULT 0, joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (conversation_id, user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                    "CREATE TABLE IF NOT EXISTS chat_messages (id INT AUTO_INCREMENT PRIMARY KEY, conversation_id INT NOT NULL, sender_id INT NOT NULL, type ENUM('text','file','image','voice','call','system') DEFAULT 'text', content TEXT NULL, file_path VARCHAR(500) NULL, file_name VARCHAR(255) NULL, file_size BIGINT NULL, mime_type VARCHAR(100) NULL, duration SMALLINT NULL, reply_to_id INT NULL, is_deleted TINYINT(1) DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                ] as $_sql) { $db->exec($_sql); }
 
                 $db->beginTransaction();
                 $db->prepare("INSERT INTO chat_conversations (type, name, created_by) VALUES ('group', ?, ?)")
@@ -195,13 +184,6 @@ if ($method === 'POST') {
         if ($db->inTransaction()) $db->rollBack();
         // Auto-create chat tables on first use, then retry once
         try {
-            foreach ([
-                "CREATE TABLE IF NOT EXISTS chat_conversations (id INT AUTO_INCREMENT PRIMARY KEY, type ENUM('direct','group') DEFAULT 'direct', name VARCHAR(150) NULL, created_by INT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                "CREATE TABLE IF NOT EXISTS chat_participants (conversation_id INT NOT NULL, user_id INT NOT NULL, last_read_msg_id INT NOT NULL DEFAULT 0, joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (conversation_id, user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                "CREATE TABLE IF NOT EXISTS chat_messages (id INT AUTO_INCREMENT PRIMARY KEY, conversation_id INT NOT NULL, sender_id INT NOT NULL, type ENUM('text','file','image','voice','call','system') DEFAULT 'text', content TEXT NULL, file_path VARCHAR(500) NULL, file_name VARCHAR(255) NULL, file_size BIGINT NULL, mime_type VARCHAR(100) NULL, duration SMALLINT NULL, reply_to_id INT NULL, is_deleted TINYINT(1) DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                "CREATE TABLE IF NOT EXISTS chat_calls (id INT AUTO_INCREMENT PRIMARY KEY, conversation_id INT NOT NULL, caller_id INT NOT NULL, callee_id INT NULL, call_type ENUM('audio','video') DEFAULT 'audio', status ENUM('ringing','active','ended','missed','rejected') DEFAULT 'ringing', offer_sdp MEDIUMTEXT NULL, answer_sdp MEDIUMTEXT NULL, caller_ice MEDIUMTEXT NULL, callee_ice MEDIUMTEXT NULL, started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, answered_at TIMESTAMP NULL, ended_at TIMESTAMP NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-                "CREATE TABLE IF NOT EXISTS chat_typing (conversation_id INT NOT NULL, user_id INT NOT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (conversation_id, user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-            ] as $_sql) { $db->exec($_sql); }
 
             // Retry the original request
             $db->beginTransaction();

@@ -1,6 +1,7 @@
 <?php
 // Chat API – Typing indicators
 require_once __DIR__ . '/../../../includes/functions.php';
+require_once __DIR__ . '/../chat_bootstrap.php';
 
 header('Content-Type: application/json');
 
