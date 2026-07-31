@@ -98,6 +98,70 @@ function _fixRolePermissions(): void {
             WHERE  up.module = 'cars' AND up.can_access = 0
         ");
     } catch (\Throwable $_) {}
+
+    _repairBlankRoles();
+}
+
+/**
+ * Restores accounts whose role was blanked by a schema change.
+ *
+ * A widening of users.role once listed the allowed values explicitly and left
+ * out 'super_admin'. MySQL strict mode is off here, so instead of failing, the
+ * ALTER silently rewrote every super-admin row to ''. A blank role matches no
+ * entry in canAccess()'s map, so those accounts lost access to every module at
+ * once — the sidebar collapsed to the single ungated Dashboard link.
+ *
+ * This has to live on the common auth path rather than in the HR migration that
+ * caused it: an account in that state cannot reach the HR pages to trigger a
+ * repair, because it cannot reach any page's menu.
+ *
+ * Cheap in the normal case — one indexed count that returns 0 and stops.
+ */
+function _repairBlankRoles(): void {
+    try {
+        $db = getDB();
+
+        $blank = (int)$db->query("SELECT COUNT(*) FROM users WHERE role = '' OR role IS NULL")->fetchColumn();
+        if ($blank === 0) {
+            // Still refresh a stale session below, then stop.
+            _refreshSessionRole();
+            return;
+        }
+
+        // Only meaningful once the value is legal again; the HR bootstrap adds
+        // it back additively. Without this guard the UPDATE would re-blank them.
+        $col = $db->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
+        if (!$col || !str_contains(strtolower($col['Type']), 'super_admin')) {
+            require_once __DIR__ . '/../modules/hr/_bootstrap.php';
+            hrMigrate($db, true);
+            $col = $db->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
+            if (!$col || !str_contains(strtolower($col['Type']), 'super_admin')) return;
+        }
+
+        $rows = $db->query("SELECT id, username FROM users WHERE role = '' OR role IS NULL")
+                   ->fetchAll(PDO::FETCH_ASSOC);
+        $db->exec("UPDATE users SET role = 'super_admin' WHERE role = '' OR role IS NULL");
+        foreach ($rows as $u) {
+            error_log("_repairBlankRoles: restored super_admin for user #{$u['id']} ({$u['username']})");
+        }
+        _refreshSessionRole();
+    } catch (\Throwable $_) {}
+}
+
+/**
+ * Re-reads the signed-in user's role from the database when the session copy is
+ * blank. The session is written at login, so repairing the row alone would
+ * leave the person staring at the same empty menu until they signed out.
+ */
+function _refreshSessionRole(): void {
+    if (empty($_SESSION['auth_user']['id'])) return;
+    if (!empty($_SESSION['auth_user']['role'])) return;   // nothing wrong with it
+    try {
+        $st = getDB()->prepare("SELECT role FROM users WHERE id = ?");
+        $st->execute([(int)$_SESSION['auth_user']['id']]);
+        $role = (string)$st->fetchColumn();
+        if ($role !== '') $_SESSION['auth_user']['role'] = $role;
+    } catch (\Throwable $_) {}
 }
 
 // Load per-user permission rows from DB (cached per request via static)
