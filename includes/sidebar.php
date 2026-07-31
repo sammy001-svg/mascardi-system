@@ -538,6 +538,22 @@ if (authRole() === 'supervisor') {
            data-label="Attendance">
             <i class="fa fa-calendar-days"></i><span>Attendance</span>
         </a>
+        <a href="<?= BASE_URL ?>/modules/hr/biometric.php"
+           class="nav-item <?= isActive('/modules/hr/biometric') ?>"
+           data-label="Biometric Devices"
+           style="position:relative">
+            <i class="fa fa-fingerprint"></i><span>Biometric</span>
+            <?php
+            try {
+                $__zkAlert = (int)getDB()->query(
+                    "SELECT (SELECT COUNT(*) FROM zk_devices WHERE status='pending')
+                          + (SELECT COUNT(DISTINCT device_pin) FROM zk_punches WHERE staff_id IS NULL)")->fetchColumn();
+                if ($__zkAlert > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#f59e0b;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__zkAlert > 99 ? '99+' : $__zkAlert ?>
+            </span>
+            <?php endif; } catch (\Throwable $_) {} ?>
+        </a>
         <a href="<?= BASE_URL ?>/modules/hr/leave.php"
            class="nav-item <?= isActive('/modules/hr/leave') ?>"
            data-label="Leave">

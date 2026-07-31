@@ -517,6 +517,23 @@ include __DIR__ . '/../../includes/header.php';
                 <span class="hr-link-icon"><i class="fa fa-calendar-days"></i></span>
                 <span><span class="hr-link-t">Attendance</span><span class="hr-link-s">Daily register</span></span>
             </a>
+            <a class="hr-link" href="<?= BASE_URL ?>/modules/hr/biometric.php">
+                <span class="hr-link-icon"><i class="fa fa-fingerprint"></i></span>
+                <span><span class="hr-link-t">Biometric</span><span class="hr-link-s">
+                    <?php
+                    // Surface the two states that stop scans counting, rather
+                    // than a device count that looks healthy either way.
+                    $zkPending = $zkUnlinked = 0;
+                    try {
+                        $zkPending  = (int)$db->query("SELECT COUNT(*) FROM zk_devices WHERE status='pending'")->fetchColumn();
+                        $zkUnlinked = (int)$db->query("SELECT COUNT(DISTINCT device_pin) FROM zk_punches WHERE staff_id IS NULL")->fetchColumn();
+                    } catch (\Throwable $_) {}
+                    if ($zkPending)       echo $zkPending . ' awaiting approval';
+                    elseif ($zkUnlinked)  echo $zkUnlinked . ' number' . ($zkUnlinked === 1 ? '' : 's') . ' unlinked';
+                    else                  echo 'ZKTeco terminals';
+                    ?>
+                </span></span>
+            </a>
             <a class="hr-link" href="<?= BASE_URL ?>/modules/hr/leave.php">
                 <span class="hr-link-icon"><i class="fa fa-plane-departure"></i></span>
                 <span><span class="hr-link-t">Leave</span><span class="hr-link-s"><?= $pendingLeaveCount ?> pending</span></span>

@@ -1,0 +1,18 @@
+# ZKTeco terminals request extensionless paths under /iclock/ and the path is
+# fixed in firmware — it cannot be pointed at router.php directly. Map the
+# known endpoints onto the router, passing the endpoint name through as __ep.
+#
+# nginx equivalent:
+#   location /iclock/ {
+#       rewrite ^/iclock/(cdata|getrequest|devicecmd|ping|fdata|edata|rtdata)$
+#               /iclock/router.php?__ep=$1 last;
+#   }
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(cdata|getrequest|devicecmd|ping|fdata|edata|rtdata)$ router.php?__ep=$1 [QSA,L]
+</IfModule>
+
+# Devices speak plain HTTP/1.0 and send no Accept header; keep responses raw.
+<IfModule mod_headers.c>
+    Header set Cache-Control "no-store"
+</IfModule>
