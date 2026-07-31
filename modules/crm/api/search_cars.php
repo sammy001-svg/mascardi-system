@@ -27,12 +27,17 @@ try {
             c.mileage,
             c.body_type,
             c.engine_cc                                         AS engine,
+            c.car_type,
             (SELECT ci.file_path
                FROM car_images ci
               WHERE ci.car_id = c.id AND ci.is_primary = 1
               LIMIT 1)                                          AS primary_image
         FROM cars c
-        WHERE c.car_type = 'inventory'
+        -- Consignment stock (trade-in / sale on behalf) is sellable too, but was
+        -- excluded here, so those vehicles could not be linked to a lead at all.
+        -- Delivered/sold units stay out: they are no longer available to sell.
+        WHERE c.car_type IN ('inventory','trade_in','sale_on_behalf')
+          AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
           AND (
                 c.make                LIKE ?
              OR c.model               LIKE ?

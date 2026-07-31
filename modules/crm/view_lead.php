@@ -199,10 +199,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Delivery hands the buyer and their vehicle over to the client book,
             // so a return visit for service does not require re-registering both.
             if ($newStage === 'delivered') {
+                // Consignment stock belongs to a customer — settle the deal so the
+                // commission and owner payout are raised, exactly as selling it
+                // through the Trade-In module would.
+                $__ref      = crmSettleConsignmentOnDelivery($db, $lead);
                 $__clientId = crmDeliverLeadToClient($db, $lead);
                 if ($__clientId) {
                     setFlash('success', 'Lead delivered. ' . e($lead['name'])
-                        . ' is now a client and the vehicle is registered to them.');
+                        . ' is now a client and the vehicle is registered to them.'
+                        . ($__ref ? ' Consignment ' . e($__ref) . ' settled — owner payout pending.' : ''));
                 } else {
                     // Do not fail silently — the delivery itself succeeded, but the
                     // handover to Clients did not, and that needs to be visible.
@@ -636,12 +641,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Same handover as the stage-change path: the buyer becomes a
                 // client and the vehicle is registered to them, so a later
                 // service booking finds both already on file.
+                $__ref      = crmSettleConsignmentOnDelivery($db, $lead);
                 $__clientId = crmDeliverLeadToClient($db, $lead);
                 notifyRoles(['customer_relations','sales_person','sales_manager','super_admin','admin'], 'sale',
                     "Delivery Note Confirmed: {$lead['name']}", "Confirmed by {$me['name']}. The delivery note can now be printed.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, "Delivery Protocol: delivery note confirmed by {$me['name']}. Lead marked Delivered.");
                 setFlash('success', 'Delivery note confirmed — Customer Relations can now print it.'
-                    . ($__clientId ? ' ' . e($lead['name']) . ' has been added to Clients with their vehicle.' : ''));
+                    . ($__clientId ? ' ' . e($lead['name']) . ' has been added to Clients with their vehicle.' : '')
+                    . ($__ref ? ' Consignment ' . e($__ref) . ' settled — owner payout pending.' : ''));
                 break;
 
             default:
@@ -1343,8 +1350,17 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                                     var sub   = c.reg || '';
                                     var specs = [c.transmission, c.fuel_type].filter(Boolean).join(' · ');
                                     var priceStr = c.price ? '<span style="color:#198754;font-weight:600">KES ' + Number(c.price).toLocaleString() + '</span>' : '';
+                                    // Flag consignment stock — the commercial terms differ
+                                    // (the vehicle belongs to a customer, not to us), so the
+                                    // salesperson needs to see that before linking it.
+                                    var typeTag = '';
+                                    if (c.car_type === 'sale_on_behalf') {
+                                        typeTag = '<span style="background:rgba(14,165,233,.15);color:#0369a1;font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;margin-left:6px">SALE ON BEHALF</span>';
+                                    } else if (c.car_type === 'trade_in') {
+                                        typeTag = '<span style="background:rgba(245,158,11,.18);color:#b45309;font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;margin-left:6px">TRADE-IN</span>';
+                                    }
                                     info.innerHTML =
-                                        '<div style="font-weight:600">' + title + '</div>' +
+                                        '<div style="font-weight:600">' + title + typeTag + '</div>' +
                                         '<div style="color:#6c757d;font-size:11.5px">' + sub + (specs ? ' &nbsp;·&nbsp; ' + specs : '') + (priceStr ? ' &nbsp;·&nbsp; ' + priceStr : '') + '</div>';
                                     row.appendChild(info);
 

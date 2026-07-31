@@ -261,3 +261,72 @@ function crmLastConvertError(?string $set = null): string
     if ($set !== null) $err = $set;
     return $err;
 }
+
+/**
+ * Settle a consignment when its vehicle is delivered through a CRM lead.
+ *
+ * Sale on Behalf / Trade-In vehicles belong to a customer, not to us. Selling
+ * one through the Trade-In module marks the deal sold and works out the
+ * commission and the owner's payout. Selling the same vehicle through a CRM
+ * lead did none of that — the car went out of the yard while its consignment
+ * stayed "active" and no payout was ever raised, so the owner would not be paid.
+ *
+ * Idempotent: a deal that is already settled is left alone.
+ * Returns the consignment reference that was settled, or '' if there was none.
+ */
+function crmSettleConsignmentOnDelivery(PDO $db, array $lead): string
+{
+    $carId = (int)($lead['pinned_car_id'] ?? 0);
+    if (!$carId) return '';
+
+    try {
+        // consignments only exists once the Trade-In module has been used.
+        $has = $db->query("SHOW TABLES LIKE 'consignments'")->fetchColumn();
+        if (!$has) return '';
+
+        $s = $db->prepare("SELECT * FROM consignments WHERE car_id = ? AND status = 'active' LIMIT 1");
+        $s->execute([$carId]);
+        $c = $s->fetch(PDO::FETCH_ASSOC);
+        if (!$c) return '';   // not consignment stock, or already settled
+
+        // Prefer the price actually agreed with the buyer; fall back to what the
+        // vehicle was listed at so a payout is never based on zero.
+        $price = (float)($lead['agreed_sale_price'] ?? 0);
+        if ($price <= 0) $price = (float)($c['listing_price'] ?? 0);
+        if ($price <= 0) {
+            $cs = $db->prepare("SELECT COALESCE(NULLIF(offer_price,0), asking_price) FROM cars WHERE id = ?");
+            $cs->execute([$carId]);
+            $price = (float)$cs->fetchColumn();
+        }
+        if ($price <= 0) return '';   // nothing sane to settle against
+
+        require_once __DIR__ . '/../trade_in/_bootstrap.php';
+        $commission = consignmentCommission($c, $price);
+        $payout     = round(max(0, $price - $commission), 2);
+
+        $db->prepare("UPDATE consignments
+                      SET status='sold', sold_price=?, sold_date=CURDATE(),
+                          commission_amount=?, payout_amount=?, payout_status='pending'
+                      WHERE id=? AND status='active'")
+           ->execute([$price, $commission, $payout, (int)$c['id']]);
+
+        logActivity('update', 'trade_in', (int)$c['id'],
+            "Consignment {$c['reference']} settled on delivery of lead #" . (int)($lead['id'] ?? 0)
+            . " — sold " . number_format($price, 2)
+            . ", commission " . number_format($commission, 2)
+            . ", owner payout " . number_format($payout, 2) . " (pending)");
+
+        try {
+            require_once __DIR__ . '/../../includes/notifications.php';
+            notifyRoles(['admin','super_admin','general_manager','finance_manager','finance_officer'], 'sale',
+                "Consignment Sold: {$c['reference']}",
+                "Sold through a CRM lead. Owner payout of " . number_format($payout, 2) . " is pending.",
+                BASE_URL . '/modules/trade_in/view.php?id=' . (int)$c['id']);
+        } catch (\Throwable $_) {}
+
+        return (string)$c['reference'];
+    } catch (\Throwable $e) {
+        error_log('crmSettleConsignmentOnDelivery: ' . $e->getMessage());
+        return '';
+    }
+}
