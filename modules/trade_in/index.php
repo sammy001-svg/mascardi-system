@@ -60,6 +60,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     redirect(BASE_URL . '/modules/trade_in/index.php');
 }
 
+// ── Delivered deals still sitting in the active list ─────────────────────────
+// A delivery through the CRM now settles the consignment automatically (see
+// crmSettleConsignmentOnDelivery). Deals delivered before that existed were
+// never settled, so they are still 'active' and keep showing here as though the
+// vehicle were available. Settling them is what actually moves them on: status
+// becomes 'sold' and the owner's commission and payout are calculated, so the
+// money owed is not lost by simply hiding the row.
+$unsettled = [];
+try {
+    $unsettled = $db->query("
+        SELECT cs.id, cs.reference, cs.car_id, cs.deal_type,
+               c.make, c.model, c.year, c.registration_number, c.chassis_number,
+               (SELECT l.id FROM crm_leads l
+                 WHERE l.pinned_car_id = cs.car_id AND l.stage = 'delivered'
+                 ORDER BY l.id DESC LIMIT 1) AS lead_id
+        FROM consignments cs
+        JOIN cars c ON c.id = cs.car_id
+        WHERE cs.status = 'active'
+          AND (c.status IN ('delivered','sold')
+               OR EXISTS (SELECT 1 FROM crm_leads l2
+                          WHERE l2.pinned_car_id = cs.car_id AND l2.stage = 'delivered'))
+        ORDER BY cs.id DESC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $_) { $unsettled = []; }
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && ($_POST['action'] ?? '') === 'settle_delivered'
+    && $unsettled && canWrite('trade_in')) {
+    verifyCsrf();
+    require_once __DIR__ . '/../crm/crm_helpers.php';
+    $settled = $skipped = 0;
+    foreach ($unsettled as $u) {
+        $lead = ['id' => 0, 'pinned_car_id' => (int)$u['car_id'], 'agreed_sale_price' => 0];
+        if ($u['lead_id']) {
+            try {
+                $ls = $db->prepare("SELECT id, pinned_car_id, agreed_sale_price FROM crm_leads WHERE id = ?");
+                $ls->execute([(int)$u['lead_id']]);
+                $lead = $ls->fetch(PDO::FETCH_ASSOC) ?: $lead;
+            } catch (\Throwable $_) {}
+        }
+        // Returns '' when it cannot settle — most often no usable price on the
+        // deal or the vehicle. Those are counted, not silently dropped.
+        if (crmSettleConsignmentOnDelivery($db, $lead) !== '') $settled++;
+        else $skipped++;
+    }
+    logActivity('update', 'trade_in', 0, "Settled {$settled} delivered consignment(s) from the backlog");
+    if ($settled) {
+        setFlash('success', $settled . ' delivered deal(s) settled and moved to Sold — owner payouts are now pending.'
+            . ($skipped ? ' ' . $skipped . ' could not be settled automatically (no sale price on the deal or vehicle) — open each and record the sale manually.' : ''));
+    } else {
+        setFlash('error', 'None could be settled automatically — no sale price is recorded on the deal, the lead or the vehicle. Open each one and enter the sale details.');
+    }
+    redirect(BASE_URL . '/modules/trade_in/index.php');
+}
+
 // ── Tab / filters ─────────────────────────────────────────────────────────────
 $tab = $_GET['tab'] ?? 'sale_on_behalf';
 if (!isset($types[$tab])) $tab = 'sale_on_behalf';
@@ -80,17 +135,27 @@ $params = [$tab];
 //   • pending approval      → cars.status is deliberately left UNCHANGED, and
 //                             only crm_leads.reservation_status marks it
 // so checking the car's status alone would miss every unapproved reservation.
-$resPredicate = "(c.status IS NULL OR c.status <> 'reserved')";
+// The exclusion deliberately applies only to deals still marked 'active'. A
+// settled ('sold') deal must stay visible under its status filter — that is
+// where the owner's payout is processed — so this hides committed stock without
+// hiding money still owed.
+$hasResStatus = false;
 try {
     $hasResStatus = (bool)$db->query("SHOW COLUMNS FROM crm_leads LIKE 'reservation_status'")->fetch();
-    $leadCond = $hasResStatus
-        ? "(l2.stage = 'reserved' OR l2.reservation_status = 'pending_approval')"
-        : "l2.stage = 'reserved'";
-    $resPredicate .= " AND NOT EXISTS (
-            SELECT 1 FROM crm_leads l2
-            WHERE l2.pinned_car_id = cs.car_id AND {$leadCond}
-        )";
-} catch (\Throwable $_) { /* no crm_leads table — car status check alone */ }
+} catch (\Throwable $_) {}
+
+$leadCond = $hasResStatus
+    ? "(l2.stage IN ('reserved','delivered') OR l2.reservation_status = 'pending_approval')"
+    : "l2.stage IN ('reserved','delivered')";
+
+$resPredicate = "NOT (
+        cs.status = 'active' AND (
+            c.status = 'reserved'
+            OR c.status IN ('delivered','sold')
+            OR EXISTS (SELECT 1 FROM crm_leads l2
+                       WHERE l2.pinned_car_id = cs.car_id AND {$leadCond})
+        )
+    )";
 $where[] = $resPredicate;
 
 if ($filterStatus) { $where[] = 'cs.status = ?'; $params[] = $filterStatus; }
@@ -321,6 +386,38 @@ include __DIR__ . '/../../includes/header.php';
                 (<?= e($md['registration_number'] ?: $md['chassis_number']) ?>)</span>
         <?php endforeach; ?>
         <?php if (count($missingDeals) > 5): ?><span>and <?= count($missingDeals) - 5 ?> more…</span><?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($unsettled): ?>
+<div class="alert alert-info py-2">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="small">
+            <i class="fa fa-truck-fast me-1"></i>
+            <strong><?= count($unsettled) ?></strong> deal<?= count($unsettled) !== 1 ? 's have' : ' has' ?>
+            been delivered to a buyer but <?= count($unsettled) !== 1 ? 'are' : 'is' ?> still open here.
+            Settling <?= count($unsettled) !== 1 ? 'them' : 'it' ?> works out the commission and the owner's
+            payout, then moves <?= count($unsettled) !== 1 ? 'them' : 'it' ?> to <strong>Sold</strong>.
+        </span>
+        <?php if (canWrite('trade_in')): ?>
+        <form method="POST" class="d-inline"
+              onsubmit="return confirm('Settle <?= count($unsettled) ?> delivered deal(s)?\n\nEach one is marked Sold, with the commission and the owner payout calculated from the agreed sale price. The payout is left pending for Finance.\n\nNothing is deleted.')">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="settle_delivered">
+            <button type="submit" class="btn btn-sm btn-info text-dark">
+                <i class="fa fa-check-double me-1"></i>Settle delivered deals
+            </button>
+        </form>
+        <?php endif; ?>
+    </div>
+    <div class="small text-muted mt-1">
+        <?php foreach (array_slice($unsettled, 0, 5) as $us): ?>
+            <span class="me-2">• <?= e($us['reference']) ?> —
+                <?= e(trim($us['year'].' '.$us['make'].' '.$us['model'])) ?>
+                (<?= e($us['registration_number'] ?: $us['chassis_number']) ?>)</span>
+        <?php endforeach; ?>
+        <?php if (count($unsettled) > 5): ?><span>and <?= count($unsettled) - 5 ?> more…</span><?php endif; ?>
     </div>
 </div>
 <?php endif; ?>
