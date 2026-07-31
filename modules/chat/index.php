@@ -1244,6 +1244,8 @@ const Chat = window.Chat = {
         this.lastMsgId = 0;
         this.lastDay   = '';
         this.readMin   = 0;
+        this.listSig   = '';
+        this.lastActivity = Date.now();
         this.prevSenderId = null;
         this.prevMsgTs    = null;
         this.scrollUnread  = 0;
@@ -1300,9 +1302,9 @@ const Chat = window.Chat = {
         el('chatMsgs').innerHTML = `<div style="text-align:center;color:#8696a0;padding:40px 0;font-size:13px">
             <i class="fa fa-spinner fa-spin me-1"></i> Loading messages…</div>`;
 
-        clearInterval(this.pollTimer);
+        this.stopPolling();
         await this._fetchMsgs(true);
-        this.pollTimer = setInterval(()=>this._fetchMsgs(false), 2000);
+        this.startPolling();
         el('msgIn').focus();
         // Close emoji picker if open
         if (this.emojiOpen) this.toggleEmoji();
@@ -1311,18 +1313,22 @@ const Chat = window.Chat = {
     /* â"€â"€ Fetch & render messages â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
     async _fetchMsgs(initial) {
         try {
-            const params = initial
-                ? { conversation_id: this.convId, initial: 1 }
-                : { conversation_id: this.convId, after: this.lastMsgId };
-
-            // Fire messages fetch and (on polls) typing check in parallel
-            const [d, td] = await Promise.all([
-                apiGet('messages.php', params),
-                initial ? Promise.resolve({ typing: [] }) : apiGet('typing.php', { conversation_id: this.convId }),
-            ]);
-
-            // ── Typing indicator ───────────────────────────────────────────
-            if (!initial) this._updateTyping(td.typing || []);
+            // The first load still goes to messages.php — it is the only one
+            // that paginates history. Every poll after that uses poll.php,
+            // which returns messages, typing, unread, the conversation-list
+            // signature and any incoming call in a single request. That
+            // replaced three separate timers hitting three endpoints.
+            let d;
+            if (initial) {
+                d = await apiGet('messages.php', { conversation_id: this.convId, initial: 1 });
+            } else {
+                d = await apiGet('poll.php', {
+                    conversation_id: this.convId,
+                    after: this.lastMsgId,
+                    list_sig: this.listSig || '',
+                });
+                this._applyPollExtras(d);
+            }
 
             const msgs = d.messages || [];
             // Update read_min for tick rendering
@@ -1458,6 +1464,88 @@ const Chat = window.Chat = {
         this.typingLastSent = now;
         apiPost('typing.php', { conversation_id: this.convId }).catch(()=>{});
     },
+    /* ── Everything a poll returns besides the messages themselves ──────────
+       Typing, presence-driven list refresh, unread badge and incoming calls
+       all used to be separate requests on separate timers. */
+    _applyPollExtras(d) {
+        if (!d || d.ok === false) return;
+
+        this._updateTyping(d.typing || []);
+        if (typeof d.read_min === 'number') this.readMin = d.read_min;
+        if (d.list_sig) this.listSig = d.list_sig;
+
+        // Rebuild the sidebar only when something actually moved. Without this
+        // the list was re-queried and re-rendered on a fixed timer regardless.
+        if (d.list_changed) this.loadConvs();
+
+        if (typeof d.unread === 'number' && window.mscSetChatBadge) {
+            window.mscSetChatBadge(d.unread);
+        }
+
+        // Folded in from the old 5-second _checkIncoming timer.
+        if (d.incoming_call && !this.activeCallId) {
+            const c = d.incoming_call;
+            this.activeCallId = parseInt(c.id);
+            this.pendingIce = [];
+            this._showCall(c.caller_name, avatarColor(c.caller_id), c.call_type, true);
+            const st = el('callStat');
+            if (st) st.textContent = `Incoming ${c.call_type} call…`;
+            pingSound();
+        }
+    },
+
+    /* ── Adaptive polling ───────────────────────────────────────────────────
+       A fixed 2-second timer kept firing at full rate in a background tab and
+       for someone who had walked away, which is most of the day. The cadence
+       now follows what the user is actually doing:
+
+         focused + recently active   2s   (feels live while typing/reading)
+         focused but idle >45s       5s
+         tab hidden                 20s   (enough to keep the badge honest)
+
+       A hidden tab is throttled by the browser anyway, so the point is not to
+       queue up work that all fires at once on return — hence the immediate
+       catch-up poll on focus. */
+    _pollDelay() {
+        if (document.hidden) return 20000;
+        const idleMs = Date.now() - (this.lastActivity || 0);
+        return idleMs > 45000 ? 5000 : 2000;
+    },
+
+    _scheduleNextPoll() {
+        clearTimeout(this.pollTimer);
+        if (!this.convId) return;
+        this.pollTimer = setTimeout(async () => {
+            // setTimeout rather than setInterval: a slow response must not let
+            // requests stack up behind each other.
+            try { await this._fetchMsgs(false); } catch (e) {}
+            this._scheduleNextPoll();
+        }, this._pollDelay());
+    },
+
+    startPolling() {
+        this.lastActivity = Date.now();
+        if (this._pollBound) { this._scheduleNextPoll(); return; }
+        this._pollBound = true;
+
+        const wake = () => {
+            this.lastActivity = Date.now();
+            if (!document.hidden && this.convId) {
+                // Catch up straight away rather than waiting out the slow interval.
+                clearTimeout(this.pollTimer);
+                this._fetchMsgs(false).finally(() => this._scheduleNextPoll());
+            }
+        };
+        document.addEventListener('visibilitychange', wake);
+        window.addEventListener('focus', wake);
+        ['keydown', 'mousedown', 'touchstart'].forEach(ev =>
+            document.addEventListener(ev, () => { this.lastActivity = Date.now(); }, { passive: true }));
+
+        this._scheduleNextPoll();
+    },
+
+    stopPolling() { clearTimeout(this.pollTimer); },
+
     _updateTyping(typers) {
         const wrap = el('chTyping');
         const nameEl = el('chTypingName');
@@ -2225,7 +2313,10 @@ const Chat = window.Chat = {
         this.buildEmojiPicker();
         this.loadConvs();
         requestNotifPerm();
-        setInterval(()=>this._checkIncoming(), 5000);
+        // Incoming calls ride along with the main poll (see _applyPollExtras).
+        // While no conversation is open there is no poll running, so keep a
+        // slow standalone check so a call still rings on the chat list screen.
+        setInterval(() => { if (!this.convId && !document.hidden) this._checkIncoming(); }, 8000);
 
         // Conversation clicks
         el('convList').addEventListener('click', e=>{
@@ -2432,9 +2523,7 @@ document.addEventListener('DOMContentLoaded', () => {
     Chat.calleeId  = <?= $autoCalleeId ?>;
     Chat.convType  = 'direct';
     history.replaceState({}, '', location.pathname);
-    Chat._fetchMsgs(true).then(() => {
-        Chat.pollTimer = setInterval(() => Chat._fetchMsgs(false), 2000);
-    });
+    Chat._fetchMsgs(true).then(() => Chat.startPolling());
     <?php endif; ?>
 });
 </script>

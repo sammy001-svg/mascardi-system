@@ -634,17 +634,13 @@ if (authRole() === 'supervisor') {
         (function(){
             var badge = document.getElementById('chatNavBadge');
             if (!badge) return;
-            function poll(){
-                fetch('<?= BASE_URL ?>/modules/chat/api/unread.php')
-                    .then(function(r){ return r.json(); })
-                    .then(function(d){
-                        var n = d.count || 0;
-                        if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
-                        else { badge.style.display = 'none'; }
-                    }).catch(function(){});
+            // Subscribes to the shared poller in header.php rather than fetching
+            // the same endpoint on a timer of its own.
+            function render(n){
+                if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
+                else { badge.style.display = 'none'; }
             }
-            poll();
-            setInterval(poll, 15000);
+            if (window.mscChatUnread) window.mscChatUnread.subscribe(render);
         }());
         </script>
         <?php endif; ?>

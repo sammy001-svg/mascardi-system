@@ -499,18 +499,10 @@ window.addEventListener('beforeinstallprompt', function(e) {
             })
             .catch(function(){});
 
-        // Team chat messages → ring/popup on every page except the chat itself
-        fetch(chatApi)
-            .then(function(r){ return r.json(); })
-            .then(function(d){
-                var c = parseInt(d.count || 0, 10);
-                if (!onChatPage && c > seen(LS_C)) {
-                    ring();
-                    popupAlert('New team chat message', c + ' unread message' + (c > 1 ? 's' : '') + ' — click to open chat', chatUrl);
-                }
-                setSeen(LS_C, c);  // chat page keeps the baseline in sync (it has its own alerts)
-            })
-            .catch(function(){});
+        // Team chat unread is fetched by the shared poller below, not here —
+        // the header, the sidebar badge and the floating button all used to
+        // fetch the identical endpoint on their own timers (12s / 15s / 20s),
+        // so every page made three requests for one number.
     }
 
     // Load list when dropdown opens
@@ -539,9 +531,62 @@ window.addEventListener('beforeinstallprompt', function(e) {
             .catch(function(){});
     });
 
-    // Poll every 12 s for new notifications + chat messages, starting now
+    // Poll every 12 s for new notifications, starting now
     updateCount();
     pollInt = setInterval(updateCount, 12000);
+
+    /* ── Shared team-chat unread ────────────────────────────────────────────
+       One fetch, many badges. Anything that shows an unread count subscribes
+       here instead of polling on its own timer. Two further savings:
+         • hidden tabs are skipped entirely, with a refresh on return;
+         • the chat page pushes the number it already has from its own poll
+           (window.mscSetChatBadge), so having chat open costs no extra request. */
+    window.mscChatUnread = (function () {
+        var subs = [], last = null, timer = null;
+
+        function apply(n) {
+            n = parseInt(n || 0, 10);
+            if (n === last) return;
+            last = n;
+            subs.forEach(function (fn) { try { fn(n); } catch (e) {} });
+
+            // Ring once when it climbs, except on the chat page which alerts itself.
+            if (!onChatPage && n > seen(LS_C)) {
+                ring();
+                popupAlert('New team chat message',
+                    n + ' unread message' + (n > 1 ? 's' : '') + ' — click to open chat', chatUrl);
+            }
+            setSeen(LS_C, n);
+        }
+
+        function poll() {
+            if (document.hidden) return;
+            fetch(chatApi)
+                .then(function (r) { return r.json(); })
+                .then(function (d) { apply(d.count || 0); })
+                .catch(function () {});
+        }
+
+        function start() {
+            if (timer) return;
+            poll();
+            timer = setInterval(poll, 15000);
+        }
+
+        document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+        start();
+
+        return {
+            subscribe: function (fn) { subs.push(fn); if (last !== null) fn(last); },
+            refresh: poll,
+            set: apply
+        };
+    }());
+
+    // Lets the chat page publish the count it already fetched.
+    window.mscSetChatBadge = function (n) {
+        if (window.mscChatUnread) window.mscChatUnread.set(n);
+    };
 }());
 </script>
 
