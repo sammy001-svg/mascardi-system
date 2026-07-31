@@ -26,7 +26,11 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
     </div>
 
     <!-- Navigation -->
-    <nav class="sidebar-nav">
+    <?php /* The collapsible grouping in header.php is for the long staff menu
+             (Fleet, Operations, Finance, …). This portal is a short, deliberately
+             focused list whose links all sit under a heading, so collapsing them
+             left nothing on screen at all. Opted out — every link stays visible. */ ?>
+    <nav class="sidebar-nav" data-accordion="off">
 
         <!-- ══ DASHBOARDS ═══════════════════════════════════════════════ -->
         <div class="nav-section">Dashboards</div>

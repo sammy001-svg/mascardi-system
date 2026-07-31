@@ -113,6 +113,9 @@ window.addEventListener('beforeinstallprompt', function(e) {
     var KEY = 'msc_sidebar_groups';
     var nav = document.querySelector('.app-sidebar .sidebar-nav');
     if (!nav) return;
+    // A sidebar can opt out (see sidebar_admin.php) — short menus are worse off
+    // grouped, and one whose every link sits under a heading renders empty.
+    if (nav.getAttribute('data-accordion') === 'off') return;
 
     var state = {};
     try { state = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { state = {}; }
