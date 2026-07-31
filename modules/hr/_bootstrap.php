@@ -55,22 +55,67 @@ function hrDocumentTypes(): array {
  */
 function hrMigrate(PDO $db): void
 {
-    // ── users.role — the ENUM had drifted badly behind the roles the UI offers.
-    // 'hr_manager' was selectable in Users → Add but was not a legal ENUM value,
-    // and with MySQL strict mode off the insert silently stored ''. An HR user
-    // therefore had no role and no access at all. Widen it to every role the
-    // application actually knows about.
+    // ── users.role ────────────────────────────────────────────────────────────
+    // The ENUM had drifted behind the roles the UI offers: 'hr_manager' was
+    // selectable in Users → Add but was not a legal value, so with MySQL strict
+    // mode off the insert silently stored ''.
+    //
+    // Widening it is therefore necessary — but it MUST be additive. An earlier
+    // version of this migration listed the roles explicitly and omitted
+    // 'super_admin', which dropped that value from the column; every account
+    // using it was silently blanked, and a blank role grants nothing at all
+    // (canAccess() matches no map), which stripped the super admin's entire
+    // menu. Never write a literal list here: read what the column already
+    // allows and add to it, so no deployment can lose a role this way again.
     try {
         $col = $db->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
-        if ($col && !str_contains(strtolower($col['Type']), 'hr_manager')) {
-            $db->exec("ALTER TABLE users MODIFY COLUMN role ENUM(
-                'admin','general_manager','manager','supervisor',
-                'finance_manager','accountant','cashier',
-                'sales_manager','sales_officer','sales_person','customer_relations','receptionist',
-                'workshop_manager','mechanic','driver',
-                'inventory_manager','procurement_officer',
-                'hr_manager'
-            ) NOT NULL DEFAULT 'sales_person'");
+        if ($col) {
+            $existing = [];
+            if (preg_match("/^enum\((.*)\)$/i", trim($col['Type']), $m)) {
+                foreach (explode("','", trim($m[1], "'")) as $v) {
+                    $v = trim($v, "' ");
+                    if ($v !== '') $existing[] = $v;
+                }
+            }
+
+            // Every role the application actually references.
+            $required = [
+                'super_admin', 'admin', 'general_manager', 'manager', 'supervisor',
+                'finance_manager', 'accountant', 'cashier',
+                'sales_manager', 'sales_officer', 'sales_person', 'customer_relations', 'receptionist',
+                'workshop_manager', 'mechanic', 'driver',
+                'inventory_manager', 'procurement_officer', 'hr_manager',
+            ];
+
+            // Union, preserving whatever the column already had first.
+            $all = $existing;
+            foreach ($required as $r) if (!in_array($r, $all, true)) $all[] = $r;
+
+            if (count($all) !== count($existing)) {
+                $list = implode(',', array_map(fn($v) => "'" . str_replace("'", "''", $v) . "'", $all));
+                $db->exec("ALTER TABLE users MODIFY COLUMN role ENUM({$list}) NOT NULL DEFAULT 'sales_person'");
+            }
+        }
+    } catch (\Throwable $_) {}
+
+    // Repair accounts blanked by the non-additive widening described above.
+    // 'super_admin' is the only role the application references that the bad
+    // list omitted, so a blank role can only have come from that value.
+    try {
+        $col = $db->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
+        if ($col && str_contains(strtolower($col['Type']), 'super_admin')) {
+            $blank = $db->query("SELECT id, name, username FROM users WHERE role = '' OR role IS NULL")
+                        ->fetchAll(PDO::FETCH_ASSOC);
+            if ($blank) {
+                $db->exec("UPDATE users SET role = 'super_admin' WHERE role = '' OR role IS NULL");
+                foreach ($blank as $u) {
+                    error_log("hrMigrate: restored blanked role to super_admin for user #{$u['id']} ({$u['username']})");
+                    try {
+                        logActivity('update', 'users', (int)$u['id'],
+                            "Restored role to super_admin — it had been blanked by a schema change that dropped the value");
+                    } catch (\Throwable $_) {}
+                }
+            }
         }
     } catch (\Throwable $_) {}
 
