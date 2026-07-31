@@ -137,7 +137,9 @@ if (authRole() === 'supervisor') {
 
         <!-- ══ DISPATCH & TEAM ════════════════════════════════════ -->
         <?php if (canAccess('dispatch') || canAccess('team')): ?>
-        <div class="nav-section">Dispatch &amp; Team</div>
+        <?php // Roles with team but no dispatch (HR) would otherwise sit under a
+              // heading for a section they have no items in. ?>
+        <div class="nav-section"><?= canAccess('dispatch') ? 'Dispatch &amp; Team' : 'Team' ?></div>
 
         <?php if (canAccess('dispatch')): ?>
         <a href="<?= BASE_URL ?>/modules/dispatch/index.php"
@@ -425,6 +427,9 @@ if (authRole() === 'supervisor') {
         <?php endif; ?>
 
         <!-- ══ WHATSAPP ═══════════════════════════════════════════ -->
+        <?php // Customer messaging — was ungated, so it appeared for every role
+              // including HR, mechanics and drivers who have no customer contact. ?>
+        <?php if (canAccess('crm') || canAccess('clients') || canAccess('cars')): ?>
         <div class="nav-section">WhatsApp</div>
         <a href="<?= BASE_URL ?>/modules/whatsapp/index.php"
            class="nav-item <?= isActive('/modules/whatsapp/') ?>"
@@ -446,6 +451,7 @@ if (authRole() === 'supervisor') {
            data-label="WA Setup">
             <i class="fa fa-qrcode"></i><span>WA Setup</span>
         </a>
+        <?php endif; ?>
         <?php endif; ?>
 
         <!-- ══ FINANCE ════════════════════════════════════════════ -->
@@ -585,12 +591,15 @@ if (authRole() === 'supervisor') {
             <i class="fa fa-chart-bar"></i><span>Reports</span>
         </a>
         <?php // Company KPI targets (revenue, cars sold, leads, jobs). The page was
-              // fully built but linked from nowhere, so nobody could reach it. ?>
+              // fully built but linked from nowhere, so nobody could reach it.
+              // Commercial targets — shown only to roles that own them. ?>
+        <?php if (canAccess('sales') || canAccess('crm')): ?>
         <a href="<?= BASE_URL ?>/modules/reports/kpi.php"
            class="nav-item <?= isActive('/modules/reports/kpi.php') ?>"
            data-label="KPI Targets">
             <i class="fa fa-bullseye"></i><span>KPI Targets</span>
         </a>
+        <?php endif; ?>
         <?php endif; ?>
 
         <!-- ══ COMMUNICATION ══════════════════════════════════════ -->
@@ -623,6 +632,7 @@ if (authRole() === 'supervisor') {
         }());
         </script>
         <?php endif; ?>
+        <?php if (canAccess('crm') || canAccess('clients') || canAccess('cars')): ?>
         <a href="<?= BASE_URL ?>/modules/whatsapp/index.php"
            class="nav-item <?= isActive('/modules/whatsapp/') ?>"
            data-label="WA Inbox"
@@ -632,6 +642,7 @@ if (authRole() === 'supervisor') {
                   background:#00a884;color:#fff;border-radius:10px;font-size:10px;
                   font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
         </a>
+        <?php endif; ?>
         <script>
         (function(){
             var badge = document.getElementById('waNavBadge');

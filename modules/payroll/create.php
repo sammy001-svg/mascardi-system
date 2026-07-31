@@ -94,16 +94,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $totalGross = 0; $totalDed = 0; $totalNet = 0;
 
                 foreach ($staffList as $s) {
-                    // Adjust for attendance if records exist
+                    // Pro-rate against how much of the month the register
+                    // actually covers, not against the nominal working days.
+                    //
+                    // Taking the raw present-day count as days worked means a
+                    // month where the register was only taken on 5 days pays
+                    // everyone 5/26 of their salary — a silent, large underpay
+                    // caused by missing data rather than missing work. Scoring
+                    // presence as a proportion of the days that were recorded
+                    // keeps absences deducted while a sparse register does not
+                    // cut anyone's pay.
                     $attStmt = $db->prepare("
-                        SELECT SUM(CASE WHEN status IN ('present','late') THEN 1 WHEN status='half_day' THEN 0.5 ELSE 0 END)
+                        SELECT COUNT(*) AS recorded,
+                               COALESCE(SUM(CASE WHEN status IN ('present','late') THEN 1
+                                                 WHEN status = 'half_day' THEN 0.5
+                                                 WHEN status = 'leave' THEN 1
+                                                 ELSE 0 END), 0) AS credited
                         FROM attendance_records
                         WHERE staff_type=? AND staff_id=?
                           AND MONTH(attendance_date)=? AND YEAR(attendance_date)=?
                     ");
                     $attStmt->execute([$s['staff_type'], $s['staff_id'], $month, $year]);
-                    $daysFromAtt = $attStmt->fetchColumn();
-                    $daysWorked = ($daysFromAtt !== null && $daysFromAtt > 0) ? (float)$daysFromAtt : $workingDays;
+                    $att      = $attStmt->fetch(PDO::FETCH_ASSOC) ?: ['recorded' => 0, 'credited' => 0];
+                    $recorded = (int)$att['recorded'];
+
+                    // No register kept for this person this month → pay in full.
+                    $daysWorked = $recorded > 0
+                        ? round((float)$att['credited'] / $recorded * $workingDays, 1)
+                        : (float)$workingDays;
 
                     $gross = (float)$s['basic_salary'] + (float)$s['house_allowance'] + (float)$s['transport_allow'];
                     // Pro-rate if less days worked
