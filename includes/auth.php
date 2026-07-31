@@ -136,7 +136,7 @@ function canAccess(string $module): bool {
         'general_manager'   => [
             'cars','mechanics','drivers','intake','assessments','jobs','parts_requests','issues',
             'quick_assessments','lpo','inventory','suppliers','car_documents','car_costs',
-            'inspections','attendance','payroll','chat','reports','clients','service_bookings',
+            'inspections','attendance','payroll','hr','chat','reports','clients','service_bookings',
             'crm','payments','invoices','quotations','sales','installments','expenses','imports','trade_in',
         ],
 
@@ -213,8 +213,13 @@ function canAccess(string $module): bool {
         ],
 
         // ── HR roles ───────────────────────────────────────────────────────────
+        // Deliberately narrow. HR previously also carried 'expenses' (a finance
+        // ledger), 'mechanics' and 'drivers' (fleet-operations records — HR
+        // reaches the same people through the employee directory, which is
+        // scoped to employment data rather than job assignment). Those were
+        // removed so the portal only exposes what HR is accountable for.
         'hr_manager'        => [
-            'attendance','payroll','mechanics','drivers','expenses','reports','chat','team',
+            'hr','attendance','payroll','team','reports','chat',
         ],
 
         // ── Legacy ─────────────────────────────────────────────────────────────
@@ -222,7 +227,7 @@ function canAccess(string $module): bool {
             'cars','mechanics','drivers','intake','assessments','jobs','quotations','invoices',
             'lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings',
             'issues','chat','car_documents','crm','car_costs','installments','expenses',
-            'inspections','attendance','payroll','quick_assessments','sales',
+            'inspections','attendance','payroll','hr','quick_assessments','sales',
             'showroom_transfers','key_handovers','dispatch','team','imports',
         ],
     ];
@@ -252,7 +257,7 @@ function canWrite(string $module): bool {
         'driver'            => ['team'],
         'inventory_manager' => ['inventory','suppliers','lpo','parts_requests'],
         'procurement_officer' => ['lpo','suppliers','inventory','parts_requests'],
-        'hr_manager'        => ['attendance','payroll'],
+        'hr_manager'        => ['hr','attendance','payroll','team'],
         'manager'           => ['cars','jobs','assessments','mechanics','drivers','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings','car_documents','car_costs','installments','expenses','inspections','attendance','payroll','quick_assessments','sales','crm','imports'],
     ];
     $role = authRole();

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../hr/_bootstrap.php';
 requireLogin();
 canAccess('payroll') || redirect(BASE_URL . '/index.php');
 
@@ -7,28 +8,24 @@ $pageTitle = 'Payroll Profiles';
 $db     = getDB();
 $errors = [];
 
-// Load all mechanics + drivers with their salary profiles
-try {
-    $mechanics = $db->query("
-        SELECT m.id, m.name, m.phone, m.status,
-               ss.id AS sal_id, ss.basic_salary, ss.house_allowance,
-               ss.transport_allow, ss.effective_date, ss.status AS sal_status
-        FROM mechanics m
-        LEFT JOIN staff_salaries ss ON ss.staff_type='mechanic' AND ss.staff_id=m.id
-        WHERE m.status='active'
-        ORDER BY m.name
-    ")->fetchAll();
-
-    $drivers = $db->query("
-        SELECT d.id, d.name, d.phone, d.status,
-               ss.id AS sal_id, ss.basic_salary, ss.house_allowance,
-               ss.transport_allow, ss.effective_date, ss.status AS sal_status
-        FROM drivers d
-        LEFT JOIN staff_salaries ss ON ss.staff_type='driver' AND ss.staff_id=d.id
-        WHERE d.status='active'
-        ORDER BY d.name
-    ")->fetchAll();
-} catch (\Throwable $e) { $mechanics = []; $drivers = []; }
+// Every employee grouped by staff type. This used to load mechanics and
+// drivers only, so office staff could never be given a salary and were
+// therefore silently absent from every payroll run.
+$groups = [];
+foreach (hrStaffTypes() as $type => $meta) $groups[$type] = ['label' => $meta['label'], 'rows' => []];
+foreach (hrStaffDirectory(getDB()) as $person) {
+    $sal = $person['salary'];
+    $groups[$person['staff_type']]['rows'][] = [
+        'id'              => $person['id'],
+        'name'            => $person['name'],
+        'job_title'       => $person['job_title'],
+        'sal_id'          => $sal['id']              ?? null,
+        'basic_salary'    => $sal['basic_salary']    ?? 0,
+        'house_allowance' => $sal['house_allowance'] ?? 0,
+        'transport_allow' => $sal['transport_allow'] ?? 0,
+        'effective_date'  => $sal['effective_date']  ?? null,
+    ];
+}
 
 // POST: save a salary profile
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && canWrite('payroll')) {
@@ -40,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && canWrite('payroll')) {
     $effDate    = $_POST['effective_date']  ?? date('Y-m-01');
     $notes      = trim($_POST['notes']      ?? '');
 
-    if (!in_array($staffType, ['mechanic','driver']) || !$staffId) {
+    if (!isset(hrStaffTypes()[$staffType]) || !$staffId) {
         $errors[] = 'Invalid staff selection.';
     } elseif ($basic < 0) {
         $errors[] = 'Basic salary cannot be negative.';
@@ -84,7 +81,7 @@ include __DIR__ . '/../../includes/header.php';
     These are auto-loaded when you create a new payroll run.
 </div>
 
-<?php foreach ([['Mechanics', $mechanics, 'mechanic'], ['Drivers', $drivers, 'driver']] as [$title, $staff, $type]): ?>
+<?php foreach ($groups as $type => $g): $title = $g['label']; $staff = $g['rows']; ?>
 <div class="card mb-4">
     <div class="card-header fw-semibold"><i class="fa fa-users me-2"></i><?= $title ?></div>
     <div class="card-body p-0">
@@ -105,7 +102,7 @@ include __DIR__ . '/../../includes/header.php';
                 $gross = (float)$s['basic_salary'] + (float)$s['house_allowance'] + (float)$s['transport_allow'];
             ?>
             <tr>
-                <td class="ps-3 fw-medium"><?= e($s['name']) ?></td>
+                <td class="ps-3 fw-medium"><?= e($s['name']) ?><?php if ($s['job_title']): ?><div class="text-muted small"><?= e($s['job_title']) ?></div><?php endif; ?></td>
                 <td class="text-end"><?= $s['sal_id'] ? money((float)$s['basic_salary']) : '<span class="text-muted small">Not set</span>' ?></td>
                 <td class="text-end"><?= $s['sal_id'] ? money((float)$s['house_allowance']) : '—' ?></td>
                 <td class="text-end"><?= $s['sal_id'] ? money((float)$s['transport_allow']) : '—' ?></td>
@@ -122,7 +119,7 @@ include __DIR__ . '/../../includes/header.php';
             </tr>
             <?php endforeach; ?>
             <?php if (empty($staff)): ?>
-            <tr><td colspan="7" class="text-center text-muted py-3">No active <?= strtolower($title) ?> found.</td></tr>
+            <tr><td colspan="7" class="text-center text-muted py-3">No <?= strtolower($title) ?> on record.</td></tr>
             <?php endif; ?>
             </tbody>
         </table>

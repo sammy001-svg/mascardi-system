@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../hr/_bootstrap.php';
 requireLogin();
 canWrite('payroll') || redirect(BASE_URL . '/index.php');
 
@@ -64,19 +65,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
-            // Fetch all staff with salary profiles
-            $staffList = $db->query("
-                SELECT ss.*, m.name AS staff_name
-                FROM staff_salaries ss
-                JOIN mechanics m ON m.id = ss.staff_id AND ss.staff_type='mechanic'
-                WHERE ss.status='active'
-                UNION ALL
-                SELECT ss.*, d.name AS staff_name
-                FROM staff_salaries ss
-                JOIN drivers d ON d.id = ss.staff_id AND ss.staff_type='driver'
-                WHERE ss.status='active'
-                ORDER BY staff_name
-            ")->fetchAll();
+            // Every employee with an active salary profile. This used to union
+            // mechanics and drivers only, so office staff were silently left
+            // off the payroll no matter what salary was recorded for them.
+            $staffList = [];
+            foreach (hrStaffDirectory($db) as $s) {
+                if (!$s['salary']) continue;
+                $staffList[] = $s['salary'] + ['staff_name' => $s['name']];
+            }
 
             if (empty($staffList)) {
                 $errors[] = 'No staff with salary profiles found. Set up salaries first.';

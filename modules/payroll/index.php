@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../hr/_bootstrap.php';
 requireLogin();
 canAccess('payroll') || redirect(BASE_URL . '/index.php');
 
@@ -27,13 +28,10 @@ try {
         FROM payroll_runs
     ")->fetch();
 
-    $unsetStaff = $db->query("
-        SELECT COUNT(*) FROM (
-            SELECT m.id FROM mechanics m WHERE m.status='active' AND NOT EXISTS (SELECT 1 FROM staff_salaries ss WHERE ss.staff_type='mechanic' AND ss.staff_id=m.id)
-            UNION
-            SELECT d.id FROM drivers d WHERE d.status='active' AND NOT EXISTS (SELECT 1 FROM staff_salaries ss WHERE ss.staff_type='driver' AND ss.staff_id=d.id)
-        ) t
-    ")->fetchColumn();
+    // Counted across every employee, not just mechanics and drivers — anyone
+    // without a salary profile is skipped by the run.
+    $unsetStaff = 0;
+    foreach (hrStaffDirectory($db) as $s) { if (!$s['salary']) $unsetStaff++; }
 } catch (\Throwable $e) { $runs = []; $summary = null; $unsetStaff = 0; }
 
 $months = ['','January','February','March','April','May','June','July','August','September','October','November','December'];

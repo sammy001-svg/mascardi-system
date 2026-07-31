@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../hr/_bootstrap.php';
 requireLogin();
 canAccess('payroll') || redirect(BASE_URL . '/index.php');
 

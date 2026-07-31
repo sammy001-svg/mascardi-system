@@ -56,6 +56,7 @@ $moduleGroups = [
         ['key' => 'expenses',           'label' => 'Expenses',            'icon' => 'fa-receipt'],
     ],
     'HR' => [
+        ['key' => 'hr',                 'label' => 'HR Portal',           'icon' => 'fa-people-roof'],
         ['key' => 'attendance',         'label' => 'Attendance',          'icon' => 'fa-calendar-days'],
         ['key' => 'payroll',            'label' => 'Payroll',             'icon' => 'fa-money-bill-wave'],
     ],
@@ -90,7 +91,7 @@ $roleAccessDefaults = [
     'driver'             => ['cars','assessments'],
     'inventory_manager'  => ['inventory','suppliers','lpo','parts_requests','cars','issues','car_documents','chat'],
     'procurement_officer'=> ['inventory','suppliers','lpo','parts_requests','cars','issues','car_documents','chat','reports'],
-    'hr_manager'         => ['attendance','payroll','mechanics','drivers','expenses','reports','chat'],
+    'hr_manager'         => ['hr','attendance','payroll','team','reports','chat'],
 ];
 $roleWriteDefaults = [
     'supervisor'         => [],
@@ -108,7 +109,7 @@ $roleWriteDefaults = [
     'driver'             => [],
     'inventory_manager'  => ['inventory','suppliers','lpo','parts_requests'],
     'procurement_officer'=> ['lpo','suppliers','inventory','parts_requests'],
-    'hr_manager'         => ['attendance','payroll'],
+    'hr_manager'         => ['hr','attendance','payroll','team'],
 ];
 
 // Load current saved permissions for this user
@@ -509,7 +510,7 @@ function permDesc(string $key): string {
         driver:             'Field staff — limited access to car records and pre-departure assessments.',
         inventory_manager:  'Manages parts stock, supplier orders and purchase requisitions.',
         procurement_officer:'Handles purchasing — LPOs, suppliers, parts requests and stock.',
-        hr_manager:         'Manages staff attendance and processes monthly payroll.',
+        hr_manager:         'Full HR portal — employee records, attendance, leave, documents and payroll.',
         supervisor:         'Supervisor — Oversees a specific location: cars, staff, service bookings, quick assessments, quotations, and invoices.',
         manager:            'Legacy broad-access role. Consider migrating to a specific role.',
     };
@@ -576,8 +577,8 @@ function permDesc(string $key): string {
             write:  ['lpo','suppliers','inventory','parts_requests']
         },
         hr_manager: {
-            access: ['attendance','payroll','mechanics','drivers','expenses','reports','chat'],
-            write:  ['attendance','payroll']
+            access: ['hr','attendance','payroll','team','reports','chat'],
+            write:  ['hr','attendance','payroll','team']
         },
         manager: {
             access: ['cars','mechanics','drivers','intake','assessments','jobs','quotations','invoices','lpo','inventory','suppliers','reports','parts_requests','clients','service_bookings','issues','chat','car_documents','crm','car_costs','installments','expenses','inspections','attendance','payroll','quick_assessments','sales'],

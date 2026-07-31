@@ -31,6 +31,12 @@ if ($role === 'customer_relations') {
     exit;
 }
 
+// HR Managers get the HR command centre
+if ($role === 'hr_manager') {
+    header('Location: ' . BASE_URL . '/modules/hr/index.php');
+    exit;
+}
+
 // Supervisors get their location-scoped portal
 if ($role === 'supervisor') {
     header('Location: ' . BASE_URL . '/modules/supervisor/dashboard.php');

@@ -49,6 +49,7 @@ $moduleGroups = [
         ['key' => 'expenses',           'label' => 'Expenses',            'icon' => 'fa-receipt'],
     ],
     'HR' => [
+        ['key' => 'hr',                 'label' => 'HR Portal',           'icon' => 'fa-people-roof'],
         ['key' => 'attendance',         'label' => 'Attendance',          'icon' => 'fa-calendar-days'],
         ['key' => 'payroll',            'label' => 'Payroll',             'icon' => 'fa-money-bill-wave'],
     ],
@@ -408,7 +409,7 @@ function permDesc(string $key): string {
         driver:              'Field staff — limited access to car records and pre-departure assessments.',
         inventory_manager:   'Manages parts stock levels, supplier relationships and purchase requisitions.',
         procurement_officer: 'Purchasing specialist — LPO management, supplier orders and inventory replenishment.',
-        hr_manager:          'HR administration — staff attendance tracking and monthly payroll processing.',
+        hr_manager:          'Full HR portal — employee records, attendance, leave, documents and monthly payroll.',
         supervisor:          'Supervisor — Oversees a specific location: cars, staff, service bookings, quick assessments, quotations, and invoices.',
     };
 
@@ -491,8 +492,8 @@ function permDesc(string $key): string {
             write:  ['lpo','suppliers','inventory','parts_requests']
         },
         hr_manager: {
-            access: ['attendance','payroll','mechanics','drivers','expenses','reports','chat'],
-            write:  ['attendance','payroll']
+            access: ['hr','attendance','payroll','team','reports','chat'],
+            write:  ['hr','attendance','payroll','team']
         },
     };
 

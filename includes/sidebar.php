@@ -511,15 +511,40 @@ if (authRole() === 'supervisor') {
         <?php endif; ?>
 
         <!-- ══ HR ═════════════════════════════════════════════════ -->
-        <?php if (canAccess('attendance') || canAccess('payroll')): ?>
+        <?php if (canAccess('hr') || canAccess('attendance') || canAccess('payroll')): ?>
         <div class="nav-section">Human Resources</div>
 
-        <?php if (canAccess('attendance')): ?>
-        <a href="<?= BASE_URL ?>/modules/attendance/hr_dashboard.php"
-           class="nav-item <?= isActive('/modules/attendance/hr_dashboard') ?>"
+        <?php if (canAccess('hr')): ?>
+        <a href="<?= BASE_URL ?>/modules/hr/index.php"
+           <?php // isActive is a substring match — anchor on index.php so the
+                 // dashboard doesn't stay lit on every other HR page ?>
+           class="nav-item <?= isActive('/modules/hr/index') ?>"
            data-label="HR Dashboard">
             <i class="fa fa-gauge-high"></i><span>HR Dashboard</span>
         </a>
+        <a href="<?= BASE_URL ?>/modules/hr/employees.php"
+           class="nav-item <?= (str_contains($__uri, '/modules/hr/employee')) ? 'active' : '' ?>"
+           data-label="Employees">
+            <i class="fa fa-users"></i><span>Employees</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/hr/attendance.php"
+           class="nav-item <?= isActive('/modules/hr/attendance') ?>"
+           data-label="Attendance">
+            <i class="fa fa-calendar-days"></i><span>Attendance</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/hr/leave.php"
+           class="nav-item <?= isActive('/modules/hr/leave') ?>"
+           data-label="Leave">
+            <i class="fa fa-plane-departure"></i><span>Leave</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/hr/documents.php"
+           class="nav-item <?= isActive('/modules/hr/documents') ?>"
+           data-label="Documents">
+            <i class="fa fa-folder-open"></i><span>Documents</span>
+        </a>
+        <?php elseif (canAccess('attendance')): ?>
+        <?php // Roles with attendance but not HR (workshop/finance) keep the
+              // plain register they already had. ?>
         <a href="<?= BASE_URL ?>/modules/attendance/index.php"
            class="nav-item <?= isActive('/modules/attendance/index') ?>"
            data-label="Attendance">
@@ -527,11 +552,25 @@ if (authRole() === 'supervisor') {
         </a>
         <?php endif; ?>
 
+        <?php if (canAccess('attendance')): ?>
+        <a href="<?= BASE_URL ?>/modules/attendance/report.php"
+           class="nav-item <?= isActive('/modules/attendance/report') ?>"
+           data-label="Attendance Report">
+            <i class="fa fa-chart-column"></i><span>Attendance Report</span>
+        </a>
+        <?php endif; ?>
+
         <?php if (canAccess('payroll')): ?>
         <a href="<?= BASE_URL ?>/modules/payroll/index.php"
-           class="nav-item <?= isActive('/modules/payroll/') ?>"
+           <?php // staff.php gets its own entry below, so exclude it here ?>
+           class="nav-item <?= (str_contains($__uri, '/modules/payroll/') && !str_contains($__uri, 'staff.php')) ? 'active' : '' ?>"
            data-label="Payroll">
             <i class="fa fa-money-bill-wave"></i><span>Payroll</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/payroll/staff.php"
+           class="nav-item <?= isActive('/modules/payroll/staff') ?>"
+           data-label="Salary Profiles">
+            <i class="fa fa-wallet"></i><span>Salary Profiles</span>
         </a>
         <?php endif; ?>
         <?php endif; ?>
