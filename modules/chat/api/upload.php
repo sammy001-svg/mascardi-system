@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); echo json_
 
 $me     = authUser();
 $db     = getDB();
+chatMigrate($db);
 $convId = (int)($_POST['conversation_id'] ?? 0);
 
 if (!$convId) { http_response_code(400); echo json_encode(['error'=>'conversation_id required']); exit; }

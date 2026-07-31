@@ -9,6 +9,7 @@ if (!isLoggedIn()) { http_response_code(401); echo json_encode(['error'=>'Unauth
 
 $me  = authUser();
 $db  = getDB();
+chatMigrate($db);
 $raw = json_decode(file_get_contents('php://input'), true) ?? [];
 
 $msgId = (int)($raw['message_id'] ?? 0);

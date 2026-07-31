@@ -9,6 +9,7 @@ if (!isLoggedIn()) { http_response_code(401); echo json_encode(['error'=>'Unauth
 
 $me     = authUser();
 $db     = getDB();
+chatMigrate($db);
 $convId  = (int)($_GET['conversation_id'] ?? 0);
 $after   = (int)($_GET['after']  ?? 0);
 $before  = isset($_GET['before'])  ? (int)$_GET['before']  : null;
@@ -25,11 +26,9 @@ try {
     $participant = $check->fetch();
     if (!$participant) { http_response_code(403); echo json_encode(['error'=>'Access denied']); exit; }
 
-    // ── Schema upgrades (safe, idempotent) ────────────────────────────────
-
-
-    // Update caller's last_seen
-    try { $db->prepare("UPDATE users SET last_seen = NOW() WHERE id = ?")->execute([$me['id']]); } catch (\Throwable $t) {}
+    // Presence. Throttled inside the helper — this used to be an unconditional
+    // row write on every 2-second poll.
+    chatTouchPresence($db, (int)$me['id']);
 
     // ── Build message query ────────────────────────────────────────────────
     $cols = "

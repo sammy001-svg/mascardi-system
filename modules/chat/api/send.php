@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); echo json_
 
 $me  = authUser();
 $db  = getDB();
+chatMigrate($db);
 
 $body      = json_decode(file_get_contents('php://input'), true) ?? [];
 $convId    = (int)($body['conversation_id'] ?? 0);

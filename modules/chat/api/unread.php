@@ -9,6 +9,7 @@ if (!isLoggedIn()) { echo json_encode(['count' => 0]); exit; }
 
 $me = authUser();
 $db = getDB();
+chatMigrate($db);
 
 try {
     $stmt = $db->prepare("

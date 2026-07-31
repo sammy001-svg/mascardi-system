@@ -9,6 +9,7 @@ if (!isLoggedIn()) { http_response_code(401); echo json_encode(['error'=>'Unauth
 
 $me     = authUser();
 $db     = getDB();
+chatMigrate($db);
 $method = $_SERVER['REQUEST_METHOD'];
 
 // ── GET: group info + members ───────────────────────────────────────────────

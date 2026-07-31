@@ -15,7 +15,7 @@
 if (!function_exists('chatMigrate')) {
 
 /** Bump when the schema below changes; that is what re-triggers the migration. */
-const CHAT_SCHEMA_VERSION = '3';
+if (!defined('CHAT_SCHEMA_VERSION')) define('CHAT_SCHEMA_VERSION', '3');
 
 /**
  * Idempotent, and — importantly — nearly free once the schema is current.
@@ -147,6 +147,15 @@ function chatMigrate(PDO $db, bool $force = false): void
             if (!$found) $db->exec($sql);
         } catch (\Throwable $_) {}
     }
+
+    // Record that this version is applied, so subsequent requests skip straight
+    // out at the version check above.
+    try {
+        $db->prepare("INSERT INTO settings (setting_key, setting_value)
+                      VALUES ('chat_schema_version', ?)
+                      ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)")
+           ->execute([CHAT_SCHEMA_VERSION]);
+    } catch (\Throwable $_) {}
 }
 
 /**
