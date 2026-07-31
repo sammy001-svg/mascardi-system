@@ -120,6 +120,23 @@ window.addEventListener('beforeinstallprompt', function(e) {
     var heads = Array.prototype.slice.call(nav.querySelectorAll('.nav-section'));
     if (!heads.length) return;
 
+    // Is there any link that is NOT inside a collapsible group?
+    //
+    // The full staff sidebar opens with a "Dashboard" link before the first
+    // heading, so collapsing every group still leaves something to click. The
+    // super-admin sidebar (sidebar_admin.php) starts with a heading instead, so
+    // every one of its links lives inside a group — collapsing all of them by
+    // default left that panel looking completely empty, which is exactly how it
+    // was reported. Groups still default to closed as intended; this only
+    // guarantees the menu is never blank.
+    var firstHead = nav.querySelector('.nav-section');
+    var hasUngrouped = false;
+    for (var p = nav.firstElementChild; p && p !== firstHead; p = p.nextElementSibling) {
+        if (p.classList && p.classList.contains('nav-item')) { hasUngrouped = true; break; }
+    }
+
+    var groups = [];   // filled below, then used to guarantee something is open
+
     heads.forEach(function (head) {
         // Collect everything up to the next section heading. <script> siblings
         // (the chat / WhatsApp badge pollers) are deliberately left where they
@@ -172,7 +189,25 @@ window.addEventListener('beforeinstallprompt', function(e) {
         head.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
         });
+
+        groups.push({ head: head, body: body, apply: apply, hasActive: hasActive });
     });
+
+    // Safety net: when nothing sits outside a group, never render a menu with
+    // no links showing. Opens the group holding the current page, falling back
+    // to the first one. Saved so it survives navigation, and so a user who then
+    // closes it keeps their choice — this only ever fires when the menu would
+    // otherwise be empty.
+    if (!hasUngrouped && groups.length) {
+        var anyOpen = groups.some(function (g) { return !g.body.classList.contains('is-collapsed'); });
+        if (!anyOpen) {
+            var target = null;
+            for (var i = 0; i < groups.length; i++) {
+                if (groups[i].hasActive) { target = groups[i]; break; }
+            }
+            (target || groups[0]).apply(false, true);
+        }
+    }
 }());
 </script>
 <script>
