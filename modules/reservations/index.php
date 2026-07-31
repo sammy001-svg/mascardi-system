@@ -26,7 +26,19 @@ $filterAgent  = $canFilter ? (int)($_GET['agent'] ?? 0) : 0;
 $filterSearch = trim($_GET['q']    ?? '');
 
 // ── Build WHERE ───────────────────────────────────────────────────────────────
-$where  = ["l.stage = 'reserved'"];
+// A reservation taken by a non-Super-Admin is held at reservation_status =
+// 'pending_approval' and the lead stage deliberately stays put until it is
+// approved. Listing only stage='reserved' therefore hid those completely — the
+// car looked un-reserved even though a deposit had been taken. Include them,
+// flagged as pending, so nothing sits invisible waiting on an approval.
+$hasResStatus = false;
+try {
+    $hasResStatus = (bool)$db->query("SHOW COLUMNS FROM crm_leads LIKE 'reservation_status'")->fetch();
+} catch (\Throwable $_) {}
+
+$where  = [$hasResStatus
+    ? "(l.stage = 'reserved' OR l.reservation_status = 'pending_approval')"
+    : "l.stage = 'reserved'"];
 $params = [];
 if ($isCrmAgent)  { $where[] = "l.assigned_to = $uid"; }
 if ($filterMake)  { $where[] = 'c.make = ?';         $params[] = $filterMake; }
@@ -45,6 +57,7 @@ $stmt = $db->prepare("
         l.name              AS lead_name,
         l.phone             AS lead_phone,
         l.email             AS lead_email,
+        l.stage             AS lead_stage,
         l.deposit_amount,
         l.deposit_date,
         l.deposit_notes,
@@ -475,7 +488,16 @@ include __DIR__ . '/../../includes/header.php';
             <?php else: ?>
             <div class="no-img"><i class="fa fa-car-side"></i></div>
             <?php endif; ?>
+            <?php // Pending reservations are now listed too — distinguish them so an
+                  // unapproved deposit is never mistaken for a confirmed reservation.
+                  $isPendingRes = (($r['lead_stage'] ?? '') !== 'reserved'); ?>
+            <?php if ($isPendingRes): ?>
+            <span class="res-img-badge" style="background:#b45309">
+                <i class="fa fa-hourglass-half me-1"></i>Awaiting approval
+            </span>
+            <?php else: ?>
             <span class="res-img-badge"><i class="fa fa-bookmark me-1"></i>Reserved</span>
+            <?php endif; ?>
         </div>
         <div class="res-car-info">
             <?php if ($r['make']): ?>

@@ -70,6 +70,29 @@ if (!isset($statuses[$filterStatus])) $filterStatus = '';
 
 $where  = ['cs.deal_type = ?'];
 $params = [$tab];
+
+// A consignment vehicle reserved against a lead is no longer available stock —
+// it belongs to the Reservations module until it is delivered or released.
+// Leaving it listed here invites offering the same car to a second buyer.
+//
+// Two cases have to be covered, and they look different in the data:
+//   • approved reservation  → cars.status = 'reserved'
+//   • pending approval      → cars.status is deliberately left UNCHANGED, and
+//                             only crm_leads.reservation_status marks it
+// so checking the car's status alone would miss every unapproved reservation.
+$resPredicate = "(c.status IS NULL OR c.status <> 'reserved')";
+try {
+    $hasResStatus = (bool)$db->query("SHOW COLUMNS FROM crm_leads LIKE 'reservation_status'")->fetch();
+    $leadCond = $hasResStatus
+        ? "(l2.stage = 'reserved' OR l2.reservation_status = 'pending_approval')"
+        : "l2.stage = 'reserved'";
+    $resPredicate .= " AND NOT EXISTS (
+            SELECT 1 FROM crm_leads l2
+            WHERE l2.pinned_car_id = cs.car_id AND {$leadCond}
+        )";
+} catch (\Throwable $_) { /* no crm_leads table — car status check alone */ }
+$where[] = $resPredicate;
+
 if ($filterStatus) { $where[] = 'cs.status = ?'; $params[] = $filterStatus; }
 if ($filterSearch) {
     $where[] = '(cs.owner_name LIKE ? OR cs.owner_phone LIKE ? OR cs.reference LIKE ?
@@ -99,7 +122,13 @@ try {
 // ── Tab counts + headline stats (per deal type) ───────────────────────────────
 $counts = ['sale_on_behalf' => 0, 'trade_in' => 0];
 try {
-    foreach ($db->query("SELECT deal_type, COUNT(*) n FROM consignments GROUP BY deal_type") as $r) {
+    // Same reserved-exclusion as the list, or the tab badges would count
+    // vehicles the list no longer shows.
+    foreach ($db->query("SELECT cs.deal_type, COUNT(*) n
+                         FROM consignments cs
+                         JOIN cars c ON c.id = cs.car_id
+                         WHERE {$resPredicate}
+                         GROUP BY cs.deal_type") as $r) {
         $counts[$r['deal_type']] = (int)$r['n'];
     }
 } catch (\Throwable $_) {}
