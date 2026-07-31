@@ -75,9 +75,19 @@ if (!empty($lead['assigned_to'])) {
     } catch (\Throwable $_) {}
 }
 
-// Company settings
-$companyPhone = getSetting('company_phone', '254 722 200018');
-$companyEmail = getSetting('company_email', 'mascardiventures@gmail.com');
+// ── Letterhead ────────────────────────────────────────────────────────────────
+// Fixed rather than read from Settings on purpose. These are the company's
+// registered particulars — the registration number and registered office — and
+// a proforma invoice is a commercial document that has to carry them exactly.
+// Pulling them from the editable Settings values previously put a general
+// contact address and mailbox on the document instead.
+$pfCompanyLines = [
+    'Reg. No. PVT-ZQUXL55',
+    '291 Kabete Lane Spring Valley',
+    'P.O.Box 1391-00606',
+    'Nairobi Kenya',
+    'Sales@mascardi.co',
+];
 
 // Customer info
 $customerName = trim($client['name']      ?? $lead['name']  ?? '');
@@ -263,9 +273,7 @@ include __DIR__ . '/../../includes/header.php';
                 <div style="font-size:9px;letter-spacing:.22em;color:var(--ink-3);
                             text-transform:uppercase;margin:2px 0 10px">Ventures Limited</div>
                 <div style="font-size:11px;color:var(--ink-2);line-height:1.8">
-                    P O Box 1391, Nairobi 00606<br>
-                    Tel: <?= e($companyPhone) ?><br>
-                    Email: <?= e($companyEmail) ?>
+                    <?= implode('<br>', array_map('e', $pfCompanyLines)) ?>
                 </div>
             </td>
 
