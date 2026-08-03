@@ -84,7 +84,11 @@ include __DIR__ . '/header.php';
         <h1 class="rv rv-d1">Extraordinary cars.<br>Effortless ownership.</h1>
         <p class="rv rv-d2">Quality imported vehicles, transparent pricing and flexible financing — hand-inspected and ready for the road.</p>
         <div class="lx-hero-ctas rv rv-d3">
-            <a href="<?= $vehiclesUrl ?>" class="btn-lx-light">Explore Vehicles</a>
+            <?php // Points off to the separate Mascardi Lifestyle site, so it opens
+                  // in a new tab and leaves the showroom where the visitor left it.
+                  // rel="noopener" keeps the new tab from reaching back into this one. ?>
+            <a href="https://mascardilifestyle.co.ke/" target="_blank" rel="noopener"
+               class="btn-lx-light">Explore Mascardi Lifestyle</a>
             <?php if ($__waClean): ?>
             <a href="https://wa.me/<?= $__waClean ?>?text=<?= urlencode('Hi, I\'d like to book a test drive.') ?>"
                target="_blank" rel="noopener" class="btn-lx-ghost">Book a Test Drive</a>
