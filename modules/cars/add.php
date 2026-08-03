@@ -5,33 +5,7 @@ $pageTitle = 'Add Car';
 $db = getDB();
 $errors = [];
 
-// ── Who may add a vehicle ────────────────────────────────────────────────────
-// Two doors, deliberately different in width:
-//
-//   • canWrite('cars')   — the full form. Any vehicle type, including stock.
-//   • canWrite('clients') AND arriving from a specific client's profile — may
-//     register a vehicle belonging to that client and nothing else.
-//
-// The second exists because registering a customer's car is part of looking
-// after that customer, which sales staff do; granting them 'cars' instead would
-// also let them create and edit inventory and its pricing.
-$clientScopedId = (int)($_GET['client_id'] ?? $_POST['return_client_id'] ?? 0);
-$scopedClient = null;
-if ($clientScopedId) {
-    try {
-        $s = $db->prepare("SELECT id, name, phone FROM clients WHERE id = ?");
-        $s->execute([$clientScopedId]);
-        $scopedClient = $s->fetch(PDO::FETCH_ASSOC) ?: null;
-    } catch (\Throwable $_) {}
-}
-if (!$scopedClient) $clientScopedId = 0;
-
-$fullCarRights = canWrite('cars');
-$clientRights  = ($clientScopedId > 0 && canWrite('clients'));
-
-if (!$fullCarRights && !$clientRights) {
-    die('Permission denied.');
-}
+canWrite('cars') || die('Permission denied.');
 
 // Inline migrations — silent no-op if columns already exist
 // The vehicle-type dropdown offers Sale on Behalf / Trade-In, but those values
@@ -56,7 +30,6 @@ try { $db->exec("ALTER TABLE cars ADD COLUMN meta_description VARCHAR(500) NULL 
 try { $db->exec("ALTER TABLE cars ADD COLUMN meta_image VARCHAR(500) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $forceClient = null;
     $chassis   = trim($_POST['chassis_number'] ?? '');
     $reg       = trim($_POST['registration_number'] ?? '');
     $make      = trim($_POST['make'] ?? '');
@@ -87,17 +60,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$make)    $errors[] = 'Make is required.';
     if (!$model)   $errors[] = 'Model is required.';
     if (!$year)    $errors[] = 'Year is required.';
-    // Someone here on client rights only gets exactly one outcome: a vehicle
-    // belonging to the client whose page they came from. Enforced server-side
-    // rather than by hiding fields, so a hand-crafted POST cannot use this door
-    // to create inventory stock or attach the car to a different client.
-    if (!$fullCarRights) {
-        $carType     = 'client';
-        $forceClient = $clientScopedId;
-        if ($ownerName === '') $ownerName = (string)$scopedClient['name'];
-        if ($ownerPhone === '') $ownerPhone = (string)$scopedClient['phone'];
-    }
-
     if ($carType === 'client' && !$ownerName) $errors[] = 'Owner name is required for client vehicles.';
 
     // Arrived from a client's page — send them back there after saving, so
@@ -108,8 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         try {
             $locId    = (int)($_POST['location_id'] ?? 1);
-            // $forceClient is set above when the user only holds client rights.
-            $clientId = $forceClient ?? ($_POST['client_id'] ? (int)$_POST['client_id'] : null);
+            $clientId = $_POST['client_id'] ? (int)$_POST['client_id'] : null;
             $stmt = $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,client_id,location_id,body_type,notes,description,features,meta_title,meta_description,meta_image,asking_price,mileage,engine_cc,featured,offer_price,show_on_website) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
             $stmt->execute([$chassis,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$clientId,$locId,$body,$notes,$description,$features,$metaTitle,$metaDesc,$metaImage,$askingPrice,$mileage,$engineCc,$featured,$offerPrice,$showOnWeb]);
             $carId = $db->lastInsertId();
@@ -168,8 +129,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // otherwise prefills from $_POST only, so a plain link would land on a blank
 // form with no client attached and the owner fields hidden — the vehicle would
 // silently save unlinked, which is the mistake this flow exists to prevent.
-$preClient   = $scopedClient;      // resolved during the permission check above
-$preClientId = $clientScopedId;
+$preClient = null;
+$preClientId = (int)($_GET['client_id'] ?? $_POST['return_client_id'] ?? 0);
+if ($preClientId) {
+    try {
+        $s = $db->prepare("SELECT id, name, phone FROM clients WHERE id = ?");
+        $s->execute([$preClientId]);
+        $preClient = $s->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (\Throwable $_) {}
+}
+if (!$preClient) $preClientId = 0;
 
 // Effective values for the fields the client context drives. A submitted value
 // always wins, so a correction the user made before a validation error is not
@@ -264,16 +233,10 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Vehicle Type <span class="text-danger">*</span></label>
-                    <?php if ($fullCarRights): ?>
                     <select name="car_type" id="car_type" class="form-select" required>
                         <option value="inventory" <?= $valCarType === 'inventory' ? 'selected' : '' ?>>Inventory (Imported)</option>
                         <option value="client" <?= $valCarType === 'client' ? 'selected' : '' ?>>Client (Repair/Service)</option>
                     </select>
-                    <?php else: ?>
-                    <?php // Fixed on the client-scoped path; the server enforces it regardless. ?>
-                    <input type="hidden" name="car_type" id="car_type" value="client">
-                    <input type="text" class="form-control" value="Client (Repair/Service)" disabled>
-                    <?php endif; ?>
                 </div>
                 <div class="col-md-4 owner-fields" style="<?= $showOwner ? '' : 'display:none' ?>">
                     <label class="form-label">Owner Name <span class="text-danger">*</span></label>
@@ -288,11 +251,6 @@ include __DIR__ . '/../../includes/header.php';
                     <?php if ($preClientId): ?>
                     <input type="hidden" name="return_client_id" value="<?= (int)$preClientId ?>">
                     <?php endif; ?>
-                    <?php if (!$fullCarRights): ?>
-                    <?php // Locked to the originating client; the server ignores any other value. ?>
-                    <input type="hidden" name="client_id" id="client_id" value="<?= (int)$clientScopedId ?>">
-                    <input type="text" class="form-control" value="<?= e($scopedClient['name']) ?>" disabled>
-                    <?php else: ?>
                     <select name="client_id" id="client_id" class="form-select select2">
                         <option value="">— No account —</option>
                         <?php 
@@ -303,7 +261,6 @@ include __DIR__ . '/../../includes/header.php';
                         </option>
                         <?php endforeach; ?>
                     </select>
-                    <?php endif; ?>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Current Location <span class="text-danger">*</span></label>

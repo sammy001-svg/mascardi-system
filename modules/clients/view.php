@@ -363,7 +363,7 @@ include __DIR__ . '/../../includes/header.php';
               // Open to anyone who may edit clients (sales staff included) —
               // cars/add.php confines that route to this client's vehicles. ?>
         <?php if (canWrite('cars') || canWrite('clients')): ?>
-        <a href="<?= BASE_URL ?>/modules/cars/add.php?client_id=<?= (int)$client['id'] ?>"
+        <a href="<?= BASE_URL ?>/modules/clients/add_vehicle.php?id=<?= (int)$client['id'] ?>"
            class="btn btn-sm btn-primary">
             <i class="fa fa-plus me-1"></i><?= $cars ? 'Add Another Vehicle' : 'Add Vehicle' ?>
         </a>
@@ -389,7 +389,7 @@ include __DIR__ . '/../../includes/header.php';
         <div class="p-4 text-muted mb-0">
             No vehicles linked to this client.
             <?php if (canWrite('cars') || canWrite('clients')): ?>
-            <a href="<?= BASE_URL ?>/modules/cars/add.php?client_id=<?= (int)$client['id'] ?>">Register their first vehicle</a>.
+            <a href="<?= BASE_URL ?>/modules/clients/add_vehicle.php?id=<?= (int)$client['id'] ?>">Register their first vehicle</a>.
             <?php endif; ?>
         </div>
         <?php endif; ?>
