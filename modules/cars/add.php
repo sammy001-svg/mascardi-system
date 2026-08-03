@@ -61,6 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$year)    $errors[] = 'Year is required.';
     if ($carType === 'client' && !$ownerName) $errors[] = 'Owner name is required for client vehicles.';
 
+    // Arrived from a client's page — send them back there after saving, so
+    // adding a second or third vehicle to the same client is a loop rather
+    // than a trip back through the client list each time.
+    $returnClientId = (int)($_POST['return_client_id'] ?? 0);
+
     if (empty($errors)) {
         try {
             $locId    = (int)($_POST['location_id'] ?? 1);
@@ -71,23 +76,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             logActivity('create', 'cars', $carId, "Added car: $make $model ($chassis)");
             setFlash('success', "Car {$make} {$model} ({$chassis}) added successfully.");
-            redirect(BASE_URL . '/modules/cars/view.php?id=' . $carId);
+            redirect($returnClientId
+                ? BASE_URL . '/modules/clients/view.php?id=' . $returnClientId
+                : BASE_URL . '/modules/cars/view.php?id=' . $carId);
         } catch (PDOException $e) {
+            // SQLSTATE 23000 covers every integrity violation, not just a
+            // duplicate chassis — a missing location or client row raises the
+            // same code. Reporting them all as "Chassis number already exists"
+            // is why that error kept appearing for chassis numbers that were
+            // genuinely not in the system. Confirm the duplicate before naming it.
             if ($e->getCode() === '23000') {
-                // Point straight at the conflicting record — a "deleted" car that
-                // still has invoices/quotations/jobs attached won't actually be
-                // removed (delete is blocked to protect those records), so the
-                // chassis number is still genuinely in use.
                 $existing = $db->prepare("SELECT id, make, model, status FROM cars WHERE chassis_number=?");
                 $existing->execute([$chassis]);
                 $existing = $existing->fetch();
+
                 if ($existing) {
+                    // Point straight at the conflicting record — a "deleted" car
+                    // that still has invoices/quotations/jobs attached won't
+                    // actually be removed (delete is blocked to protect those
+                    // records), so the chassis number is still genuinely in use.
                     $errors[] = 'Chassis number already exists — car #' . $existing['id'] . ' ('
                         . trim($existing['make'] . ' ' . $existing['model']) . ', status: ' . $existing['status']
                         . '). Open ' . BASE_URL . '/modules/cars/view.php?id=' . $existing['id']
                         . ' — if you tried to delete it, it likely still has invoices, quotations, or jobs linked to it.';
                 } else {
-                    $errors[] = 'Chassis number already exists.';
+                    // No duplicate, so something else the row points at is
+                    // missing. Name the likely culprit rather than sending the
+                    // user hunting for a chassis number that is not there.
+                    $msg = $e->getMessage();
+                    if (stripos($msg, 'location') !== false) {
+                        $errors[] = 'That location no longer exists. Pick a different location, '
+                                  . 'or add one under Settings → Locations.';
+                    } elseif (stripos($msg, 'client') !== false) {
+                        $errors[] = 'That client account no longer exists. Choose another, or leave it as “No account”.';
+                    } else {
+                        $errors[] = 'The vehicle could not be saved because a linked record is missing '
+                                  . '(location or client account). The chassis number itself is not in use. '
+                                  . 'Details: ' . $msg;
+                    }
+                    error_log('cars/add 23000 (not a duplicate chassis): ' . $msg);
                 }
             } else {
                 $errors[] = 'Database error: ' . $e->getMessage();
@@ -96,8 +123,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// ── Adding a vehicle for a specific client ───────────────────────────────────
+// Reached from that client's page ("Add Another Vehicle"). The whole form
+// otherwise prefills from $_POST only, so a plain link would land on a blank
+// form with no client attached and the owner fields hidden — the vehicle would
+// silently save unlinked, which is the mistake this flow exists to prevent.
+$preClient = null;
+$preClientId = (int)($_GET['client_id'] ?? $_POST['return_client_id'] ?? 0);
+if ($preClientId) {
+    try {
+        $s = $db->prepare("SELECT id, name, phone FROM clients WHERE id = ?");
+        $s->execute([$preClientId]);
+        $preClient = $s->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (\Throwable $_) {}
+}
+if (!$preClient) $preClientId = 0;
+
+// Effective values for the fields the client context drives. A submitted value
+// always wins, so a correction the user made before a validation error is not
+// thrown away on redisplay.
+$valCarType    = $_POST['car_type']    ?? ($preClient ? 'client' : 'inventory');
+$valClientId   = (int)($_POST['client_id'] ?? ($preClient['id'] ?? 0));
+$valOwnerName  = $_POST['owner_name']  ?? ($preClient['name']  ?? '');
+$valOwnerPhone = $_POST['owner_phone'] ?? ($preClient['phone'] ?? '');
+$showOwner     = ($valCarType === 'client');
+
 include __DIR__ . '/../../includes/header.php';
 ?>
+
+<?php if ($preClient): ?>
+<div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2 py-2">
+    <span class="small">
+        <i class="fa fa-user me-1"></i>
+        Adding a vehicle for <strong><?= e($preClient['name']) ?></strong>. It will be linked to their
+        account automatically, and you will come back here when it is saved.
+    </span>
+    <a href="<?= BASE_URL ?>/modules/clients/view.php?id=<?= (int)$preClient['id'] ?>"
+       class="btn btn-sm btn-outline-secondary">
+        <i class="fa fa-arrow-left me-1"></i>Back to client
+    </a>
+</div>
+<?php endif; ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">Add New Car</h5>
     <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
@@ -167,26 +233,29 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="col-md-3">
                     <label class="form-label">Vehicle Type <span class="text-danger">*</span></label>
                     <select name="car_type" id="car_type" class="form-select" required>
-                        <option value="inventory" <?= ($_POST['car_type'] ?? 'inventory') === 'inventory' ? 'selected' : '' ?>>Inventory (Imported)</option>
-                        <option value="client" <?= ($_POST['car_type'] ?? '') === 'client' ? 'selected' : '' ?>>Client (Repair/Service)</option>
+                        <option value="inventory" <?= $valCarType === 'inventory' ? 'selected' : '' ?>>Inventory (Imported)</option>
+                        <option value="client" <?= $valCarType === 'client' ? 'selected' : '' ?>>Client (Repair/Service)</option>
                     </select>
                 </div>
-                <div class="col-md-4 owner-fields" style="<?= ($_POST['car_type'] ?? '') === 'client' ? '' : 'display:none' ?>">
+                <div class="col-md-4 owner-fields" style="<?= $showOwner ? '' : 'display:none' ?>">
                     <label class="form-label">Owner Name <span class="text-danger">*</span></label>
-                    <input type="text" name="owner_name" class="form-control" value="<?= e($_POST['owner_name'] ?? '') ?>" placeholder="Customer Name">
+                    <input type="text" name="owner_name" class="form-control" value="<?= e($valOwnerName) ?>" placeholder="Customer Name">
                 </div>
-                <div class="col-md-4 owner-fields" style="<?= ($_POST['car_type'] ?? '') === 'client' ? '' : 'display:none' ?>">
+                <div class="col-md-4 owner-fields" style="<?= $showOwner ? '' : 'display:none' ?>">
                     <label class="form-label">Owner Phone</label>
-                    <input type="text" name="owner_phone" class="form-control" value="<?= e($_POST['owner_phone'] ?? '') ?>" placeholder="Customer Phone">
+                    <input type="text" name="owner_phone" class="form-control" value="<?= e($valOwnerPhone) ?>" placeholder="Customer Phone">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Client Account <small class="text-muted">(for portal access)</small></label>
+                    <?php if ($preClientId): ?>
+                    <input type="hidden" name="return_client_id" value="<?= (int)$preClientId ?>">
+                    <?php endif; ?>
                     <select name="client_id" id="client_id" class="form-select select2">
                         <option value="">— No account —</option>
                         <?php 
                         $clients = $db->query("SELECT id, name, phone, email FROM clients WHERE status='active' ORDER BY name ASC")->fetchAll();
                         foreach ($clients as $cl): ?>
-                        <option value="<?= $cl['id'] ?>" data-name="<?= e($cl['name']) ?>" data-phone="<?= e($cl['phone']) ?>" <?= (int)($_POST['client_id'] ?? 0) === (int)$cl['id'] ? 'selected' : '' ?>>
+                        <option value="<?= $cl['id'] ?>" data-name="<?= e($cl['name']) ?>" data-phone="<?= e($cl['phone']) ?>" <?= $valClientId === (int)$cl['id'] ? 'selected' : '' ?>>
                             <?= e($cl['name']) ?><?= $cl['phone'] ? ' (' . e($cl['phone']) . ')' : '' ?>
                         </option>
                         <?php endforeach; ?>

@@ -356,7 +356,17 @@ include __DIR__ . '/../../includes/header.php';
 
 <!-- Vehicles -->
 <div class="card mb-4">
-    <div class="card-header d-flex justify-content-between"><span><i class="fa fa-car me-2"></i>Client Vehicles (<?= count($cars) ?>)</span></div>
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="fa fa-car me-2"></i>Client Vehicles (<?= count($cars) ?>)</span>
+        <?php if (canWrite('cars')): ?>
+        <?php // A client can own several vehicles; this adds another straight
+              // onto their account instead of going to Cars and re-picking them. ?>
+        <a href="<?= BASE_URL ?>/modules/cars/add.php?client_id=<?= (int)$client['id'] ?>"
+           class="btn btn-sm btn-primary">
+            <i class="fa fa-plus me-1"></i><?= $cars ? 'Add Another Vehicle' : 'Add Vehicle' ?>
+        </a>
+        <?php endif; ?>
+    </div>
     <div class="card-body p-0">
         <?php if ($cars): ?>
         <table class="table table-hover mb-0">
@@ -374,7 +384,12 @@ include __DIR__ . '/../../includes/header.php';
             </tbody>
         </table>
         <?php else: ?>
-        <p class="text-muted p-4 mb-0">No vehicles linked to this client.</p>
+        <div class="p-4 text-muted mb-0">
+            No vehicles linked to this client.
+            <?php if (canWrite('cars')): ?>
+            <a href="<?= BASE_URL ?>/modules/cars/add.php?client_id=<?= (int)$client['id'] ?>">Register their first vehicle</a>.
+            <?php endif; ?>
+        </div>
         <?php endif; ?>
     </div>
 </div>
