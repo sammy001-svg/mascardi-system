@@ -597,34 +597,6 @@ if (authRole() === 'supervisor') {
         <?php endif; ?>
         <?php endif; ?>
 
-        <!-- ══ MEETINGS ═══════════════════════════════════════════ -->
-        <?php if (canAccess('meetings')): ?>
-        <div class="nav-section">Meetings</div>
-        <a href="<?= BASE_URL ?>/modules/meetings/index.php"
-           <?php // anchor on index so the deliverables link doesn't stay lit too ?>
-           class="nav-item <?= isActive('/modules/meetings/index') ?>"
-           data-label="Meetings">
-            <i class="fa fa-handshake-angle"></i><span>Meetings</span>
-        </a>
-        <a href="<?= BASE_URL ?>/modules/meetings/actions.php"
-           class="nav-item <?= isActive('/modules/meetings/actions') ?>"
-           data-label="Deliverables"
-           style="position:relative">
-            <i class="fa fa-list-check"></i><span>Deliverables</span>
-            <?php
-            try {
-                $__mtDue = getDB()->prepare("SELECT COUNT(*) FROM meeting_actions
-                    WHERE assigned_to = ? AND status IN ('pending','in_progress','blocked')");
-                $__mtDue->execute([(int)(authUser()['id'] ?? 0)]);
-                $__mtDue = (int)$__mtDue->fetchColumn();
-                if ($__mtDue > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#f59e0b;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
-                <?= $__mtDue > 99 ? '99+' : $__mtDue ?>
-            </span>
-            <?php endif; } catch (\Throwable $_) {} ?>
-        </a>
-        <?php endif; ?>
-
         <!-- ══ ANALYTICS ══════════════════════════════════════════ -->
         <?php if (canAccess('reports')): ?>
         <div class="nav-section">Analytics</div>
@@ -658,6 +630,7 @@ if (authRole() === 'supervisor') {
                   background:#25d366;color:#fff;border-radius:10px;font-size:10px;
                   font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
         </a>
+
         <script>
         (function(){
             var badge = document.getElementById('chatNavBadge');
@@ -672,6 +645,30 @@ if (authRole() === 'supervisor') {
         }());
         </script>
         <?php endif; ?>
+        <?php // Meetings sits with the other ways people talk to each other.
+              // Universal — see universalModules() in includes/auth.php. ?>
+        <a href="<?= BASE_URL ?>/modules/meetings/index.php"
+           class="nav-item <?= isActive('/modules/meetings/index') ?>"
+           data-label="Meetings">
+            <i class="fa fa-handshake-angle"></i><span>Meetings</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/meetings/actions.php"
+           class="nav-item <?= isActive('/modules/meetings/actions') ?>"
+           data-label="My Deliverables"
+           style="position:relative">
+            <i class="fa fa-list-check"></i><span>My Deliverables</span>
+            <?php
+            try {
+                $__mtDue = getDB()->prepare("SELECT COUNT(*) FROM meeting_actions
+                    WHERE assigned_to = ? AND status IN ('pending','in_progress','blocked')");
+                $__mtDue->execute([(int)(authUser()['id'] ?? 0)]);
+                $__mtDue = (int)$__mtDue->fetchColumn();
+                if ($__mtDue > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#f59e0b;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__mtDue > 99 ? '99+' : $__mtDue ?>
+            </span>
+            <?php endif; } catch (\Throwable $_) {} ?>
+        </a>
         <?php if (canAccess('crm') || canAccess('clients') || canAccess('cars')): ?>
         <a href="<?= BASE_URL ?>/modules/whatsapp/index.php"
            class="nav-item <?= isActive('/modules/whatsapp/') ?>"

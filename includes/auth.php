@@ -185,11 +185,20 @@ function getUserPermissions(): array {
 }
 
 // Module access map (non-admin roles)
+/** Modules every signed-in member of staff gets, whatever their role. */
+function universalModules(): array {
+    // Meetings is company-wide: anyone can be invited to one, be given a
+    // deliverable in it, or need to see what they agreed to. Gating it by role
+    // would mean a mechanic invited to a safety briefing could not open it.
+    return ['meetings'];
+}
+
 function canAccess(string $module): bool {
     _fixRolePermissions();
     $user = authUser();
     if (!$user) return false;
     if ($user['role'] === 'admin' || $user['role'] === 'super_admin') return true;
+    if (in_array($module, universalModules(), true)) return true;
     // DB grants are additive — role map is the floor (DB=0 falls through to role map)
     $perms = getUserPermissions();
     if (isset($perms[$module]) && $perms[$module][0]) {
@@ -301,6 +310,9 @@ function canAccess(string $module): bool {
 // Create/edit permission per module (non-destructive writes)
 function canWrite(string $module): bool {
     if (hasRole('admin')) return true;
+    // Anyone may schedule a meeting. What they can do to a meeting they are not
+    // running is a separate, per-meeting question answered by meetingCanEdit().
+    if (in_array($module, universalModules(), true)) return true;
     $perms = getUserPermissions();
     if (isset($perms[$module]) && $perms[$module][1]) {
         return true;
