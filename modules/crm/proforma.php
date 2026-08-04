@@ -89,6 +89,18 @@ $pfCompanyLines = [
     'Sales@mascardi.co',
 ];
 
+// Where the customer pays. Kept here beside the letterhead so both sets of
+// company particulars are edited in one place. Label => value, rendered in
+// this order.
+$pfBankDetails = [
+    'Bank'         => 'M- Oriental Bank Limited',
+    'Account Name' => 'Mascardi Ventures Limited',
+    'Account No'   => '1007044001797',
+    'Branch'       => 'Westlands Branch, Nairobi',
+    'Branch Code'  => '007',
+    'Swift Code'   => 'MORBKENA',
+];
+
 // ── Customer info ────────────────────────────────────────────────────────────
 // Read the lead first, then the linked client record.
 //
@@ -165,7 +177,30 @@ include __DIR__ . '/../../includes/header.php';
         min-height: 0 !important;
         overflow: hidden;
     }
-    .pf-spacer { min-height: 0 !important; }
+
+    /* ── Staying on one page ──────────────────────────────────────────────
+       Three mechanisms, in the order they take effect:
+
+       1. The two elastic spacers give up their height first, so a normal
+          document simply closes the gaps and prints as one page.
+       2. If content still exceeds the page — an unusually long vehicle
+          description, say — these rules shave the padding and the blank
+          gap rows, which buys roughly another 60px without touching a
+          single character of the content.
+       3. overflow:hidden above is the last resort. It is a clip, so it can
+          cut text off; everything here exists so step 3 is never reached.
+          The bank block, the total and the ownership note are the parts
+          that must never be lost, which is why they sit above the fold by
+          design rather than relying on the clip. */
+    .pf-spacer { min-height: 0 !important; flex-shrink: 1 !important; }
+    .pf-row[style*="min-height:14px"],
+    .pf-row[style*="min-height:10px"] { min-height: 0 !important; }
+    .pf-col-d, .pf-col-a { padding-top: 3px !important; padding-bottom: 3px !important; }
+    .pf-bank .pf-col-d { padding-top: 2px !important; padding-bottom: 2px !important; }
+
+    /* Never break the document across sheets. */
+    #proformaDoc, #pf-desc, #pf-top, #pf-footer { page-break-inside: avoid; }
+    #proformaDoc { page-break-after: avoid; }
 }
 
 /* ── Design tokens ────────────────────────────────────────────────────────── */
@@ -232,6 +267,9 @@ include __DIR__ . '/../../includes/header.php';
     display: flex;
     min-height: 50px;   /* screen: at least visible */
 }
+/* Bank block — reference data, so a touch tighter than the rows above it.
+   The height this saves is the margin that keeps the page from spilling. */
+.pf-bank .pf-col-d { padding-top: 3px; padding-bottom: 3px; font-size: 11.5px; }
 .pf-spacer-d { flex: 1; border-right: 1px solid var(--line); }
 .pf-spacer-a { width: 130px; flex-shrink: 0; }
 </style>
@@ -427,6 +465,27 @@ include __DIR__ . '/../../includes/header.php';
             </div>
             <div class="pf-col-a"></div>
         </div>
+
+        <!-- ══ BANK DETAILS ═══════════════════════════════════════════════════
+             Immediately after the payment terms, which is where a customer
+             looks for them. Rendered a notch tighter than the rows above —
+             it is reference data, and the saved height is what keeps the
+             document on a single page. ══════════════════════════════════════ -->
+        <div class="pf-row" style="min-height:10px">
+            <div class="pf-col-d"></div><div class="pf-col-a"></div>
+        </div>
+        <div class="pf-row pf-bank">
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">Bank Details:</div>
+            <div class="pf-col-a"></div>
+        </div>
+        <?php foreach ($pfBankDetails as $bkLabel => $bkValue): ?>
+        <div class="pf-row pf-bank">
+            <div class="pf-col-d" style="padding-left:28px">
+                <strong><?= e($bkLabel) ?>:</strong> <?= e($bkValue) ?>
+            </div>
+            <div class="pf-col-a"></div>
+        </div>
+        <?php endforeach; ?>
 
         <!-- ── ELASTIC SPACER 2 — fills gap before sales person ─────────────── -->
         <div class="pf-spacer">
