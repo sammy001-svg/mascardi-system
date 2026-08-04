@@ -89,17 +89,86 @@ $pfCompanyLines = [
     'Sales@mascardi.co',
 ];
 
-// Where the customer pays. Kept here beside the letterhead so both sets of
-// company particulars are edited in one place. Label => value, rendered in
-// this order.
-$pfBankDetails = [
-    'Bank'         => 'M- Oriental Bank Limited',
-    'Account Name' => 'Mascardi Ventures Limited',
-    'Account No'   => '1007044001797',
-    'Branch'       => 'Westlands Branch, Nairobi',
-    'Branch Code'  => '007',
-    'Swift Code'   => 'MORBKENA',
+// ── Where the customer pays ──────────────────────────────────────────────────
+// Several accounts, one chosen per invoice. Kept beside the letterhead so all
+// the company's payment particulars are edited in one place.
+//
+// 'label' is what the operator picks from; 'lines' is what prints, in order.
+$pfBankAccounts = [
+    'm_oriental' => [
+        'label'    => 'M-Oriental Bank (KES)',
+        'currency' => 'KES',
+        'lines'    => [
+            'Bank'         => 'M- Oriental Bank Limited',
+            'Account Name' => 'Mascardi Ventures Limited',
+            'Account No'   => '1007044001797',
+            'Branch'       => 'Westlands Branch, Nairobi',
+            'Branch Code'  => '007',
+            'Swift Code'   => 'MORBKENA',
+        ],
+    ],
+    'ncba' => [
+        'label'    => 'NCBA (KES)',
+        'currency' => 'KES',
+        'lines'    => [
+            'Bank'                 => 'NCBA',
+            'Account Name'         => 'Mascardi Ventures Limited',
+            'Account No'           => '4539920024',
+            'Paybill Business No'  => '880100',
+        ],
+    ],
+    'im' => [
+        'label'    => 'I&M Bank (KES)',
+        'currency' => 'KES',
+        'lines'    => [
+            'Bank'         => 'I&M',
+            'Account Name' => 'Mascardi Ventures Limited',
+            'Account No'   => '03001705641210',
+            'Paybill No'   => '542542',
+        ],
+    ],
+    'absa' => [
+        'label'    => 'ABSA (KES)',
+        'currency' => 'KES',
+        'lines'    => [
+            'Bank'                => 'ABSA',
+            'Account Name'        => 'Mascardi Ventures Limited',
+            'Account No'          => '2051081016',
+            'Paybill Business No' => '303030',
+        ],
+    ],
+    // Flagged as USD in the label and on the document — the invoice totals are
+    // in Kenya Shillings, so paying into this one is a deliberate choice rather
+    // than something to stumble into.
+    'm_oriental_usd' => [
+        'label'    => 'M-Oriental Bank — USD account',
+        'currency' => 'USD',
+        'lines'    => [
+            'Bank'         => 'M Oriental Bank Limited',
+            'Account Name' => 'Mascardi Ventures Limited',
+            'Account No'   => '1007051001949',
+        ],
+    ],
 ];
+
+// Remembering the choice on the lead: without it, reopening the invoice would
+// silently revert to the default and the wrong account could be printed.
+try { $db->exec("ALTER TABLE crm_leads ADD COLUMN proforma_bank VARCHAR(40) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
+
+$pfBankKey = (string)($_GET['bank'] ?? '');
+if (!isset($pfBankAccounts[$pfBankKey])) {
+    $pfBankKey = (string)($lead['proforma_bank'] ?? '');
+    if (!isset($pfBankAccounts[$pfBankKey])) $pfBankKey = array_key_first($pfBankAccounts);
+} elseif (($lead['proforma_bank'] ?? '') !== $pfBankKey) {
+    // Only written when the operator actually picked one, so simply viewing
+    // the invoice never changes what was chosen before.
+    try {
+        $db->prepare("UPDATE crm_leads SET proforma_bank = ? WHERE id = ?")->execute([$pfBankKey, $leadId]);
+    } catch (\Throwable $_) {}
+}
+
+$pfBank        = $pfBankAccounts[$pfBankKey];
+$pfBankDetails = $pfBank['lines'];
 
 // ── Customer info ────────────────────────────────────────────────────────────
 // Read the lead first, then the linked client record.
@@ -303,6 +372,37 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<!-- ── Bank selector (screen only — never printed) ────────────────────────── -->
+<div class="d-print-none mb-3">
+    <form method="GET" class="d-flex align-items-center gap-2 flex-wrap"
+          style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+                 padding:12px 14px;box-shadow:var(--sh-sm)">
+        <input type="hidden" name="lead_id" value="<?= $leadId ?>">
+        <label for="pfBankSel" style="font-size:12.5px;font-weight:700;color:var(--text);margin:0">
+            <i class="fa fa-building-columns me-1" style="color:var(--brand)"></i>Pay into
+        </label>
+        <select name="bank" id="pfBankSel" class="form-select form-select-sm"
+                style="width:auto;min-width:230px" onchange="this.form.submit()">
+            <?php foreach ($pfBankAccounts as $bk => $acct): ?>
+            <option value="<?= e($bk) ?>" <?= $bk === $pfBankKey ? 'selected' : '' ?>><?= e($acct['label']) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <span class="text-muted" style="font-size:12px">
+            A/C <?= e($pfBankDetails['Account No'] ?? '—') ?>
+            — this account prints on the invoice, and is remembered for this lead.
+        </span>
+        <noscript><button class="btn btn-sm btn-primary">Apply</button></noscript>
+    </form>
+</div>
+
+<?php if (($pfBank['currency'] ?? 'KES') !== 'KES'): ?>
+<div class="d-print-none alert alert-warning py-2 small mb-3">
+    <i class="fa fa-triangle-exclamation me-1"></i>
+    This is a <strong><?= e($pfBank['currency']) ?></strong> account, but the invoice totals are in
+    Kenya Shillings. Check that is what you intend before sending it.
+</div>
+<?php endif; ?>
+
 <div class="d-print-none alert alert-light border small mb-4" style="font-size:12px">
     <i class="fa fa-circle-info me-1 text-muted"></i>
     For a clean printout with no browser date/title line, open <strong>More settings</strong> in the print
@@ -475,7 +575,12 @@ include __DIR__ . '/../../includes/header.php';
             <div class="pf-col-d"></div><div class="pf-col-a"></div>
         </div>
         <div class="pf-row pf-bank">
-            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">Bank Details:</div>
+            <div class="pf-col-d" style="padding-left:28px;font-weight:bold">
+                <?php // Currency is stated on the document itself when it is not
+                      // the invoice currency, so a printed copy cannot mislead. ?>
+                Bank Details<?= ($pfBank['currency'] ?? 'KES') !== 'KES'
+                    ? ' — ' . e($pfBank['currency']) . ' Account' : '' ?>:
+            </div>
             <div class="pf-col-a"></div>
         </div>
         <?php foreach ($pfBankDetails as $bkLabel => $bkValue): ?>
