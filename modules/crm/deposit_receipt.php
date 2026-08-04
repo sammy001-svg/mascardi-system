@@ -56,7 +56,10 @@ if (!empty($lead['client_id'])) {
 
 // Buyer details
 $buyerName   = trim($client['name']      ?? $lead['name']  ?? '');
-$buyerIdNo   = trim($client['id_number'] ?? '');
+// Lead first, then the linked client — the ID is captured on the lead while
+// the deal is being done. Reading the client alone meant an ID typed on the
+// lead was missing here, and the row is conditional so it vanished entirely.
+$buyerIdNo   = trim($lead['id_number'] ?? '') ?: trim($client['id_number'] ?? '');
 $buyerKraPin = trim($client['kra_pin']   ?? '');
 
 // Amounts

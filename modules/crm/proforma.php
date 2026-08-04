@@ -89,9 +89,21 @@ $pfCompanyLines = [
     'Sales@mascardi.co',
 ];
 
-// Customer info
-$customerName = trim($client['name']      ?? $lead['name']  ?? '');
-$customerIdNo = trim($client['id_number'] ?? '');
+// ── Customer info ────────────────────────────────────────────────────────────
+// Read the lead first, then the linked client record.
+//
+// These details are captured on the lead while the deal is being done — that is
+// where the salesperson types them, and often before any client record exists.
+// This previously read the client only, so an ID entered on the lead never
+// reached the document; the P.O. Box was not read at all, it was a hard-coded
+// "_____, Nairobi" placeholder in the markup.
+//
+// Lead wins where it has a value, because it is the more recent and
+// deal-specific entry; a blank lead field falls back to the client record
+// rather than blanking a detail already held there.
+$customerName  = trim($lead['name'] ?? '') ?: trim($client['name'] ?? '');
+$customerIdNo  = trim($lead['id_number'] ?? '') ?: trim($client['id_number'] ?? '');
+$customerPoBox = trim($lead['po_box'] ?? '') ?: trim($client['po_box'] ?? '');
 
 // Purchase price: agreed_sale_price → offer_price → asking_price
 $price = 0;
@@ -285,8 +297,10 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <div style="padding:8px 14px">
                     <strong style="font-size:12.5px;color:var(--ink)">Client: <?= e($customerName) ?></strong><br>
-                    <span style="font-size:11.5px;color:var(--ink-2)">I.D No: <?= e($customerIdNo ?: '&nbsp;') ?></span><br>
-                    <span style="font-size:11.5px;color:var(--ink-2)">P.O Box: _____, Nairobi</span>
+                    <span style="font-size:11.5px;color:var(--ink-2)">I.D No: <?= $customerIdNo !== '' ? e($customerIdNo) : '_____' ?></span><br>
+                    <?php // A blank falls back to a ruled line so the document can still
+                          // be completed by hand, rather than printing an empty label. ?>
+                    <span style="font-size:11.5px;color:var(--ink-2)">P.O Box: <?= $customerPoBox !== '' ? e($customerPoBox) : '_____' ?></span>
                 </div>
 
                 <!-- Invoice meta -->
