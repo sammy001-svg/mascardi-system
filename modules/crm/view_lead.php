@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/credit_bootstrap.php';
 requireLogin();
 canAccess('crm') || redirect(BASE_URL . '/index.php');
 
@@ -754,6 +755,127 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         logActivity('update', 'crm_leads', $id, "Reservation revoked by admin ({$me['name']}). Lead reset to active.");
         setFlash('success', 'Reservation revoked. The lead has been returned to Active and the vehicle freed.');
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
+    // ── Credit Payment Agreement ─────────────────────────────────────────────
+    if ($action === 'save_credit' && canWrite('crm')) {
+        require_once __DIR__ . '/credit_bootstrap.php';
+        creditMigrate($db);
+
+        $principal   = (float)($_POST['principal'] ?? 0);
+        $monthly     = (float)($_POST['monthly_payment'] ?? 0);
+        $firstDue    = trim($_POST['first_due_date'] ?? '');
+        $penaltyType = ($_POST['penalty_type'] ?? 'fixed') === 'percent' ? 'percent' : 'fixed';
+        $penaltyVal  = (float)($_POST['penalty_value'] ?? 0);
+        $interest    = (float)($_POST['interest_rate'] ?? 25);
+        $agrDate     = trim($_POST['agreement_date'] ?? '') ?: date('Y-m-d');
+        $saleDate    = trim($_POST['sale_agreement_date'] ?? '') ?: null;
+
+        $credErrors = [];
+        if ($principal <= 0)                    $credErrors[] = 'Enter the credit amount.';
+        if ($monthly <= 0)                      $credErrors[] = 'Enter the monthly payment.';
+        if ($monthly > $principal)              $credErrors[] = 'The monthly payment cannot exceed the credit amount.';
+        if (!$firstDue || !strtotime($firstDue)) $credErrors[] = 'Set the first payment date.';
+        if ($penaltyType === 'percent' && ($penaltyVal < 0 || $penaltyVal > 100)) {
+            $credErrors[] = 'A percentage penalty must be between 0 and 100.';
+        }
+
+        if ($credErrors) {
+            setFlash('error', implode(' ', $credErrors));
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+        }
+
+        $sched = creditBuildSchedule($principal, $monthly, $firstDue);
+        if (!$sched['count']) {
+            setFlash('error', 'Those figures do not produce a payment schedule. Check the amounts.');
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+        }
+
+        try {
+            $existing = creditForLead($db, $id);
+            if ($existing) {
+                $db->prepare("UPDATE credit_agreements SET principal=?, monthly_payment=?, first_due_date=?,
+                              installments=?, completion_date=?, total_repayable=?, penalty_type=?, penalty_value=?,
+                              interest_rate=?, agreement_date=?, sale_agreement_date=?, car_id=?, client_id=?
+                              WHERE id=?")
+                   ->execute([$principal, $monthly, $firstDue, $sched['count'], $sched['completion_date'],
+                              $sched['total'], $penaltyType, $penaltyVal, $interest, $agrDate, $saleDate,
+                              (int)($lead['pinned_car_id'] ?? 0) ?: null, (int)($lead['client_id'] ?? 0) ?: null,
+                              (int)$existing['id']]);
+                $agrId = (int)$existing['id'];
+
+                // Rebuilding the schedule would wipe payments already recorded
+                // against it, so it is only rebuilt while nothing has been paid.
+                $paidSoFar = creditSummary($db, $agrId)['paid'];
+                if ($paidSoFar > 0) {
+                    setFlash('success', 'Credit terms updated. The existing schedule was kept because '
+                        . money($paidSoFar) . ' has already been paid against it.');
+                } else {
+                    creditWriteSchedule($db, $agrId, $sched);
+                    setFlash('success', 'Credit agreement updated — ' . $sched['count']
+                        . ' installments, completing ' . date('d M Y', strtotime($sched['completion_date'])) . '.');
+                }
+            } else {
+                $db->prepare("INSERT INTO credit_agreements
+                        (lead_id, car_id, client_id, reference, agreement_date, sale_agreement_date,
+                         principal, monthly_payment, first_due_date, installments, completion_date,
+                         total_repayable, penalty_type, penalty_value, interest_rate, created_by)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                   ->execute([$id, (int)($lead['pinned_car_id'] ?? 0) ?: null,
+                              (int)($lead['client_id'] ?? 0) ?: null, creditNextReference($db),
+                              $agrDate, $saleDate, $principal, $monthly, $firstDue, $sched['count'],
+                              $sched['completion_date'], $sched['total'], $penaltyType, $penaltyVal,
+                              $interest, (int)$me['id']]);
+                $agrId = (int)$db->lastInsertId();
+                creditWriteSchedule($db, $agrId, $sched);
+                setFlash('success', 'Credit agreement created — ' . $sched['count']
+                    . ' installments, completing ' . date('d M Y', strtotime($sched['completion_date'])) . '.');
+            }
+            logActivity('create', 'crm_leads', $id, 'Credit agreement saved: ' . money($principal)
+                . ' over ' . $sched['count'] . ' installments');
+        } catch (\Throwable $e) {
+            error_log('save_credit: ' . $e->getMessage());
+            setFlash('error', 'Could not save the credit agreement: ' . $e->getMessage());
+        }
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
+    if ($action === 'record_credit_payment' && canWrite('crm')) {
+        require_once __DIR__ . '/credit_bootstrap.php';
+        creditMigrate($db);
+
+        $agr = creditForLead($db, $id);
+        $amt = (float)($_POST['amount'] ?? 0);
+        $on  = trim($_POST['paid_on'] ?? '') ?: date('Y-m-d');
+
+        if (!$agr) {
+            setFlash('error', 'There is no credit agreement on this lead.');
+        } elseif ($amt <= 0) {
+            setFlash('error', 'Enter the amount received.');
+        } else {
+            try {
+                $receipt = creditNextReceipt($db);
+                $db->prepare("INSERT INTO credit_payments
+                        (agreement_id, receipt_number, amount, paid_on, method, reference, notes, recorded_by)
+                     VALUES (?,?,?,?,?,?,?,?)")
+                   ->execute([(int)$agr['id'], $receipt, $amt, $on,
+                              trim($_POST['method'] ?? '') ?: null,
+                              trim($_POST['reference'] ?? '') ?: null,
+                              trim($_POST['notes'] ?? '') ?: null, (int)$me['id']]);
+                $payId = (int)$db->lastInsertId();
+                creditApplyPayment($db, (int)$agr['id'], $amt, $payId);
+
+                $sum = creditSummary($db, (int)$agr['id']);
+                logActivity('create', 'crm_leads', $id, "Credit payment {$receipt} of " . money($amt) . ' recorded');
+                setFlash('success', 'Payment of ' . money($amt) . ' recorded (' . $receipt . '). '
+                    . ($sum['balance'] > 0 ? 'Balance now ' . money($sum['balance']) . '.'
+                                           : 'The credit facility is now settled in full.'));
+            } catch (\Throwable $e) {
+                error_log('record_credit_payment: ' . $e->getMessage());
+                setFlash('error', 'Could not record the payment: ' . $e->getMessage());
+            }
+        }
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#credit');
     }
 
     if ($action === 'schedule_test_drive' && canWrite('crm')) {
