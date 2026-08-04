@@ -121,7 +121,14 @@ include __DIR__ . '/../../includes/header.php';
             </span>
             <?php endif; ?>
         </h5>
-        <div class="text-muted small"><?= e($client['email']) ?><?= $client['phone'] ? ' · ' . e($client['phone']) : '' ?></div>
+        <div class="text-muted small d-flex align-items-center gap-2 flex-wrap">
+            <span><?= e($client['email']) ?><?= $client['phone'] ? ' · ' . e($client['phone']) : '' ?></span>
+            <?php // Straight into the dialer with the number and name already filled. ?>
+            <?php if ($client['phone'] && canAccess('callcenter')): ?>
+            <a href="<?= BASE_URL ?>/modules/callcenter/dialer.php?to=<?= urlencode($client['phone']) ?>&name=<?= urlencode($client['name']) ?>"
+               class="btn btn-xs btn-success"><i class="fa fa-phone me-1"></i>Call</a>
+            <?php endif; ?>
+        </div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <a href="statement.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-outline-primary">

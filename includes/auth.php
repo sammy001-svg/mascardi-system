@@ -190,7 +190,7 @@ function universalModules(): array {
     // Meetings is company-wide: anyone can be invited to one, be given a
     // deliverable in it, or need to see what they agreed to. Gating it by role
     // would mean a mechanic invited to a safety briefing could not open it.
-    return ['meetings'];
+    return ['meetings', 'callcenter'];
 }
 
 function canAccess(string $module): bool {
@@ -312,29 +312,31 @@ function canWrite(string $module): bool {
     if (hasRole('admin')) return true;
     // Anyone may schedule a meeting. What they can do to a meeting they are not
     // running is a separate, per-meeting question answered by meetingCanEdit().
-    if (in_array($module, universalModules(), true)) return true;
+    // Everyone can place a call; configuring the service and recording
+    // top-ups is a management job, so 'callcenter' write is not universal.
+    if (in_array($module, universalModules(), true) && $module !== 'callcenter') return true;
     $perms = getUserPermissions();
     if (isset($perms[$module]) && $perms[$module][1]) {
         return true;
     }
     $map = [
-        'general_manager'   => ['quotations','invoices','sales','imports','trade_in','meetings'],
+        'general_manager'   => ['quotations','invoices','sales','imports','trade_in','meetings','callcenter'],
         'supervisor'        => ['quick_assessments','meetings'], // read-only elsewhere; can log assessments at their own location
         'finance_manager'   => ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo','imports','trade_in','meetings'],
         'accountant'        => ['payments','invoices','quotations','expenses','sales','installments','trade_in','meetings'],
         'cashier'           => ['payments','installments'],
-        'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team','imports','trade_in','meetings'],
+        'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team','imports','trade_in','meetings','callcenter'],
         'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','dispatch','team','trade_in','meetings'],
         'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team','trade_in','meetings'],
-        'customer_relations' => ['clients','crm','cars','meetings'],
+        'customer_relations' => ['clients','crm','cars','meetings','callcenter'],
         'receptionist'      => ['clients','service_bookings','quick_assessments','team','meetings'],
         'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','dispatch','team','imports','meetings'],
         'mechanic'          => ['assessments','parts_requests','team'],
         'driver'            => ['team'],
         'inventory_manager' => ['inventory','suppliers','lpo','parts_requests','meetings'],
         'procurement_officer' => ['lpo','suppliers','inventory','parts_requests','meetings'],
-        'hr_manager'        => ['hr','attendance','payroll','team','meetings'],
-        'manager'           => ['cars','jobs','assessments','mechanics','drivers','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings','car_documents','car_costs','installments','expenses','inspections','attendance','payroll','quick_assessments','sales','crm','imports','meetings'],
+        'hr_manager'        => ['hr','attendance','payroll','team','meetings','callcenter'],
+        'manager'           => ['cars','jobs','assessments','mechanics','drivers','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings','car_documents','car_costs','installments','expenses','inspections','attendance','payroll','quick_assessments','sales','crm','imports','meetings','callcenter'],
     ];
     $role = authRole();
     return in_array($module, $map[$role] ?? []);

@@ -952,9 +952,20 @@ include __DIR__ . '/../../includes/header.php';
         </a>
         <?php endif; ?>
         <?php if ($lead['phone']): ?>
+        <?php // Prefer the in-system dialer, which calls from the shared
+              // call-centre number and logs the call against this lead. The
+              // tel: link stays for anyone without call-centre access — it
+              // hands off to whatever the device has. ?>
+        <?php if (canAccess('callcenter')): ?>
+        <a href="<?= BASE_URL ?>/modules/callcenter/dialer.php?to=<?= urlencode($lead['phone']) ?>&name=<?= urlencode($lead['name']) ?>&lead_id=<?= (int)$lead['id'] ?>"
+           class="btn btn-sm btn-success" title="Call from the call centre">
+            <i class="fa fa-phone me-1"></i><?= e($lead['phone']) ?>
+        </a>
+        <?php else: ?>
         <a href="tel:<?= e($lead['phone']) ?>" class="btn btn-sm btn-outline-success" title="Call">
             <i class="fa fa-phone me-1"></i><?= e($lead['phone']) ?>
         </a>
+        <?php endif; ?>
         <?php
         $waNum = preg_replace('/[^0-9]/', '', $lead['phone']);
         if (str_starts_with($lead['phone'], '0')) $waNum = '254' . substr($waNum, 1);

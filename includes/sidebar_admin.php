@@ -152,6 +152,18 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
             <?php endif; } catch (\Throwable $_) {} ?>
         </a>
 
+        <?php // Call centre — universal, like Meetings. See universalModules(). ?>
+        <a href="<?= BASE_URL ?>/modules/callcenter/index.php"
+           class="nav-item <?= (str_contains($__uri, '/modules/callcenter/') && !str_contains($__uri, 'dialer')) ? 'active' : '' ?>"
+           data-label="Call Centre">
+            <i class="fa fa-headset"></i><span>Call Centre</span>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/callcenter/dialer.php"
+           class="nav-item <?= isActive('/modules/callcenter/dialer') ?>"
+           data-label="Dialer">
+            <i class="fa fa-phone"></i><span>Dialer</span>
+        </a>
+
         <a href="<?= BASE_URL ?>/modules/whatsapp/index.php"
            class="nav-item <?= isActive('/modules/whatsapp/') ?>"
            data-label="WA Inbox" style="position:relative">
