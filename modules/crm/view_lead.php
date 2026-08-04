@@ -3073,6 +3073,294 @@ function dpBadge(bool $done, bool $open): string {
 </div>
 
 <!-- Add Deposit Modal -->
+<!-- ══ CREDIT AGREEMENT SET-UP ═══════════════════════════════════════════════ -->
+<?php if (canWrite('crm') && $lead['stage'] === 'reserved'): ?>
+<?php
+$__cAgr  = creditForLead($db, $id);
+$__cPaid = $__cAgr ? creditSummary($db, (int)$__cAgr['id'])['paid'] : 0.0;
+$__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
+?>
+<div class="modal fade" id="creditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="action" value="save_credit">
+                <div class="modal-header" style="background:linear-gradient(135deg,#faf5ff,#f3e8ff)">
+                    <h6 class="modal-title fw-bold" style="color:#7e22ce">
+                        <i class="fa fa-file-contract me-2"></i>
+                        <?= $__cAgr ? 'Edit Credit Terms' : 'Set Up Credit Agreement' ?>
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <?php if ($__cAgr && $__cPaid > 0): ?>
+                    <div class="alert alert-warning py-2 small">
+                        <i class="fa fa-triangle-exclamation me-1"></i>
+                        <strong><?= money($__cPaid) ?></strong> has already been paid against this schedule.
+                        The terms can be corrected, but the schedule itself will be left as it is so those
+                        payments are not lost.
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">
+                                Credit amount <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">KSh</span>
+                                <input type="number" step="0.01" min="1" name="principal" id="cdPrincipal"
+                                       class="form-control" required value="<?= $__cPrincipal > 0 ? $__cPrincipal : '' ?>">
+                            </div>
+                            <div class="form-text" style="font-size:11px">
+                                Defaults to the balance after deposits<?= ($balance ?? 0) > 0 ? ' (' . money($balance) . ')' : '' ?>.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">
+                                Monthly payment <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">KSh</span>
+                                <input type="number" step="0.01" min="1" name="monthly_payment" id="cdMonthly"
+                                       class="form-control" required
+                                       value="<?= $__cAgr ? (float)$__cAgr['monthly_payment'] : '' ?>">
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">
+                                First payment due <span class="text-danger">*</span>
+                            </label>
+                            <input type="date" name="first_due_date" id="cdFirstDue" class="form-control" required
+                                   value="<?= e($__cAgr ? $__cAgr['first_due_date'] : date('Y-m-d', strtotime('+1 month'))) ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Agreement date</label>
+                            <input type="date" name="agreement_date" class="form-control"
+                                   value="<?= e($__cAgr ? $__cAgr['agreement_date'] : date('Y-m-d')) ?>">
+                        </div>
+
+                        <div class="col-12"><hr class="my-1"></div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Late payment penalty</label>
+                            <div class="btn-group w-100 mb-2" role="group">
+                                <input type="radio" class="btn-check" name="penalty_type" id="cdPenFixed" value="fixed"
+                                       <?= (!$__cAgr || $__cAgr['penalty_type'] === 'fixed') ? 'checked' : '' ?>>
+                                <label class="btn btn-outline-secondary btn-sm" for="cdPenFixed">Fixed amount</label>
+                                <input type="radio" class="btn-check" name="penalty_type" id="cdPenPct" value="percent"
+                                       <?= ($__cAgr && $__cAgr['penalty_type'] === 'percent') ? 'checked' : '' ?>>
+                                <label class="btn btn-outline-secondary btn-sm" for="cdPenPct">Percentage</label>
+                            </div>
+                            <div class="input-group">
+                                <span class="input-group-text" id="cdPenUnit">KSh</span>
+                                <input type="number" step="0.01" min="0" name="penalty_value" id="cdPenValue"
+                                       class="form-control"
+                                       value="<?= $__cAgr ? (float)$__cAgr['penalty_value'] : '30000' ?>">
+                            </div>
+                            <div class="form-text" style="font-size:11px" id="cdPenHelp">
+                                Charged per late installment.
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">Interest p.a.</label>
+                            <div class="input-group">
+                                <input type="number" step="0.01" min="0" name="interest_rate" class="form-control"
+                                       value="<?= $__cAgr ? (float)$__cAgr['interest_rate'] : '25' ?>">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">Sale agreement dated</label>
+                            <input type="date" name="sale_agreement_date" class="form-control"
+                                   value="<?= e($__cAgr['sale_agreement_date'] ?? ($lead['deposit_date'] ?? '')) ?>">
+                        </div>
+
+                        <!-- Live schedule preview — the completion date the user asked for -->
+                        <div class="col-12">
+                            <div class="rounded-3 p-3" id="cdPreview"
+                                 style="background:#f8fafc;border:1px solid #e2e8f0">
+                                <div class="row text-center g-2">
+                                    <div class="col-4">
+                                        <div class="text-muted" style="font-size:11px">Installments</div>
+                                        <div class="fw-bold" style="font-size:19px;color:#7e22ce" id="cdCount">—</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted" style="font-size:11px">Final payment</div>
+                                        <div class="fw-bold" style="font-size:15px" id="cdLast">—</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted" style="font-size:11px">Expected completion</div>
+                                        <div class="fw-bold" style="font-size:15px;color:#15803d" id="cdDone">—</div>
+                                    </div>
+                                </div>
+                                <div class="text-muted mt-2 pt-2 border-top" style="font-size:11.5px" id="cdNote">
+                                    Enter the amounts to see the schedule.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn" style="background:#7e22ce;color:#fff">
+                        <i class="fa fa-floppy-disk me-1"></i>Save Credit Agreement
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ══ RECORD A MONTHLY PAYMENT ══════════════════════════════════════════════ -->
+<div class="modal fade" id="creditPayModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="action" value="record_credit_payment">
+                <div class="modal-header">
+                    <h6 class="modal-title fw-bold"><i class="fa fa-coins me-2 text-success"></i>Record Monthly Payment</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <?php if ($__cAgr):
+                        $__cSum = creditSummary($db, (int)$__cAgr['id']); ?>
+                    <div class="alert alert-light border py-2 small mb-3">
+                        Balance outstanding <strong><?= money($__cSum['balance']) ?></strong>.
+                        <?php if ($__cSum['next_due']): ?>
+                        Next installment <strong><?= money($__cSum['next_amount']) ?></strong>
+                        due <?= fmtDate($__cSum['next_due'], 'd M Y') ?>.
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Amount received <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">KSh</span>
+                                <input type="number" step="0.01" min="0.01" name="amount" class="form-control" required
+                                       value="<?= $__cAgr && !empty($__cSum['next_amount']) ? (float)$__cSum['next_amount'] : '' ?>">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Date received</label>
+                            <input type="date" name="paid_on" class="form-control" value="<?= date('Y-m-d') ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Paid by</label>
+                            <input type="text" name="method" class="form-control" placeholder="M-Pesa / Bank / Cash">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Reference</label>
+                            <input type="text" name="reference" class="form-control" placeholder="Transaction code">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold">Notes</label>
+                            <input type="text" name="notes" class="form-control">
+                        </div>
+                    </div>
+                    <div class="form-text mt-2" style="font-size:11px">
+                        The payment is applied to the oldest unpaid installment first, then carries onto the next.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success"><i class="fa fa-check me-1"></i>Record Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    // Live schedule preview. Mirrors creditBuildSchedule() in credit_bootstrap.php:
+    // whole months with the day clamped to the month length, and a final
+    // installment that carries the remainder so the plan totals the credit exactly.
+    var principal = document.getElementById('cdPrincipal');
+    var monthly   = document.getElementById('cdMonthly');
+    var firstDue  = document.getElementById('cdFirstDue');
+    if (!principal || !monthly || !firstDue) return;
+
+    var fmt = new Intl.NumberFormat('en-KE', { maximumFractionDigits: 0 });
+
+    function addMonths(d, n) {
+        var day = d.getDate();
+        var x = new Date(d.getFullYear(), d.getMonth() + n, 1);
+        var last = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate();
+        x.setDate(Math.min(day, last));
+        return x;
+    }
+    function fmtDate(d) {
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    function recalc() {
+        var p = parseFloat(principal.value) || 0;
+        var m = parseFloat(monthly.value) || 0;
+        var s = firstDue.value ? new Date(firstDue.value + 'T00:00:00') : null;
+
+        var count = document.getElementById('cdCount'),
+            last  = document.getElementById('cdLast'),
+            done  = document.getElementById('cdDone'),
+            note  = document.getElementById('cdNote');
+
+        if (p <= 0 || m <= 0 || !s || isNaN(s.getTime())) {
+            count.textContent = last.textContent = done.textContent = '—';
+            note.textContent = 'Enter the amounts to see the schedule.';
+            return;
+        }
+        if (m > p) {
+            count.textContent = last.textContent = done.textContent = '—';
+            note.innerHTML = '<span class="text-danger">The monthly payment is more than the credit amount.</span>';
+            return;
+        }
+
+        var n = Math.max(1, Math.min(Math.ceil(+(p / m).toFixed(6)), 600));
+        var lastAmt = +(p - m * (n - 1)).toFixed(2);
+        var endDate = addMonths(s, n - 1);
+
+        count.textContent = n;
+        last.textContent  = 'KSh ' + fmt.format(lastAmt);
+        done.textContent  = fmtDate(endDate);
+        note.innerHTML = n + ' payment' + (n === 1 ? '' : 's') + ' of KSh ' + fmt.format(m) +
+            (Math.abs(lastAmt - m) > 0.01
+                ? ', with a final payment of KSh ' + fmt.format(lastAmt)
+                : '') +
+            ', from ' + fmtDate(s) + ' to ' + fmtDate(endDate) + '.';
+    }
+
+    [principal, monthly, firstDue].forEach(function (el) {
+        el.addEventListener('input', recalc);
+        el.addEventListener('change', recalc);
+    });
+
+    // Penalty unit follows the chosen basis.
+    var fixed = document.getElementById('cdPenFixed'),
+        pct   = document.getElementById('cdPenPct'),
+        unit  = document.getElementById('cdPenUnit'),
+        help  = document.getElementById('cdPenHelp'),
+        pval  = document.getElementById('cdPenValue');
+    function syncPenalty() {
+        var isPct = pct && pct.checked;
+        unit.textContent = isPct ? '%' : 'KSh';
+        help.textContent = isPct
+            ? 'A percentage of each late installment.'
+            : 'A flat charge per late installment.';
+        if (pval) { pval.max = isPct ? 100 : ''; }
+    }
+    if (fixed) fixed.addEventListener('change', syncPenalty);
+    if (pct)   pct.addEventListener('change', syncPenalty);
+    syncPenalty();
+    recalc();
+
+    var modal = document.getElementById('creditModal');
+    if (modal) modal.addEventListener('shown.bs.modal', recalc);
+}());
+</script>
+<?php endif; ?>
+
 <div class="modal fade" id="addDepositModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
