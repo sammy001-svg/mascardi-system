@@ -1951,6 +1951,178 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                 </div>
             </div>
         </div>
+
+        <!-- ══ CREDIT SUMMARY ══════════════════════════════════════════════════
+             Sits directly under the Reservation Summary. Before an agreement
+             exists this is a single call to action; once saved it becomes the
+             running account. ═══════════════════════════════════════════════ -->
+        <?php
+        creditMigrate($db);
+        $creditAgr = creditForLead($db, $id);
+        $creditSum = $creditAgr ? creditSummary($db, (int)$creditAgr['id']) : null;
+        $creditIns = $creditAgr ? creditInstallments($db, (int)$creditAgr['id']) : [];
+        $creditLastPay = null;
+        if ($creditAgr) {
+            $__p = creditPayments($db, (int)$creditAgr['id']);
+            $creditLastPay = $__p ? end($__p) : null;
+        }
+        ?>
+
+        <?php if (!$creditAgr): ?>
+        <div class="card mb-4" id="credit" style="border-color:#c084fc;border-width:2px">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2"
+                 style="background:linear-gradient(135deg,#faf5ff,#f3e8ff);border-bottom-color:#e9d5ff">
+                <span style="color:#7e22ce"><i class="fa fa-file-contract me-2"></i>Credit Agreement</span>
+                <?php if (canWrite('crm')): ?>
+                <button type="button" class="btn btn-sm" style="background:#7e22ce;color:#fff"
+                        data-bs-toggle="modal" data-bs-target="#creditModal">
+                    <i class="fa fa-plus me-1"></i>Set Up Credit Agreement
+                </button>
+                <?php endif; ?>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-0" style="font-size:13px">
+                    Selling this vehicle on credit? Set up the payment plan and the system will build the
+                    installment schedule, work out the completion date, and produce the Credit Payment
+                    Agreement, receipts and client statement.
+                    <?php if ($balance > 0): ?>
+                    <br><span class="text-dark">Balance available to finance:
+                        <strong><?= money($balance) ?></strong></span>
+                    <?php endif; ?>
+                </p>
+            </div>
+        </div>
+        <?php else: ?>
+        <?php [$cStatL, $cStatC] = creditStatuses()[$creditAgr['status']] ?? ['Active', '#2563eb']; ?>
+        <div class="card mb-4" id="credit" style="border-color:#c084fc;border-width:2px">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2"
+                 style="background:linear-gradient(135deg,#faf5ff,#f3e8ff);border-bottom-color:#e9d5ff">
+                <span style="color:#7e22ce">
+                    <i class="fa fa-file-contract me-2"></i>Credit Summary
+                    <span class="badge ms-2" style="background:<?= $cStatC ?>;font-size:10px"><?= $cStatL ?></span>
+                    <span class="text-muted fw-normal" style="font-size:12px">
+                        · <?= e($creditAgr['reference'] ?: '') ?></span>
+                </span>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="credit_agreement.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm" style="background:#7e22ce;color:#fff">
+                        <i class="fa fa-file-signature me-1"></i>Credit Agreement
+                    </a>
+                    <a href="credit_receipt.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-warning<?= $creditLastPay ? '' : ' disabled' ?>"
+                       <?= $creditLastPay ? '' : 'tabindex="-1" aria-disabled="true" title="Record a payment first"' ?>>
+                        <i class="fa fa-receipt me-1"></i>Deposit Receipt
+                    </a>
+                    <a href="credit_statement.php?lead_id=<?= $id ?>" target="_blank"
+                       class="btn btn-sm btn-outline-info">
+                        <i class="fa fa-file-lines me-1"></i>Client Statement
+                    </a>
+                    <?php if (canWrite('crm')): ?>
+                    <button type="button" class="btn btn-sm btn-success"
+                            data-bs-toggle="modal" data-bs-target="#creditPayModal">
+                        <i class="fa fa-coins me-1"></i>Record Payment
+                    </button>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <div class="rounded-3 p-3 text-center" style="background:#faf5ff;border:1px solid #e9d5ff">
+                            <div class="text-muted small mb-1">Credit Amount</div>
+                            <div class="fw-bold" style="font-size:20px;color:#7e22ce">
+                                <?= money((float)$creditAgr['principal']) ?></div>
+                            <div class="text-muted" style="font-size:11px">
+                                <?= (int)$creditAgr['installments'] ?> monthly payments</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="rounded-3 p-3 text-center" style="background:#f0fdf4;border:1px solid #bbf7d0">
+                            <div class="text-muted small mb-1">Paid to Date</div>
+                            <div class="fw-bold text-success" style="font-size:20px">
+                                <?= money($creditSum['paid']) ?></div>
+                            <div class="text-muted" style="font-size:11px">
+                                <?= (int)$creditSum['paid_count'] ?> of <?= (int)$creditSum['count'] ?> installments</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="rounded-3 p-3 text-center"
+                             style="background:<?= $creditSum['balance'] > 0 ? '#fff7ed' : '#f0fdf4' ?>;
+                                    border:1px solid <?= $creditSum['balance'] > 0 ? '#fed7aa' : '#bbf7d0' ?>">
+                            <div class="text-muted small mb-1">Balance</div>
+                            <div class="fw-bold" style="font-size:20px;color:<?= $creditSum['balance'] > 0 ? '#c2410c' : '#15803d' ?>">
+                                <?= money($creditSum['balance']) ?></div>
+                            <div class="text-muted" style="font-size:11px">
+                                <?= $creditSum['balance'] > 0 ? 'Still outstanding' : 'Settled in full' ?></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="rounded-3 p-3 text-center"
+                             style="background:<?= $creditSum['overdue_count'] ? '#fef2f2' : '#f8fafc' ?>;
+                                    border:1px solid <?= $creditSum['overdue_count'] ? '#fecaca' : '#e2e8f0' ?>">
+                            <div class="text-muted small mb-1">
+                                <?= $creditSum['overdue_count'] ? 'Overdue' : 'Expected Completion' ?></div>
+                            <?php if ($creditSum['overdue_count']): ?>
+                            <div class="fw-bold" style="font-size:20px;color:#b91c1c">
+                                <?= money($creditSum['overdue_amount']) ?></div>
+                            <div class="text-muted" style="font-size:11px">
+                                <?= (int)$creditSum['overdue_count'] ?> installment<?= $creditSum['overdue_count'] === 1 ? '' : 's' ?> late</div>
+                            <?php else: ?>
+                            <div class="fw-bold" style="font-size:17px;color:#334155">
+                                <?= $creditAgr['completion_date'] ? fmtDate($creditAgr['completion_date'], 'd M Y') : '—' ?></div>
+                            <div class="text-muted" style="font-size:11px">
+                                Monthly <?= money((float)$creditAgr['monthly_payment']) ?></div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <?php if ($creditSum['next_due'] && $creditSum['balance'] > 0): ?>
+                <div class="alert alert-<?= $creditSum['overdue_count'] ? 'danger' : 'light' ?> border py-2 mb-3"
+                     style="font-size:13px">
+                    <i class="fa fa-calendar-day me-1"></i>
+                    Next payment <strong><?= money($creditSum['next_amount']) ?></strong>
+                    due <strong><?= fmtDate($creditSum['next_due'], 'd M Y') ?></strong>.
+                    Late fee: <?= e(creditPenaltyPhrase($creditAgr)) ?> per occurrence
+                    &middot; interest <?= e(rtrim(rtrim(number_format((float)$creditAgr['interest_rate'], 2), '0'), '.')) ?>% p.a.
+                </div>
+                <?php endif; ?>
+
+                <div class="border-top pt-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted small fw-semibold">
+                            <i class="fa fa-list-ol me-1"></i>Installment Schedule</span>
+                        <?php if (canWrite('crm')): ?>
+                        <button type="button" class="btn btn-xs btn-outline-secondary"
+                                data-bs-toggle="modal" data-bs-target="#creditModal">
+                            <i class="fa fa-pen me-1"></i>Edit terms
+                        </button>
+                        <?php endif; ?>
+                    </div>
+                    <div class="table-responsive" style="max-height:260px;overflow-y:auto">
+                        <table class="table table-sm mb-0" style="font-size:12.5px">
+                            <thead><tr>
+                                <th style="width:42px">#</th><th>Due</th>
+                                <th class="text-end">Amount</th><th class="text-end">Paid</th><th>Status</th>
+                            </tr></thead>
+                            <tbody>
+                            <?php foreach ($creditIns as $ins):
+                                [$il, $ic] = creditInstallmentStatuses()[$ins['status']] ?? ['Pending', '#64748b']; ?>
+                            <tr>
+                                <td><?= (int)$ins['seq'] ?></td>
+                                <td><?= fmtDate($ins['due_date'], 'd M Y') ?></td>
+                                <td class="text-end"><?= money((float)$ins['amount']) ?></td>
+                                <td class="text-end"><?= (float)$ins['amount_paid'] > 0 ? money((float)$ins['amount_paid']) : '—' ?></td>
+                                <td><span class="badge" style="background:<?= $ic ?>1f;color:<?= $ic ?>;font-size:10px"><?= $il ?></span></td>
+                            </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
         <?php endif; ?>
 
         <!-- Import Order Summary (shown only when stage = import_order) -->
