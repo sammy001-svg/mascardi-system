@@ -4,7 +4,7 @@ $pageTitle = 'Cars';
 $db = getDB();
 
 $section = $_GET['section'] ?? 'inventory';
-if (!in_array($section, ['inventory', 'client', 'workshop'])) $section = 'inventory';
+if (!in_array($section, ['inventory', 'client', 'workshop', 'consignment'])) $section = 'inventory';
 
 // Header cells and the DataTables column config must agree — a mismatch is what
 // triggers "Incorrect column count" warnings.
@@ -100,6 +100,12 @@ $locFilter = $supLocId ? " AND location_id = $supLocId" : '';
 $cntInv  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='inventory' AND (status IS NULL OR status NOT IN ('delivered','sold'))$locFilter")->fetchColumn();
 $cntCli  = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type='client'$locFilter")->fetchColumn();
 $cntWork = (int)$db->query("SELECT COUNT(*) FROM cars WHERE status='in_workshop'$locFilter")->fetchColumn();
+// Consignment vehicles (trade-in / sale on behalf) belong to customers; without
+// their own tab they would appear in none of the sections above.
+$cntCons = 0;
+try {
+    $cntCons = (int)$db->query("SELECT COUNT(*) FROM cars WHERE car_type IN ('trade_in','sale_on_behalf')$locFilter")->fetchColumn();
+} catch (\Throwable $_) {}
 
 // Filter dropdowns — only needed on inventory tab, scoped for supervisors
 $invMakes     = [];
@@ -210,7 +216,28 @@ include __DIR__ . '/../../includes/header.php';
         <span class="badge <?= $section === 'workshop' ? 'bg-dark' : 'bg-warning text-dark border' ?> ms-1"><?= $cntWork ?></span>
         <?php endif; ?>
     </a>
+    <?php if (canAccess('trade_in')): ?>
+    <a href="?section=consignment"
+       class="btn btn-lg <?= $section === 'consignment' ? 'btn-info text-dark' : 'btn-outline-info' ?> flex-fill text-center" style="min-width:160px">
+        <i class="fa fa-handshake me-2"></i>Trade-In / On Behalf
+        <?php if ($cntCons): ?>
+        <span class="badge <?= $section === 'consignment' ? 'bg-white text-dark' : 'bg-info' ?> ms-1"><?= $cntCons ?></span>
+        <?php endif; ?>
+    </a>
+    <?php endif; ?>
 </div>
+
+<?php if ($section === 'consignment'): ?>
+<div class="alert alert-info py-2 small d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <span>
+        <i class="fa fa-circle-info me-1"></i>
+        These vehicles belong to customers. Owners, commission and payouts are managed in the dedicated module.
+    </span>
+    <a href="<?= BASE_URL ?>/modules/trade_in/index.php" class="btn btn-sm btn-info">
+        <i class="fa fa-handshake me-1"></i>Open Trade-In &amp; Sale on Behalf
+    </a>
+</div>
+<?php endif; ?>
 
 <?php if ($orphanTypes > 0): ?>
 <div class="alert alert-danger d-flex align-items-center justify-content-between flex-wrap gap-2 py-2">
