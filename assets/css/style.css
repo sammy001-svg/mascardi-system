@@ -110,7 +110,14 @@ a:hover { text-decoration: underline; }
 .page-body {
     flex: 1;
     padding: 28px 32px 48px;
-    animation: pageFadeIn .22s ease both;
+    /* Deliberately NO fill-mode. "both" kept this opacity animation permanently
+       in its fill state, which makes .page-body a stacking context for the life
+       of the page. Bootstrap appends .modal-backdrop to <body>, so any modal
+       inside .page-body was trapped in a lower context than the backdrop — the
+       dialog rendered *under* the black veil and could not be clicked or typed
+       into. Dropping the fill costs nothing visually (the animation ends at
+       opacity:1, which is already the default) and frees every modal. */
+    animation: pageFadeIn .22s ease;
 }
 
 /* ─────────────────────────────────────────────────────────
