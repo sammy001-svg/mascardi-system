@@ -121,7 +121,8 @@ if (!isset($types[$tab])) $tab = 'sale_on_behalf';
 
 $filterStatus = $_GET['status'] ?? '';
 $filterSearch = trim($_GET['q'] ?? '');
-if (!isset($statuses[$filterStatus])) $filterStatus = '';
+// '' = default live-stock view, 'all' = every status, otherwise a specific one.
+if ($filterStatus !== 'all' && !isset($statuses[$filterStatus])) $filterStatus = '';
 
 $where  = ['cs.deal_type = ?'];
 $params = [$tab];
@@ -139,26 +140,56 @@ $params = [$tab];
 // settled ('sold') deal must stay visible under its status filter — that is
 // where the owner's payout is processed — so this hides committed stock without
 // hiding money still owed.
+//
+// Note this predicate alone is not enough to keep a delivered car out of sight:
+// once the deal is settled it is no longer 'active', so the predicate stops
+// applying and the row reappears. The default status filter below is what
+// actually keeps the list to live stock.
+// The CRM tables are optional — an install without the CRM migration has no
+// crm_leads at all. Referencing it unguarded made the whole listing query throw,
+// and since that query is wrapped in a try/catch the page just rendered an empty
+// list as though there were no deals. Check the table exists before joining it.
+$hasLeads = false;
 $hasResStatus = false;
 try {
-    $hasResStatus = (bool)$db->query("SHOW COLUMNS FROM crm_leads LIKE 'reservation_status'")->fetch();
+    $hasLeads = (bool)$db->query("SHOW TABLES LIKE 'crm_leads'")->fetch();
+    if ($hasLeads) {
+        $hasResStatus = (bool)$db->query("SHOW COLUMNS FROM crm_leads LIKE 'reservation_status'")->fetch();
+    }
 } catch (\Throwable $_) {}
 
 $leadCond = $hasResStatus
     ? "(l2.stage IN ('reserved','delivered') OR l2.reservation_status = 'pending_approval')"
     : "l2.stage IN ('reserved','delivered')";
 
+$leadExists = $hasLeads
+    ? "OR EXISTS (SELECT 1 FROM crm_leads l2
+                  WHERE l2.pinned_car_id = cs.car_id AND {$leadCond})"
+    : '';
+
 $resPredicate = "NOT (
         cs.status = 'active' AND (
             c.status = 'reserved'
             OR c.status IN ('delivered','sold')
-            OR EXISTS (SELECT 1 FROM crm_leads l2
-                       WHERE l2.pinned_car_id = cs.car_id AND {$leadCond})
+            {$leadExists}
         )
     )";
 $where[] = $resPredicate;
 
-if ($filterStatus) { $where[] = 'cs.status = ?'; $params[] = $filterStatus; }
+if ($filterStatus === 'all') {
+    // Explicitly everything — no status condition at all.
+} elseif ($filterStatus) {
+    $where[] = 'cs.status = ?';
+    $params[] = $filterStatus;
+} else {
+    // Default view = live stock only. Once a vehicle is delivered its deal is
+    // settled to 'sold', and a sold car is not something anyone is still trying
+    // to market — leaving those in the default list made delivered vehicles look
+    // like they were still on offer. They remain one click away under the Sold
+    // filter (where payouts are processed), and any money still owed is
+    // surfaced by the banner above regardless of which filter is active.
+    $where[] = "cs.status = 'active'";
+}
 if ($filterSearch) {
     $where[] = '(cs.owner_name LIKE ? OR cs.owner_phone LIKE ? OR cs.reference LIKE ?
                  OR c.make LIKE ? OR c.model LIKE ? OR c.registration_number LIKE ? OR c.chassis_number LIKE ?)';
@@ -187,30 +218,54 @@ try {
 // ── Tab counts + headline stats (per deal type) ───────────────────────────────
 $counts = ['sale_on_behalf' => 0, 'trade_in' => 0];
 try {
-    // Same reserved-exclusion as the list, or the tab badges would count
-    // vehicles the list no longer shows.
+    // Badges count live stock, matching what the default list shows — the same
+    // reserved-exclusion plus active-only, so a delivered vehicle stops being
+    // counted as available the moment its deal is settled.
     foreach ($db->query("SELECT cs.deal_type, COUNT(*) n
                          FROM consignments cs
                          JOIN cars c ON c.id = cs.car_id
-                         WHERE {$resPredicate}
+                         WHERE {$resPredicate} AND cs.status = 'active'
                          GROUP BY cs.deal_type") as $r) {
         $counts[$r['deal_type']] = (int)$r['n'];
     }
 } catch (\Throwable $_) {}
 
-$statActive = $statSold = 0;
-$statValue  = $statCommission = $statOwed = 0.0;
+// Live-stock figures come from the rows on screen.
+$statActive = 0;
+$statValue  = 0.0;
 foreach ($rows as $r) {
     if ($r['status'] === 'active') {
         $statActive++;
         $statValue += (float)($r['listing_price'] ?: 0);
     }
-    if ($r['status'] === 'sold') {
-        $statSold++;
-        $statCommission += (float)($r['commission_amount'] ?: 0);
-        $statOwed       += max(0, (float)($r['payout_amount'] ?: 0) - (float)($r['payout_paid'] ?: 0));
-    }
 }
+
+// Settled figures must NOT come from $rows. The default view lists live stock
+// only, so reading these off the visible rows would report zero commission and
+// zero owed the moment a deal is delivered — silently hiding money the business
+// still owes a customer. Query them for the whole tab instead, independent of
+// whichever filter is applied.
+$statSold = 0;
+$statCommission = $statOwed = 0.0;
+try {
+    $s = $db->prepare("
+        SELECT COUNT(*)                                                       AS n,
+               COALESCE(SUM(commission_amount), 0)                            AS commission,
+               COALESCE(SUM(GREATEST(0, COALESCE(payout_amount,0) - COALESCE(payout_paid,0))), 0) AS owed
+        FROM consignments
+        WHERE deal_type = ? AND status = 'sold'");
+    $s->execute([$tab]);
+    if ($r = $s->fetch(PDO::FETCH_ASSOC)) {
+        $statSold       = (int)$r['n'];
+        $statCommission = (float)$r['commission'];
+        $statOwed       = (float)$r['owed'];
+    }
+} catch (\Throwable $_) {}
+
+// Owner money still outstanding on settled deals, plus deals closed without any
+// sale figures recorded. Drives the banner that keeps this visible even though
+// those deals no longer appear in the default list.
+$outstanding = consignmentOutstanding($db, $tab);
 
 $isFiltered = $filterStatus !== '' || $filterSearch !== '';
 $pageTitle  = 'Trade-In & Sale on Behalf';
@@ -317,6 +372,27 @@ include __DIR__ . '/../../includes/header.php';
     to run:
     <pre class="mt-2 mb-0" style="font-size:11.5px;white-space:pre-wrap">ALTER TABLE cars MODIFY COLUMN car_type
   ENUM('inventory','client','trade_in','sale_on_behalf') DEFAULT 'inventory';</pre>
+</div>
+<?php endif; ?>
+
+<?php if (!$filterStatus && ($outstanding['amount'] > 0 || $outstanding['unsettled'] > 0)): ?>
+<!-- Delivered deals leave the list below; this makes sure the money they still
+     owe does not leave with them. -->
+<div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap gap-2 py-2">
+    <span style="font-size:13px">
+        <i class="fa fa-hand-holding-dollar me-1"></i>
+        <?php if ($outstanding['amount'] > 0): ?>
+            <strong><?= money($outstanding['amount']) ?></strong> still owed to owners
+            on <?= $outstanding['count'] ?> settled deal<?= $outstanding['count'] === 1 ? '' : 's' ?><?= $outstanding['unsettled'] ? ',' : '.' ?>
+        <?php endif; ?>
+        <?php if ($outstanding['unsettled'] > 0): ?>
+            <strong><?= $outstanding['unsettled'] ?></strong> settled deal<?= $outstanding['unsettled'] === 1 ? '' : 's' ?>
+            still <?= $outstanding['unsettled'] === 1 ? 'has' : 'have' ?> no sale figures recorded.
+        <?php endif; ?>
+    </span>
+    <a href="?tab=<?= e($tab) ?>&status=sold" class="btn btn-sm btn-warning">
+        <i class="fa fa-arrow-right me-1"></i>View sold deals
+    </a>
 </div>
 <?php endif; ?>
 
@@ -450,7 +526,10 @@ include __DIR__ . '/../../includes/header.php';
     <div class="filter-group">
         <label>Status</label>
         <select name="status">
-            <option value="">All statuses</option>
+            <!-- Blank is the default view and means live stock, not everything —
+                 labelled accordingly so it cannot be mistaken for "show all". -->
+            <option value="">Live stock (active)</option>
+            <option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>All statuses</option>
             <?php foreach ($statuses as $k => $s): ?>
             <option value="<?= $k ?>" <?= $filterStatus === $k ? 'selected' : '' ?>><?= $s['label'] ?></option>
             <?php endforeach; ?>
@@ -480,15 +559,45 @@ include __DIR__ . '/../../includes/header.php';
         <div style="font-size:48px;color:#cbd5e1;margin-bottom:14px">
             <i class="fa <?= $types[$tab]['icon'] ?>"></i>
         </div>
-        <h6 class="fw-bold mb-1">No <?= strtolower($types[$tab]['label']) ?> records<?= $isFiltered ? ' match your filters' : ' yet' ?></h6>
+        <?php
+        // The default view lists live stock only, so "none" here usually means
+        // every deal has been delivered — not that none were ever recorded.
+        // Saying "yet" in that case would be plainly wrong.
+        $tabTotal = 0;
+        try {
+            $tt = $db->prepare("SELECT COUNT(*) FROM consignments WHERE deal_type = ?");
+            $tt->execute([$tab]);
+            $tabTotal = (int)$tt->fetchColumn();
+        } catch (\Throwable $_) {}
+        $allClosed = !$isFiltered && $tabTotal > 0;
+        ?>
+        <h6 class="fw-bold mb-1">
+            <?php if ($isFiltered): ?>
+                No <?= strtolower($types[$tab]['label']) ?> records match your filters
+            <?php elseif ($allClosed): ?>
+                No <?= strtolower($types[$tab]['label']) ?> vehicles currently on offer
+            <?php else: ?>
+                No <?= strtolower($types[$tab]['label']) ?> records yet
+            <?php endif; ?>
+        </h6>
         <p class="text-muted small mb-3">
-            <?= $tab === 'trade_in'
-                ? 'Record a vehicle taken in part-exchange to track its valuation and allowance.'
-                : 'Register a customer vehicle to market it on their behalf and track your commission.' ?>
+            <?php if ($allClosed): ?>
+                All <?= $tabTotal ?> recorded deal<?= $tabTotal === 1 ? ' has' : 's have' ?>
+                been delivered, withdrawn or closed.
+            <?php else: ?>
+                <?= $tab === 'trade_in'
+                    ? 'Record a vehicle taken in part-exchange to track its valuation and allowance.'
+                    : 'Register a customer vehicle to market it on their behalf and track your commission.' ?>
+            <?php endif; ?>
         </p>
+        <?php if ($allClosed): ?>
+        <a href="?tab=<?= e($tab) ?>&status=all" class="btn btn-outline-secondary btn-sm me-1">
+            <i class="fa fa-clock-rotate-left me-1"></i>View all past deals
+        </a>
+        <?php endif; ?>
         <?php if (canWrite('trade_in') && !$isFiltered): ?>
         <a href="add.php?type=<?= $tab ?>" class="btn btn-primary btn-sm">
-            <i class="fa fa-plus me-1"></i>Add the first one
+            <i class="fa fa-plus me-1"></i><?= $allClosed ? 'Record a new one' : 'Add the first one' ?>
         </a>
         <?php endif; ?>
     </div>

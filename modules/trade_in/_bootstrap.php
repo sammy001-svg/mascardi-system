@@ -130,6 +130,63 @@ function tradeInMigrate(PDO $db): void {
                      AND expiry_date IS NOT NULL
                      AND expiry_date < CURDATE()");
     } catch (\Throwable $_) {}
+
+    consignmentReconcile($db);
+}
+
+/**
+ * Housekeeping for consignment vehicles that have left the yard.
+ *
+ * Deliberately does NOT flip the deal's status. Settling is handled by
+ * crmSettleConsignmentOnDelivery() and the "settle delivered deals" backlog
+ * action, both of which work out the real sale price, commission and payout.
+ * Force-closing a deal here would only mark it sold with empty figures and hide
+ * it from that backlog — losing the owner's money trail rather than completing
+ * it. All this does is guarantee a departed vehicle is never still advertised,
+ * which some sale flows (e.g. modules/sales/add.php) don't currently handle.
+ */
+function consignmentReconcile(PDO $db, bool $force = false): void {
+    static $done = false;
+    if ($done && !$force) return;   // once per request is enough; $force is for tests
+    $done = true;
+
+    try {
+        $db->exec("UPDATE cars c
+                   JOIN consignments cs ON cs.car_id = c.id
+                   SET c.show_on_website = 0
+                   WHERE c.status IN ('sold','delivered')
+                     AND c.show_on_website = 1");
+    } catch (\Throwable $_) {}
+}
+
+/**
+ * Settled deals that still owe the owner money, plus those closed without any
+ * sale figures recorded. Used to keep that liability visible even though the
+ * deals themselves drop out of the default (live-stock) listing.
+ */
+function consignmentOutstanding(PDO $db, ?string $dealType = null): array {
+    $out = ['count' => 0, 'amount' => 0.0, 'unsettled' => 0];
+    try {
+        $sql = "SELECT
+                    SUM(CASE WHEN cs.payout_amount IS NOT NULL
+                              AND cs.payout_amount > cs.payout_paid THEN 1 ELSE 0 END)  AS n,
+                    COALESCE(SUM(CASE WHEN cs.payout_amount IS NOT NULL
+                              AND cs.payout_amount > cs.payout_paid
+                         THEN cs.payout_amount - cs.payout_paid ELSE 0 END), 0)         AS amt,
+                    SUM(CASE WHEN cs.sold_price IS NULL THEN 1 ELSE 0 END)              AS unsettled
+                FROM consignments cs
+                WHERE cs.status = 'sold'";
+        $params = [];
+        if ($dealType !== null) { $sql .= " AND cs.deal_type = ?"; $params[] = $dealType; }
+        $s = $db->prepare($sql);
+        $s->execute($params);
+        if ($r = $s->fetch(PDO::FETCH_ASSOC)) {
+            $out['count']     = (int)($r['n'] ?? 0);
+            $out['amount']    = (float)($r['amt'] ?? 0);
+            $out['unsettled'] = (int)($r['unsettled'] ?? 0);
+        }
+    } catch (\Throwable $_) {}
+    return $out;
 }
 
 /** Deal-type labels/colours, used for badges across the module. */
