@@ -3,9 +3,29 @@ require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
 canAccess('quick_assessments') || die('Access denied.');
 canWrite('quick_assessments') || die('Permission denied.');
-$pageTitle = 'New Quick Assessment';
+
+// ── One form, two modes ──────────────────────────────────────────────────────
+// ?id= turns this page into an edit of that assessment. Editing shares the form
+// rather than living in a second file: the form is the bulk of this page, and a
+// duplicate would drift out of step with it the first time a check item is
+// added. Anyone who may create an assessment may correct one — that is the same
+// judgement, and a wrong tyre note is worth fixing rather than re-keying.
 $db = getDB();
 $errors = [];
+
+$editId   = (int)($_GET['id'] ?? $_POST['edit_id'] ?? 0);
+$existing = null;
+if ($editId) {
+    $s = $db->prepare("SELECT * FROM quick_assessments WHERE id = ?");
+    $s->execute([$editId]);
+    $existing = $s->fetch(PDO::FETCH_ASSOC) ?: null;
+    if (!$existing) {
+        setFlash('error', 'That assessment no longer exists.');
+        redirect(BASE_URL . '/modules/quick_assessments/index.php');
+    }
+}
+$isEdit    = (bool)$existing;
+$pageTitle = $isEdit ? 'Edit Quick Assessment' : 'New Quick Assessment';
 
 // ── Inline migration: run once, safe to repeat ────────────────────────────
 // Adds new columns to quick_assessments if they don't exist yet.
@@ -122,7 +142,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!array_key_exists($overall, $overallOptions))      $errors[] = 'Please select an overall condition.';
     if ($clientEmail && !filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) $errors[] = 'Invalid email address.';
 
-    if (empty($errors)) {
+    if (empty($errors) && $isEdit) {
+        try {
+            // assessment_number and created_by are deliberately left alone — the
+            // reference on a printed copy must keep pointing at the same record.
+            $db->prepare("
+                UPDATE quick_assessments SET
+                    assessment_date=?, car_make=?, car_model=?, car_registration=?, car_year=?,
+                    client_name=?, client_phone=?, client_email=?, service_booking_id=?,
+                    check_tyres=?, check_lights=?, check_exterior=?, check_engine=?,
+                    check_interior=?, check_brakes=?, check_fluids=?, check_electrical=?,
+                    check_jack=?, check_dents=?, check_items_left=?, check_mileage=?,
+                    check_fuel_level=?, check_radio=?,
+                    overall_condition=?, observations=?, recommended_services=?, assessed_by=?,
+                    updated_at=NOW()
+                WHERE id=?
+            ")->execute([
+                $aDate, $carMake, $carModel, $carReg, $carYear,
+                $clientName, $clientPhone, $clientEmail, $bookingId,
+                $checkVals['tyres'],    $checkVals['lights'],  $checkVals['exterior'], $checkVals['engine'],
+                $checkVals['interior'], $checkVals['brakes'],  $checkVals['fluids'],   $checkVals['electrical'],
+                $checkVals['jack'],     $checkVals['dents'],   $checkVals['items_left'],
+                $checkVals['mileage'],  $checkVals['fuel_level'], $checkVals['radio'],
+                $overall, $observations, $recommended, $assessedBy,
+                $editId,
+            ]);
+            logActivity('update', 'quick_assessments', $editId,
+                "Edited quick assessment {$existing['assessment_number']}");
+            setFlash('success', "Quick assessment {$existing['assessment_number']} updated.");
+            redirect(BASE_URL . '/modules/quick_assessments/view.php?id=' . $editId);
+        } catch (\Throwable $e) {
+            $errors[] = $e->getMessage();
+        }
+    }
+
+    if (empty($errors) && !$isEdit) {
         try {
             $num = nextNumber('quick_assessments', 'assessment_number', 'QA');
             $db->prepare("
@@ -154,13 +208,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$p = $_POST; // shorthand for post values
+// Submitted values win on redisplay after a validation error; otherwise the
+// stored row fills the form. The column names match the field names, so no
+// mapping is needed.
+$p = $_POST ?: ($existing ?? []);
 include __DIR__ . '/../../includes/header.php';
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0"><i class="fa fa-magnifying-glass-chart me-2 text-primary"></i>New Quick Assessment</h5>
-    <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
+    <h5 class="mb-0">
+        <i class="fa fa-magnifying-glass-chart me-2 text-primary"></i>
+        <?= $isEdit ? 'Edit Quick Assessment' : 'New Quick Assessment' ?>
+        <?php if ($isEdit): ?>
+        <span class="text-muted fw-normal" style="font-size:14px">· <?= e($existing['assessment_number']) ?></span>
+        <?php endif; ?>
+    </h5>
+    <a href="<?= $isEdit ? 'view.php?id=' . $editId : 'index.php' ?>" class="btn btn-sm btn-outline-secondary">
+        <i class="fa fa-arrow-left me-1"></i>Back
+    </a>
 </div>
 
 <?php if ($errors): ?>
@@ -168,6 +233,7 @@ include __DIR__ . '/../../includes/header.php';
 <?php endif; ?>
 
 <form method="POST">
+<?php if ($isEdit): ?><input type="hidden" name="edit_id" value="<?= $editId ?>"><?php endif; ?>
 
     <!-- ── Service Booking (top, full-width) ───────────────────────────────── -->
     <div class="card mb-4 border-primary border-opacity-50">
@@ -413,7 +479,7 @@ include __DIR__ . '/../../includes/header.php';
 
             <div class="d-grid">
                 <button type="submit" class="btn btn-primary btn-lg">
-                    <i class="fa fa-save me-2"></i>Save Assessment
+                    <i class="fa fa-save me-2"></i><?= $isEdit ? 'Save Changes' : 'Save Assessment' ?>
                 </button>
             </div>
 

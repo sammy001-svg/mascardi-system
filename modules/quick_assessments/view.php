@@ -97,6 +97,9 @@ $checkItems = [
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
         <a href="print.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-primary"><i class="fa fa-print me-1"></i>Print</a>
+        <?php if (canWrite('quick_assessments')): ?>
+        <a href="add.php?id=<?= $a['id'] ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
+        <?php endif; ?>
         <?php if (canEditDelete()): ?>
         <a href="delete.php?id=<?= $a['id'] ?>" class="btn btn-sm btn-outline-danger confirm-delete"><i class="fa fa-trash"></i></a>
         <?php endif; ?>

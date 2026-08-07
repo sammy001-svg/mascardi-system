@@ -78,6 +78,12 @@ include __DIR__ . '/../../includes/header.php';
                         <a href="view.php?id=<?= $a['id'] ?>" class="btn btn-xs btn-outline-primary">
                             <i class="fa fa-eye"></i>
                         </a>
+                        <?php // Editing follows create rights; deleting stays with admins. ?>
+                        <?php if (canWrite('quick_assessments')): ?>
+                        <a href="add.php?id=<?= $a['id'] ?>" class="btn btn-xs btn-outline-secondary ms-1" title="Edit">
+                            <i class="fa fa-pen"></i>
+                        </a>
+                        <?php endif; ?>
                         <?php if (canEditDelete()): ?>
                         <a href="delete.php?id=<?= $a['id'] ?>" class="btn btn-xs btn-outline-danger confirm-delete ms-1">
                             <i class="fa fa-trash"></i>
