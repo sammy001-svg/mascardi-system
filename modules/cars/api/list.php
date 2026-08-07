@@ -22,7 +22,7 @@ try { $db->exec("ALTER TABLE cars ADD INDEX idx_cars_status (status)");  }      
 try { $db->exec("ALTER TABLE car_images ADD INDEX idx_ci_primary (car_id, is_primary)"); } catch (\Throwable $_) {}
 
 // ── Params ───────────────────────────────────────────────────────────────────
-$section = in_array($_GET['section'] ?? '', ['inventory', 'client', 'workshop'])
+$section = in_array($_GET['section'] ?? '', ['inventory', 'client', 'workshop', 'consignment'])
          ? $_GET['section'] : 'inventory';
 
 $usesInventoryLayout = ($section === 'inventory');
@@ -68,6 +68,8 @@ if ($section === 'workshop') {
     $baseWhere = "c.status = 'in_workshop'";
 } elseif ($section === 'inventory') {
     $baseWhere = "c.car_type = 'inventory' AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))";
+} elseif ($section === 'consignment') {
+    $baseWhere = "c.car_type IN ('trade_in','sale_on_behalf')";
 } else {
     $baseWhere = "c.car_type = 'client'";
 }

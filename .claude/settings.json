@@ -24,6 +24,9 @@
       "Bash(php -l \"c:/Mascardi Systems/mascardi-system/showroom/header.php\")",
       "Bash(php -l \"c:/Mascardi Systems/mascardi-system/showroom/view.php\")",
       "Bash(php -l \"c:/Mascardi Systems/mascardi-system/showroom/index.php\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Elitebook 820G3\\AppData\\Local\\Temp\\claude\\e--projects-Mascardi-System-mascardi-system\\a4e9ca3d-c0f8-4a0c-a5c0-1e0ceeb01471\\scratchpad"
     ]
   }
 }
