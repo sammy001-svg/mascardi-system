@@ -1,0 +1,54 @@
+---
+# cPanel Git Version Control — deployment
+#
+# Why this file is needed
+# ----------------------
+# cPanel's "Update from Remote" only runs `git pull` inside the *repository*
+# directory. It does not copy anything to the live site. Without this file there
+# is no deployment step at all, so cPanel truthfully reports the repository as
+# up-to-date while public_html still holds the old code — which is exactly the
+# symptom of nothing changing after a pull.
+#
+# With this file present, the repository page gains a "Deploy HEAD Commit"
+# button, and that is what publishes the code.
+#
+# Safety
+# ------
+# rsync is used WITHOUT --delete, on purpose. Everything the application writes
+# at runtime lives outside git (see .gitignore) and must survive a deploy:
+#
+#   uploads/                   customer photos, HR documents, car images
+#   .env                       credentials
+#   config/database.local.php  database overrides
+#   sessions/, tmp/, backups/
+#
+# --delete would erase all of it on the first deploy. The excludes below are a
+# second line of defence for the same reason.
+#
+# .git is excluded so the repository — including its full history — is never
+# served from the web root.
+
+deployment:
+  tasks:
+    - export DEPLOYPATH=$HOME/public_html
+
+    # Publish the code. Trailing slash on ./ copies the contents, not the folder.
+    - /usr/bin/rsync -a
+        --exclude='.git'
+        --exclude='.github'
+        --exclude='.cpanel.yml'
+        --exclude='uploads/'
+        --exclude='sessions/'
+        --exclude='tmp/'
+        --exclude='backups/'
+        --exclude='.env'
+        --exclude='config/database.local.php'
+        ./ $DEPLOYPATH/
+
+    # Runtime directories the app writes to. Created only if absent; never reset.
+    - /bin/mkdir -p $DEPLOYPATH/uploads $DEPLOYPATH/uploads/hr_documents $DEPLOYPATH/sessions $DEPLOYPATH/tmp
+    - /bin/chmod 755 $DEPLOYPATH/uploads $DEPLOYPATH/sessions $DEPLOYPATH/tmp
+
+    # Employee documents hold national IDs and bank details — the deny file that
+    # keeps them off the public web must exist even on a fresh deploy.
+    - /bin/cp -f uploads/hr_documents/.htaccess $DEPLOYPATH/uploads/hr_documents/.htaccess 2>/dev/null || true
