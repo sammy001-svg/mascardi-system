@@ -21,6 +21,7 @@ try {
                    ENUM('inventory','client','trade_in','sale_on_behalf') DEFAULT 'inventory'");
     }
 } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN description TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
@@ -32,6 +33,7 @@ try { $db->exec("ALTER TABLE cars ADD COLUMN meta_image VARCHAR(500) NULL DEFAUL
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $chassis   = trim($_POST['chassis_number'] ?? '');
     $reg       = trim($_POST['registration_number'] ?? '');
+    $entryNo   = trim($_POST['entry_number'] ?? '');
     $make      = trim($_POST['make'] ?? '');
     $model     = trim($_POST['model'] ?? '');
     $year      = (int)($_POST['year'] ?? 0);
@@ -71,8 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $locId    = (int)($_POST['location_id'] ?? 1);
             $clientId = $_POST['client_id'] ? (int)$_POST['client_id'] : null;
-            $stmt = $db->prepare("INSERT INTO cars (chassis_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,client_id,location_id,body_type,notes,description,features,meta_title,meta_description,meta_image,asking_price,mileage,engine_cc,featured,offer_price,show_on_website) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-            $stmt->execute([$chassis,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$clientId,$locId,$body,$notes,$description,$features,$metaTitle,$metaDesc,$metaImage,$askingPrice,$mileage,$engineCc,$featured,$offerPrice,$showOnWeb]);
+            $stmt = $db->prepare("INSERT INTO cars (chassis_number,entry_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,client_id,location_id,body_type,notes,description,features,meta_title,meta_description,meta_image,asking_price,mileage,engine_cc,featured,offer_price,show_on_website) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([$chassis,$entryNo ?: null,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$clientId,$locId,$body,$notes,$description,$features,$metaTitle,$metaDesc,$metaImage,$askingPrice,$mileage,$engineCc,$featured,$offerPrice,$showOnWeb]);
             $carId = $db->lastInsertId();
             
             logActivity('create', 'cars', $carId, "Added car: $make $model ($chassis)");
@@ -181,6 +183,14 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="col-md-4">
                     <label class="form-label">Chassis Number <span class="text-danger">*</span></label>
                     <input type="text" name="chassis_number" class="form-control" value="<?= e($_POST['chassis_number'] ?? '') ?>" placeholder="e.g. JTEBT9FJ60K056783" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Entry Number</label>
+                    <input type="text" name="entry_number" class="form-control"
+                           value="<?= e($_POST['entry_number'] ?? '') ?>" placeholder="e.g. ENT-2026-0142">
+                    <div class="form-text" style="font-size:11px">
+                        Internal reference. Never shown on the public website.
+                    </div>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Registration Number</label>

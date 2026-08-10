@@ -23,6 +23,7 @@ try {
                    ENUM('inventory','client','trade_in','sale_on_behalf') DEFAULT 'inventory'");
     }
 } catch (\Throwable $_) {}
+try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN description TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
@@ -34,6 +35,7 @@ try { $db->exec("ALTER TABLE cars ADD COLUMN meta_image VARCHAR(500) NULL DEFAUL
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
         'chassis_number'      => trim($_POST['chassis_number'] ?? ''),
+        'entry_number'        => trim($_POST['entry_number'] ?? '') ?: null,
         'registration_number' => trim($_POST['registration_number'] ?? ''),
         'make'                => trim($_POST['make'] ?? ''),
         'model'               => trim($_POST['model'] ?? ''),
@@ -68,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
-            $db->prepare("UPDATE cars SET chassis_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,description=?,features=?,meta_title=?,meta_description=?,meta_image=?,asking_price=?,mileage=?,engine_cc=?,featured=?,offer_price=?,show_on_website=? WHERE id=?")
+            $db->prepare("UPDATE cars SET chassis_number=?,entry_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,description=?,features=?,meta_title=?,meta_description=?,meta_image=?,asking_price=?,mileage=?,engine_cc=?,featured=?,offer_price=?,show_on_website=? WHERE id=?")
                ->execute([...array_values($data), $id]);
             logActivity('update', 'cars', $id, "Updated car: {$data['make']} {$data['model']} ({$data['chassis_number']})");
 
@@ -156,6 +158,14 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="col-md-4">
                     <label class="form-label">Chassis Number <span class="text-danger">*</span></label>
                     <input type="text" name="chassis_number" class="form-control" value="<?= e($car['chassis_number']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Entry Number</label>
+                    <input type="text" name="entry_number" class="form-control"
+                           value="<?= e($car['entry_number'] ?? '') ?>" placeholder="e.g. ENT-2026-0142">
+                    <div class="form-text" style="font-size:11px">
+                        Internal reference. Never shown on the public website.
+                    </div>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Registration Number</label>

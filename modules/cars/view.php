@@ -195,6 +195,9 @@ if (in_array($car['status'], ['delivered','sold']))     $activeStep = 6;
                     <dd class="col-7"><?= statusBadge($car['status']) ?></dd>
                     <dt class="col-5 text-muted">Chassis</dt>
                     <dd class="col-7"><code><?= e($car['chassis_number']) ?></code></dd>
+                    <?php // Internal reference — deliberately absent from every showroom page. ?>
+                    <dt class="col-5 text-muted">Entry No.</dt>
+                    <dd class="col-7"><code><?= e($car['entry_number'] ?: '—') ?></code></dd>
                     <dt class="col-5 text-muted">Mileage</dt>
                     <dd class="col-7"><?= $car['mileage'] ? number_format((int)$car['mileage']) . ' km' : '—' ?></dd>
                     <dt class="col-5 text-muted">Reg. No.</dt>
