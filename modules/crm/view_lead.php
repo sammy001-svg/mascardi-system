@@ -763,18 +763,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         creditMigrate($db);
 
         $principal   = (float)($_POST['principal'] ?? 0);
-        $monthly     = (float)($_POST['monthly_payment'] ?? 0);
+        $interest    = (float)($_POST['interest_rate'] ?? 0); // monthly interest %
+        $months      = max(1, (int)($_POST['months'] ?? 1));
         $firstDue    = trim($_POST['first_due_date'] ?? '');
         $penaltyType = ($_POST['penalty_type'] ?? 'fixed') === 'percent' ? 'percent' : 'fixed';
         $penaltyVal  = (float)($_POST['penalty_value'] ?? 0);
-        $interest    = (float)($_POST['interest_rate'] ?? 25);
         $agrDate     = trim($_POST['agreement_date'] ?? '') ?: date('Y-m-d');
         $saleDate    = trim($_POST['sale_agreement_date'] ?? '') ?: null;
 
+        // Total interest = Principal * (Interest % / 100) * Months
+        $totalInterest  = $principal * ($interest / 100) * $months;
+        $totalRepayable = round($principal + $totalInterest, 2);
+        
+        // Monthly payment = Total Repayable / Months (allow override if manually posted)
+        $postedMonthly = (float)($_POST['monthly_payment'] ?? 0);
+        $monthly       = $postedMonthly > 0 ? $postedMonthly : round($totalRepayable / $months, 2);
+
         $credErrors = [];
-        if ($principal <= 0)                    $credErrors[] = 'Enter the credit amount.';
-        if ($monthly <= 0)                      $credErrors[] = 'Enter the monthly payment.';
-        if ($monthly > $principal)              $credErrors[] = 'The monthly payment cannot exceed the credit amount.';
+        if ($principal <= 0)                     $credErrors[] = 'Enter the credit amount.';
+        if ($monthly <= 0)                       $credErrors[] = 'Enter the monthly payment.';
         if (!$firstDue || !strtotime($firstDue)) $credErrors[] = 'Set the first payment date.';
         if ($penaltyType === 'percent' && ($penaltyVal < 0 || $penaltyVal > 100)) {
             $credErrors[] = 'A percentage penalty must be between 0 and 100.';
@@ -785,7 +792,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
         }
 
-        $sched = creditBuildSchedule($principal, $monthly, $firstDue);
+        $sched = creditBuildSchedule($totalRepayable, $monthly, $firstDue);
         if (!$sched['count']) {
             setFlash('error', 'Those figures do not produce a payment schedule. Check the amounts.');
             redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
@@ -804,8 +811,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                               (int)$existing['id']]);
                 $agrId = (int)$existing['id'];
 
-                // Rebuilding the schedule would wipe payments already recorded
-                // against it, so it is only rebuilt while nothing has been paid.
                 $paidSoFar = creditSummary($db, $agrId)['paid'];
                 if ($paidSoFar > 0) {
                     setFlash('success', 'Credit terms updated. The existing schedule was kept because '
@@ -3103,9 +3108,10 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
                     <?php endif; ?>
 
                     <div class="row g-3">
+                        <!-- Principal -->
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold">
-                                Credit amount <span class="text-danger">*</span>
+                                Principal Amount <span class="text-danger">*</span>
                             </label>
                             <div class="input-group">
                                 <span class="input-group-text">KSh</span>
@@ -3113,12 +3119,37 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
                                        class="form-control" required value="<?= $__cPrincipal > 0 ? $__cPrincipal : '' ?>">
                             </div>
                             <div class="form-text" style="font-size:11px">
-                                Defaults to the balance after deposits<?= ($balance ?? 0) > 0 ? ' (' . money($balance) . ')' : '' ?>.
+                                Auto-populated from balance after deposit<?= ($balance ?? 0) > 0 ? ' (' . money($balance) . ')' : '' ?>.
                             </div>
                         </div>
+
+                        <!-- Monthly Interest Rate (%) -->
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">
+                                Monthly Interest <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="number" step="0.01" min="0" max="100" name="interest_rate" id="cdInterestRate"
+                                       class="form-control" value="<?= $__cAgr ? (float)$__cAgr['interest_rate'] : '2' ?>" required>
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <div class="form-text" style="font-size:11px">Monthly interest rate (%)</div>
+                        </div>
+
+                        <!-- Number of Months (Tenor) -->
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">
+                                Duration (Months) <span class="text-danger">*</span>
+                            </label>
+                            <input type="number" step="1" min="1" max="120" name="months" id="cdMonths"
+                                   class="form-control" value="<?= $__cAgr ? (int)$__cAgr['installments'] : '6' ?>" required>
+                            <div class="form-text" style="font-size:11px">Number of months</div>
+                        </div>
+
+                        <!-- Monthly Payment (Auto-Calculated) -->
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold">
-                                Monthly payment <span class="text-danger">*</span>
+                                Monthly Payment (Calculated) <span class="text-danger">*</span>
                             </label>
                             <div class="input-group">
                                 <span class="input-group-text">KSh</span>
@@ -3126,16 +3157,20 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
                                        class="form-control" required
                                        value="<?= $__cAgr ? (float)$__cAgr['monthly_payment'] : '' ?>">
                             </div>
+                            <div class="form-text" style="font-size:11px" id="cdMonthlyHelp">
+                                Auto-calculated: (Principal + Total Interest) ÷ Months
+                            </div>
                         </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">
-                                First payment due <span class="text-danger">*</span>
-                            </label>
+                        <!-- First payment due date -->
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">First payment due <span class="text-danger">*</span></label>
                             <input type="date" name="first_due_date" id="cdFirstDue" class="form-control" required
                                    value="<?= e($__cAgr ? $__cAgr['first_due_date'] : date('Y-m-d', strtotime('+1 month'))) ?>">
                         </div>
-                        <div class="col-md-6">
+
+                        <!-- Agreement date -->
+                        <div class="col-md-3">
                             <label class="form-label small fw-semibold">Agreement date</label>
                             <input type="date" name="agreement_date" class="form-control"
                                    value="<?= e($__cAgr ? $__cAgr['agreement_date'] : date('Y-m-d')) ?>">
@@ -3143,6 +3178,7 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
 
                         <div class="col-12"><hr class="my-1"></div>
 
+                        <!-- Late penalty & Sale agreement date -->
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold">Late payment penalty</label>
                             <div class="btn-group w-100 mb-2" role="group">
@@ -3163,40 +3199,36 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
                                 Charged per late installment.
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small fw-semibold">Interest p.a.</label>
-                            <div class="input-group">
-                                <input type="number" step="0.01" min="0" name="interest_rate" class="form-control"
-                                       value="<?= $__cAgr ? (float)$__cAgr['interest_rate'] : '25' ?>">
-                                <span class="input-group-text">%</span>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
                             <label class="form-label small fw-semibold">Sale agreement dated</label>
                             <input type="date" name="sale_agreement_date" class="form-control"
                                    value="<?= e($__cAgr['sale_agreement_date'] ?? ($lead['deposit_date'] ?? '')) ?>">
                         </div>
 
-                        <!-- Live schedule preview — the completion date the user asked for -->
+                        <!-- Real-time calculation preview -->
                         <div class="col-12">
                             <div class="rounded-3 p-3" id="cdPreview"
-                                 style="background:#f8fafc;border:1px solid #e2e8f0">
+                                 style="background:#faf5ff;border:1px solid #e9d5ff">
                                 <div class="row text-center g-2">
-                                    <div class="col-4">
-                                        <div class="text-muted" style="font-size:11px">Installments</div>
-                                        <div class="fw-bold" style="font-size:19px;color:#7e22ce" id="cdCount">—</div>
+                                    <div class="col-md-3 col-6">
+                                        <div class="text-muted" style="font-size:11px">Monthly Interest</div>
+                                        <div class="fw-bold" style="font-size:14px;color:#7e22ce" id="cdMonthlyIntCharge">—</div>
                                     </div>
-                                    <div class="col-4">
-                                        <div class="text-muted" style="font-size:11px">Final payment</div>
-                                        <div class="fw-bold" style="font-size:15px" id="cdLast">—</div>
+                                    <div class="col-md-3 col-6">
+                                        <div class="text-muted" style="font-size:11px">Total Interest</div>
+                                        <div class="fw-bold" style="font-size:14px;color:#7e22ce" id="cdTotalInterest">—</div>
                                     </div>
-                                    <div class="col-4">
-                                        <div class="text-muted" style="font-size:11px">Expected completion</div>
-                                        <div class="fw-bold" style="font-size:15px;color:#15803d" id="cdDone">—</div>
+                                    <div class="col-md-3 col-6">
+                                        <div class="text-muted" style="font-size:11px">Total Repayable</div>
+                                        <div class="fw-bold" style="font-size:14px;color:#1e293b" id="cdTotalRepayable">—</div>
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <div class="text-muted" style="font-size:11px">Expected Completion</div>
+                                        <div class="fw-bold" style="font-size:14px;color:#15803d" id="cdDone">—</div>
                                     </div>
                                 </div>
                                 <div class="text-muted mt-2 pt-2 border-top" style="font-size:11.5px" id="cdNote">
-                                    Enter the amounts to see the schedule.
+                                    Enter Principal, Monthly Interest % and Duration to calculate.
                                 </div>
                             </div>
                         </div>
@@ -3275,12 +3307,11 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
 
 <script>
 (function () {
-    // Live schedule preview. Mirrors creditBuildSchedule() in credit_bootstrap.php:
-    // whole months with the day clamped to the month length, and a final
-    // installment that carries the remainder so the plan totals the credit exactly.
-    var principal = document.getElementById('cdPrincipal');
-    var monthly   = document.getElementById('cdMonthly');
-    var firstDue  = document.getElementById('cdFirstDue');
+    var principal    = document.getElementById('cdPrincipal');
+    var interestRate = document.getElementById('cdInterestRate');
+    var months       = document.getElementById('cdMonths');
+    var monthly      = document.getElementById('cdMonthly');
+    var firstDue     = document.getElementById('cdFirstDue');
     if (!principal || !monthly || !firstDue) return;
 
     var fmt = new Intl.NumberFormat('en-KE', { maximumFractionDigits: 0 });
@@ -3296,44 +3327,69 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
         return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     }
 
+    var isManualMonthly = false;
+    monthly.addEventListener('input', function() { isManualMonthly = true; });
+
     function recalc() {
         var p = parseFloat(principal.value) || 0;
-        var m = parseFloat(monthly.value) || 0;
+        var i = parseFloat(interestRate ? interestRate.value : 0) || 0;
+        var n = parseInt(months ? months.value : 1) || 1;
         var s = firstDue.value ? new Date(firstDue.value + 'T00:00:00') : null;
 
-        var count = document.getElementById('cdCount'),
-            last  = document.getElementById('cdLast'),
-            done  = document.getElementById('cdDone'),
-            note  = document.getElementById('cdNote');
+        var mChargeEl = document.getElementById('cdMonthlyIntCharge'),
+            tIntEl    = document.getElementById('cdTotalInterest'),
+            tRepEl    = document.getElementById('cdTotalRepayable'),
+            done      = document.getElementById('cdDone'),
+            note      = document.getElementById('cdNote');
 
-        if (p <= 0 || m <= 0 || !s || isNaN(s.getTime())) {
-            count.textContent = last.textContent = done.textContent = '—';
-            note.textContent = 'Enter the amounts to see the schedule.';
+        if (p <= 0 || n <= 0) {
+            if (mChargeEl) mChargeEl.textContent = '—';
+            if (tIntEl) tIntEl.textContent = '—';
+            if (tRepEl) tRepEl.textContent = '—';
+            if (done) done.textContent = '—';
+            if (note) note.textContent = 'Enter Principal, Monthly Interest % and Duration to calculate.';
             return;
         }
-        if (m > p) {
-            count.textContent = last.textContent = done.textContent = '—';
-            note.innerHTML = '<span class="text-danger">The monthly payment is more than the credit amount.</span>';
-            return;
+
+        // Monthly Interest Charge = Principal * (Interest % / 100)
+        var monthlyInterestCharge = p * (i / 100);
+        // Total Interest = Monthly Interest Charge * Months
+        var totalInterest = monthlyInterestCharge * n;
+        // Total Repayable = Principal + Total Interest
+        var totalRepayable = p + totalInterest;
+        // Monthly Payment = Total Repayable / Months
+        var calcMonthly = n > 0 ? (totalRepayable / n) : 0;
+
+        if (!isManualMonthly || !monthly.value) {
+            monthly.value = calcMonthly.toFixed(2);
         }
+        var mVal = parseFloat(monthly.value) || calcMonthly;
 
-        var n = Math.max(1, Math.min(Math.ceil(+(p / m).toFixed(6)), 600));
-        var lastAmt = +(p - m * (n - 1)).toFixed(2);
-        var endDate = addMonths(s, n - 1);
+        var endDate = s && !isNaN(s.getTime()) ? addMonths(s, n - 1) : null;
 
-        count.textContent = n;
-        last.textContent  = 'KSh ' + fmt.format(lastAmt);
-        done.textContent  = fmtDate(endDate);
-        note.innerHTML = n + ' payment' + (n === 1 ? '' : 's') + ' of KSh ' + fmt.format(m) +
-            (Math.abs(lastAmt - m) > 0.01
-                ? ', with a final payment of KSh ' + fmt.format(lastAmt)
-                : '') +
-            ', from ' + fmtDate(s) + ' to ' + fmtDate(endDate) + '.';
+        if (mChargeEl) mChargeEl.textContent = 'KSh ' + fmt.format(Math.round(monthlyInterestCharge));
+        if (tIntEl) tIntEl.textContent = 'KSh ' + fmt.format(Math.round(totalInterest));
+        if (tRepEl) tRepEl.textContent = 'KSh ' + fmt.format(Math.round(totalRepayable));
+        if (done) done.textContent = endDate ? fmtDate(endDate) : '—';
+
+        if (note) {
+            note.innerHTML = '<strong>' + n + '</strong> monthly payment' + (n === 1 ? '' : 's') +
+                ' of <strong>KSh ' + fmt.format(Math.round(mVal)) + '</strong>' +
+                ' (Principal: KSh ' + fmt.format(Math.round(p / n)) + ' + Interest: KSh ' + fmt.format(Math.round(monthlyInterestCharge)) + '/mo)' +
+                (endDate ? ', starting ' + fmtDate(s) + ' to ' + fmtDate(endDate) + '.' : '.');
+        }
     }
 
-    [principal, monthly, firstDue].forEach(function (el) {
-        el.addEventListener('input', recalc);
-        el.addEventListener('change', recalc);
+    [principal, interestRate, months, firstDue].forEach(function (el) {
+        if (!el) return;
+        el.addEventListener('input', function() {
+            if (el === principal || el === interestRate || el === months) isManualMonthly = false;
+            recalc();
+        });
+        el.addEventListener('change', function() {
+            if (el === principal || el === interestRate || el === months) isManualMonthly = false;
+            recalc();
+        });
     });
 
     // Penalty unit follows the chosen basis.
