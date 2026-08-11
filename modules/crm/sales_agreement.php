@@ -378,7 +378,7 @@ include __DIR__ . '/../../includes/header.php';
         <!-- ── 4. Delivery, Vehicle Insurance and Transfer of Risk ─────────── -->
         <div class="sa-clause">
             <div class="sa-clause-title">4. Delivery, Vehicle Insurance and Transfer of Risk</div>
-            <p>Upon receipt of the agreed payment, the Seller shall deliver the vehicle to the Buyer. 
+            <p>Upon receipt of the full payment, the Seller shall deliver the vehicle to the Buyer. 
             The risk and liability of the vehicle shall be transferred to the Buyer upon delivery, and 
             the Buyer shall be responsible for obtaining comprehensive vehicle insurance from this 
             point onwards prior to taking delivery of the vehicle.</p>
@@ -394,8 +394,7 @@ include __DIR__ . '/../../includes/header.php';
             all costs associated with the repossession, including but not limited to legal fees, 
             transportation, and administrative expenses. Furthermore, any partial payments made by 
             the Buyer prior to repossession shall be deemed non-refundable and retained by the 
-            Seller as liquidated damages. Both parties hereby agree that a tracking device will 
-            be installed in the vehicle at the expense of the buyer.</p>
+            Seller as liquidated damages.</p>
         </div>
 
         <!-- ── 6. Vehicle Condition Disclaimer ─────────────────────────────── -->
