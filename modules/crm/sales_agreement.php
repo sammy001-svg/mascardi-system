@@ -370,9 +370,9 @@ include __DIR__ . '/../../includes/header.php';
             Failure to do so grants the Seller the right to withhold possession of the vehicle.
             All payments made by the Purchaser shall be deemed as commitment toward securing the Vehicle
             and reserving the agreed price and allocation and shall not be refunded without deductions in
-            the event of withdrawal, default, or delay by the Purchaser. All payments received remain
-            subject to standard company t&amp;c:
-            https://www.mascardi.co/terms-of-service</p>
+            the event of withdrawal, default, or delay by the Purchaser. Incase of non-payment by the client 
+            as per the agreed schedule, Mascardi retains the right to sell the car to other interested parties.
+            All payments received remain subject to standard company T&Cs: https://www.mascardi.co/terms-of-service</p>
         </div>
 
         <!-- ── 4. Delivery, Vehicle Insurance and Transfer of Risk ─────────── -->
