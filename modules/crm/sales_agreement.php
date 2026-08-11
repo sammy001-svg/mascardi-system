@@ -394,7 +394,9 @@ include __DIR__ . '/../../includes/header.php';
             all costs associated with the repossession, including but not limited to legal fees, 
             transportation, and administrative expenses. Furthermore, any partial payments made by 
             the Buyer prior to repossession shall be deemed non-refundable and retained by the 
-            Seller as liquidated damages.</p>
+            Seller as liquidated damages. In the case of any pending credit payment, both parties 
+            hereby agree that a tracking device will be installed in the vehicle at the expense of 
+            the buyer.</p>
         </div>
 
         <!-- ── 6. Vehicle Condition Disclaimer ─────────────────────────────── -->
