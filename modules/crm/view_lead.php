@@ -3208,26 +3208,26 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
                         <!-- Real-time calculation preview -->
                         <div class="col-12">
                             <div class="rounded-3 p-3" id="cdPreview"
-                                 style="background:#faf5ff;border:1px solid #e9d5ff">
+                                 style="background:#faf5ff !important;border:1px solid #d8b4fe !important;color:#1e293b !important">
                                 <div class="row text-center g-2">
                                     <div class="col-md-3 col-6">
-                                        <div class="text-muted" style="font-size:11px">Monthly Interest</div>
-                                        <div class="fw-bold" style="font-size:14px;color:#7e22ce" id="cdMonthlyIntCharge">—</div>
+                                        <div style="font-size:11px;color:#64748b !important;font-weight:500">Monthly Interest</div>
+                                        <div class="fw-bold" style="font-size:14px;color:#7e22ce !important" id="cdMonthlyIntCharge">—</div>
                                     </div>
                                     <div class="col-md-3 col-6">
-                                        <div class="text-muted" style="font-size:11px">Total Interest</div>
-                                        <div class="fw-bold" style="font-size:14px;color:#7e22ce" id="cdTotalInterest">—</div>
+                                        <div style="font-size:11px;color:#64748b !important;font-weight:500">Total Interest</div>
+                                        <div class="fw-bold" style="font-size:14px;color:#7e22ce !important" id="cdTotalInterest">—</div>
                                     </div>
                                     <div class="col-md-3 col-6">
-                                        <div class="text-muted" style="font-size:11px">Total Repayable</div>
-                                        <div class="fw-bold" style="font-size:14px;color:#1e293b" id="cdTotalRepayable">—</div>
+                                        <div style="font-size:11px;color:#64748b !important;font-weight:500">Total Repayable</div>
+                                        <div class="fw-bold" style="font-size:15px;color:#0f172a !important" id="cdTotalRepayable">—</div>
                                     </div>
                                     <div class="col-md-3 col-6">
-                                        <div class="text-muted" style="font-size:11px">Expected Completion</div>
-                                        <div class="fw-bold" style="font-size:14px;color:#15803d" id="cdDone">—</div>
+                                        <div style="font-size:11px;color:#64748b !important;font-weight:500">Expected Completion</div>
+                                        <div class="fw-bold" style="font-size:14px;color:#15803d !important" id="cdDone">—</div>
                                     </div>
                                 </div>
-                                <div class="text-muted mt-2 pt-2 border-top" style="font-size:11.5px" id="cdNote">
+                                <div class="mt-2 pt-2 border-top" style="font-size:11.5px;color:#475569 !important;border-top-color:#e9d5ff !important" id="cdNote">
                                     Enter Principal, Monthly Interest % and Duration to calculate.
                                 </div>
                             </div>
