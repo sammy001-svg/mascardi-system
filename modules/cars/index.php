@@ -189,6 +189,11 @@ include __DIR__ . '/../../includes/header.php';
         <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#stockTakeModal">
             <i class="fa fa-clipboard-check me-1"></i>Stock Taking
         </button>
+        <?php if ($section === 'inventory'): ?>
+        <button class="btn btn-outline-success btn-sm" id="exportExcelBtn" title="Download inventory as Excel spreadsheet">
+            <i class="fa fa-file-excel me-1"></i>Export to Excel
+        </button>
+        <?php endif; ?>
         <?php if (canWrite('cars')): ?>
         <a href="<?= BASE_URL ?>/modules/cars/add.php" class="btn btn-primary btn-sm">
             <i class="fa fa-plus me-1"></i>Add Car
