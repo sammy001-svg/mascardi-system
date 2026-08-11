@@ -277,8 +277,7 @@ include __DIR__ . '/../../includes/header.php';
                 padding:10px 14px;margin-top:14px;font-size:11.5px;color:#374151;line-height:1.7">
         I, <strong><?= e($buyerName) ?></strong>, hereby confirm that I have received the above-described vehicle
         from Mascardi Ventures Limited in satisfactory condition on
-        <strong><?= (new DateTime($deliveryDate))->format('d F Y') ?></strong>, and that all items listed
-        in the handover checklist above have been received and verified.
+        <strong><?= (new DateTime($deliveryDate))->format('d F Y') ?></strong>.
     </div>
 
     <!-- ── Signatures ─────────────────────────────────────────────────────── -->
