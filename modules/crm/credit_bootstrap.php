@@ -120,17 +120,16 @@ function creditMigrate(PDO $db, bool $force = false): void
 }
 
 /**
- * Calculates Reducing Balance EMI and schedule metrics using Annual Interest Rate (% p.a.).
+ * Calculates Reducing Balance EMI and schedule metrics.
  */
-function creditCalculateReducingBalance(float $principal, float $annualInterestPct, int $months): array
+function creditCalculateReducingBalance(float $principal, float $monthlyInterestPct, int $months): array
 {
     $months = max(1, $months);
     if ($principal <= 0) {
         return ['monthly_payment' => 0.0, 'total_interest' => 0.0, 'total_repayable' => 0.0];
     }
     
-    // Convert Annual Rate % to Monthly Rate decimal: r = Annual / 12 / 100
-    $r = ($annualInterestPct / 1200);
+    $r = ($monthlyInterestPct / 100);
     if ($r <= 0) {
         $monthly = round($principal / $months, 2);
         return [
