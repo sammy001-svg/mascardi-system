@@ -172,6 +172,18 @@ $extraJs = '<script>
     $(document).on("click",  "#filterReset", function () {
         $("#filterMake, #filterLocation").val("").trigger("change");
     });
+
+    // ── Export to Excel ──────────────────────────────────────────────────────
+    $(document).on("click", "#exportExcelBtn", function () {
+        var base = ' . json_encode(BASE_URL . '/modules/cars/api/export_excel.php') . ';
+        var make = $("#filterMake").val()     || "";
+        var loc  = $("#filterLocation").val() || "";
+        var url  = base;
+        var sep  = "?";
+        if (make) { url += sep + "filter_make="     + encodeURIComponent(make); sep = "&"; }
+        if (loc)  { url += sep + "filter_location=" + encodeURIComponent(loc); }
+        window.location.href = url;
+    });
 }());
 </script>';
 
