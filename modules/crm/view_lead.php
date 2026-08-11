@@ -3378,9 +3378,10 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
         if (done) done.textContent = endDate ? fmtDate(endDate) : '—';
 
         if (note) {
-            note.innerHTML = '<strong>' + n + '</strong> monthly payment' + (n === 1 ? '' : 's') +
-                ' of <strong>KSh ' + fmt.format(Math.round(mVal)) + '</strong>' +
-                ' (Reducing balance @ ' + i + '%/mo · Total Interest: KSh ' + fmt.format(Math.round(totalInterest)) + ')' +
+            note.style.color = '#334155';
+            note.innerHTML = '<strong style="color:#0f172a !important">' + n + '</strong> monthly payment' + (n === 1 ? '' : 's') +
+                ' of <strong style="color:#7e22ce !important">KSh ' + fmt.format(Math.round(mVal)) + '</strong>' +
+                ' <span style="color:#475569 !important">(Reducing balance @ ' + i + '%/mo · Total Interest: <strong style="color:#0f172a !important">KSh ' + fmt.format(Math.round(totalInterest)) + '</strong>)</span>' +
                 (endDate ? ', starting ' + fmtDate(s) + ' to ' + fmtDate(endDate) + '.' : '.');
         }
     }
