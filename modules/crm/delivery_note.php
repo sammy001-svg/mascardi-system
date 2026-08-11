@@ -272,18 +272,6 @@ include __DIR__ . '/../../includes/header.php';
         </tr>
     </table>
 
-    <!-- ── Handover Checklist ─────────────────────────────────────────────── -->
-    <div style="margin-top:16px;margin-bottom:8px;font-weight:700;font-size:13px;
-                border-bottom:1px solid #333;padding-bottom:4px">Handover Checklist</div>
-    <ul class="dn-checklist" style="font-size:12px">
-        <li><span class="dn-box"></span>All vehicle keys handed over</li>
-        <li><span class="dn-box"></span>Logbook / title documents handed over</li>
-        <li><span class="dn-box"></span>Vehicle in agreed condition</li>
-        <li><span class="dn-box"></span>Insurance / road worthiness confirmed</li>
-        <li><span class="dn-box"></span>Spare tyre and tools present</li>
-        <li><span class="dn-box"></span>Full payment received / settlement confirmed</li>
-    </ul>
-
     <!-- ── Declaration ────────────────────────────────────────────────────── -->
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;
                 padding:10px 14px;margin-top:14px;font-size:11.5px;color:#374151;line-height:1.7">
