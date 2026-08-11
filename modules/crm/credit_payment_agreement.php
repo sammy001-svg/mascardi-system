@@ -81,33 +81,34 @@ include __DIR__ . '/../../includes/header.php';
     .app-sidebar,.topbar,.sidebar-overlay,.app-topbar,header.app-topbar,
     #sidebarBackdrop,.fab-wa,.fab-chat,#pwaOverlay,#toastStack { display:none !important; }
     .main-wrap,.main-content,.page-body { margin:0 !important; padding:0 !important; }
-    body { background:#fff !important; margin:0 !important; }
+    body { background:#fff !important; margin:0 !important; color:#000 !important; }
     #cpaDoc { max-width:none !important; box-shadow:none !important; border:none !important;
-              padding:0 !important; margin:0 !important; }
+              padding:0 !important; margin:0 !important; background:#fff !important; color:#000 !important; }
     /* A clause must never be split across a page break mid-sentence. */
     #cpaDoc h2, #cpaDoc h3 { page-break-after: avoid; }
     #cpaDoc p, #cpaDoc li, #cpaDoc table { page-break-inside: avoid; }
     #cpaSign { page-break-inside: avoid; }
 }
 #cpaDoc{
-    --ink:#111827; --ink-2:#374151; --line:#9ca3af;
-    max-width:820px; margin:0 auto; background:#fff; color:var(--ink);
+    --ink:#000000; --ink-2:#000000; --line:#000000;
+    max-width:820px; margin:0 auto; background:#fff !important; color:#000000 !important; color-scheme:light !important;
     padding:34px 40px; border:1px solid #e5e7eb; border-radius:10px;
     font-family:"Cambria","Times New Roman",Georgia,serif; font-size:13.5px; line-height:1.62;
 }
-#cpaDoc .band{ background:#111827; color:#fff; padding:14px 20px; margin:-34px -40px 26px;
+#cpaDoc .band{ background:#111827 !important; color:#ffffff !important; padding:14px 20px; margin:-34px -40px 26px;
     border-radius:10px 10px 0 0; font-size:24px; font-weight:800; letter-spacing:5px; }
-#cpaDoc h1{ font-size:15px; font-weight:700; text-align:center; margin:0 0 16px; letter-spacing:.4px; }
-#cpaDoc h2{ font-size:13.5px; font-weight:700; margin:18px 0 6px; }
-#cpaDoc p{ margin:0 0 9px; }
-#cpaDoc .kv{ margin:0 0 3px; }
-#cpaDoc .kv b{ font-weight:700; }
-#cpaDoc ul{ margin:4px 0 10px 20px; padding:0; }
-#cpaDoc li{ margin-bottom:5px; }
+#cpaDoc h1{ font-size:15px; font-weight:700; text-align:center; margin:0 0 16px; letter-spacing:.4px; color:#000000 !important; }
+#cpaDoc h2{ font-size:13.5px; font-weight:700; margin:18px 0 6px; color:#000000 !important; }
+#cpaDoc h3{ font-size:13px; font-weight:700; margin:14px 0 4px; color:#000000 !important; }
+#cpaDoc b, #cpaDoc strong{ color:#000000 !important; font-weight:700; }
+#cpaDoc p{ margin:0 0 9px; color:#000000 !important; }
+#cpaDoc .kv{ margin:0 0 3px; color:#000000 !important; }
+#cpaDoc ul{ margin:4px 0 10px 20px; padding:0; color:#000000 !important; }
+#cpaDoc li{ margin-bottom:5px; color:#000000 !important; }
 #cpaDoc table.sched{ width:100%; border-collapse:collapse; margin:8px 0 14px; }
-#cpaDoc table.sched td{ border:1px solid var(--ink); padding:5px 10px; font-size:13px; }
-#cpaSign{ margin-top:34px; }
-#cpaSign .line{ margin:26px 0 2px; letter-spacing:1px; }
+#cpaDoc table.sched td{ border:1px solid #000000 !important; padding:5px 10px; font-size:13px; color:#000000 !important; }
+#cpaSign{ margin-top:34px; color:#000000 !important; }
+#cpaSign .line{ margin:26px 0 2px; letter-spacing:1px; color:#000000 !important; }
 </style>
 
 <div class="d-print-none mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
