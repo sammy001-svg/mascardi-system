@@ -221,14 +221,15 @@ include __DIR__ . '/../../includes/header.php';
     align-items:center; justify-content:center;
 " onclick="closePrintModalOutside(event)">
     <div style="
-        background:#fff; border-radius:14px; padding:28px 30px 24px;
+        background:#fff !important; color-scheme:light !important;
+        border-radius:14px; padding:28px 30px 24px;
         max-width:400px; width:90%; box-shadow:0 20px 60px rgba(15,23,42,.22);
         font-family:'Helvetica Neue',Arial,sans-serif;
     ">
-        <div style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px">
-            <i class="fa fa-print me-2" style="color:#b45309"></i>Print Sales Agreement
+        <div style="font-size:15px;font-weight:700;color:#0f172a !important;margin-bottom:6px">
+            <i class="fa fa-print me-2" style="color:#b45309 !important"></i>Print Sales Agreement
         </div>
-        <div style="font-size:12.5px;color:#64748b;margin-bottom:20px">
+        <div style="font-size:12.5px;color:#64748b !important;margin-bottom:20px">
             Choose how the Due Date should appear on the printed document:
         </div>
 
@@ -236,19 +237,19 @@ include __DIR__ . '/../../includes/header.php';
         <label id="opt-date-label" style="
             display:flex; align-items:flex-start; gap:12px; cursor:pointer;
             padding:12px 14px; border-radius:9px; border:2px solid #b45309;
-            background:#fffbf5; margin-bottom:10px; transition:all .18s;
+            background:#fffbf5 !important; margin-bottom:10px; transition:all .18s;
         ">
             <input type="radio" name="printMode" value="date" checked
                    style="margin-top:3px;accent-color:#b45309"
                    onchange="updatePrintSelection()">
             <div>
-                <div style="font-weight:600;font-size:13px;color:#0f172a">Date</div>
-                <div style="font-size:11.5px;color:#64748b;margin-top:2px">
+                <div style="font-weight:600;font-size:13px;color:#0f172a !important">Date</div>
+                <div style="font-size:11.5px;color:#475569 !important;margin-top:2px">
                     Prints the actual due date as entered on the lead
                     <?php if ($dueDate): ?>
-                        &nbsp;<span style="color:#b45309;font-weight:600">(<?= e($dueDate) ?>)</span>
+                        &nbsp;<span style="color:#b45309 !important;font-weight:600">(<?= e($dueDate) ?>)</span>
                     <?php else: ?>
-                        &nbsp;<span style="color:#94a3b8">(no date set)</span>
+                        &nbsp;<span style="color:#64748b !important">(no date set)</span>
                     <?php endif; ?>
                 </div>
             </div>
@@ -257,30 +258,30 @@ include __DIR__ . '/../../includes/header.php';
         <!-- Option 2: To be paid by -->
         <label id="opt-credit-label" style="
             display:flex; align-items:flex-start; gap:12px; cursor:pointer;
-            padding:12px 14px; border-radius:9px; border:2px solid #e2e8f0;
-            background:#f8fafc; margin-bottom:22px; transition:all .18s;
+            padding:12px 14px; border-radius:9px; border:2px solid #cbd5e1;
+            background:#f1f5f9 !important; margin-bottom:22px; transition:all .18s;
         ">
             <input type="radio" name="printMode" value="credit"
                    style="margin-top:3px;accent-color:#b45309"
                    onchange="updatePrintSelection()">
             <div>
-                <div style="font-weight:600;font-size:13px;color:#0f172a">To be paid by</div>
-                <div style="font-size:11.5px;color:#64748b;margin-top:2px">
+                <div style="font-weight:600;font-size:13px;color:#0f172a !important">To be paid by</div>
+                <div style="font-size:11.5px;color:#475569 !important;margin-top:2px">
                     Replaces the due date with<br>
-                    <em style="color:#0f172a">"as agreed on the credit payment agreement"</em>
+                    <em style="color:#1e293b !important;font-style:italic">"as agreed on the credit payment agreement"</em>
                 </div>
             </div>
         </label>
 
         <div style="display:flex;gap:10px;justify-content:flex-end">
             <button onclick="closePrintModal()" style="
-                padding:8px 18px;border-radius:7px;border:1px solid #e2e8f0;
-                background:#fff;color:#475569;font-size:13px;cursor:pointer;
+                padding:8px 18px;border-radius:7px;border:1px solid #cbd5e1;
+                background:#f8fafc !important;color:#334155 !important;font-size:13px;cursor:pointer;
                 font-weight:500;
             ">Cancel</button>
             <button onclick="confirmPrint()" style="
                 padding:8px 20px;border-radius:7px;border:none;
-                background:#b45309;color:#fff;font-size:13px;cursor:pointer;
+                background:#b45309 !important;color:#fff !important;font-size:13px;cursor:pointer;
                 font-weight:600;box-shadow:0 2px 8px rgba(180,83,9,.25);
             "><i class="fa fa-print me-1"></i>Print</button>
         </div>
