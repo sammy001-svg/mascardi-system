@@ -3123,17 +3123,17 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
                             </div>
                         </div>
 
-                        <!-- Monthly Interest Rate (%) -->
+                        <!-- Annual Interest Rate (% p.a.) -->
                         <div class="col-md-3">
                             <label class="form-label small fw-semibold">
-                                Monthly Interest <span class="text-danger">*</span>
+                                Annual Interest <span class="text-danger">*</span>
                             </label>
                             <div class="input-group">
                                 <input type="number" step="0.01" min="0" max="100" name="interest_rate" id="cdInterestRate"
-                                       class="form-control" value="<?= $__cAgr ? (float)$__cAgr['interest_rate'] : '2' ?>" required>
-                                <span class="input-group-text">%</span>
+                                       class="form-control" value="<?= $__cAgr ? (float)$__cAgr['interest_rate'] : '25' ?>" required>
+                                <span class="input-group-text">% p.a.</span>
                             </div>
-                            <div class="form-text" style="font-size:11px">Monthly interest rate (%)</div>
+                            <div class="form-text" style="font-size:11px">Annual rate (% p.a.)</div>
                         </div>
 
                         <!-- Number of Months (Tenor) -->
