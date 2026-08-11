@@ -370,19 +370,15 @@ include __DIR__ . '/../../includes/header.php';
             Failure to do so grants the Seller the right to withhold possession of the vehicle.
             All payments made by the Purchaser shall be deemed as commitment toward securing the Vehicle
             and reserving the agreed price and allocation and shall not be refunded without deductions in
-            the event of withdrawal, default, or delay by the Purchaser. 
-            Early Payment Concessions:
-            Should the Debtor settle the outstanding principal amount in full on or before 30 November 2026, 
-            the Creditor shall refund Ksh 200,000/- to the Debtor. Such refund may, at the Creditor's discretion, 
-            be paid directly to the Debtor or applied as a deduction against the final installment. Incase of 
-            non-payment by the client as per the agreed schedule, Mascardi retains the right to sell the car to other 
-            interested parties. All payments received remain subject to standard company T&Cs: https://www.mascardi.co/terms-of-service</p>
+            the event of withdrawal, default, or delay by the Purchaser. Incase of non-payment by the client 
+            as per the agreed schedule, Mascardi retains the right to sell the car to other interested parties. 
+            All payments received remain subject to standard company T&Cs: https://www.mascardi.co/terms-of-service</p>
         </div>
 
         <!-- ── 4. Delivery, Vehicle Insurance and Transfer of Risk ─────────── -->
         <div class="sa-clause">
             <div class="sa-clause-title">4. Delivery, Vehicle Insurance and Transfer of Risk</div>
-            <p>Upon receipt of the full payment, the Seller shall deliver the vehicle to the Buyer. 
+            <p>Upon receipt of the agreed payment, the Seller shall deliver the vehicle to the Buyer. 
             The risk and liability of the vehicle shall be transferred to the Buyer upon delivery, and 
             the Buyer shall be responsible for obtaining comprehensive vehicle insurance from this 
             point onwards prior to taking delivery of the vehicle.</p>
