@@ -4,7 +4,7 @@
  *
  * A credit agreement sits on top of a reserved lead: the balance left after
  * deposits becomes the Principal Amount, and the buyer pays it off in monthly
- * installments. The wording of the agreement itself is fixed (credit_agreement.php)
+ * installments. The wording of the agreement itself is fixed (credit_payment_agreement.php)
  * — only the figures, dates and party details come from here.
  *
  * On the schedule

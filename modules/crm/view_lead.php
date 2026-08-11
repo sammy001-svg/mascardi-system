@@ -2009,7 +2009,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         · <?= e($creditAgr['reference'] ?: '') ?></span>
                 </span>
                 <div class="d-flex gap-2 flex-wrap">
-                    <a href="credit_agreement.php?lead_id=<?= $id ?>" target="_blank"
+                    <a href="credit_payment_agreement.php?lead_id=<?= $id ?>" target="_blank"
                        class="btn btn-sm" style="background:#7e22ce;color:#fff">
                         <i class="fa fa-file-signature me-1"></i>Credit Agreement
                     </a>
