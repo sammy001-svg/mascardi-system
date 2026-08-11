@@ -771,13 +771,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $agrDate     = trim($_POST['agreement_date'] ?? '') ?: date('Y-m-d');
         $saleDate    = trim($_POST['sale_agreement_date'] ?? '') ?: null;
 
-        // Total interest = Principal * (Interest % / 100) * Months
-        $totalInterest  = $principal * ($interest / 100) * $months;
-        $totalRepayable = round($principal + $totalInterest, 2);
+        // Reducing balance interest calculation
+        $red = creditCalculateReducingBalance($principal, $interest, $months);
+        $totalRepayable = $red['total_repayable'];
         
-        // Monthly payment = Total Repayable / Months (allow override if manually posted)
+        // Monthly payment = Reducing balance EMI (allow override if manually posted)
         $postedMonthly = (float)($_POST['monthly_payment'] ?? 0);
-        $monthly       = $postedMonthly > 0 ? $postedMonthly : round($totalRepayable / $months, 2);
+        $monthly       = $postedMonthly > 0 ? $postedMonthly : $red['monthly_payment'];
 
         $credErrors = [];
         if ($principal <= 0)                     $credErrors[] = 'Enter the credit amount.';
@@ -3351,14 +3351,19 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
             return;
         }
 
-        // Monthly Interest Charge = Principal * (Interest % / 100)
-        var monthlyInterestCharge = p * (i / 100);
-        // Total Interest = Monthly Interest Charge * Months
-        var totalInterest = monthlyInterestCharge * n;
-        // Total Repayable = Principal + Total Interest
-        var totalRepayable = p + totalInterest;
-        // Monthly Payment = Total Repayable / Months
-        var calcMonthly = n > 0 ? (totalRepayable / n) : 0;
+        var r = i / 100;
+        var calcMonthly = 0;
+        if (r <= 0) {
+            calcMonthly = p / n;
+        } else {
+            var pow = Math.pow(1 + r, n);
+            calcMonthly = p * (r * pow) / (pow - 1);
+        }
+
+        // Month 1 interest charge (on starting principal)
+        var month1Interest = p * r;
+        var totalRepayable = calcMonthly * n;
+        var totalInterest  = totalRepayable - p;
 
         if (!isManualMonthly || !monthly.value) {
             monthly.value = calcMonthly.toFixed(2);
@@ -3367,7 +3372,7 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
 
         var endDate = s && !isNaN(s.getTime()) ? addMonths(s, n - 1) : null;
 
-        if (mChargeEl) mChargeEl.textContent = 'KSh ' + fmt.format(Math.round(monthlyInterestCharge));
+        if (mChargeEl) mChargeEl.textContent = 'KSh ' + fmt.format(Math.round(month1Interest));
         if (tIntEl) tIntEl.textContent = 'KSh ' + fmt.format(Math.round(totalInterest));
         if (tRepEl) tRepEl.textContent = 'KSh ' + fmt.format(Math.round(totalRepayable));
         if (done) done.textContent = endDate ? fmtDate(endDate) : '—';
@@ -3375,7 +3380,7 @@ $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
         if (note) {
             note.innerHTML = '<strong>' + n + '</strong> monthly payment' + (n === 1 ? '' : 's') +
                 ' of <strong>KSh ' + fmt.format(Math.round(mVal)) + '</strong>' +
-                ' (Principal: KSh ' + fmt.format(Math.round(p / n)) + ' + Interest: KSh ' + fmt.format(Math.round(monthlyInterestCharge)) + '/mo)' +
+                ' (Reducing balance @ ' + i + '%/mo · Total Interest: KSh ' + fmt.format(Math.round(totalInterest)) + ')' +
                 (endDate ? ', starting ' + fmtDate(s) + ' to ' + fmtDate(endDate) + '.' : '.');
         }
     }

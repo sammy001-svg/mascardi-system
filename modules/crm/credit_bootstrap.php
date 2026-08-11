@@ -120,6 +120,51 @@ function creditMigrate(PDO $db, bool $force = false): void
 }
 
 /**
+ * Calculates Reducing Balance EMI and schedule metrics.
+ */
+function creditCalculateReducingBalance(float $principal, float $monthlyInterestPct, int $months): array
+{
+    $months = max(1, $months);
+    if ($principal <= 0) {
+        return ['monthly_payment' => 0.0, 'total_interest' => 0.0, 'total_repayable' => 0.0];
+    }
+    
+    $r = ($monthlyInterestPct / 100);
+    if ($r <= 0) {
+        $monthly = round($principal / $months, 2);
+        return [
+            'monthly_payment' => $monthly,
+            'total_interest'  => 0.0,
+            'total_repayable' => $principal,
+        ];
+    }
+
+    // Reducing balance EMI formula: M = P * [r(1+r)^n] / [(1+r)^n - 1]
+    $pow = pow(1 + $r, $months);
+    $monthly = round($principal * ($r * $pow) / ($pow - 1), 2);
+    
+    // Simulate month by month for exact total repayable and interest sum
+    $rem = $principal;
+    $totalPaid = 0.0;
+    for ($i = 1; $i <= $months; $i++) {
+        $interestForMonth = round($rem * $r, 2);
+        $pmt = ($i === $months) ? round($rem + $interestForMonth, 2) : $monthly;
+        $principalPortion = $pmt - $interestForMonth;
+        $rem = max(0, $rem - $principalPortion);
+        $totalPaid += $pmt;
+    }
+    
+    $totalRepayable = round($totalPaid, 2);
+    $totalInterest  = round($totalRepayable - $principal, 2);
+
+    return [
+        'monthly_payment' => $monthly,
+        'total_interest'  => $totalInterest,
+        'total_repayable' => $totalRepayable,
+    ];
+}
+
+/**
  * Builds the installment schedule.
  *
  * Returns ['count','completion_date','total','rows'=>[['seq','due_date','amount'],…]].
