@@ -366,13 +366,14 @@ include __DIR__ . '/../../includes/header.php';
                     <td><?= $dueDate ? e($dueDate) : '<span style="color:#999">—</span>' ?></td>
                 </tr>
             </table>
-            <p>The Buyer agrees to pay the full Purchase Price to the Seller as per the schedule above.
-            Failure to do so grants the Seller the right to withhold possession of the vehicle.
-            All payments made by the Purchaser shall be deemed as commitment toward securing the Vehicle
-            and reserving the agreed price and allocation and shall not be refunded without deductions in
-            the event of withdrawal, default, or delay by the Purchaser. Incase of non-payment by the client 
-            as per the agreed schedule, Mascardi retains the right to sell the car to other interested parties. 
-            All payments received remain subject to standard company T&Cs: https://www.mascardi.co/terms-of-service</p>
+            <p>The Buyer agrees to pay the full Purchase Price to the Seller as per the schedule above or as
+            agreed on the credit payment in the case of any credit payment. Failure to do so grants the Seller 
+            the right to withhold possession of the vehicle. All payments made by the Purchaser shall be deemed 
+            as commitment toward securing the Vehicle and reserving the agreed price and allocation and shall not 
+            be refunded without deductions in the event of withdrawal, default, or delay by the Purchaser. Incase 
+            of non-payment by the client as per the agreed schedule, Mascardi retains the right to sell the car to 
+            other interested parties. All payments received remain subject to standard company 
+            T&Cs: https://www.mascardi.co/terms-of-service</p>
         </div>
 
         <!-- ── 4. Delivery, Vehicle Insurance and Transfer of Risk ─────────── -->
