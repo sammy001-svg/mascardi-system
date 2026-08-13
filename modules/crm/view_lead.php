@@ -50,6 +50,19 @@ try { $db->exec("CREATE TABLE IF NOT EXISTS crm_delivery_protocol (
 // vehicle that had a signed credit agreement.
 try { $db->exec("ALTER TABLE crm_delivery_protocol ADD COLUMN s3_on_credit TINYINT(1) NOT NULL DEFAULT 0"); } catch (\Throwable $_) {}
 
+// Backfill for deliveries completed before the checkbox existed. Those rows sit
+// at s3_on_credit = 0, so Step 3 reports "full payment confirmed" on vehicles
+// that were in fact sold on credit. A credit agreement only exists because the
+// sale was financed, so its presence identifies them unambiguously. Corrects the
+// flag only — no money, dates or agreement figures are touched.
+try {
+    $db->exec("UPDATE crm_delivery_protocol dp
+               JOIN credit_agreements ca ON ca.lead_id = dp.lead_id
+               SET dp.s3_on_credit = 1
+               WHERE dp.s3_on_credit = 0
+                 AND dp.s3_completed_at IS NOT NULL");
+} catch (\Throwable $_) {}
+
 // Test drive & car extended fields
 try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars MODIFY COLUMN status ENUM('in_transit','arrived','in_assessment','in_workshop','completed','sold','delivered','reserved') DEFAULT 'in_transit'"); } catch (\Throwable $_) {}
