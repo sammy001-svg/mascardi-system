@@ -44,6 +44,12 @@ try { $db->exec("CREATE TABLE IF NOT EXISTS crm_delivery_protocol (
     s6_requested_at DATETIME NULL, s6_approved_at DATETIME NULL, s6_approved_by INT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $_) {}
+// Marks Step 3 as a credit sale rather than a full-payment one. Without it a
+// delivered lead lost its credit summary entirely (the section is gated on
+// stage = 'reserved'), leaving no way to record the monthly installments on a
+// vehicle that had a signed credit agreement.
+try { $db->exec("ALTER TABLE crm_delivery_protocol ADD COLUMN s3_on_credit TINYINT(1) NOT NULL DEFAULT 0"); } catch (\Throwable $_) {}
+
 // Test drive & car extended fields
 try { $db->exec("ALTER TABLE cars ADD COLUMN entry_number VARCHAR(100) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars MODIFY COLUMN status ENUM('in_transit','arrived','in_assessment','in_workshop','completed','sold','delivered','reserved') DEFAULT 'in_transit'"); } catch (\Throwable $_) {}
@@ -563,15 +569,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($dp['s3_completed_at']))       $fail('Registration already completed.');
                 $regNo = strtoupper(trim($_POST['reg_number'] ?? ''));
                 if ($regNo === '')                        $fail('Enter the registration number.');
-                if (empty($_POST['payment_confirmed']))   $fail('Tick the full-payment confirmation box.');
-                $db->prepare("UPDATE crm_delivery_protocol SET s3_reg_number = ?, s3_completed_at = NOW() WHERE lead_id = ?")->execute([$regNo, $id]);
+                // Cash and credit are alternatives, not extras: a credit sale is
+                // settled over time so full payment cannot be confirmed, but the
+                // step still has to complete. Require exactly one.
+                $onCredit = !empty($_POST['on_credit']);
+                $paidFull = !empty($_POST['payment_confirmed']);
+                if (!$onCredit && !$paidFull) $fail('Tick either the full-payment confirmation or "Purchased on credit".');
+                if ($onCredit && $paidFull)   $fail('A sale is either fully paid or on credit — tick only one.');
+
+                $db->prepare("UPDATE crm_delivery_protocol
+                              SET s3_reg_number = ?, s3_on_credit = ?, s3_completed_at = NOW()
+                              WHERE lead_id = ?")
+                   ->execute([$regNo, $onCredit ? 1 : 0, $id]);
                 if (!empty($lead['pinned_car_id'])) {
                     try { $db->prepare("UPDATE cars SET registration_number = ?, updated_at = NOW() WHERE id = ?")->execute([$regNo, (int)$lead['pinned_car_id']]); } catch (\Throwable $_) {}
                 }
+
+                $settleWord = $onCredit ? 'sold on credit' : 'full payment confirmed';
                 notifyRoles(['customer_relations','sales_person','super_admin','admin'], 'sale',
-                    "Registered & Paid: {$lead['name']}", "Reg No. {$regNo}. Full payment confirmed — proceed to PDI.", $leadUrlDp);
-                logActivity('update', 'crm_leads', $id, "Delivery Protocol: vehicle registered ({$regNo}), full payment confirmed.");
-                setFlash('success', 'Registration and full payment confirmed — Step 4 (PDI) unlocked.');
+                    "Registered: {$lead['name']}", "Reg No. {$regNo}. " . ucfirst($settleWord) . " — proceed to PDI.", $leadUrlDp);
+                logActivity('update', 'crm_leads', $id, "Delivery Protocol: vehicle registered ({$regNo}), {$settleWord}.");
+                setFlash('success', $onCredit
+                    ? 'Registration saved and marked as a credit sale — the credit summary stays available after delivery. Step 4 (PDI) unlocked.'
+                    : 'Registration and full payment confirmed — Step 4 (PDI) unlocked.');
                 break;
 
             case 'request_pdi':
@@ -1794,8 +1814,11 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
         <?php endif; ?>
 
         <!-- Reservation Documents (shown only when stage = reserved) -->
-        <?php if ($lead['stage'] === 'reserved'): ?>
         <?php
+        // Computed before the reserved-only gate because the Credit Summary
+        // below also needs $balance, and that section now renders after delivery
+        // too. Leaving these inside the gate left $balance undefined on a
+        // delivered lead, so the credit card reported a zero balance.
         $depAmt        = (float)($lead['deposit_amount']    ?? 0);
         $depDate       = $lead['deposit_date']               ?? date('Y-m-d');
         $agreedPrice   = (float)($lead['agreed_sale_price']  ?? 0);
@@ -1810,6 +1833,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
             ? round(($resDiscount / $carListPrice) * 100, 1) : 0;
         $balance        = max(0, $effectivePrice - $totalDeposit);
         ?>
+        <?php if ($lead['stage'] === 'reserved'): ?>
         <div class="card mb-4" style="border-color:#16a34a;border-width:2px">
             <div class="card-header fw-semibold d-flex justify-content-between align-items-center"
                  style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-bottom-color:#bbf7d0">
@@ -1957,10 +1981,19 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
             </div>
         </div>
 
+        <?php endif; /* ── end of the reserved-only reservation documents ── */ ?>
+
         <!-- ══ CREDIT SUMMARY ══════════════════════════════════════════════════
              Sits directly under the Reservation Summary. Before an agreement
              exists this is a single call to action; once saved it becomes the
-             running account. ═══════════════════════════════════════════════ -->
+             running account.
+
+             Deliberately OUTSIDE the reserved-only block above. A credit sale is
+             settled over months, so the running account has to survive delivery —
+             while this sat inside that block, handing the vehicle over made the
+             schedule, the balance and the Record Payment button all disappear,
+             leaving no way to record the remaining installments.
+             ═══════════════════════════════════════════════════════════════ -->
         <?php
         creditMigrate($db);
         $creditAgr = creditForLead($db, $id);
@@ -1971,7 +2004,15 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
             $__p = creditPayments($db, (int)$creditAgr['id']);
             $creditLastPay = $__p ? end($__p) : null;
         }
+
+        // Shown while the deal is still being negotiated, and from then on
+        // whenever this is a credit sale — either an agreement exists or Step 3
+        // of the delivery protocol flagged it as purchased on credit.
+        $showCredit = $lead['stage'] === 'reserved'
+                   || $creditAgr
+                   || !empty($dp['s3_on_credit']);
         ?>
+        <?php if ($showCredit): ?>
 
         <?php if (!$creditAgr): ?>
         <div class="card mb-4" id="credit" style="border-color:#c084fc;border-width:2px">
@@ -2950,20 +2991,61 @@ function dpBadge(bool $done, bool $open): string {
                             <?php else: ?>
                                 <div class="small text-muted mb-2">Requested <?= fmtDate($dp['s3_requested_at'],'d M Y H:i') ?> — Super Admin registers the vehicle.</div>
                                 <?php if ($isSuperAdmin): ?>
-                                <form method="POST" class="d-flex gap-2 align-items-center flex-wrap">
+                                <form method="POST" class="d-flex gap-2 align-items-center flex-wrap" id="dpRegForm">
                                     <input type="hidden" name="action" value="dp_action"><input type="hidden" name="dp" value="complete_reg">
                                     <input type="text" name="reg_number" class="form-control form-control-sm" style="max-width:180px;text-transform:uppercase"
                                            placeholder="Reg No. e.g. KDS 001A" required oninput="this.value=this.value.toUpperCase()">
                                     <div class="form-check m-0">
-                                        <input class="form-check-input" type="checkbox" name="payment_confirmed" value="1" id="dpPayConfirm" required>
+                                        <input class="form-check-input" type="checkbox" name="payment_confirmed" value="1" id="dpPayConfirm">
                                         <label class="form-check-label small" for="dpPayConfirm">Full payment confirmed</label>
                                     </div>
+                                    <!-- A credit sale is settled over time, so "full payment confirmed"
+                                         can't be ticked. Flagging it here keeps the credit summary and
+                                         the Record Payment action available after delivery. -->
+                                    <div class="form-check m-0">
+                                        <input class="form-check-input" type="checkbox" name="on_credit" value="1" id="dpOnCredit"
+                                               <?= !empty($dp['s3_on_credit']) ? 'checked' : '' ?>>
+                                        <label class="form-check-label small" for="dpOnCredit">
+                                            <i class="fa fa-file-contract me-1" style="color:#7e22ce"></i>Purchased on credit
+                                        </label>
+                                    </div>
                                     <button class="btn btn-sm btn-success"><i class="fa fa-check me-1"></i>Save Registration</button>
+                                    <div class="w-100 small text-muted mt-1">
+                                        Tick <strong>Full payment confirmed</strong> for a cash sale, or
+                                        <strong>Purchased on credit</strong> when the balance is being paid in installments.
+                                    </div>
                                 </form>
+                                <script>
+                                /* The two boxes describe mutually exclusive settlements, and exactly
+                                   one must be chosen — enforced server-side too. */
+                                (function () {
+                                    var f = document.getElementById('dpRegForm');
+                                    if (!f) return;
+                                    var pay = document.getElementById('dpPayConfirm');
+                                    var cr  = document.getElementById('dpOnCredit');
+                                    pay.addEventListener('change', function () { if (this.checked) cr.checked = false; });
+                                    cr.addEventListener('change',  function () { if (this.checked) pay.checked = false; });
+                                    f.addEventListener('submit', function (e) {
+                                        if (!pay.checked && !cr.checked) {
+                                            e.preventDefault();
+                                            alert('Tick either "Full payment confirmed" or "Purchased on credit".');
+                                        }
+                                    });
+                                }());
+                                </script>
                                 <?php else: ?><span class="small text-muted">Waiting for Super Admin to register &amp; confirm payment.</span><?php endif; ?>
                             <?php endif; ?>
                         <?php elseif ($dpStep3): ?>
-                        <div class="small text-success"><i class="fa fa-check me-1"></i>Registered as <strong><?= e($dp['s3_reg_number']) ?></strong>, full payment confirmed <?= fmtDate($dp['s3_completed_at'],'d M Y H:i') ?>.</div>
+                        <div class="small text-success">
+                            <i class="fa fa-check me-1"></i>Registered as <strong><?= e($dp['s3_reg_number']) ?></strong>,
+                            <?= !empty($dp['s3_on_credit'])
+                                ? 'sold <strong>on credit</strong>'
+                                : 'full payment confirmed' ?>
+                            <?= fmtDate($dp['s3_completed_at'],'d M Y H:i') ?>.
+                            <?php if (!empty($dp['s3_on_credit'])): ?>
+                            <a href="#credit" class="ms-1"><i class="fa fa-file-contract me-1"></i>Credit summary</a>
+                            <?php endif; ?>
+                        </div>
                         <?php endif; ?>
                     </div>
 
@@ -3079,12 +3161,19 @@ function dpBadge(bool $done, bool $open): string {
 
 <!-- Add Deposit Modal -->
 <!-- ══ CREDIT AGREEMENT SET-UP ═══════════════════════════════════════════════ -->
-<?php if (canWrite('crm') && $lead['stage'] === 'reserved'): ?>
 <?php
 $__cAgr  = creditForLead($db, $id);
 $__cPaid = $__cAgr ? creditSummary($db, (int)$__cAgr['id'])['paid'] : 0.0;
 $__cPrincipal = $__cAgr ? (float)$__cAgr['principal'] : (float)($balance ?? 0);
+
+// Must mirror $showCredit above. Gating these modals on stage = 'reserved' meant
+// that after delivery the Record Payment button in the credit summary opened
+// nothing — the modal it targets no longer existed on the page.
+$__showCreditModals = $lead['stage'] === 'reserved'
+                   || $__cAgr
+                   || !empty($dp['s3_on_credit']);
 ?>
+<?php if (canWrite('crm') && $__showCreditModals): ?>
 <div class="modal fade" id="creditModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
