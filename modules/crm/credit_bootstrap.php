@@ -22,7 +22,8 @@ require_once __DIR__ . '/credit_clauses.php';
 
 if (!function_exists('creditMigrate')) {
 
-if (!defined('CREDIT_SCHEMA_VERSION')) define('CREDIT_SCHEMA_VERSION', '1');
+// 2 — added concession_date / concession_amount for the Early Payment Concession.
+if (!defined('CREDIT_SCHEMA_VERSION')) define('CREDIT_SCHEMA_VERSION', '2');
 
 function creditStatuses(): array {
     return [
@@ -74,6 +75,8 @@ function creditMigrate(PDO $db, bool $force = false): void
             penalty_type ENUM('fixed','percent') NOT NULL DEFAULT 'fixed',
             penalty_value DECIMAL(15,2) NOT NULL DEFAULT 0,
             interest_rate DECIMAL(6,2) NOT NULL DEFAULT 25.00,
+            concession_date DATE NULL,
+            concession_amount DECIMAL(15,2) NULL,
             status ENUM('active','completed','defaulted','cancelled') NOT NULL DEFAULT 'active',
             notes TEXT NULL,
             created_by INT NULL,
@@ -114,6 +117,15 @@ function creditMigrate(PDO $db, bool $force = false): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
     ];
     foreach ($tables as $sql) { try { $db->exec($sql); } catch (\Throwable $_) {} }
+
+    // Columns added after the table shipped. CREATE TABLE IF NOT EXISTS above is a
+    // no-op on an existing install, so anything added later has to come through
+    // here as well — the two definitions must stay in step.
+    $columns = [
+        "ALTER TABLE credit_agreements ADD COLUMN concession_date DATE NULL AFTER interest_rate",
+        "ALTER TABLE credit_agreements ADD COLUMN concession_amount DECIMAL(15,2) NULL AFTER concession_date",
+    ];
+    foreach ($columns as $sql) { try { $db->exec($sql); } catch (\Throwable $_) {} }
 
     try {
         $db->prepare("INSERT INTO settings (setting_key, setting_value)

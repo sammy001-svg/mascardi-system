@@ -59,8 +59,9 @@ $installments = creditInstallments($db, (int)$agreement['id']);
 // document under an early-payment heading — that would be a contract saying
 // something other than what was agreed.
 [$variantKey, $variant] = creditVariant($_GET['variant'] ?? null);
-$variantReady   = creditVariantReady($variantKey);
-$variantClauses = $variant['clauses'];
+$variantMissing = creditVariantMissing($variantKey, $agreement);
+$variantReady   = creditVariantReady($variantKey, $agreement);
+$variantClauses = $variantReady ? creditVariantClauses($variantKey, $agreement) : [];
 
 // ── Party details ────────────────────────────────────────────────────────────
 // Lead first, then the client record — the details are captured on the lead
@@ -96,12 +97,25 @@ if (!$variantReady) {
                 <i class="fa fa-triangle-exclamation me-2"></i><?= e($variant['label']) ?> — not ready yet
             </div>
             <div class="card-body">
+                <?php if ($variantMissing): ?>
+                <p>This agreement is missing the figures this version writes into its clauses, so it
+                   cannot be generated yet. Still to be filled in:</p>
+                <ul class="mb-3">
+                    <?php foreach ($variantMissing as $__m): ?>
+                    <li><strong><?= e($__m) ?></strong></li>
+                    <?php endforeach; ?>
+                </ul>
+                <p class="mb-3">Open <em>Edit terms</em> on the Credit Summary, complete the
+                   <?= e($variant['label']) ?> section and save. This version becomes available
+                   straight away.</p>
+                <?php else: ?>
                 <p>This version of the Credit Payment Agreement cannot be generated, because the
                    <strong>clause wording for it has not been added to the system yet</strong>.</p>
                 <p class="mb-3">Everything else is in place: it will produce the same agreement as the
                    standard one, with the <?= e($variant['label']) ?> clauses inserted after
                    clause&nbsp;3(d). Only the text of those clauses is missing, and it has to come from
                    the signed template rather than be written here.</p>
+                <?php endif; ?>
                 <div class="alert alert-light border py-2 mb-3" style="font-size:13px">
                     <i class="fa fa-circle-info me-1"></i>
                     The <strong>standard Credit Agreement</strong> is unaffected and can be generated

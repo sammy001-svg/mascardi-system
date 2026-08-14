@@ -804,6 +804,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $agrDate     = trim($_POST['agreement_date'] ?? '') ?: date('Y-m-d');
         $saleDate    = trim($_POST['sale_agreement_date'] ?? '') ?: null;
 
+        // Early Payment Concession — both optional, but they are printed into the
+        // clause as a pair, so a lone half is treated as not set at all.
+        $concDate   = trim($_POST['concession_date'] ?? '') ?: null;
+        $concAmount = (float)($_POST['concession_amount'] ?? 0);
+        if ($concDate && !strtotime($concDate)) $concDate = null;
+        if ($concAmount <= 0)                   $concAmount = null;
+
         // Reducing balance interest calculation
         $red = creditCalculateReducingBalance($principal, $interest, $months);
         $totalRepayable = $red['total_repayable'];
@@ -836,10 +843,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($existing) {
                 $db->prepare("UPDATE credit_agreements SET principal=?, monthly_payment=?, first_due_date=?,
                               installments=?, completion_date=?, total_repayable=?, penalty_type=?, penalty_value=?,
-                              interest_rate=?, agreement_date=?, sale_agreement_date=?, car_id=?, client_id=?
+                              interest_rate=?, agreement_date=?, sale_agreement_date=?,
+                              concession_date=?, concession_amount=?, car_id=?, client_id=?
                               WHERE id=?")
                    ->execute([$principal, $monthly, $firstDue, $sched['count'], $sched['completion_date'],
                               $sched['total'], $penaltyType, $penaltyVal, $interest, $agrDate, $saleDate,
+                              $concDate, $concAmount,
                               (int)($lead['pinned_car_id'] ?? 0) ?: null, (int)($lead['client_id'] ?? 0) ?: null,
                               (int)$existing['id']]);
                 $agrId = (int)$existing['id'];
@@ -857,13 +866,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->prepare("INSERT INTO credit_agreements
                         (lead_id, car_id, client_id, reference, agreement_date, sale_agreement_date,
                          principal, monthly_payment, first_due_date, installments, completion_date,
-                         total_repayable, penalty_type, penalty_value, interest_rate, created_by)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                         total_repayable, penalty_type, penalty_value, interest_rate,
+                         concession_date, concession_amount, created_by)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                    ->execute([$id, (int)($lead['pinned_car_id'] ?? 0) ?: null,
                               (int)($lead['client_id'] ?? 0) ?: null, creditNextReference($db),
                               $agrDate, $saleDate, $principal, $monthly, $firstDue, $sched['count'],
                               $sched['completion_date'], $sched['total'], $penaltyType, $penaltyVal,
-                              $interest, (int)$me['id']]);
+                              $interest, $concDate, $concAmount, (int)$me['id']]);
                 $agrId = (int)$db->lastInsertId();
                 creditWriteSchedule($db, $agrId, $sched);
                 setFlash('success', 'Credit agreement created — ' . $sched['count']
@@ -2075,15 +2085,19 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                              document page then explains what is missing. A dead button
                              that does nothing on click just reads as broken. */ ?>
                     <?php foreach (['concession', 'recalc'] as $__vk):
-                        [, $__v] = creditVariant($__vk);
-                        $__ready = creditVariantReady($__vk); ?>
+                        [, $__v]   = creditVariant($__vk);
+                        $__miss    = creditVariantMissing($__vk, $creditAgr);
+                        $__ready   = creditVariantReady($__vk, $creditAgr);
+                        $__why     = $__miss
+                                   ? 'Needs the ' . implode(' and the ', $__miss) . ' — set it under Edit terms'
+                                   : 'Clause wording for this version has not been added yet'; ?>
                     <a href="credit_payment_agreement.php?lead_id=<?= $id ?>&amp;variant=<?= $__vk ?>"
                        target="_blank" class="btn btn-sm btn-outline-primary"
-                       <?= $__ready ? '' : 'title="Clause wording for this version has not been added yet"' ?>>
+                       <?= $__ready ? '' : 'title="' . e($__why) . '"' ?>>
                         <i class="fa <?= e($__v['icon']) ?> me-1"></i><?= e($__v['label']) ?>
                         <?php if (!$__ready): ?>
                         <i class="fa fa-triangle-exclamation ms-1 text-warning"
-                           aria-label="wording not added yet"></i>
+                           aria-label="<?= e($__why) ?>"></i>
                         <?php endif; ?>
                     </a>
                     <?php endforeach; ?>
@@ -3325,6 +3339,36 @@ $__showCreditModals = $lead['stage'] === 'reserved'
                             <label class="form-label small fw-semibold">Sale agreement dated</label>
                             <input type="date" name="sale_agreement_date" class="form-control"
                                    value="<?= e($__cAgr['sale_agreement_date'] ?? ($lead['deposit_date'] ?? '')) ?>">
+                        </div>
+
+                        <!-- Early Payment Concession — only used by that version of the
+                             agreement. Both values go into its clause 3(e) wording, so
+                             the version stays unavailable until both are filled in. -->
+                        <div class="col-12"><hr class="my-1"></div>
+                        <div class="col-12">
+                            <div class="small fw-semibold mb-1" style="color:#7e22ce">
+                                <i class="fa fa-handshake me-1"></i>Early Payment Concession
+                                <span class="text-muted fw-normal">— optional</span>
+                            </div>
+                            <div class="form-text mb-2" style="font-size:11px">
+                                If the buyer settles in full by the date below, this amount is refunded.
+                                Fill both in to enable the Early Payment Concession agreement.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Settle in full on or before</label>
+                            <input type="date" name="concession_date" class="form-control"
+                                   value="<?= e($__cAgr['concession_date'] ?? '') ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Refund if settled early</label>
+                            <div class="input-group">
+                                <span class="input-group-text">KSh</span>
+                                <input type="number" step="0.01" min="0" name="concession_amount"
+                                       class="form-control"
+                                       value="<?= $__cAgr && (float)$__cAgr['concession_amount'] > 0
+                                                 ? (float)$__cAgr['concession_amount'] : '' ?>">
+                            </div>
                         </div>
 
                         <!-- Real-time calculation preview -->

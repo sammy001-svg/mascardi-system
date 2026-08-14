@@ -54,16 +54,19 @@ function creditVariants(): array
             'short'   => 'Concession',
             'title'   => 'CREDIT PAYMENT AGREEMENT',
             'icon'    => 'fa-handshake',
+            // Filled in per deal on the credit agreement — the settlement deadline
+            // and the refund are negotiated, not company-wide, so they cannot be
+            // baked into the sentence.
+            'requires' => [
+                'concession_date'   => 'early settlement date',
+                'concession_amount' => 'refund amount',
+            ],
             'clauses' => [
-                // Supplied wording. NOTE: the settlement date and the refund figure
-                // are written into the sentence as supplied, so every concession
-                // agreement prints this same date and amount. If they are meant to
-                // vary per deal they need to become fields on the credit agreement.
                 ['heading' => 'Early Payment Concession:',
                  'body'    => 'Should the Debtor settle the outstanding principal amount in full '
-                            . 'on or before 30 November 2026, the Creditor shall refund '
-                            . 'Ksh 200,000/- to the Debtor. Such refund may, at the Creditor’s '
-                            . 'discretion, be paid directly to the Debtor or applied as a '
+                            . 'on or before {concession_date}, the Creditor shall refund '
+                            . 'Ksh {concession_amount}/- to the Debtor. Such refund may, at the '
+                            . 'Creditor’s discretion, be paid directly to the Debtor or applied as a '
                             . 'deduction against the final installment'],
             ],
         ],
@@ -95,14 +98,77 @@ function creditVariant(?string $key): array
 }
 
 /**
- * Whether a variant can be printed. The standard agreement always can; an
- * early-payment variant only once its wording has been supplied.
+ * Formats one required value the way it has to read inside a clause.
+ *
+ * Returns '' when the value is absent, which is what marks the variant as not
+ * yet printable — see creditVariantMissing().
  */
-function creditVariantReady(string $key): bool
+function creditClauseValue(string $field, array $agreement): string
+{
+    $raw = $agreement[$field] ?? null;
+    if ($raw === null || $raw === '' || $raw === '0000-00-00') return '';
+
+    // Dates read as they do in the source document: "30 November 2026".
+    if (str_ends_with($field, '_date')) {
+        $ts = strtotime((string)$raw);
+        return $ts ? date('j F Y', $ts) : '';
+    }
+    // Money appears with thousands separators and no decimals: "200,000".
+    if (str_ends_with($field, '_amount')) {
+        $n = (float)$raw;
+        return $n > 0 ? number_format($n, 0) : '';
+    }
+    return trim((string)$raw);
+}
+
+/**
+ * Which of a variant's required values have not been filled in on this
+ * agreement, as human-readable labels. Empty means it is ready to print.
+ */
+function creditVariantMissing(string $key, array $agreement = []): array
+{
+    [, $def] = creditVariant($key);
+    $missing = [];
+    foreach (($def['requires'] ?? []) as $field => $label) {
+        if (creditClauseValue($field, $agreement) === '') $missing[] = $label;
+    }
+    return $missing;
+}
+
+/**
+ * Whether a variant can be printed for this agreement. The standard agreement
+ * always can. An early-payment variant needs both its wording (supplied in this
+ * file) and every per-deal value it refers to.
+ */
+function creditVariantReady(string $key, array $agreement = []): bool
 {
     if ($key === 'standard') return true;
     [, $def] = creditVariant($key);
-    return !empty($def['clauses']);
+    if (empty($def['clauses'])) return false;
+    return !creditVariantMissing($key, $agreement);
+}
+
+/**
+ * A variant's clauses with every {token} replaced by its value from the
+ * agreement. Call creditVariantReady() first — a clause is never printed with an
+ * unresolved token in it.
+ */
+function creditVariantClauses(string $key, array $agreement = []): array
+{
+    [, $def] = creditVariant($key);
+    $map = [];
+    foreach (($def['requires'] ?? []) as $field => $_label) {
+        $map['{' . $field . '}'] = creditClauseValue($field, $agreement);
+    }
+    if (!$map) return $def['clauses'];
+
+    $out = [];
+    foreach ($def['clauses'] as $c) {
+        $c['body']    = strtr((string)($c['body'] ?? ''),    $map);
+        $c['heading'] = strtr((string)($c['heading'] ?? ''), $map);
+        $out[] = $c;
+    }
+    return $out;
 }
 
 /**
