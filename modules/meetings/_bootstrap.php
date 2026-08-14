@@ -376,10 +376,11 @@ function meetingSeriesMaterialise(PDO $db, int $seriesId, ?string $horizon = nul
     }
     if (!$tpl) return 0;
 
-    $horizon = $horizon ?: date('Y-m-d', strtotime('+' . MEETING_SERIES_HORIZON_DAYS . ' days'));
+    $today   = meetingToday($db);
+    $horizon = $horizon ?: date('Y-m-d', strtotime($today . ' +' . MEETING_SERIES_HORIZON_DAYS . ' days'));
     // Never backfill: a meeting that did not happen should not appear later as
     // though it had been scheduled all along.
-    $from  = max(date('Y-m-d'), $series['starts_on']);
+    $from  = max($today, $series['starts_on']);
     $dates = meetingSeriesDates($series, $from, $horizon);
     if (!$dates) { meetingSeriesTouch($db, $seriesId, $horizon); return 0; }
 
@@ -428,11 +429,27 @@ function meetingSeriesMaterialise(PDO $db, int $seriesId, ?string $horizon = nul
     meetingSeriesTouch($db, $seriesId, $horizon);
 
     // A series with a closing date is finished once its last date is in the past.
-    if (!empty($series['ends_on']) && strtotime($series['ends_on']) < strtotime(date('Y-m-d'))) {
+    if (!empty($series['ends_on']) && strtotime($series['ends_on']) < strtotime($today)) {
         try { $db->prepare("UPDATE meeting_series SET status='ended' WHERE id=?")->execute([$seriesId]); }
         catch (\Throwable $_) {}
     }
     return $made;
+}
+
+/**
+ * Today's date according to the DATABASE, not PHP.
+ *
+ * These two clocks do not agree here: PHP has no timezone configured and so runs
+ * in UTC, while MySQL runs in local time (UTC+3). Scheduled times are stored as
+ * the local wall-clock times the operator typed, and every other date comparison
+ * in the system is made in SQL against NOW()/CURDATE() — so the database is the
+ * clock this feature has to share. Using PHP's date() here instead would put the
+ * "do not backfill" floor three hours out and, late in the evening, drop a day.
+ */
+function meetingToday(PDO $db): string
+{
+    try { return (string)$db->query("SELECT CURDATE()")->fetchColumn(); }
+    catch (\Throwable $_) { return date('Y-m-d'); }
 }
 
 function meetingSeriesTouch(PDO $db, int $seriesId, string $horizon): void

@@ -100,6 +100,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $startSql = date('Y-m-d H:i:s', strtotime($start));
             $endSql   = ($end !== '' && strtotime($end)) ? date('Y-m-d H:i:s', strtotime($end)) : null;
 
+            // The chosen days are the specification, so the first meeting has to
+            // obey them too. Picking a Saturday start and then "every Monday and
+            // Thursday" would otherwise leave one stray Saturday meeting sitting
+            // outside the pattern. Shift it forward to the first day that fits,
+            // keeping the time of day and the duration.
+            $shiftedFrom = '';
+            if ($repFreq) {
+                $probe = ['frequency' => $repFreq,
+                          'weekdays'  => $repFreq === 'weekly'  ? implode(',', $repDays) : null,
+                          'month_day' => $repFreq === 'monthly' ? $repMonthD : null,
+                          'starts_on' => date('Y-m-d', strtotime($startSql)),
+                          'ends_on'   => $repEndsOn !== '' ? date('Y-m-d', strtotime($repEndsOn)) : null];
+                $firstFit = meetingSeriesDates($probe, $probe['starts_on'],
+                                               date('Y-m-d', strtotime($probe['starts_on'] . ' +400 days')))[0] ?? null;
+                if ($firstFit && $firstFit !== $probe['starts_on']) {
+                    $shiftedFrom = $probe['starts_on'];
+                    $lenSec   = $endSql ? strtotime($endSql) - strtotime($startSql) : 0;
+                    $startSql = $firstFit . ' ' . date('H:i:s', strtotime($startSql));
+                    $endSql   = $lenSec > 0 ? date('Y-m-d H:i:s', strtotime($startSql) + $lenSec) : null;
+                }
+            }
+
             if ($meeting) {
                 $db->prepare("UPDATE meetings SET title=?, purpose=?, meeting_type=?, venue=?,
                               scheduled_start=?, scheduled_end=?, organiser_id=? WHERE id=?")
@@ -242,7 +264,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $srow = $sr->fetch(PDO::FETCH_ASSOC) ?: [];
                 setFlash('success', 'Recurring meeting scheduled — ' . meetingSeriesDescribe($srow)
                     . '. ' . ($madeCount + 1) . ' date' . ($madeCount === 0 ? '' : 's') . ' on the calendar'
-                    . (empty($srow['ends_on']) ? ' so far; more are added automatically.' : '.'));
+                    . (empty($srow['ends_on']) ? ' so far; more are added automatically.' : '.')
+                    . ($shiftedFrom
+                        ? ' The first meeting moved from ' . date('D j M', strtotime($shiftedFrom))
+                          . ' to ' . date('D j M', strtotime($startSql)) . ', the first day matching your pattern.'
+                        : ''));
             } else {
                 setFlash('success', $meeting ? 'Meeting updated.' : 'Meeting scheduled and everyone invited.');
             }
