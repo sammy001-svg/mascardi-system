@@ -2,12 +2,15 @@
 /**
  * In Shipment — vehicles currently on the water / in transit.
  *
- * This is the ONLY public page where status = 'in_transit' stock appears. Every
+ * This is the ONLY public page that LISTS status = 'in_transit' stock. Every
  * other showroom surface (homepage, vehicles listing, search, filters, compare,
  * similar-vehicles, nav make counts, sitemap) explicitly excludes 'in_transit',
- * and showroom/view.php redirects here if such a car is opened directly. Cards
- * are intentionally self-contained — they do not link to a detail page, so this
- * stock cannot leak into the normal browsing flow.
+ * so this stock still cannot leak into the normal browsing flow.
+ *
+ * Cards do link to showroom/view.php for the full detail page — the image and
+ * the title both open it. That page detects 'in_transit' and presents the car as
+ * incoming rather than as stock on the yard, and serves itself noindex so a
+ * shipment listing cannot arrive through a search engine either.
  */
 require_once __DIR__ . '/../includes/functions.php';
 $db = getDB();
@@ -133,8 +136,10 @@ include __DIR__ . '/header.php';
                     . ". Could you share the expected arrival and reservation terms?"
                 );
             ?>
+            <?php $detailUrl = BASE_URL . '/showroom/view.php?id=' . (int)$c['id']; ?>
             <article class="ish-card">
-                <div class="ish-img">
+                <a href="<?= htmlspecialchars($detailUrl) ?>" class="ish-img"
+                   aria-label="View details for <?= htmlspecialchars($title) ?>">
                     <?php if ($c['primary_image']): ?>
                     <img src="<?= htmlspecialchars(thumbUrl('cars', $c['primary_image'])) ?>"
                          alt="<?= htmlspecialchars($title) ?>" loading="lazy" decoding="async">
@@ -142,10 +147,13 @@ include __DIR__ . '/header.php';
                     <div class="lx-noimg"><i class="fa fa-car-side"></i></div>
                     <?php endif; ?>
                     <span class="ish-badge"><i class="fa fa-ship"></i> In Shipment</span>
-                </div>
+                    <span class="ish-view"><i class="fa fa-expand"></i> View details</span>
+                </a>
 
                 <div class="ish-body">
-                    <h2 class="ish-title"><?= htmlspecialchars($title) ?></h2>
+                    <h2 class="ish-title">
+                        <a href="<?= htmlspecialchars($detailUrl) ?>"><?= htmlspecialchars($title) ?></a>
+                    </h2>
                     <?php if ($bits): ?>
                     <div class="ish-meta"><?= htmlspecialchars(implode(' · ', $bits)) ?></div>
                     <?php endif; ?>
@@ -205,8 +213,28 @@ include __DIR__ . '/header.php';
 }
 .ish-card:hover { box-shadow: 0 24px 56px rgba(0,0,0,.10); border-color: #cfcfcd; transform: translateY(-3px); }
 
-.ish-img { position: relative; aspect-ratio: 4/3; background: var(--paper); overflow: hidden; }
-.ish-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* The image is now a link, so it has to lay out like the block it replaced. */
+.ish-img { position: relative; display: block; aspect-ratio: 4/3; background: var(--paper); overflow: hidden; }
+.ish-img img { width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: transform .5s var(--ease); }
+.ish-card:hover .ish-img img { transform: scale(1.035); }
+
+/* "View details" reveals on hover so the card stays clean, but the whole image
+   is clickable regardless — the label is a hint, not the only target. On touch
+   there is no hover, so it stays visible. */
+.ish-view {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    background: rgba(255,255,255,.95); color: var(--ink);
+    font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+    padding: 10px 18px; border-radius: var(--r);
+    display: inline-flex; align-items: center; gap: 8px;
+    opacity: 0; transition: opacity .3s var(--ease); pointer-events: none;
+}
+.ish-card:hover .ish-view { opacity: 1; }
+@media (hover: none) { .ish-view { opacity: 1; background: rgba(255,255,255,.86); } }
+
+.ish-title a { color: inherit; text-decoration: none; transition: opacity .2s var(--ease); }
+.ish-title a:hover { opacity: .62; text-decoration: underline; text-underline-offset: 3px; }
 .ish-badge {
     position: absolute; top: 12px; left: 12px;
     background: rgba(17,17,17,.9); color: #fff;

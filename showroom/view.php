@@ -22,12 +22,15 @@ $stmt->execute([$id]);
 $car = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$car) { header('Location: ' . BASE_URL . '/showroom/'); exit; }
 
-// Vehicles still in shipment are listed on one dedicated page only and must not
-// surface as a normal listing anywhere else — including via a direct/stale link.
-if (($car['status'] ?? '') === 'in_transit') {
-    header('Location: ' . BASE_URL . '/showroom/in-shipment.php', true, 302);
-    exit;
-}
+// Vehicles still in shipment get the full detail page, reached from the cards on
+// in-shipment.php. What must not happen is this stock entering the normal
+// browsing flow, so the original rule still holds everywhere it matters: the
+// listings, search, filters, compare, similar-vehicles and sitemap all continue
+// to exclude in_transit, and the page is served noindex so it cannot arrive
+// through a search engine either. The page itself then presents the car as
+// incoming rather than as stock standing on the yard.
+$inTransit = ($car['status'] ?? '') === 'in_transit';
+if ($inTransit) $noIndex = true;
 
 // Images
 $images = $db->prepare("SELECT * FROM car_images WHERE car_id=? ORDER BY is_primary DESC, id ASC");
@@ -60,14 +63,24 @@ $saveAmt  = ($hasOffer && $hasPrice && $car['asking_price'] > $car['offer_price'
           ? (float)$car['asking_price'] - (float)$car['offer_price'] : 0;
 
 $carTitle = $car['year'] . ' ' . $car['make'] . ' ' . $car['model'];
-$waMsg    = urlencode("Hi, I'm interested in the {$carTitle}" . ($displayPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? " . BASE_URL . "/showroom/view.php?id={$id}");
+$waMsg    = $inTransit
+    ? urlencode("Hi, I'm interested in the {$carTitle} that is currently in shipment"
+        . ($displayPrice ? " ({$priceStr})" : '')
+        . ". Could you share the expected arrival and reservation terms? "
+        . BASE_URL . "/showroom/view.php?id={$id}")
+    : urlencode("Hi, I'm interested in the {$carTitle}" . ($displayPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? " . BASE_URL . "/showroom/view.php?id={$id}");
 
 // ── SEO: per-car overrides, falling back to auto-generated values ──────────
 $canonicalUrl = rtrim(BASE_URL, '/') . '/showroom/view.php?id=' . $id;
 $fullTitle    = trim((string)($car['meta_title'] ?? '')) !== ''
               ? $car['meta_title']
               : "{$carTitle} for Sale in Kenya | {$companyName}";
-$autoDesc     = "Buy this {$carTitle} at {$companyName}." . ($displayPrice ? " {$priceStr}." : '') . " Finance available.";
+// Not indexed while in shipment, but this still becomes the preview text when
+// someone shares the link on WhatsApp — so it has to say the car is incoming.
+$autoDesc     = $inTransit
+              ? "{$carTitle} currently in shipment to {$companyName}."
+                . ($displayPrice ? " {$priceStr}." : '') . " Reserve it before it lands."
+              : "Buy this {$carTitle} at {$companyName}." . ($displayPrice ? " {$priceStr}." : '') . " Finance available.";
 if (!empty($car['description'])) $autoDesc = trim($car['description']) . ' ' . $autoDesc;
 $metaDesc     = trim((string)($car['meta_description'] ?? '')) !== ''
               ? $car['meta_description']
@@ -111,7 +124,8 @@ if ($displayPrice) {
         '@type'           => 'Offer',
         'price'           => (string)(int)$displayPrice,
         'priceCurrency'   => 'KES',
-        'availability'    => $isReserved ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+        'availability'    => $inTransit  ? 'https://schema.org/PreOrder'
+                           : ($isReserved ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock'),
         'itemCondition'   => 'https://schema.org/UsedCondition',
         'url'             => $canonicalUrl,
     ];
@@ -127,8 +141,8 @@ include __DIR__ . '/header.php';
 <div style="background:var(--white)">
     <div class="lx-wrap" style="padding-top:28px;padding-bottom:72px">
 
-        <a href="<?= BASE_URL ?>/showroom/vehicles.php" class="dv-back">
-            <i class="fa fa-arrow-left"></i> Back to vehicles
+        <a href="<?= BASE_URL ?>/showroom/<?= $inTransit ? 'in-shipment.php' : 'vehicles.php' ?>" class="dv-back">
+            <i class="fa fa-arrow-left"></i> <?= $inTransit ? 'Back to cars in shipment' : 'Back to vehicles' ?>
         </a>
 
         <div class="dv-layout">
@@ -142,7 +156,9 @@ include __DIR__ . '/header.php';
                              src="<?= htmlspecialchars($primaryImg) ?>"
                              alt="<?= htmlspecialchars($carTitle) ?>"
                              fetchpriority="high" decoding="async">
-                        <?php if ($isReserved): ?>
+                        <?php if ($inTransit): ?>
+                        <span class="dv-chip dv-chip-dark"><i class="fa fa-ship me-1"></i>In Shipment</span>
+                        <?php elseif ($isReserved): ?>
                         <span class="dv-chip dv-chip-dark">Reserved</span>
                         <?php elseif ($car['featured']): ?>
                         <span class="dv-chip">Available Today</span>
@@ -282,7 +298,9 @@ include __DIR__ . '/header.php';
             <div>
                 <div class="dv-panel">
 
-                    <?php if ($isReserved): ?>
+                    <?php if ($inTransit): ?>
+                    <div class="dv-avail"><span class="dot dot-dark"></span><i class="fa fa-ship me-1"></i>In Shipment</div>
+                    <?php elseif ($isReserved): ?>
                     <div class="dv-avail"><span class="dot dot-dark"></span>Reserved</div>
                     <?php else: ?>
                     <div class="dv-avail"><span class="dot"></span><?= $car['featured'] ? 'Available Today' : 'Available' ?></div>
@@ -294,7 +312,15 @@ include __DIR__ . '/header.php';
                     </div>
 
                     <div class="dv-price">
-                        <?php if ($isReserved): ?>
+                        <?php if ($inTransit): ?>
+                            <?php if ($displayPrice): ?>
+                            <div class="amt"><?= $priceStr ?></div>
+                            <div class="note">Reserve now — we will contact you the moment it arrives and clears</div>
+                            <?php else: ?>
+                            <div class="amt" style="font-size:24px">Price on arrival</div>
+                            <div class="note">Ask us about reservation terms</div>
+                            <?php endif; ?>
+                        <?php elseif ($isReserved): ?>
                             <div class="amt" style="font-size:24px;font-weight:400;color:var(--ink-2)">Reserved</div>
                             <?php if ($hasPrice): ?><div class="note">Listed at KES <?= number_format((float)$car['asking_price']) ?> — contact us to join the waitlist</div><?php endif; ?>
                         <?php elseif ($displayPrice): ?>
@@ -310,14 +336,18 @@ include __DIR__ . '/header.php';
                         <?php endif; ?>
                     </div>
 
-                    <?php if (!empty($car['location_name'])): ?>
+                    <?php if ($inTransit): ?>
+                    <?php /* The yard location would be misleading — the car is not there yet. */ ?>
+                    <div class="dv-loc"><i class="fa fa-ship"></i>On its way to us — not yet available for viewing</div>
+                    <?php elseif (!empty($car['location_name'])): ?>
                     <div class="dv-loc"><i class="fa fa-location-dot"></i>Available at <?= htmlspecialchars($car['location_name']) ?></div>
                     <?php endif; ?>
 
                     <div class="dv-ctas">
                         <?php if ($whatsappPhone): ?>
                         <a href="https://wa.me/<?= $whatsappPhone ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="btn-lx" style="width:100%">
-                            <i class="fa-brands fa-whatsapp"></i> <?= $isReserved ? 'Join Waitlist' : 'Enquire on WhatsApp' ?>
+                            <i class="fa-brands fa-whatsapp"></i>
+                            <?= $inTransit ? 'Reserve this unit' : ($isReserved ? 'Join Waitlist' : 'Enquire on WhatsApp') ?>
                         </a>
                         <?php endif; ?>
                         <?php if ($companyPhone): ?>
