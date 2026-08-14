@@ -9,6 +9,7 @@
  */
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/credit_bootstrap.php';
+require_once __DIR__ . '/credit_clauses.php';
 requireLogin();
 canAccess('crm') || redirect(BASE_URL . '/index.php');
 
@@ -51,6 +52,16 @@ if (!empty($lead['client_id'])) {
 
 $installments = creditInstallments($db, (int)$agreement['id']);
 
+// ── Which of the three agreements is being produced ──────────────────────────
+// The two early-payment variants are the base document plus their own clauses
+// inserted after clause 3(d). An early-payment variant with no wording supplied
+// yet is refused outright further down rather than silently printing the base
+// document under an early-payment heading — that would be a contract saying
+// something other than what was agreed.
+[$variantKey, $variant] = creditVariant($_GET['variant'] ?? null);
+$variantReady   = creditVariantReady($variantKey);
+$variantClauses = $variant['clauses'];
+
 // ── Party details ────────────────────────────────────────────────────────────
 // Lead first, then the client record — the details are captured on the lead
 // while the deal is being done.
@@ -70,7 +81,17 @@ $vehChassis   = $car['chassis_number'] ?? '';
 $vehEngine    = $car['engine_number'] ?? '';
 $vehRating    = $car && !empty($car['engine_cc']) ? ((int)$car['engine_cc'] . ' cc') : '';
 
-$pageTitle = 'Credit Payment Agreement — ' . ($debtorName ?: 'Lead #' . $leadId);
+if (!$variantReady) {
+    setFlash('error', $variant['label'] . ': the clause wording for this version has not been '
+           . 'added to the system yet, so it cannot be generated. The standard Credit Agreement '
+           . 'is unaffected.');
+    redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $leadId . '#credit');
+}
+
+$docName   = $variantKey === 'standard'
+           ? 'Credit Payment Agreement'
+           : 'Credit Payment Agreement (' . $variant['label'] . ')';
+$pageTitle = $docName . ' — ' . ($debtorName ?: 'Lead #' . $leadId);
 include __DIR__ . '/../../includes/header.php';
 ?>
 <style>
@@ -115,6 +136,11 @@ include __DIR__ . '/../../includes/header.php';
     <a href="view_lead.php?id=<?= $leadId ?>" class="btn btn-outline-secondary btn-sm">
         <i class="fa fa-arrow-left me-1"></i>Back to Lead
     </a>
+    <?php if ($variantKey !== 'standard'): ?>
+    <span class="badge" style="background:#7e22ce;font-size:12px;padding:7px 12px">
+        <i class="fa <?= e($variant['icon']) ?> me-1"></i><?= e($variant['label']) ?>
+    </span>
+    <?php endif; ?>
     <button class="btn btn-success btn-sm" onclick="window.print()">
         <i class="fa fa-print me-1"></i>Print / Save PDF
     </button>
@@ -217,6 +243,19 @@ include __DIR__ . '/../../includes/header.php';
        including legal fees, auctioneer costs, and other administrative fees incurred by the Creditor in
        the recovery process.</p>
 
+    <?php /* Early-payment clauses, inserted after 3(d) and lettered on from it.
+             A clause keeps its letter whether or not it carries a heading: with
+             one it reads "e) Heading:" then the paragraph, without one the
+             letter simply opens the paragraph. */ ?>
+    <?php foreach ($variantClauses as $__i => $__c):
+        $__letter  = creditClauseLetter($__i);
+        $__heading = trim((string)($__c['heading'] ?? ''));
+        $__body    = trim((string)($__c['body'] ?? ''));
+    ?>
+    <p><?php if ($__heading !== ''): ?><b><?= e($__letter) ?>) <?= e($__heading) ?></b><br>
+       <?= nl2br(e($__body)) ?><?php else: ?><b><?= e($__letter) ?>)</b> <?= nl2br(e($__body)) ?><?php endif; ?></p>
+    <?php endforeach; ?>
+
     <h2>4. Legal Enforceability:</h2>
     <p>This Agreement constitutes a legally binding contract between the Parties. The Parties agree to
        abide by the terms and conditions outlined herein and acknowledge that this Agreement can be
@@ -246,7 +285,7 @@ include __DIR__ . '/../../includes/header.php';
 <script>
 (function () {
     var original = document.title;
-    var printTitle = 'Credit Payment Agreement — ' + <?= json_encode($debtorName ?: ('Lead ' . $leadId)) ?>;
+    var printTitle = <?= json_encode($docName . ' — ' . ($debtorName ?: 'Lead ' . $leadId)) ?>;
     window.addEventListener('beforeprint', function () { document.title = printTitle; });
     window.addEventListener('afterprint',  function () { document.title = original; });
 }());

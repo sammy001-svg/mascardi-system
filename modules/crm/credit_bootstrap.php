@@ -16,6 +16,10 @@
  * total the debt is not something to put a signature on.
  */
 
+// The agreement's three variants and their clause wording. Pulled in here so
+// every consumer of the credit helpers has creditVariant() available.
+require_once __DIR__ . '/credit_clauses.php';
+
 if (!function_exists('creditMigrate')) {
 
 if (!defined('CREDIT_SCHEMA_VERSION')) define('CREDIT_SCHEMA_VERSION', '1');

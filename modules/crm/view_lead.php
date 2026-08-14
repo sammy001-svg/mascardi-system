@@ -2063,10 +2063,26 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         · <?= e($creditAgr['reference'] ?: '') ?></span>
                 </span>
                 <div class="d-flex gap-2 flex-wrap">
+                    <?php /* Three versions of the same agreement. The two early-payment
+                             ones are the standard document plus their clauses inserted
+                             after 3(d); each stays disabled until its wording has been
+                             added, so an incomplete contract can never be printed. */ ?>
                     <a href="credit_payment_agreement.php?lead_id=<?= $id ?>" target="_blank"
                        class="btn btn-sm" style="background:#7e22ce;color:#fff">
                         <i class="fa fa-file-signature me-1"></i>Credit Agreement
                     </a>
+                    <?php foreach (['concession', 'recalc'] as $__vk):
+                        [, $__v]  = creditVariant($__vk);
+                        $__ready  = creditVariantReady($__vk); ?>
+                    <a <?= $__ready
+                            ? 'href="credit_payment_agreement.php?lead_id=' . $id
+                              . '&amp;variant=' . $__vk . '" target="_blank"'
+                            : 'href="#" tabindex="-1" aria-disabled="true"
+                               title="Clause wording for this version has not been added yet"' ?>
+                       class="btn btn-sm btn-outline-primary<?= $__ready ? '' : ' disabled' ?>">
+                        <i class="fa <?= e($__v['icon']) ?> me-1"></i><?= e($__v['label']) ?>
+                    </a>
+                    <?php endforeach; ?>
                     <a href="credit_receipt.php?lead_id=<?= $id ?>" target="_blank"
                        class="btn btn-sm btn-outline-warning<?= $creditLastPay ? '' : ' disabled' ?>"
                        <?= $creditLastPay ? '' : 'tabindex="-1" aria-disabled="true" title="Record a payment first"' ?>>
