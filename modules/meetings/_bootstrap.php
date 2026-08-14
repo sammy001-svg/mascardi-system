@@ -15,7 +15,12 @@
 
 if (!function_exists('meetingsMigrate')) {
 
-if (!defined('MEETINGS_SCHEMA_VERSION')) define('MEETINGS_SCHEMA_VERSION', '1');
+// 2 — recurring series (meeting_series, meetings.series_id/occurrence_date) and
+//     reminder dispatch tracking (meeting_reminders).
+if (!defined('MEETINGS_SCHEMA_VERSION')) define('MEETINGS_SCHEMA_VERSION', '2');
+
+/** How far ahead occurrences of an open-ended series are created. */
+if (!defined('MEETING_SERIES_HORIZON_DAYS')) define('MEETING_SERIES_HORIZON_DAYS', 120);
 
 function meetingStatuses(): array {
     return [
@@ -173,8 +178,63 @@ function meetingsMigrate(PDO $db, bool $force = false): void
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             KEY idx_sig_inbox (meeting_id, to_user, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        // ── Recurring series ────────────────────────────────────────────────
+        // The rule only. The meeting itself — title, participants, agenda — is
+        // held on the first occurrence, which every later one is cloned from,
+        // so there is no second copy of a meeting's details to keep in step.
+        //
+        // ends_on NULL means the series runs indefinitely. Nothing infinite can
+        // be written to a table, so occurrences are created a rolling window
+        // ahead (MEETING_SERIES_HORIZON_DAYS) and topped up by the cron job.
+        "CREATE TABLE IF NOT EXISTS meeting_series (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            frequency ENUM('daily','weekly','monthly') NOT NULL DEFAULT 'weekly',
+            weekdays VARCHAR(20) NULL,
+            month_day TINYINT NULL,
+            time_of_day TIME NOT NULL,
+            duration_min INT NULL,
+            starts_on DATE NOT NULL,
+            ends_on DATE NULL,
+            status ENUM('active','ended','cancelled') NOT NULL DEFAULT 'active',
+            template_meeting_id INT NULL,
+            materialised_to DATE NULL,
+            created_by INT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_ms_status (status, materialised_to)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        // ── Reminder dispatch log ───────────────────────────────────────────
+        // One row per reminder actually delivered. The unique key is what makes
+        // the dispatcher safe to run as often as you like: a second attempt for
+        // the same person, meeting, lead time and channel cannot insert, so no
+        // one is ever reminded twice however the cron is scheduled.
+        "CREATE TABLE IF NOT EXISTS meeting_reminders (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            meeting_id INT NOT NULL,
+            user_id INT NOT NULL,
+            lead_time ENUM('day','soon') NOT NULL,
+            channel ENUM('email','system') NOT NULL,
+            status ENUM('sent','failed') NOT NULL DEFAULT 'sent',
+            error VARCHAR(255) NULL,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_reminder (meeting_id, user_id, lead_time, channel),
+            KEY idx_mr_meeting (meeting_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
     ];
     foreach ($tables as $sql) { try { $db->exec($sql); } catch (\Throwable $_) {} }
+
+    // Added after the meetings table shipped, so CREATE TABLE IF NOT EXISTS
+    // above will not apply them to an existing install.
+    $columns = [
+        "ALTER TABLE meetings ADD COLUMN series_id INT NULL AFTER organiser_id",
+        "ALTER TABLE meetings ADD COLUMN occurrence_date DATE NULL AFTER series_id",
+        // Materialising is idempotent: re-running can never duplicate a date.
+        "ALTER TABLE meetings ADD UNIQUE KEY uq_series_date (series_id, occurrence_date)",
+        "ALTER TABLE meetings ADD INDEX idx_upcoming (status, scheduled_start)",
+    ];
+    foreach ($columns as $sql) { try { $db->exec($sql); } catch (\Throwable $_) {} }
 
     try {
         $db->prepare("INSERT INTO settings (setting_key, setting_value)
@@ -182,6 +242,216 @@ function meetingsMigrate(PDO $db, bool $force = false): void
                       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)")
            ->execute([MEETINGS_SCHEMA_VERSION]);
     } catch (\Throwable $_) {}
+}
+
+// ── Recurring series ─────────────────────────────────────────────────────────
+
+function meetingFrequencies(): array {
+    return ['daily' => 'Every day', 'weekly' => 'Every week', 'monthly' => 'Every month'];
+}
+
+/** ISO-8601 weekday numbers, which is what date('N') returns. */
+function meetingWeekdayNames(): array {
+    return [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday',
+            5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'];
+}
+
+/** Parses the stored '1,3,5' into a clean, ordered list of ISO weekday numbers. */
+function meetingParseWeekdays(?string $csv): array
+{
+    $out = [];
+    foreach (explode(',', (string)$csv) as $d) {
+        $d = (int)trim($d);
+        if ($d >= 1 && $d <= 7 && !in_array($d, $out, true)) $out[] = $d;
+    }
+    sort($out);
+    return $out;
+}
+
+/**
+ * The dates a series falls on within a window, inclusive.
+ *
+ * Bounded by the series' own start and end. An open-ended series (ends_on NULL)
+ * is bounded only by $to, which is what keeps "forever" finite at the point of
+ * use — callers pass the horizon they are prepared to create rows for.
+ *
+ * @return string[] Y-m-d, ascending.
+ */
+function meetingSeriesDates(array $series, string $from, string $to): array
+{
+    $freq = $series['frequency'] ?? 'weekly';
+    try {
+        $cursor = new DateTimeImmutable(max($from, $series['starts_on']));
+        $limit  = new DateTimeImmutable(
+            !empty($series['ends_on']) ? min($to, $series['ends_on']) : $to
+        );
+    } catch (\Throwable $_) { return []; }
+    if ($cursor > $limit) return [];
+
+    $dates = [];
+    // A guard, not a rule: no legitimate window produces this many dates, and it
+    // stops a corrupt row from spinning forever.
+    $guard = 4000;
+
+    if ($freq === 'daily') {
+        while ($cursor <= $limit && $guard-- > 0) {
+            $dates[] = $cursor->format('Y-m-d');
+            $cursor = $cursor->modify('+1 day');
+        }
+    } elseif ($freq === 'weekly') {
+        $days = meetingParseWeekdays($series['weekdays'] ?? '');
+        if (!$days) return [];
+        while ($cursor <= $limit && $guard-- > 0) {
+            if (in_array((int)$cursor->format('N'), $days, true)) $dates[] = $cursor->format('Y-m-d');
+            $cursor = $cursor->modify('+1 day');
+        }
+    } else { // monthly
+        $wanted = (int)($series['month_day'] ?? 0);
+        if ($wanted < 1 || $wanted > 31) $wanted = (int)(new DateTimeImmutable($series['starts_on']))->format('j');
+        $month = $cursor->modify('first day of this month');
+        while ($month <= $limit && $guard-- > 0) {
+            // "The 31st" in a 30-day month lands on the last day of it rather
+            // than rolling into the next one.
+            $dim  = (int)$month->format('t');
+            $day  = min($wanted, $dim);
+            $date = $month->setDate((int)$month->format('Y'), (int)$month->format('n'), $day);
+            if ($date >= $cursor && $date <= $limit) $dates[] = $date->format('Y-m-d');
+            $month = $month->modify('+1 month');
+        }
+    }
+    return $dates;
+}
+
+/** A one-line, human description of the rule — "Every Monday & Thursday at 10:00". */
+function meetingSeriesDescribe(array $series): string
+{
+    $time = date('H:i', strtotime('2000-01-01 ' . ($series['time_of_day'] ?? '00:00')));
+    $freq = $series['frequency'] ?? 'weekly';
+
+    if ($freq === 'daily') {
+        $what = 'Every day';
+    } elseif ($freq === 'weekly') {
+        $names = meetingWeekdayNames();
+        $days  = array_map(fn($d) => $names[$d], meetingParseWeekdays($series['weekdays'] ?? ''));
+        if (!$days)             $what = 'Every week';
+        elseif (count($days) === 1) $what = 'Every ' . $days[0];
+        else {
+            $last = array_pop($days);
+            $what = 'Every ' . implode(', ', $days) . ' & ' . $last;
+        }
+    } else {
+        $d = (int)($series['month_day'] ?? 1);
+        $suffix = (in_array($d % 100, [11,12,13], true)) ? 'th'
+                : ([1 => 'st', 2 => 'nd', 3 => 'rd'][$d % 10] ?? 'th');
+        $what = "Monthly on the {$d}{$suffix}";
+    }
+
+    $out = $what . ' at ' . $time;
+    if (!empty($series['ends_on'])) $out .= ', until ' . date('j M Y', strtotime($series['ends_on']));
+    else                            $out .= ', with no end date';
+    return $out;
+}
+
+/**
+ * Creates any occurrences of a series that are missing between now and the
+ * horizon, cloning the template meeting's participants and agenda into each.
+ *
+ * Safe to call repeatedly — the unique key on (series_id, occurrence_date) makes
+ * a duplicate insert a no-op rather than a second meeting on the same day.
+ *
+ * @return int How many occurrences were created.
+ */
+function meetingSeriesMaterialise(PDO $db, int $seriesId, ?string $horizon = null): int
+{
+    $st = $db->prepare("SELECT * FROM meeting_series WHERE id = ?");
+    $st->execute([$seriesId]);
+    $series = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$series || $series['status'] !== 'active') return 0;
+
+    $tpl = null;
+    if (!empty($series['template_meeting_id'])) {
+        $t = $db->prepare("SELECT * FROM meetings WHERE id = ?");
+        $t->execute([(int)$series['template_meeting_id']]);
+        $tpl = $t->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+    if (!$tpl) return 0;
+
+    $horizon = $horizon ?: date('Y-m-d', strtotime('+' . MEETING_SERIES_HORIZON_DAYS . ' days'));
+    // Never backfill: a meeting that did not happen should not appear later as
+    // though it had been scheduled all along.
+    $from  = max(date('Y-m-d'), $series['starts_on']);
+    $dates = meetingSeriesDates($series, $from, $horizon);
+    if (!$dates) { meetingSeriesTouch($db, $seriesId, $horizon); return 0; }
+
+    $have = [];
+    $ex = $db->prepare("SELECT occurrence_date FROM meetings WHERE series_id = ?");
+    $ex->execute([$seriesId]);
+    foreach ($ex->fetchAll(PDO::FETCH_COLUMN) as $d) $have[$d] = true;
+
+    $durMin = (int)($series['duration_min'] ?? 0);
+    if ($durMin < 1 && !empty($tpl['scheduled_end'])) {
+        $durMin = max(0, (int)round((strtotime($tpl['scheduled_end']) - strtotime($tpl['scheduled_start'])) / 60));
+    }
+
+    $insM = $db->prepare("INSERT IGNORE INTO meetings
+            (title, purpose, meeting_type, venue, room_code, scheduled_start, scheduled_end,
+             status, organiser_id, series_id, occurrence_date, created_by)
+            VALUES (?,?,?,?,?,?,?, 'scheduled', ?,?,?,?)");
+    $insP = $db->prepare("INSERT IGNORE INTO meeting_participants (meeting_id, user_id, role)
+                          SELECT ?, user_id, role FROM meeting_participants WHERE meeting_id = ?");
+    $insA = $db->prepare("INSERT INTO meeting_agenda_items
+                            (meeting_id, position, title, detail, presenter_id, duration_min)
+                          SELECT ?, position, title, detail, presenter_id, duration_min
+                          FROM meeting_agenda_items WHERE meeting_id = ?");
+
+    $made = 0;
+    foreach ($dates as $d) {
+        if (isset($have[$d])) continue;
+        $start = $d . ' ' . date('H:i:s', strtotime('2000-01-01 ' . $series['time_of_day']));
+        $end   = $durMin > 0 ? date('Y-m-d H:i:s', strtotime($start) + $durMin * 60) : null;
+        try {
+            $insM->execute([
+                $tpl['title'], $tpl['purpose'], $tpl['meeting_type'], $tpl['venue'],
+                // Each occurrence gets its own room: a stale link should not drop
+                // someone into a different week's meeting.
+                $tpl['meeting_type'] === 'physical' ? null : meetingRoomCode(),
+                $start, $end, $tpl['organiser_id'], $seriesId, $d, $tpl['created_by'],
+            ]);
+            $newId = (int)$db->lastInsertId();
+            if (!$newId) continue;          // lost the race to a concurrent run
+            $insP->execute([$newId, (int)$tpl['id']]);
+            $insA->execute([$newId, (int)$tpl['id']]);
+            $made++;
+        } catch (\Throwable $_) { /* a concurrent run got there first */ }
+    }
+
+    meetingSeriesTouch($db, $seriesId, $horizon);
+
+    // A series with a closing date is finished once its last date is in the past.
+    if (!empty($series['ends_on']) && strtotime($series['ends_on']) < strtotime(date('Y-m-d'))) {
+        try { $db->prepare("UPDATE meeting_series SET status='ended' WHERE id=?")->execute([$seriesId]); }
+        catch (\Throwable $_) {}
+    }
+    return $made;
+}
+
+function meetingSeriesTouch(PDO $db, int $seriesId, string $horizon): void
+{
+    try {
+        $db->prepare("UPDATE meeting_series SET materialised_to = ? WHERE id = ?")
+           ->execute([$horizon, $seriesId]);
+    } catch (\Throwable $_) {}
+}
+
+/** Tops up every active series. Called by the reminder cron. */
+function meetingSeriesMaterialiseAll(PDO $db): int
+{
+    $made = 0;
+    try {
+        $ids = $db->query("SELECT id FROM meeting_series WHERE status='active'")->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($ids as $sid) $made += meetingSeriesMaterialise($db, (int)$sid);
+    } catch (\Throwable $_) {}
+    return $made;
 }
 
 // ── Access ───────────────────────────────────────────────────────────────────

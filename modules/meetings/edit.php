@@ -51,6 +51,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($type === 'physical' && $venue === '') $errors[] = 'Give a venue for an in-person meeting.';
 
+    // ── Recurrence (only offered when creating) ──────────────────────────────
+    $repFreq   = $meeting ? '' : (string)($_POST['repeat_freq'] ?? '');
+    if (!isset(meetingFrequencies()[$repFreq])) $repFreq = '';
+    $repDays   = meetingParseWeekdays(implode(',', array_map('intval', $_POST['repeat_days'] ?? [])));
+    $repMonthD = (int)($_POST['repeat_monthday'] ?? 0);
+    // "No end date" leaves the field disabled, so an absent value means forever
+    // rather than an empty date that could be read as "ends immediately".
+    $repEndsOn = (($_POST['repeat_end_mode'] ?? 'never') === 'on')
+               ? trim((string)($_POST['repeat_ends_on'] ?? '')) : '';
+
+    if ($repFreq === 'weekly' && !$repDays) {
+        $errors[] = 'Choose which days of the week the meeting repeats on.';
+    }
+    if ($repFreq === 'monthly' && ($repMonthD < 1 || $repMonthD > 31)) {
+        $errors[] = 'Choose which day of the month the meeting repeats on (1–31).';
+    }
+    if ($repFreq && ($_POST['repeat_end_mode'] ?? '') === 'on') {
+        if ($repEndsOn === '' || !strtotime($repEndsOn)) {
+            $errors[] = 'Set the date the repeating meeting should stop, or choose "No end date".';
+        } elseif ($start !== '' && strtotime($repEndsOn) < strtotime(date('Y-m-d', strtotime($start)))) {
+            $errors[] = 'The repeat end date cannot be before the first meeting.';
+        }
+    }
+
     // Participants
     $partIds  = array_values(array_unique(array_map('intval', $_POST['participants'] ?? [])));
     $partRole = $_POST['participant_role'] ?? [];
@@ -154,7 +178,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 else        $insA->execute([$id, $pos, $t, $detail, $pres, $dur]);
             }
 
+            // ── Recurring series ──────────────────────────────────────────────
+            // Created last, inside the same transaction, because the meeting just
+            // saved becomes the template every later occurrence is cloned from —
+            // it needs its participants and agenda already in place.
+            $seriesId = 0;
+            if ($repFreq) {
+                $firstDate = date('Y-m-d', strtotime($startSql));
+                $durMin    = $endSql
+                    ? max(0, (int)round((strtotime($endSql) - strtotime($startSql)) / 60))
+                    : null;
+
+                $db->prepare("INSERT INTO meeting_series
+                        (frequency, weekdays, month_day, time_of_day, duration_min,
+                         starts_on, ends_on, template_meeting_id, created_by)
+                        VALUES (?,?,?,?,?,?,?,?,?)")
+                   ->execute([
+                       $repFreq,
+                       $repFreq === 'weekly'  ? implode(',', $repDays) : null,
+                       $repFreq === 'monthly' ? $repMonthD : null,
+                       date('H:i:s', strtotime($startSql)),
+                       $durMin,
+                       $firstDate,
+                       $repEndsOn !== '' ? date('Y-m-d', strtotime($repEndsOn)) : null,
+                       $id,
+                       $meId,
+                   ]);
+                $seriesId = (int)$db->lastInsertId();
+
+                // The meeting that was just saved is the first occurrence.
+                $db->prepare("UPDATE meetings SET series_id=?, occurrence_date=? WHERE id=?")
+                   ->execute([$seriesId, $firstDate, $id]);
+            }
+
             $db->commit();
+
+            // Fill in the rest of the calendar. Outside the transaction: this can
+            // create a hundred rows, and a slow write should not hold the lock on
+            // a meeting that is already safely saved.
+            $madeCount = 0;
+            if ($seriesId) {
+                try { $madeCount = meetingSeriesMaterialise($db, $seriesId); }
+                catch (\Throwable $e) { error_log('meetings/series: ' . $e->getMessage()); }
+            }
 
             // Tell people they are expected. Sent after the commit so a failed
             // save never produces an invitation to a meeting that does not exist.
@@ -170,7 +236,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } catch (\Throwable $_) {}
 
-            setFlash('success', $meeting ? 'Meeting updated.' : 'Meeting scheduled and everyone invited.');
+            if ($seriesId) {
+                $sr = $db->prepare("SELECT * FROM meeting_series WHERE id=?");
+                $sr->execute([$seriesId]);
+                $srow = $sr->fetch(PDO::FETCH_ASSOC) ?: [];
+                setFlash('success', 'Recurring meeting scheduled — ' . meetingSeriesDescribe($srow)
+                    . '. ' . ($madeCount + 1) . ' date' . ($madeCount === 0 ? '' : 's') . ' on the calendar'
+                    . (empty($srow['ends_on']) ? ' so far; more are added automatically.' : '.'));
+            } else {
+                setFlash('success', $meeting ? 'Meeting updated.' : 'Meeting scheduled and everyone invited.');
+            }
             redirect(BASE_URL . '/modules/meetings/view.php?id=' . $id);
         } catch (\Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();
@@ -308,6 +383,95 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </div>
     </div>
+
+    <?php /* ── Recurrence ──────────────────────────────────────────────────────
+         Only offered when creating. Changing the rule of a running series is a
+         different operation — it has to decide what happens to occurrences that
+         already have minutes and deliverables against them — so an existing
+         series is managed from the meeting page instead. */ ?>
+    <?php if (!$meeting): ?>
+    <div class="me-card">
+        <div class="me-card-head">
+            <h2 class="me-card-title"><i class="fa fa-repeat"></i>Repeat</h2>
+            <span class="small text-muted">For meetings that run on a schedule</span>
+        </div>
+        <div class="me-card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Repeats</label>
+                    <select name="repeat_freq" id="repeatFreq" class="form-select form-select-sm">
+                        <option value="">Does not repeat</option>
+                        <?php foreach (meetingFrequencies() as $k => $lbl): ?>
+                        <option value="<?= $k ?>" <?= ($_POST['repeat_freq'] ?? '') === $k ? 'selected' : '' ?>>
+                            <?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="col-md-9 rp-when rp-weekly" style="display:none">
+                    <label class="form-label">On these days</label>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <?php $selDays = array_map('intval', $_POST['repeat_days'] ?? []); ?>
+                        <?php foreach (meetingWeekdayNames() as $n => $dayName): ?>
+                        <label class="rp-day">
+                            <input type="checkbox" name="repeat_days[]" value="<?= $n ?>"
+                                   <?= in_array($n, $selDays, true) ? 'checked' : '' ?>>
+                            <span><?= e(substr($dayName, 0, 3)) ?></span>
+                        </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <div class="col-md-3 rp-when rp-monthly" style="display:none">
+                    <label class="form-label">Day of the month</label>
+                    <input type="number" name="repeat_monthday" min="1" max="31"
+                           class="form-control form-control-sm"
+                           value="<?= e($_POST['repeat_monthday'] ?? '') ?>" placeholder="e.g. 15">
+                    <div class="form-text" style="font-size:11px">
+                        The 29th–31st falls on the last day in shorter months.
+                    </div>
+                </div>
+
+                <div class="col-12 rp-when" style="display:none"><hr class="my-1"></div>
+
+                <div class="col-md-4 rp-when" style="display:none">
+                    <label class="form-label">Until</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="repeat_end_mode" id="rpEndNever" value="never"
+                               <?= ($_POST['repeat_end_mode'] ?? 'never') === 'never' ? 'checked' : '' ?>>
+                        <label class="btn btn-outline-secondary btn-sm" for="rpEndNever">No end date</label>
+                        <input type="radio" class="btn-check" name="repeat_end_mode" id="rpEndOn" value="on"
+                               <?= ($_POST['repeat_end_mode'] ?? '') === 'on' ? 'checked' : '' ?>>
+                        <label class="btn btn-outline-secondary btn-sm" for="rpEndOn">Ends on</label>
+                    </div>
+                </div>
+                <div class="col-md-3 rp-when" style="display:none">
+                    <label class="form-label">End date</label>
+                    <input type="date" name="repeat_ends_on" id="rpEndsOn" class="form-control form-control-sm"
+                           value="<?= e($_POST['repeat_ends_on'] ?? '') ?>" disabled>
+                </div>
+                <div class="col-md-5 rp-when" style="display:none">
+                    <div class="alert alert-light border py-2 mb-0" style="font-size:12px">
+                        <i class="fa fa-circle-info me-1"></i>
+                        <span id="rpSummary" class="text-muted">Pick the days this meeting runs on.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    .rp-day{ cursor:pointer; user-select:none; }
+    .rp-day input{ position:absolute; opacity:0; width:0; height:0; }
+    .rp-day span{
+        display:inline-flex; align-items:center; justify-content:center;
+        min-width:52px; padding:7px 10px; border:1px solid var(--border,#dee2e6);
+        border-radius:8px; font-size:12.5px; font-weight:600; transition:.12s;
+    }
+    .rp-day input:checked + span{ background:#7e22ce; border-color:#7e22ce; color:#fff; }
+    .rp-day input:focus-visible + span{ outline:2px solid #7e22ce; outline-offset:2px; }
+    </style>
+    <?php endif; ?>
 
     <div class="me-card">
         <div class="me-card-head">
@@ -447,6 +611,77 @@ include __DIR__ . '/../../includes/header.php';
     }
     type.addEventListener('change', syncVenue);
     syncVenue();
+
+    // ── Recurrence ──────────────────────────────────────────────────────────
+    var freq = document.getElementById('repeatFreq');
+    if (freq) {
+        var endsOn  = document.getElementById('rpEndsOn');
+        var summary = document.getElementById('rpSummary');
+        var startEl = document.querySelector('input[name="scheduled_start"]');
+        var NAMES   = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+        function checkedDays() {
+            return Array.prototype.slice
+                .call(document.querySelectorAll('input[name="repeat_days[]"]:checked'))
+                .map(function (c) { return parseInt(c.value, 10); })
+                .sort(function (a, b) { return a - b; });
+        }
+
+        function describe() {
+            var f = freq.value;
+            if (!f) return '';
+            var time = startEl && startEl.value ? startEl.value.slice(11, 16) : '';
+            var what;
+            if (f === 'daily') {
+                what = 'Every day';
+            } else if (f === 'weekly') {
+                var d = checkedDays().map(function (n) { return NAMES[n]; });
+                if (!d.length) return 'Pick at least one day.';
+                what = d.length === 1 ? 'Every ' + d[0]
+                     : 'Every ' + d.slice(0, -1).join(', ') + ' & ' + d[d.length - 1];
+            } else {
+                var md = document.querySelector('input[name="repeat_monthday"]');
+                var n  = md && md.value ? parseInt(md.value, 10) : 0;
+                if (!n) return 'Pick a day of the month.';
+                what = 'Monthly on day ' + n;
+            }
+            if (time) what += ' at ' + time;
+            var onMode = document.getElementById('rpEndOn');
+            if (onMode && onMode.checked) {
+                what += endsOn.value ? ', until ' + endsOn.value : ', until — pick an end date';
+            } else {
+                what += ', with no end date';
+            }
+            return what;
+        }
+
+        function sync() {
+            var on = !!freq.value;
+            document.querySelectorAll('.rp-when').forEach(function (el) {
+                var show = on && (
+                    (!el.classList.contains('rp-weekly')  || freq.value === 'weekly') &&
+                    (!el.classList.contains('rp-monthly') || freq.value === 'monthly')
+                );
+                el.style.display = show ? '' : 'none';
+            });
+            var byDate = document.getElementById('rpEndOn');
+            // A disabled input is not submitted, which is what keeps an empty
+            // date from being read as "ends today" when "No end date" is chosen.
+            endsOn.disabled = !(on && byDate && byDate.checked);
+            if (summary) summary.textContent = describe() || 'Pick the days this meeting runs on.';
+        }
+
+        freq.addEventListener('change', sync);
+        document.addEventListener('change', function (e) {
+            if (e.target.name === 'repeat_days[]' || e.target.name === 'repeat_end_mode' ||
+                e.target.name === 'repeat_monthday' || e.target.name === 'repeat_ends_on' ||
+                e.target.name === 'scheduled_start') sync();
+        });
+        document.addEventListener('input', function (e) {
+            if (e.target.name === 'repeat_monthday') sync();
+        });
+        sync();
+    }
 }());
 </script>
 
