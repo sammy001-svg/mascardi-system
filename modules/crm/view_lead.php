@@ -2071,16 +2071,20 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                        class="btn btn-sm" style="background:#7e22ce;color:#fff">
                         <i class="fa fa-file-signature me-1"></i>Credit Agreement
                     </a>
+                    <?php /* These stay clickable even before their wording exists: the
+                             document page then explains what is missing. A dead button
+                             that does nothing on click just reads as broken. */ ?>
                     <?php foreach (['concession', 'recalc'] as $__vk):
-                        [, $__v]  = creditVariant($__vk);
-                        $__ready  = creditVariantReady($__vk); ?>
-                    <a <?= $__ready
-                            ? 'href="credit_payment_agreement.php?lead_id=' . $id
-                              . '&amp;variant=' . $__vk . '" target="_blank"'
-                            : 'href="#" tabindex="-1" aria-disabled="true"
-                               title="Clause wording for this version has not been added yet"' ?>
-                       class="btn btn-sm btn-outline-primary<?= $__ready ? '' : ' disabled' ?>">
+                        [, $__v] = creditVariant($__vk);
+                        $__ready = creditVariantReady($__vk); ?>
+                    <a href="credit_payment_agreement.php?lead_id=<?= $id ?>&amp;variant=<?= $__vk ?>"
+                       target="_blank" class="btn btn-sm btn-outline-primary"
+                       <?= $__ready ? '' : 'title="Clause wording for this version has not been added yet"' ?>>
                         <i class="fa <?= e($__v['icon']) ?> me-1"></i><?= e($__v['label']) ?>
+                        <?php if (!$__ready): ?>
+                        <i class="fa fa-triangle-exclamation ms-1 text-warning"
+                           aria-label="wording not added yet"></i>
+                        <?php endif; ?>
                     </a>
                     <?php endforeach; ?>
                     <a href="credit_receipt.php?lead_id=<?= $id ?>" target="_blank"

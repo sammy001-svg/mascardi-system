@@ -81,11 +81,45 @@ $vehChassis   = $car['chassis_number'] ?? '';
 $vehEngine    = $car['engine_number'] ?? '';
 $vehRating    = $car && !empty($car['engine_cc']) ? ((int)$car['engine_cc'] . ' cc') : '';
 
+// An early-payment version whose wording has not been supplied yet stops here
+// with an explanation. Deliberately a page rather than a redirect: these open in
+// a new tab, so redirecting would just show a second copy of the lead and leave
+// the user guessing why the document never appeared.
 if (!$variantReady) {
-    setFlash('error', $variant['label'] . ': the clause wording for this version has not been '
-           . 'added to the system yet, so it cannot be generated. The standard Credit Agreement '
-           . 'is unaffected.');
-    redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $leadId . '#credit');
+    $pageTitle = $variant['label'];
+    include __DIR__ . '/../../includes/header.php';
+    ?>
+    <div class="container" style="max-width:640px">
+        <div class="card mt-4 mb-4" style="border-color:#fcd34d;border-width:2px">
+            <div class="card-header fw-semibold"
+                 style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-bottom-color:#fde68a;color:#92400e">
+                <i class="fa fa-triangle-exclamation me-2"></i><?= e($variant['label']) ?> — not ready yet
+            </div>
+            <div class="card-body">
+                <p>This version of the Credit Payment Agreement cannot be generated, because the
+                   <strong>clause wording for it has not been added to the system yet</strong>.</p>
+                <p class="mb-3">Everything else is in place: it will produce the same agreement as the
+                   standard one, with the <?= e($variant['label']) ?> clauses inserted after
+                   clause&nbsp;3(d). Only the text of those clauses is missing, and it has to come from
+                   the signed template rather than be written here.</p>
+                <div class="alert alert-light border py-2 mb-3" style="font-size:13px">
+                    <i class="fa fa-circle-info me-1"></i>
+                    The <strong>standard Credit Agreement</strong> is unaffected and can be generated
+                    as normal.
+                </div>
+                <a href="view_lead.php?id=<?= $leadId ?>#credit" class="btn btn-sm btn-outline-secondary">
+                    <i class="fa fa-arrow-left me-1"></i>Back to Lead
+                </a>
+                <a href="credit_payment_agreement.php?lead_id=<?= $leadId ?>"
+                   class="btn btn-sm" style="background:#7e22ce;color:#fff">
+                    <i class="fa fa-file-signature me-1"></i>Generate standard Credit Agreement
+                </a>
+            </div>
+        </div>
+    </div>
+    <?php
+    include __DIR__ . '/../../includes/footer.php';
+    exit;
 }
 
 $docName   = $variantKey === 'standard'

@@ -55,7 +55,16 @@ function creditVariants(): array
             'title'   => 'CREDIT PAYMENT AGREEMENT',
             'icon'    => 'fa-handshake',
             'clauses' => [
-                // ── PASTE THE EARLY PAYMENT CONCESSION CLAUSES HERE ──
+                // Supplied wording. NOTE: the settlement date and the refund figure
+                // are written into the sentence as supplied, so every concession
+                // agreement prints this same date and amount. If they are meant to
+                // vary per deal they need to become fields on the credit agreement.
+                ['heading' => 'Early Payment Concession:',
+                 'body'    => 'Should the Debtor settle the outstanding principal amount in full '
+                            . 'on or before 30 November 2026, the Creditor shall refund '
+                            . 'Ksh 200,000/- to the Debtor. Such refund may, at the Creditor’s '
+                            . 'discretion, be paid directly to the Debtor or applied as a '
+                            . 'deduction against the final installment'],
             ],
         ],
 
