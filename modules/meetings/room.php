@@ -61,6 +61,49 @@ include __DIR__ . '/../../includes/header.php';
 .rm-tile{ position:relative; background:#111827; border-radius:var(--r); overflow:hidden; aspect-ratio:16/10; }
 .rm-tile video{ width:100%; height:100%; object-fit:cover; background:#111827; display:block; }
 .rm-tile.speaking{ outline:2px solid #16a34a; outline-offset:-2px; }
+
+/* A shared screen is never cropped. `cover` fills the tile by cutting off the
+   edges, which is fine for a face but loses the sides of a slide or the toolbar
+   of whatever is being demonstrated — the parts a presentation is being shown
+   for. Letterboxing is the correct trade here. */
+.rm-tile.sharing video{ object-fit:contain; background:#000; }
+.rm-tile.sharing{ outline:2px solid var(--brand); outline-offset:-2px; }
+
+/* ── Expand / spotlight ──────────────────────────────────────────────────────
+   Kept out of the way until wanted: the controls fade in on hover, and stay
+   permanently visible on a tile that is presenting so the option is findable
+   without hunting for it. On touch there is no hover, so they are always on. */
+.rm-acts{ position:absolute; right:6px; bottom:6px; display:flex; gap:5px;
+    opacity:0; transition:opacity .14s; }
+.rm-tile:hover .rm-acts,
+.rm-tile.sharing .rm-acts,
+.rm-tile.focus .rm-acts{ opacity:1; }
+@media(hover:none){ .rm-acts{ opacity:1; } }
+.rm-act{ width:29px; height:29px; border-radius:7px; border:0; cursor:pointer;
+    background:rgba(0,0,0,.66); color:#fff; font-size:12px; line-height:1;
+    display:flex; align-items:center; justify-content:center; }
+.rm-act:hover{ background:rgba(0,0,0,.85); }
+
+/* Spotlight: the focused tile takes the top of the stage at full width, and
+   everyone else drops to a thumbnail row beneath it. */
+.rm-grid.focus-mode{ grid-template-columns:repeat(auto-fit,minmax(104px,1fr));
+    grid-auto-rows:76px; align-content:start; }
+.rm-grid.focus-mode .rm-tile{ aspect-ratio:auto; height:76px; }
+.rm-grid.focus-mode .rm-tile video{ object-fit:cover; }
+.rm-grid.focus-mode .rm-tile.focus{ grid-column:1/-1; order:-1;
+    height:min(68vh,620px); aspect-ratio:auto; }
+.rm-grid.focus-mode .rm-tile.focus video{ object-fit:contain; }
+.rm-grid.focus-mode .rm-tile:not(.focus) .rm-name{ font-size:10px; padding:2px 6px; left:4px; bottom:4px; }
+.rm-grid.focus-mode .rm-tile:not(.focus) .rm-acts{ display:none; }
+.rm-grid.focus-mode .rm-tile:not(.focus) .rm-avatar{ font-size:19px; }
+
+/* True fullscreen — the video fills the screen with nothing else on it. */
+.rm-tile:fullscreen{ aspect-ratio:auto; width:100vw; height:100vh; border-radius:0; background:#000; }
+.rm-tile:fullscreen video{ object-fit:contain; }
+
+.rm-presenting{ position:absolute; left:8px; top:8px; background:var(--brand); color:#fff;
+    font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:20px;
+    display:flex; align-items:center; gap:5px; }
 .rm-name{ position:absolute; left:8px; bottom:8px; background:rgba(0,0,0,.62); color:#fff;
     font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:20px; display:flex; align-items:center; gap:6px; }
 .rm-name i{ font-size:10px; }
@@ -118,6 +161,13 @@ include __DIR__ . '/../../includes/header.php';
                     <?= e(meetingInitials($me['name'])) ?>
                 </div>
                 <div class="rm-name"><i class="fa fa-microphone" id="selfMicIcon"></i><?= e($me['name']) ?> (you)</div>
+                <div class="rm-presenting" style="display:none"><i class="fa fa-display"></i>Presenting</div>
+                <div class="rm-acts">
+                    <button type="button" class="rm-act" data-act="focus"
+                            title="Expand — fill the stage with this view"><i class="fa fa-expand"></i></button>
+                    <button type="button" class="rm-act" data-act="full"
+                            title="Fullscreen"><i class="fa fa-up-right-and-down-left-from-center"></i></button>
+                </div>
             </div>
         </div>
         <div class="rm-bar">
@@ -229,7 +279,9 @@ include __DIR__ . '/../../includes/header.php';
             '<video autoplay playsinline></video>' +
             '<div class="rm-avatar" style="background:' + colorFor(userId) + '">' + initials(name) + '</div>' +
             '<div class="rm-name"><i class="fa fa-microphone"></i>' + escapeHtml(name) + '</div>' +
-            '<div class="rm-badge" style="display:none">Connecting…</div>';
+            '<div class="rm-presenting" style="display:none"><i class="fa fa-display"></i>Presenting</div>' +
+            '<div class="rm-badge" style="display:none">Connecting…</div>' +
+            tileActionsHtml();
         document.getElementById('rmGrid').appendChild(el);
         return el;
     }
@@ -240,7 +292,99 @@ include __DIR__ . '/../../includes/header.php';
     }
     function dropTile(userId) {
         var el = document.getElementById('tile-' + userId);
-        if (el) el.remove();
+        if (!el) return;
+        if (el.classList.contains('focus')) setFocus(null);   // don't leave an empty spotlight
+        el.remove();
+    }
+
+    // ── Expand / spotlight / fullscreen ─────────────────────────────────────
+    var grid       = document.getElementById('rmGrid');
+    var focusedId  = null;    // tile id currently filling the stage
+    var autoFocused = null;   // who we spotlighted on their behalf, so a manual
+                              // choice is never overridden by the poller
+
+    function tileActionsHtml() {
+        return '<div class="rm-acts">' +
+            '<button type="button" class="rm-act" data-act="focus" ' +
+                'title="Expand — fill the stage with this view"><i class="fa fa-expand"></i></button>' +
+            '<button type="button" class="rm-act" data-act="full" ' +
+                'title="Fullscreen"><i class="fa fa-up-right-and-down-left-from-center"></i></button>' +
+        '</div>';
+    }
+
+    function setFocus(tileId) {
+        // Passing the already-focused tile collapses back to the even grid.
+        if (tileId && tileId === focusedId) tileId = null;
+        focusedId = tileId;
+
+        Array.prototype.forEach.call(grid.querySelectorAll('.rm-tile'), function (t) {
+            var on = (t.id === tileId);
+            t.classList.toggle('focus', on);
+            var b = t.querySelector('[data-act="focus"] i');
+            if (b) b.className = on ? 'fa fa-compress' : 'fa fa-expand';
+            var btn = t.querySelector('[data-act="focus"]');
+            if (btn) btn.title = on ? 'Shrink back to the grid' : 'Expand — fill the stage with this view';
+        });
+        grid.classList.toggle('focus-mode', !!tileId);
+        if (!tileId) autoFocused = null;
+    }
+
+    function toggleFullscreen(tile) {
+        if (document.fullscreenElement) { document.exitFullscreen(); return; }
+        // Older WebKit exposes this only on the video element.
+        var target = tile.requestFullscreen ? tile : tile.querySelector('video');
+        if (!target) return;
+        var req = target.requestFullscreen || target.webkitRequestFullscreen || target.msRequestFullscreen;
+        if (req) { try { req.call(target); } catch (e) {} }
+    }
+
+    // One delegated listener covers tiles that do not exist yet.
+    grid.addEventListener('click', function (ev) {
+        var btn = ev.target.closest ? ev.target.closest('.rm-act') : null;
+        if (!btn) return;
+        var tile = btn.closest('.rm-tile');
+        if (!tile) return;
+        ev.preventDefault();
+        if (btn.dataset.act === 'focus')     setFocus(tile.id);
+        else if (btn.dataset.act === 'full') toggleFullscreen(tile);
+    });
+
+    // Double-click anywhere on a tile is the familiar shortcut for expanding it.
+    grid.addEventListener('dblclick', function (ev) {
+        var tile = ev.target.closest ? ev.target.closest('.rm-tile') : null;
+        if (tile) setFocus(tile.id);
+    });
+
+    // Escape leaves the spotlight. Fullscreen has its own Escape handling, so
+    // only act when we are not in it.
+    document.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape' && focusedId && !document.fullscreenElement) setFocus(null);
+    });
+
+    /**
+     * Marks a tile as presenting and, the first time it starts, expands it for
+     * everyone. Manual choices win: if the viewer has focused something else, or
+     * deliberately collapsed the spotlight, we leave it alone.
+     */
+    function setSharing(tileId, isSharing) {
+        var tile = document.getElementById(tileId);
+        if (!tile) return;
+        var was = tile.classList.contains('sharing');
+        if (was === !!isSharing) return;
+
+        tile.classList.toggle('sharing', !!isSharing);
+        var badge = tile.querySelector('.rm-presenting');
+        if (badge) badge.style.display = isSharing ? '' : 'none';
+
+        // Auto-expand is for the people watching. The presenter is already
+        // looking at whatever they are sharing, so filling their stage with a
+        // mirror of it only gets in the way — they can still expand by hand.
+        if (isSharing && !focusedId && tileId !== 'tile-self') {
+            setFocus(tileId);
+            autoFocused = tileId;
+        } else if (!isSharing && autoFocused === tileId) {
+            setFocus(null);
+        }
     }
 
     function makePeer(userId, name) {
@@ -349,6 +493,12 @@ include __DIR__ . '/../../includes/header.php';
         });
         document.getElementById('rmPeople').innerHTML = html;
 
+        // Reflect who is presenting onto the tiles. The roster is the only place
+        // a remote screen share is announced — the incoming track looks the same
+        // either way — so the badge, the uncropped scaling and the auto-expand
+        // all hang off this.
+        peers.forEach(function (p) { setSharing('tile-' + p.user_id, !!p.sharing); });
+
         // Someone whose heartbeat stopped is gone even without a goodbye.
         var live = {};
         peers.forEach(function (p) { live[p.user_id] = 1; });
@@ -434,6 +584,7 @@ include __DIR__ . '/../../includes/header.php';
             document.getElementById('selfAvatar').style.display = 'none';
             sharing = true;
             this.classList.add('on');
+            setSharing('tile-self', true);
             post('state', { mic_on: micOn, cam_on: camOn, sharing: true });
             // The browser's own "stop sharing" bar must put the camera back.
             track.onended = stopShare;
@@ -444,6 +595,7 @@ include __DIR__ . '/../../includes/header.php';
         if (screenStream) { screenStream.getTracks().forEach(function (t) { t.stop(); }); screenStream = null; }
         sharing = false;
         document.getElementById('btnShare').classList.remove('on');
+        setSharing('tile-self', false);
         var cam = localStream && localStream.getVideoTracks()[0];
         if (cam) replaceOutgoingVideo(cam);
         document.getElementById('selfVideo').srcObject = localStream;
