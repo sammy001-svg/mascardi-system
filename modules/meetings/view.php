@@ -298,6 +298,23 @@ include __DIR__ . '/../../includes/header.php';
                 <span><i class="fa <?= $type[1] ?>"></i><?= $type[0] ?></span>
                 <?php if ($meeting['venue']): ?><span><i class="fa fa-location-dot"></i><?= e($meeting['venue']) ?></span><?php endif; ?>
                 <?php if ($meeting['organiser_name']): ?><span><i class="fa fa-user-tie"></i><?= e($meeting['organiser_name']) ?></span><?php endif; ?>
+                <?php
+                // Part of a recurring series — say so, and say what the rule is,
+                // so it is obvious this date is one of many.
+                $__series = null;
+                if (!empty($meeting['series_id'])) {
+                    try {
+                        $__s = $db->prepare("SELECT * FROM meeting_series WHERE id = ?");
+                        $__s->execute([(int)$meeting['series_id']]);
+                        $__series = $__s->fetch(PDO::FETCH_ASSOC) ?: null;
+                    } catch (\Throwable $_) {}
+                }
+                ?>
+                <?php if ($__series): ?>
+                <span title="<?= e(meetingSeriesDescribe($__series)) ?>">
+                    <i class="fa fa-repeat"></i><?= e(meetingSeriesDescribe($__series)) ?>
+                </span>
+                <?php endif; ?>
             </div>
         </div>
         <span class="mv-tag" style="background:<?= $sc ?>1f;color:<?= $sc ?>"><?= $sl ?></span>

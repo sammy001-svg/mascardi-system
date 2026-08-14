@@ -241,6 +241,9 @@ include __DIR__ . '/../../includes/header.php';
                 <span><i class="fa fa-users"></i><?= (int)$m['participant_count'] ?></span>
                 <?php if ((int)$m['agenda_count']): ?><span><i class="fa fa-list-ol"></i><?= (int)$m['agenda_count'] ?> item<?= (int)$m['agenda_count'] === 1 ? '' : 's' ?></span><?php endif; ?>
                 <?php if ($m['organiser_name']): ?><span><i class="fa fa-user-tie"></i><?= e($m['organiser_name']) ?></span><?php endif; ?>
+                <?php if (!empty($m['series_id'])): ?>
+                <span title="Part of a recurring series"><i class="fa fa-repeat"></i>Repeats</span>
+                <?php endif; ?>
             </div>
         </div>
         <div class="mt-side">
