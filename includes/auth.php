@@ -166,25 +166,61 @@ function _fixRolePermissions(): void {
  *
  * @return bool Whether the column now accepts the role.
  */
-function ensureUserRole(string $role): bool {
-    if ($role === '' || !preg_match('/^[a-z_]+$/', $role)) return false;
+function ensureUserRole(string $role, ?string &$detail = null): bool {
+    $detail = '';
+    if ($role === '' || !preg_match('/^[a-z_]+$/', $role)) {
+        $detail = 'Role name must be lowercase letters and underscores only.';
+        return false;
+    }
     try {
         $db  = getDB();
         $col = $db->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
-        if (!$col || !preg_match('/^enum\((.*)\)$/i', trim($col['Type']), $m)) return false;
+        if (!$col) {
+            $detail = 'No users.role column found.';
+            return false;
+        }
+        $type = trim((string)$col['Type']);
+
+        // Not an ENUM — a VARCHAR/TEXT column already accepts any role, so there
+        // is nothing to widen and nothing wrong. This used to report failure,
+        // which stopped the visitors book seeding on installations whose role
+        // column had been changed to a string at some point.
+        if (!preg_match('/^enum\((.*)\)$/is', $type, $m)) {
+            $detail = 'users.role is ' . $type . ' — accepts any value, no change needed.';
+            return true;
+        }
 
         $existing = [];
         foreach (explode("','", trim($m[1], "'")) as $v) {
             $v = trim($v, "' ");
             if ($v !== '') $existing[] = $v;
         }
-        if (in_array($role, $existing, true)) return true;
+        if (in_array($role, $existing, true)) {
+            $detail = 'Already allowed by the ENUM.';
+            return true;
+        }
+
+        // Preserve whatever the column already had, and keep its own nullability
+        // and default rather than asserting ones that may not suit this install —
+        // forcing NOT NULL on a column holding NULLs is a needless way to fail.
+        $notNull = (($col['Null'] ?? 'YES') === 'NO') ? ' NOT NULL' : ' NULL';
+        $default = '';
+        if (($col['Default'] ?? null) !== null && $col['Default'] !== '') {
+            $default = " DEFAULT '" . str_replace("'", "''", (string)$col['Default']) . "'";
+        } elseif ($notNull === ' NOT NULL') {
+            $default = " DEFAULT '" . str_replace("'", "''", $existing[0] ?? $role) . "'";
+        }
 
         $all  = array_merge($existing, [$role]);
         $list = implode(',', array_map(fn($v) => "'" . str_replace("'", "''", $v) . "'", $all));
-        $db->exec("ALTER TABLE users MODIFY COLUMN role ENUM({$list}) NOT NULL DEFAULT 'sales_person'");
+        $db->exec("ALTER TABLE users MODIFY COLUMN role ENUM({$list}){$notNull}{$default}");
+        $detail = 'Added to the ENUM (' . count($all) . ' roles).';
         return true;
     } catch (\Throwable $e) {
+        // Surfaced to the caller as well as logged. On shared hosting this is
+        // usually a missing ALTER privilege, and a caller that only sees "false"
+        // cannot tell the operator that.
+        $detail = $e->getMessage();
         error_log('ensureUserRole(' . $role . '): ' . $e->getMessage());
         return false;
     }

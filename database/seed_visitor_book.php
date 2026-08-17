@@ -87,9 +87,19 @@ try {
 
 // The tables and the role itself have to exist before an account can use them.
 visitorsMigrate($db);
-if (!ensureUserRole('visitor_book')) {
-    exit('Could not add the visitor_book role to users.role — check the column is an ENUM.' . PHP_EOL);
-}
+
+// Attempt the widening, but do not abort on it. Whether the role is usable is
+// decided further down by reading back what the database actually stored, which
+// is the real test — bailing out on this check alone previously stopped the seed
+// on installations where the widening was unnecessary in the first place.
+$roleDetail = '';
+$roleWidened = ensureUserRole('visitor_book', $roleDetail);
+
+$colType = '(unknown)';
+try {
+    $c = $db->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
+    if ($c) $colType = trim((string)$c['Type']);
+} catch (\Throwable $_) {}
 
 $hash   = password_hash($password, PASSWORD_DEFAULT);
 $action = '';
@@ -130,8 +140,29 @@ try {
     // otherwise only show up when someone tried to sign in.
     $stored = (string)$db->query("SELECT role FROM users WHERE id = {$userId}")->fetchColumn();
     if ($stored !== 'visitor_book') {
-        exit("Role was not stored correctly (got '" . $stored . "'). The users.role ENUM "
-           . "does not accept 'visitor_book'." . PHP_EOL);
+        $msg = "The account was created, but the database would not store its role.\n\n"
+             . "  Stored role : '" . $stored . "' (expected 'visitor_book')\n"
+             . "  Column type : " . $colType . "\n"
+             . "  Widening    : " . ($roleWidened ? 'reported success' : 'FAILED') . "\n"
+             . "  Detail      : " . ($roleDetail !== '' ? $roleDetail : '(none)') . "\n\n"
+             . "The usual cause is that the database user cannot run ALTER TABLE, which is\n"
+             . "common on shared hosting. Run this once in phpMyAdmin (SQL tab), then reload\n"
+             . "this page — it appends the role without disturbing the existing ones:\n\n"
+             . "  ALTER TABLE users MODIFY COLUMN role\n"
+             . "    ENUM('admin','general_manager','manager','supervisor','finance_manager',\n"
+             . "         'accountant','cashier','sales_manager','sales_officer','sales_person',\n"
+             . "         'customer_relations','receptionist','workshop_manager','mechanic',\n"
+             . "         'driver','inventory_manager','procurement_officer','hr_manager',\n"
+             . "         'super_admin','visitor_book')\n"
+             . "    NOT NULL DEFAULT 'sales_person';\n\n"
+             . "Check that list against your own column first (SHOW COLUMNS FROM users LIKE\n"
+             . "'role') and keep every value it already has — dropping one blanks the role of\n"
+             . "every account holding it.\n";
+        if ($isCli) exit(PHP_EOL . $msg . PHP_EOL);
+        http_response_code(500);
+        exit('<pre style="font:13px/1.6 ui-monospace,Consolas,monospace;background:#151c26;'
+           . 'color:#e8eaed;padding:22px;margin:0;min-height:100vh;white-space:pre-wrap">'
+           . htmlspecialchars($msg) . '</pre>');
     }
 } catch (\Throwable $e) {
     exit('Seed failed: ' . $e->getMessage() . PHP_EOL);
@@ -153,6 +184,7 @@ if ($isCli) {
     echo "  Username  : {$username}", PHP_EOL;
     echo "  Password  : {$password}", PHP_EOL;
     echo "  Sign in at: https://your-domain{$loginUrl}", PHP_EOL;
+    echo "  Role       : visitor_book — " . ($roleDetail !== '' ? $roleDetail : 'ok'), PHP_EOL;
     echo $line, PHP_EOL;
     if ($generated) {
         echo "  This password is shown once. Write it down now.", PHP_EOL;
@@ -207,7 +239,10 @@ h1{text-align:center;font-size:20px;font-weight:800;margin-bottom:6px;letter-spa
     <div class="row"><span class="label">Password</span>
         <span class="val pw"><?= htmlspecialchars($password) ?></span></div>
     <div class="row"><span class="label">Role</span>
-        <span class="val">visitor_book</span></div>
+        <span class="val">visitor_book &#10003;</span></div>
+    <div class="row"><span class="label">Role column</span>
+        <span class="val" style="font-size:11.5px;font-weight:400;color:#9aa4b2">
+            <?= htmlspecialchars($roleDetail !== '' ? $roleDetail : 'ok') ?></span></div>
 
     <?php if ($generated): ?>
     <div class="note">
