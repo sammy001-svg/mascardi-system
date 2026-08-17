@@ -152,7 +152,7 @@ if ($isCli) {
     echo "  Action    : {$action}", PHP_EOL;
     echo "  Username  : {$username}", PHP_EOL;
     echo "  Password  : {$password}", PHP_EOL;
-    echo "  Sign in at: {$loginUrl}", PHP_EOL;
+    echo "  Sign in at: https://your-domain{$loginUrl}", PHP_EOL;
     echo $line, PHP_EOL;
     if ($generated) {
         echo "  This password is shown once. Write it down now.", PHP_EOL;
