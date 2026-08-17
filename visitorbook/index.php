@@ -374,10 +374,85 @@ require __DIR__ . '/_layout.php';
                 talk you through what is coming in.
             </p>
             <?php else: ?>
-            <p class="text-muted" style="font-size:13px;margin-bottom:14px">
+            <?php
+            // Filter options come from the cars already loaded, so the lists only
+            // ever offer choices that lead somewhere. A dropdown containing makes
+            // we do not stock is worse than no dropdown.
+            $fMakes = $fBodies = [];
+            foreach ($cars as $c) {
+                $mk = trim((string)$c['make']);       if ($mk !== '') $fMakes[$mk] = ($fMakes[$mk] ?? 0) + 1;
+                $bd = trim((string)$c['body_type']);  if ($bd !== '') $fBodies[$bd] = ($fBodies[$bd] ?? 0) + 1;
+            }
+            ksort($fMakes); ksort($fBodies);
+
+            // Price bands, but only the ones something actually falls into.
+            $bands = [
+                ['1000000',  'Under 1M'],
+                ['2000000',  'Under 2M'],
+                ['3000000',  'Under 3M'],
+                ['5000000',  'Under 5M'],
+                ['10000000', 'Under 10M'],
+            ];
+            $priced = array_filter(array_map('visitorCarPrice', $cars));
+            $cheapest = $priced ? min($priced) : 0;
+            $dearest  = $priced ? max($priced) : 0;
+            $bands = array_values(array_filter($bands, fn($b) =>
+                (float)$b[0] > $cheapest && (float)$b[0] < $dearest * 1.5));
+            ?>
+            <div class="vb-filters" id="vbFilters">
+                <div class="vb-filter">
+                    <label class="form-label">Make</label>
+                    <select class="form-select" id="fMake" data-filter="make">
+                        <option value="">Any make</option>
+                        <?php foreach ($fMakes as $mk => $n): ?>
+                        <option value="<?= htmlspecialchars($mk) ?>"><?= htmlspecialchars($mk) ?> (<?= $n ?>)</option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php if (count($fBodies) > 1): ?>
+                <div class="vb-filter">
+                    <label class="form-label">Type</label>
+                    <select class="form-select" id="fBody" data-filter="body">
+                        <option value="">Any type</option>
+                        <?php foreach ($fBodies as $bd => $n): ?>
+                        <option value="<?= htmlspecialchars($bd) ?>"><?= htmlspecialchars($bd) ?> (<?= $n ?>)</option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
+                <?php if ($bands): ?>
+                <div class="vb-filter">
+                    <label class="form-label">Budget</label>
+                    <select class="form-select" id="fPrice" data-filter="price">
+                        <option value="">Any price</option>
+                        <?php foreach ($bands as [$v, $lbl]): ?>
+                        <option value="<?= $v ?>"><?= htmlspecialchars($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
+                <div class="vb-filter vb-filter-actions">
+                    <button type="button" class="btn btn-sm btn-outline-secondary vb-hidden" id="fClear">
+                        <i class="fa fa-xmark me-1"></i>Clear
+                    </button>
+                </div>
+            </div>
+
+            <p class="text-muted" id="vbCarsHint" style="font-size:13px;margin:0 0 14px">
                 Tap a vehicle to select it.
+                <span id="vbCarsCount"></span>
             </p>
-            <div class="vb-cars">
+
+            <div id="vbNoMatch" class="vb-hidden" style="text-align:center;padding:34px 18px;
+                 border:1px dashed var(--vb-line);border-radius:var(--vb-r);margin-bottom:14px">
+                <i class="fa fa-car-side" style="font-size:24px;color:var(--vb-ink-3);display:block;margin-bottom:10px"></i>
+                <div style="font-size:14px;font-weight:600">Nothing matches that</div>
+                <div style="font-size:12.5px;color:var(--vb-ink-3);margin-top:4px">
+                    Try widening your choices, or ask us — we may have one coming in.
+                </div>
+            </div>
+
+            <div class="vb-cars" id="vbCars">
                 <?php foreach ($cars as $c):
                     $price = visitorCarPrice($c);
                     $bits  = array_filter([
@@ -387,7 +462,10 @@ require __DIR__ . '/_layout.php';
                         !empty($c['mileage']) ? number_format((int)$c['mileage']) . ' km' : null,
                     ]);
                 ?>
-                <label class="vb-car">
+                <label class="vb-car"
+                       data-make="<?= htmlspecialchars(trim((string)$c['make'])) ?>"
+                       data-body="<?= htmlspecialchars(trim((string)$c['body_type'])) ?>"
+                       data-price="<?= $price ? (int)$price : '' ?>">
                     <input type="radio" name="car_id" value="<?= (int)$c['id'] ?>"
                            <?= (int)($P['car_id'] ?? 0) === (int)$c['id'] ? 'checked' : '' ?>>
                     <div>
@@ -411,6 +489,12 @@ require __DIR__ . '/_layout.php';
                 </label>
                 <?php endforeach; ?>
             </div>
+
+            <?php /* Shown only once a vehicle is chosen and the rest have been
+                     cleared away, so there is always a way back to the list. */ ?>
+            <button type="button" class="btn btn-sm btn-outline-secondary vb-hidden mt-3" id="vbChangeCar">
+                <i class="fa fa-arrow-left me-1"></i>Choose a different vehicle
+            </button>
             <?php endif; ?>
 
             <div class="mt-4">
@@ -606,6 +690,105 @@ require __DIR__ . '/_layout.php';
         });
     }
 
+    // ── Car list: filtering, and collapsing once one is chosen ──────────────
+    var carsWrap = document.getElementById('vbCars');
+    if (carsWrap) {
+        var cards    = Array.prototype.slice.call(carsWrap.querySelectorAll('.vb-car'));
+        var filters  = Array.prototype.slice.call(document.querySelectorAll('#vbFilters [data-filter]'));
+        var filterBar = document.getElementById('vbFilters');
+        var clearBtn = document.getElementById('fClear');
+        var changeBtn = document.getElementById('vbChangeCar');
+        var noMatch  = document.getElementById('vbNoMatch');
+        var hint     = document.getElementById('vbCarsHint');
+        var countEl  = document.getElementById('vbCarsCount');
+
+        function values() {
+            var v = {};
+            filters.forEach(function (f) { v[f.dataset.filter] = f.value; });
+            return v;
+        }
+        function anyFilter() {
+            return filters.some(function (f) { return f.value !== ''; });
+        }
+
+        function applyFilters() {
+            var v = values(), shown = 0;
+            cards.forEach(function (card) {
+                var ok = true;
+                if (v.make && card.dataset.make !== v.make)  ok = false;
+                if (v.body && card.dataset.body !== v.body)  ok = false;
+                if (v.price) {
+                    // A car with no price is never excluded by a budget: "ask us"
+                    // may well be within it, and hiding it loses a sale.
+                    var p = card.dataset.price;
+                    if (p !== '' && parseInt(p, 10) > parseInt(v.price, 10)) ok = false;
+                }
+                card.classList.toggle('filtered-out', !ok);
+                if (ok) shown++;
+            });
+
+            if (noMatch)  noMatch.classList.toggle('vb-hidden', shown > 0);
+            if (clearBtn) clearBtn.classList.toggle('vb-hidden', !anyFilter());
+            if (countEl) {
+                countEl.textContent = (shown === cards.length)
+                    ? (cards.length + (cards.length === 1 ? ' vehicle available.' : ' vehicles available.'))
+                    : ('Showing ' + shown + ' of ' + cards.length + '.');
+            }
+            return shown;
+        }
+
+        function picked() { return carsWrap.querySelector('input[name="car_id"]:checked'); }
+
+        function collapse() {
+            var sel = picked();
+            cards.forEach(function (c) {
+                c.classList.toggle('is-picked', c.contains(sel));
+            });
+            carsWrap.classList.add('picked');
+            // With one card on screen there is nothing left to filter or count.
+            if (filterBar) filterBar.classList.add('vb-hidden');
+            if (noMatch)   noMatch.classList.add('vb-hidden');
+            if (changeBtn) changeBtn.classList.remove('vb-hidden');
+            if (hint)      hint.classList.add('vb-hidden');
+        }
+
+        function expand() {
+            carsWrap.classList.remove('picked');
+            cards.forEach(function (c) { c.classList.remove('is-picked'); });
+            // Clearing the choice matters: a radio left checked behind a hidden
+            // card would submit a vehicle the visitor can no longer see.
+            var sel = picked();
+            if (sel) sel.checked = false;
+            if (filterBar) filterBar.classList.remove('vb-hidden');
+            if (changeBtn) changeBtn.classList.add('vb-hidden');
+            if (hint)      hint.classList.remove('vb-hidden');
+            applyFilters();
+        }
+
+        carsWrap.addEventListener('change', function (e) {
+            if (e.target.name === 'car_id' && e.target.checked) collapse();
+        });
+        if (changeBtn) changeBtn.addEventListener('click', function () {
+            expand();
+            carsWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+        filters.forEach(function (f) { f.addEventListener('change', applyFilters); });
+        if (clearBtn) clearBtn.addEventListener('click', function () {
+            filters.forEach(function (f) { f.value = ''; });
+            applyFilters();
+        });
+
+        applyFilters();
+        // A choice restored after a failed submit comes back already collapsed.
+        if (picked()) collapse();
+
+        // Reset by the idle timer has to put this section back to a clean list.
+        document.addEventListener('vb:reset', function () {
+            filters.forEach(function (f) { f.value = ''; });
+            expand();
+        });
+    }
+
     // ── Staff availability ──────────────────────────────────────────────────
     var staffSel = form.querySelector('select[name="staff_id"]');
     var staffWarn = document.getElementById('vbStaffWarn');
@@ -642,6 +825,9 @@ require __DIR__ . '/_layout.php';
         known.classList.add('vb-hidden');
         pending = null;
         if (staffWarn) staffWarn.classList.add('vb-hidden');
+        // form.reset() clears the inputs but not the UI state built around them —
+        // the collapsed car list and any chosen filters have to be told.
+        document.dispatchEvent(new Event('vb:reset'));
         sync();
         window.scrollTo({ top: 0, behavior: 'smooth' });
         var fn = form.querySelector('[name="first_name"]');

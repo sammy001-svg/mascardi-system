@@ -122,8 +122,26 @@ body{
 .vb-purpose input:checked + div i{ color:var(--vb-brand); }
 .vb-purpose input:focus-visible + div{ outline:3px solid color-mix(in srgb, var(--vb-brand) 55%, transparent); outline-offset:2px; }
 
+/* Car filters — few controls, big targets, used standing at a counter. */
+.vb-filters{
+    display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;
+    padding:14px; margin-bottom:16px;
+    background:var(--vb-card-2); border:1px solid var(--vb-line); border-radius:var(--vb-r);
+}
+.vb-filter{ flex:1 1 165px; min-width:0; }
+.vb-filter .form-label{ margin-bottom:4px; }
+.vb-filter-actions{ flex:0 0 auto; }
+@media(max-width:560px){ .vb-filter{ flex:1 1 100%; } }
+
 /* Car picker */
 .vb-cars{ display:grid; grid-template-columns:repeat(auto-fill,minmax(216px,1fr)); gap:14px; }
+
+/* Once a vehicle is chosen the others are cleared away, so the visitor is looking
+   at their choice rather than re-reading the whole list. The chosen card gets the
+   full width it no longer has to share. */
+.vb-cars.picked{ grid-template-columns:minmax(0,340px); }
+.vb-cars.picked .vb-car:not(.is-picked){ display:none; }
+.vb-car.filtered-out{ display:none; }
 .vb-car input{ position:absolute; opacity:0; width:0; height:0; }
 .vb-car > div{
     border:2px solid var(--vb-line); border-radius:var(--vb-r); overflow:hidden;
