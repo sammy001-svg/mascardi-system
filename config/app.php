@@ -15,7 +15,7 @@ if (!defined('BASE_URL')) {
     // Any directory that holds pages rather than being the project root must be
     // listed here, or BASE_URL resolves to the subdirectory and every link built
     // from it gains an extra path segment.
-    $basePath = preg_replace('/(\/(modules|portal|client|config|includes|assets|showroom|visitorbook|scripts))($|\/.*)/', '', $dir);
+    $basePath = preg_replace('/(\/(modules|portal|client|config|includes|assets|showroom|visitorbook|scripts|database))($|\/.*)/', '', $dir);
     $basePath = rtrim($basePath, '/');
 
     define('BASE_URL', $protocol . '://' . $host . $basePath);

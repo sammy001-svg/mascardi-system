@@ -54,7 +54,7 @@ require __DIR__ . '/_layout.php';
 <?php if ($done): ?>
 <div class="vb-card">
     <div class="vb-card-body text-center" style="padding:44px 22px">
-        <div style="width:72px;height:72px;border-radius:50%;background:#dbeafe;color:#2563eb;
+        <div style="width:72px;height:72px;border-radius:50%;background:var(--vb-info-bg);color:var(--vb-info-fg);
                     display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 20px">
             <i class="fa fa-hand-peace"></i>
         </div>

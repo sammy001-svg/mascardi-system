@@ -236,7 +236,7 @@ require __DIR__ . '/_layout.php';
 <?php if ($done): ?>
 <div class="vb-card">
     <div class="vb-card-body text-center" style="padding:44px 22px">
-        <div style="width:72px;height:72px;border-radius:50%;background:#dcfce7;color:#16a34a;
+        <div style="width:72px;height:72px;border-radius:50%;background:var(--vb-ok-bg);color:var(--vb-ok-fg);
                     display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 20px">
             <i class="fa fa-check"></i>
         </div>
@@ -312,7 +312,7 @@ require __DIR__ . '/_layout.php';
                     <input type="tel" name="phone" id="vbPhone" class="form-control" required autocomplete="off"
                            placeholder="07xx xxx xxx" value="<?= htmlspecialchars($P['phone'] ?? '') ?>">
                     <div id="vbKnown" class="vb-hidden" style="font-size:12px;margin-top:6px">
-                        <span style="color:#16a34a;font-weight:600">
+                        <span style="color:var(--vb-ok-fg);font-weight:600">
                             <i class="fa fa-circle-check me-1"></i>You have been here before
                         </span>
                         <button type="button" class="btn btn-sm btn-outline-success mt-1 w-100"
@@ -481,7 +481,7 @@ require __DIR__ . '/_layout.php';
                     <?php /* A warning, never a block: someone can be on site without
                              having opened the system today. */ ?>
                     <div id="vbStaffWarn" class="vb-hidden"
-                         style="font-size:12px;color:#b45309;margin-top:6px">
+                         style="font-size:12px;color:var(--vb-warn-fg);margin-top:6px">
                         <i class="fa fa-triangle-exclamation me-1"></i>
                         This person has not used the system today — they may not be in.
                         Reception will check for you.

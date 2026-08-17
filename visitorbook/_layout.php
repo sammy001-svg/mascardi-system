@@ -18,20 +18,53 @@ if (!defined('VB_LAYOUT')) {
     $vbCompany = getSetting('company_name', 'Mascardi');
     $vbLogo    = getSetting('company_logo', '');
     ?><!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark" data-bs-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
+<meta name="color-scheme" content="dark light">
 <title><?= htmlspecialchars(($vbTitle ?? 'Visitors Book') . ' — ' . $vbCompany) ?></title>
+<script>
+/* Applied before the stylesheets load so the kiosk never flashes the wrong
+   colour on a screen that is on display all day. Dark is the default: the
+   attributes are already on <html>, and this only switches to light when someone
+   has explicitly asked for it. System preference is deliberately ignored — the
+   kiosk's look is a decision about the room it stands in, not about the machine. */
+(function () {
+    try {
+        if (localStorage.getItem('vbTheme') === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.documentElement.setAttribute('data-bs-theme', 'light');
+        }
+    } catch (e) { /* private mode — stay on the dark default */ }
+}());
+</script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
 <style>
+/* Dark is the primary palette, so it lives on bare :root and light is the
+   override. Bootstrap 5.3 is themed alongside it through data-bs-theme, which is
+   what keeps its alerts, buttons and form controls in step — hand-darkening those
+   would drift out of sync with the framework. */
 :root{
-    --vb-ink:#0f172a; --vb-ink-2:#475569; --vb-ink-3:#94a3b8;
-    --vb-line:#e2e8f0; --vb-bg:#f1f5f9; --vb-card:#ffffff;
-    --vb-brand:#7e22ce; --vb-brand-soft:#faf5ff; --vb-brand-line:#e9d5ff;
+    --vb-ink:#e8eaed; --vb-ink-2:#9aa4b2; --vb-ink-3:#6b7688;
+    --vb-line:#2a3442; --vb-bg:#0d1219; --vb-card:#151c26; --vb-card-2:#1b2431;
+    --vb-brand:#a855f7; --vb-brand-soft:#1e1430; --vb-brand-line:#3b2a5c;
+    --vb-ok-bg:#132a1c;   --vb-ok-fg:#4ade80;
+    --vb-info-bg:#12233d; --vb-info-fg:#60a5fa;
+    --vb-warn-fg:#fbbf24;
+    --vb-shadow:0 10px 30px rgba(0,0,0,.45);
     --vb-r:12px;
+}
+:root[data-theme="light"]{
+    --vb-ink:#0f172a; --vb-ink-2:#475569; --vb-ink-3:#94a3b8;
+    --vb-line:#e2e8f0; --vb-bg:#f1f5f9; --vb-card:#ffffff; --vb-card-2:#fbfcfe;
+    --vb-brand:#7e22ce; --vb-brand-soft:#faf5ff; --vb-brand-line:#e9d5ff;
+    --vb-ok-bg:#dcfce7;   --vb-ok-fg:#16a34a;
+    --vb-info-bg:#dbeafe; --vb-info-fg:#2563eb;
+    --vb-warn-fg:#b45309;
+    --vb-shadow:0 10px 30px rgba(15,23,42,.10);
 }
 *{ box-sizing:border-box; }
 body{
@@ -40,7 +73,7 @@ body{
     -webkit-text-size-adjust:100%;
 }
 .vb-top{
-    background:#fff; border-bottom:1px solid var(--vb-line);
+    background:var(--vb-card); border-bottom:1px solid var(--vb-line);
     padding:18px 0; position:sticky; top:0; z-index:20;
 }
 .vb-wrap{ max-width:960px; margin:0 auto; padding:0 20px; }
@@ -57,7 +90,7 @@ body{
 }
 .vb-card-head{
     padding:14px 18px; border-bottom:1px solid var(--vb-line);
-    background:#fbfcfe; display:flex; align-items:center; gap:9px;
+    background:var(--vb-card-2); display:flex; align-items:center; gap:9px;
     font-size:13px; font-weight:700; letter-spacing:.02em;
 }
 .vb-card-head i{ color:var(--vb-brand); }
@@ -70,7 +103,7 @@ body{
 
 .form-label{ font-size:12.5px; font-weight:600; color:var(--vb-ink-2); margin-bottom:5px; }
 .form-control,.form-select{ font-size:15px; padding:11px 13px; border-color:var(--vb-line); border-radius:9px; }
-.form-control:focus,.form-select:focus{ border-color:var(--vb-brand); box-shadow:0 0 0 3px rgba(126,34,206,.12); }
+.form-control:focus,.form-select:focus{ border-color:var(--vb-brand); box-shadow:0 0 0 3px color-mix(in srgb, var(--vb-brand) 32%, transparent); }
 .form-control::placeholder{ color:var(--vb-ink-3); }
 .req{ color:#dc2626; }
 
@@ -87,19 +120,19 @@ body{
 .vb-purpose > div:hover{ border-color:var(--vb-ink-3); }
 .vb-purpose input:checked + div{ border-color:var(--vb-brand); background:var(--vb-brand-soft); }
 .vb-purpose input:checked + div i{ color:var(--vb-brand); }
-.vb-purpose input:focus-visible + div{ outline:3px solid rgba(126,34,206,.35); outline-offset:2px; }
+.vb-purpose input:focus-visible + div{ outline:3px solid color-mix(in srgb, var(--vb-brand) 55%, transparent); outline-offset:2px; }
 
 /* Car picker */
 .vb-cars{ display:grid; grid-template-columns:repeat(auto-fill,minmax(216px,1fr)); gap:14px; }
 .vb-car input{ position:absolute; opacity:0; width:0; height:0; }
 .vb-car > div{
     border:2px solid var(--vb-line); border-radius:var(--vb-r); overflow:hidden;
-    cursor:pointer; transition:.14s; background:#fff; height:100%;
+    cursor:pointer; transition:.14s; background:var(--vb-card); height:100%;
     display:flex; flex-direction:column;
 }
 .vb-car > div:hover{ border-color:var(--vb-ink-3); }
-.vb-car input:checked + div{ border-color:var(--vb-brand); box-shadow:0 0 0 3px rgba(126,34,206,.14); }
-.vb-car input:focus-visible + div{ outline:3px solid rgba(126,34,206,.35); outline-offset:2px; }
+.vb-car input:checked + div{ border-color:var(--vb-brand); box-shadow:0 0 0 3px color-mix(in srgb, var(--vb-brand) 38%, transparent); }
+.vb-car input:focus-visible + div{ outline:3px solid color-mix(in srgb, var(--vb-brand) 55%, transparent); outline-offset:2px; }
 .vb-car-img{ aspect-ratio:4/3; background:var(--vb-bg); position:relative; }
 .vb-car-img img{ width:100%; height:100%; object-fit:cover; display:block; }
 .vb-car-noimg{
@@ -125,6 +158,26 @@ body{
 .vb-submit:disabled{ opacity:.55; cursor:not-allowed; }
 .vb-foot{ text-align:center; font-size:11.5px; color:var(--vb-ink-3); padding:0 0 30px; }
 .vb-hidden{ display:none !important; }
+
+.vb-theme{
+    background:transparent; border:1px solid var(--vb-line); color:var(--vb-ink-2);
+    border-radius:8px; padding:6px 12px; font-size:12.5px; font-weight:600;
+    display:inline-flex; align-items:center; gap:7px; cursor:pointer; transition:.14s;
+}
+.vb-theme:hover{ border-color:var(--vb-brand); color:var(--vb-ink); }
+
+/* Photographs and the placeholder tile are the two things a dark palette cannot
+   simply recolour: a bright thumbnail against a near-black card is glaring at the
+   distance this screen is read from, so it is eased back a little and restored on
+   hover once someone is actually looking at it. */
+:root[data-theme="dark"] .vb-car-img img{ filter:brightness(.9); transition:filter .2s; }
+:root[data-theme="dark"] .vb-car:hover .vb-car-img img,
+:root[data-theme="dark"] .vb-car input:checked + div .vb-car-img img{ filter:none; }
+:root[data-theme="dark"] .vb-brandline img{ filter:brightness(1.08); }
+
+/* Bootstrap's subtle alert backgrounds are readable under data-bs-theme="dark",
+   but its borders all but vanish on this background, so they are brought back. */
+:root[data-theme="dark"] .alert{ border-color:var(--vb-line); }
 </style>
 </head>
 <body>
@@ -141,14 +194,20 @@ body{
                 <p class="vb-sub"><?= htmlspecialchars($vbCompany) ?> &middot; please sign in below</p>
             </div>
         </div>
-        <?php /* Confirmed, because a visitor tapping this would sign the kiosk
-                 out and leave the next arrival unable to sign in at all. */ ?>
-        <a href="<?= BASE_URL ?>/logout.php" class="btn btn-sm btn-outline-secondary"
-           title="Close the visitors book (staff only)"
-           onclick="return confirm('Close the visitors book?\n\nThis signs the reception account out and staff will need to sign back in before the next visitor can be recorded.');">
-            <i class="fa fa-lock"></i>
-            <span class="d-none d-sm-inline ms-1">Staff exit</span>
-        </a>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" id="vbTheme" class="vb-theme" title="Switch between dark and light">
+                <i class="fa fa-moon" id="vbThemeIcon"></i>
+                <span class="d-none d-md-inline" id="vbThemeLabel">Dark</span>
+            </button>
+            <?php /* Confirmed, because a visitor tapping this would sign the kiosk
+                     out and leave the next arrival unable to sign in at all. */ ?>
+            <a href="<?= BASE_URL ?>/logout.php" class="btn btn-sm btn-outline-secondary"
+               title="Close the visitors book (staff only)"
+               onclick="return confirm('Close the visitors book?\n\nThis signs the reception account out and staff will need to sign back in before the next visitor can be recorded.');">
+                <i class="fa fa-lock"></i>
+                <span class="d-none d-sm-inline ms-1">Staff exit</span>
+            </a>
+        </div>
     </div>
 </header>
 
@@ -166,6 +225,38 @@ function vbFooter(): void
     Your details are held only so we can assist you with your visit.
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+/* Theme toggle. Lives in the footer so every page built on this shell gets it,
+   and only ever writes 'light' or clears the key — dark is the absence of a
+   preference, which keeps a wiped browser profile coming back up dark. */
+(function () {
+    var btn   = document.getElementById('vbTheme');
+    var icon  = document.getElementById('vbThemeIcon');
+    var label = document.getElementById('vbThemeLabel');
+    if (!btn) return;
+    var root = document.documentElement;
+
+    function paint() {
+        var light = root.getAttribute('data-theme') === 'light';
+        if (icon)  icon.className = light ? 'fa fa-sun' : 'fa fa-moon';
+        if (label) label.textContent = light ? 'Light' : 'Dark';
+        btn.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
+    }
+
+    btn.addEventListener('click', function () {
+        var toLight = root.getAttribute('data-theme') !== 'light';
+        root.setAttribute('data-theme',    toLight ? 'light' : 'dark');
+        root.setAttribute('data-bs-theme', toLight ? 'light' : 'dark');
+        try {
+            if (toLight) localStorage.setItem('vbTheme', 'light');
+            else         localStorage.removeItem('vbTheme');
+        } catch (e) { /* preference just will not persist */ }
+        paint();
+    });
+
+    paint();
+}());
+</script>
 </body>
 </html>
 <?php
