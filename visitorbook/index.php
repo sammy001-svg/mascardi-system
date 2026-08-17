@@ -34,6 +34,17 @@ if (!isset($_SESSION['vb_location_id'])) {
     redirect(BASE_URL . '/visitorbook/location.php');
 }
 
+// Still ours? Several devices share this login, one per branch, and a device that
+// was switched off long enough for its claim to lapse may find its location taken
+// by another. Better to send it back to the chooser than let two desks record
+// against the same branch.
+if ($locationId && !visitorDeskTouch($db, $locationId)) {
+    unset($_SESSION['vb_location_id']);
+    setFlash('error', 'This desk lost its claim on ' . visitorLocationName($db, $locationId)
+           . ' — another device has taken that location. Please choose again.');
+    redirect(BASE_URL . '/visitorbook/location.php');
+}
+
 $errors = [];
 $done   = null;
 
@@ -891,6 +902,41 @@ require __DIR__ . '/_layout.php';
         document.addEventListener(ev, armIdle, { passive: true });
     });
     armIdle();
+
+    // ── Desk heartbeat ──────────────────────────────────────────────────────
+    // Keeps this device's claim on its location alive while the page is open,
+    // even untouched, and reacts if the claim is lost.
+    (function () {
+        var EVERY = <?= (int)VISITOR_DESK_PING ?> * 1000;
+        var url   = '<?= BASE_URL ?>/visitorbook/api/ping.php';
+        var timer = null;
+
+        function beat() {
+            fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (j) {
+                    if (!j || j.held !== false) return;
+                    // The location went to another device. Stop pinging and say so
+                    // plainly, rather than letting reception carry on recording
+                    // visitors against a branch this desk no longer holds.
+                    clearInterval(timer);
+                    var msg = 'Another device has taken over '
+                            + (j.location || 'this location')
+                            + (j.taken_by ? ' (' + j.taken_by + ')' : '')
+                            + '.\n\nThis desk needs to choose a location again.';
+                    alert(msg);
+                    location.href = '<?= BASE_URL ?>/visitorbook/location.php';
+                })
+                .catch(function () { /* offline — the claim survives until the TTL */ });
+        }
+
+        timer = setInterval(beat, EVERY);
+        // Catch up immediately when a tablet wakes from sleep, which is when a
+        // claim is most likely to have lapsed.
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') beat();
+        });
+    }());
 
     sync();
 }());

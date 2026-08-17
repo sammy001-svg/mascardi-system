@@ -36,6 +36,8 @@ if (!$locations) {
     redirect(BASE_URL . '/visitorbook/index.php');
 }
 
+$conflict = null;   // set when another device already holds the chosen location
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $picked = (int)($_POST['location_id'] ?? 0);
     $valid  = false;
@@ -44,20 +46,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$valid) {
         $error = 'Choose the location this desk is at.';
     } else {
-        $_SESSION['vb_location_id'] = $picked;
-        // Remembered on the account so tomorrow it is one tap to confirm rather
-        // than a decision to make again.
-        try {
-            $db->prepare("UPDATE users SET location_id = ? WHERE id = ?")->execute([$picked, $meId]);
-        } catch (\Throwable $_) {}
-        setFlash('success', 'Signed in at ' . visitorLocationName($db, $picked)
-               . '. Visitors recorded from now on will be logged against this location.');
-        redirect(BASE_URL . '/visitorbook/index.php');
+        // One device per location. Several devices may share this login — that is
+        // the point — but only one of them may hold any given branch, or two
+        // people end up recording against the same desk with neither aware.
+        $claim = visitorDeskClaim($db, $picked, $meId);
+
+        if (!$claim['ok']) {
+            $conflict = $claim['holder'];
+            $_SESSION['vb_location_id'] = null;
+            unset($_SESSION['vb_location_id']);
+        } else {
+            $_SESSION['vb_location_id'] = $picked;
+            // Remembered per DEVICE, in a cookie, not on the shared account row.
+            // Several tablets use this one login, so writing the choice to
+            // users.location_id would have each device overwriting the others and
+            // pre-selecting somebody else's branch tomorrow.
+            @setcookie('vb_last_location', (string)$picked, [
+                'expires'  => time() + 180 * 24 * 3600,
+                'path'     => '/',
+                'secure'   => !empty($_SERVER['HTTPS']),
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]);
+            setFlash('success', 'This desk is signed in at ' . visitorLocationName($db, $picked)
+                   . '. Visitors recorded from now on will be logged against this location.');
+            redirect(BASE_URL . '/visitorbook/index.php');
+        }
     }
 }
 
-// Pre-select: whatever this sitting already chose, else what the account used last.
-$current = visitorSessionLocation() ?: (int)($me['location_id'] ?? 0);
+// Pre-select: this sitting's choice, else what this device chose last time.
+$current = visitorSessionLocation() ?: (int)($_COOKIE['vb_last_location'] ?? 0);
+
+// Which locations are already taken, so the choice shows it before it is made.
+$taken = [];
+foreach (visitorActiveDesks($db) as $d) {
+    if (!hash_equals((string)$d['session_hash'], visitorDeskKey())) {
+        $taken[(int)$d['location_id']] = $d;
+    }
+}
 
 $vbTitle = 'Choose your location';
 require __DIR__ . '/_layout.php';
@@ -70,10 +97,35 @@ require __DIR__ . '/_layout.php';
         <div class="alert alert-warning" style="border-radius:10px;font-size:14px"><?= e($error) ?></div>
         <?php endif; ?>
 
+        <?php if ($conflict): ?>
+        <div class="alert alert-danger" style="border-radius:10px;font-size:14px">
+            <div class="fw-bold mb-1">
+                <i class="fa fa-circle-exclamation me-1"></i>That location is already signed in
+            </div>
+            <?= e(visitorLocationName($db, (int)$conflict['location_id'])) ?> is currently being used by
+            <strong><?= e($conflict['device_label'] ?: 'another device') ?></strong><?php
+            if ((int)$conflict['held_minutes'] > 0): ?>, signed in
+                <?= (int)$conflict['held_minutes'] < 60
+                    ? (int)$conflict['held_minutes'] . ' minutes ago'
+                    : floor((int)$conflict['held_minutes'] / 60) . ' hours ago' ?><?php
+            endif; ?>.
+            <div class="mt-2" style="font-size:13px">
+                Two desks cannot share one location. Either choose a different location, or close the
+                visitors book on that device first — this one will be able to take over about
+                <?= (int)round(VISITOR_DESK_TTL / 60) ?> minutes after it stops being used.
+            </div>
+        </div>
+        <?php endif; ?>
+
         <p style="color:var(--vb-ink-2);font-size:14.5px;margin:0 0 18px">
             Sign in to the location you are working from. Every visitor recorded afterwards is
             logged against it, and anyone wanting to buy a car is passed to a customer relations
             officer here.
+            <?php if ($taken): ?>
+            <br><span style="font-size:13px;color:var(--vb-ink-3)">
+                Locations already in use on another device are marked and cannot be selected.
+            </span>
+            <?php endif; ?>
         </p>
 
         <form method="POST">
@@ -83,12 +135,19 @@ require __DIR__ . '/_layout.php';
                     $icon = ['yard' => 'fa-warehouse', 'showroom' => 'fa-store',
                              'port' => 'fa-anchor',    'office'   => 'fa-building'][$l['type']] ?? 'fa-location-dot';
                 ?>
-                <label class="vb-loc">
+                <?php $busy = $taken[(int)$l['id']] ?? null; ?>
+                <label class="vb-loc<?= $busy ? ' vb-loc-busy' : '' ?>">
                     <input type="radio" name="location_id" value="<?= (int)$l['id'] ?>"
-                           <?= $current === (int)$l['id'] ? 'checked' : '' ?>>
+                           <?= $busy ? 'disabled' : '' ?>
+                           <?= (!$busy && $current === (int)$l['id']) ? 'checked' : '' ?>>
                     <div>
-                        <i class="fa <?= $icon ?>"></i>
+                        <i class="fa <?= $busy ? 'fa-lock' : $icon ?>"></i>
                         <div class="vb-loc-n"><?= e($l['name']) ?></div>
+                        <?php if ($busy): ?>
+                        <div class="vb-loc-m" style="color:var(--vb-warn-fg);font-weight:600">
+                            In use on <?= e($busy['device_label'] ?: 'another device') ?>
+                        </div>
+                        <?php endif; ?>
                         <?php if ($l['parent_name'] !== '' || $l['type']): ?>
                         <div class="vb-loc-m">
                             <?= e(trim(($l['parent_name'] !== '' ? $l['parent_name'] . ' · ' : '')

@@ -167,6 +167,40 @@ include __DIR__ . '/../../includes/header.php';
 </form>
 
 <?php
+// ── Which desks are open ─────────────────────────────────────────────────────
+// The visitors book runs on one device per branch under a shared login. When
+// somebody reports that they cannot sign in at a location, this is the answer:
+// which device is holding it, and since when.
+$desks = visitorActiveDesks($db);
+?>
+<?php if ($desks): ?>
+<div class="card mb-3">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="fa fa-tablet-screen-button me-2"></i>Visitors book desks open now</span>
+        <span class="text-muted small">one device per location</span>
+    </div>
+    <div class="card-body py-2">
+        <div class="d-flex flex-wrap gap-2">
+            <?php foreach ($desks as $d): ?>
+            <span class="vs-chip" style="cursor:default">
+                <i class="fa fa-location-dot text-success"></i>
+                <strong><?= e($d['location_name'] ?: 'Unknown location') ?></strong>
+                <span class="text-muted fw-normal">
+                    · <?= e($d['device_label'] ?: 'a device') ?>
+                    <?php if ((int)$d['held_minutes'] > 0): ?>
+                        · <?= (int)$d['held_minutes'] < 60
+                            ? (int)$d['held_minutes'] . 'm'
+                            : floor((int)$d['held_minutes'] / 60) . 'h' ?>
+                    <?php endif; ?>
+                </span>
+            </span>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php
 // ── Who is in the building ───────────────────────────────────────────────────
 // The reason a visitors book exists: during an evacuation this is the list that
 // matters, so it sits above the historical log rather than inside it.

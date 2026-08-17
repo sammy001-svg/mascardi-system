@@ -122,7 +122,11 @@ document.addEventListener('click', function (e) {
 <!-- PWA -->
 <link rel="manifest"    href="<?= BASE_URL ?>/manifest.php">
 <link rel="icon"        type="image/svg+xml" href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
-<link rel="apple-touch-icon"                 href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
+<?php /* PNG, not the SVG that was here: iOS and iPadOS ignore SVG for
+         apple-touch-icon and fall back to a screenshot of the page. */ ?>
+<link rel="apple-touch-icon" sizes="192x192"  href="<?= BASE_URL ?>/assets/images/icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512"  href="<?= BASE_URL ?>/assets/images/icons/icon-512.png">
+<link rel="apple-touch-icon"                  href="<?= BASE_URL ?>/assets/images/icons/icon-192.png">
 <meta name="mobile-web-app-capable"          content="yes">
 <meta name="apple-mobile-web-app-capable"    content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

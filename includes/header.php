@@ -28,11 +28,18 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="application-name" content="<?= e(getSetting('company_name', APP_NAME)) ?>">
 
-<!-- PWA — Apple / iOS -->
+<!-- PWA — Apple / iOS / iPadOS -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="<?= e(getSetting('company_name', APP_NAME)) ?>">
-<link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
+<?php /* MUST be a PNG. This pointed at icon.svg, which iOS and iPadOS silently
+         ignore for apple-touch-icon — "Add to Home Screen" on an iPad produced a
+         blank tile or a screenshot of the page instead of the app icon. Safari
+         does not read the manifest icons for this, so the PNG has to be declared
+         here explicitly. */ ?>
+<link rel="apple-touch-icon" sizes="192x192" href="<?= BASE_URL ?>/assets/images/icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="<?= BASE_URL ?>/assets/images/icons/icon-512.png">
+<link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/images/icons/icon-192.png">
 
 <!-- PWA — Microsoft (Edge/Windows) -->
 <meta name="msapplication-TileColor" content="#2563eb">
@@ -368,6 +375,17 @@ window.addEventListener('beforeinstallprompt', function(e) {
                     <i class="fa fa-gear"></i>System Settings
                 </a></li>
                 <?php endif; ?>
+                <?php /* A findable way to install. The banner auto-hides after 12
+                         seconds and then stays away for weeks, and on iPad no
+                         banner appears at all — so without this there is no route
+                         to installing the app on the device the request was about.
+                         install-prompt.js unhides it only where install is
+                         actually possible and the app is not already installed. */ ?>
+                <li id="pwaInstallMenuItem" style="display:none">
+                    <a class="dropdown-item" href="#" id="pwaInstallMenuLink">
+                        <i class="fa fa-mobile-screen-button"></i>Install App
+                    </a>
+                </li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item item-danger" href="<?= BASE_URL ?>/logout.php">
                     <i class="fa fa-right-from-bracket"></i>Sign Out

@@ -23,7 +23,17 @@ if (!function_exists('visitorsMigrate')) {
 
 // 2 — check-out tracking (checked_out_at / checked_out_by).
 // 3 — visitors.location_id, so a walk-in is tied to the branch that received it.
-if (!defined('VISITORS_SCHEMA_VERSION')) define('VISITORS_SCHEMA_VERSION', '3');
+// 4 — visitor_kiosk_sessions: one live desk per location, many desks per account.
+if (!defined('VISITORS_SCHEMA_VERSION')) define('VISITORS_SCHEMA_VERSION', '4');
+
+/**
+ * How long a desk's claim on a location survives without a heartbeat.
+ *
+ * Comfortably longer than the ping interval below, so a slow network or a
+ * momentarily sleeping tablet does not hand its location to someone else.
+ */
+if (!defined('VISITOR_DESK_TTL')) define('VISITOR_DESK_TTL', 240);   // seconds
+if (!defined('VISITOR_DESK_PING')) define('VISITOR_DESK_PING', 60);  // seconds
 
 /** How long the kiosk sits untouched before it clears itself, in seconds. */
 if (!defined('VISITOR_KIOSK_IDLE')) define('VISITOR_KIOSK_IDLE', 120);
@@ -102,6 +112,31 @@ function visitorsMigrate(PDO $db, bool $force = false): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     try { $db->exec($sql); } catch (\Throwable $_) {}
 
+    // ── One desk per location ────────────────────────────────────────────────
+    // The visitors book is meant to run on several tablets at once under a single
+    // shared login — one per branch. What must not happen is two tablets claiming
+    // the SAME branch, because then two people are recording against one desk and
+    // neither knows about the other.
+    //
+    // The rule lives in the UNIQUE key on location_id, not in PHP. Two devices
+    // pressing Save in the same second is exactly the case application-level
+    // checking gets wrong, and the database is the only thing here that can
+    // actually serialise them.
+    $desks = "CREATE TABLE IF NOT EXISTS visitor_kiosk_sessions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        location_id INT NOT NULL,
+        user_id INT NOT NULL,
+        session_hash CHAR(64) NOT NULL,
+        device_label VARCHAR(120) NULL,
+        ip_address VARCHAR(45) NULL,
+        last_seen DATETIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_desk_location (location_id),
+        KEY idx_desk_session (session_hash),
+        KEY idx_desk_seen (last_seen)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    try { $db->exec($desks); } catch (\Throwable $_) {}
+
     // Added after the table shipped, so CREATE TABLE IF NOT EXISTS above is a
     // no-op for them on an existing install.
     $columns = [
@@ -175,6 +210,181 @@ function visitorSessionLocation(): ?int
 {
     $id = (int)($_SESSION['vb_location_id'] ?? 0);
     return $id > 0 ? $id : null;
+}
+
+// ── Desk claims: one device per location ─────────────────────────────────────
+
+/**
+ * This browser's identity for desk purposes.
+ *
+ * The PHP session id, hashed. Hashed because a raw session id sitting in a table
+ * is a stolen session waiting to happen, and only equality is ever needed here.
+ *
+ * Two tablets sharing one login get different session ids, which is precisely
+ * what lets the same account hold several locations at once while still being
+ * distinguishable from itself.
+ */
+function visitorDeskKey(): string
+{
+    $sid = session_id();
+    if ($sid === '' || $sid === false) return '';
+    return hash('sha256', 'desk|' . $sid);
+}
+
+/** A short, honest description of the device, for the conflict message. */
+function visitorDeviceLabel(?string $ua = null): string
+{
+    $ua = $ua ?? (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+    if ($ua === '') return 'an unknown device';
+
+    $os = 'a device';
+    if (preg_match('/iPad|Macintosh.*Mobile/i', $ua))      $os = 'an iPad';
+    elseif (preg_match('/iPhone/i', $ua))                  $os = 'an iPhone';
+    elseif (preg_match('/Android/i', $ua))                  $os = preg_match('/Mobile/i', $ua) ? 'an Android phone' : 'an Android tablet';
+    elseif (preg_match('/Windows/i', $ua))                  $os = 'a Windows computer';
+    elseif (preg_match('/Macintosh|Mac OS X/i', $ua))       $os = 'a Mac';
+    elseif (preg_match('/Linux|CrOS/i', $ua))               $os = 'a computer';
+
+    $br = '';
+    if     (preg_match('/Edg\//i', $ua))                       $br = 'Edge';
+    elseif (preg_match('/CriOS|Chrome\//i', $ua))              $br = 'Chrome';
+    elseif (preg_match('/FxiOS|Firefox\//i', $ua))             $br = 'Firefox';
+    elseif (preg_match('/Safari\//i', $ua))                    $br = 'Safari';
+
+    return $br !== '' ? $os . ' (' . $br . ')' : $os;
+}
+
+/** Clears claims whose device has stopped checking in. */
+function visitorDeskPrune(PDO $db): void
+{
+    try {
+        $db->prepare("DELETE FROM visitor_kiosk_sessions
+                      WHERE last_seen < DATE_SUB(NOW(), INTERVAL ? SECOND)")
+           ->execute([VISITOR_DESK_TTL]);
+    } catch (\Throwable $_) {}
+}
+
+/** Whoever currently holds a location, or null. Stale claims are cleared first. */
+function visitorDeskHolder(PDO $db, int $locationId): ?array
+{
+    visitorDeskPrune($db);
+    try {
+        $st = $db->prepare("SELECT k.*, u.name AS user_name,
+                                   TIMESTAMPDIFF(MINUTE, k.created_at, NOW()) AS held_minutes
+                            FROM visitor_kiosk_sessions k
+                            LEFT JOIN users u ON u.id = k.user_id
+                            WHERE k.location_id = ?");
+        $st->execute([$locationId]);
+        return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (\Throwable $_) { return null; }
+}
+
+/**
+ * Takes this location for this device.
+ *
+ * Same device re-claiming the same location is a no-op refresh. A device moving
+ * between locations releases the one it held first, so a tablet carried from one
+ * branch to another does not strand its old claim for the whole TTL.
+ *
+ * @return array{ok:bool,holder:?array} holder is set only when refused.
+ */
+function visitorDeskClaim(PDO $db, int $locationId, int $userId): array
+{
+    $me = visitorDeskKey();
+    if ($me === '' || $locationId < 1) return ['ok' => false, 'holder' => null];
+
+    visitorDeskPrune($db);
+
+    // Give up anything this device held elsewhere.
+    try {
+        $db->prepare("DELETE FROM visitor_kiosk_sessions
+                      WHERE session_hash = ? AND location_id <> ?")
+           ->execute([$me, $locationId]);
+    } catch (\Throwable $_) {}
+
+    $label = visitorDeviceLabel();
+    $ip    = substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+
+    // One statement decides it. The unique key means only one device can insert;
+    // the ON DUPLICATE branch updates only when the row is already ours, so a
+    // rival device's claim is never quietly overwritten.
+    try {
+        $st = $db->prepare("
+            INSERT INTO visitor_kiosk_sessions
+                   (location_id, user_id, session_hash, device_label, ip_address, last_seen)
+            VALUES (?,?,?,?,?, NOW())
+            ON DUPLICATE KEY UPDATE
+                user_id      = IF(session_hash = VALUES(session_hash), VALUES(user_id),      user_id),
+                device_label = IF(session_hash = VALUES(session_hash), VALUES(device_label),  device_label),
+                ip_address   = IF(session_hash = VALUES(session_hash), VALUES(ip_address),    ip_address),
+                last_seen    = IF(session_hash = VALUES(session_hash), NOW(),                 last_seen)");
+        $st->execute([$locationId, $userId, $me, $label, $ip]);
+    } catch (\Throwable $_) {
+        return ['ok' => false, 'holder' => visitorDeskHolder($db, $locationId)];
+    }
+
+    // Read back who actually holds it — the only trustworthy answer.
+    $holder = visitorDeskHolder($db, $locationId);
+    if ($holder && hash_equals((string)$holder['session_hash'], $me)) {
+        return ['ok' => true, 'holder' => $holder];
+    }
+    return ['ok' => false, 'holder' => $holder];
+}
+
+/**
+ * Confirms this device still holds its location and refreshes the claim.
+ *
+ * Called on every kiosk page load and by the background ping. Returning false
+ * means the claim is gone — the device slept past the TTL and another took the
+ * location — and the caller sends the operator back to choose again rather than
+ * letting two desks record against one branch.
+ */
+function visitorDeskTouch(PDO $db, int $locationId): bool
+{
+    $me = visitorDeskKey();
+    if ($me === '' || $locationId < 1) return false;
+    try {
+        $st = $db->prepare("UPDATE visitor_kiosk_sessions SET last_seen = NOW()
+                            WHERE location_id = ? AND session_hash = ?");
+        $st->execute([$locationId, $me]);
+        if ($st->rowCount() > 0) return true;
+
+        // rowCount 0 is ambiguous: either not ours, or ours and already stamped
+        // this second. Check before declaring the desk lost.
+        $chk = $db->prepare("SELECT session_hash FROM visitor_kiosk_sessions
+                             WHERE location_id = ? AND last_seen >= DATE_SUB(NOW(), INTERVAL ? SECOND)");
+        $chk->execute([$locationId, VISITOR_DESK_TTL]);
+        $row = $chk->fetch(PDO::FETCH_ASSOC);
+        return $row && hash_equals((string)$row['session_hash'], $me);
+    } catch (\Throwable $_) {
+        // A database hiccup must not throw reception off the desk.
+        return true;
+    }
+}
+
+/** Releases whatever this device holds. Used on sign-out. */
+function visitorDeskRelease(PDO $db): void
+{
+    $me = visitorDeskKey();
+    if ($me === '') return;
+    try {
+        $db->prepare("DELETE FROM visitor_kiosk_sessions WHERE session_hash = ?")->execute([$me]);
+    } catch (\Throwable $_) {}
+}
+
+/** Every desk currently signed in, for the management module. */
+function visitorActiveDesks(PDO $db): array
+{
+    visitorDeskPrune($db);
+    try {
+        return $db->query("
+            SELECT k.*, l.name AS location_name, u.name AS user_name,
+                   TIMESTAMPDIFF(MINUTE, k.created_at, NOW()) AS held_minutes
+            FROM visitor_kiosk_sessions k
+            LEFT JOIN locations l ON l.id = k.location_id
+            LEFT JOIN users u ON u.id = k.user_id
+            ORDER BY l.name")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (\Throwable $_) { return []; }
 }
 
 /**

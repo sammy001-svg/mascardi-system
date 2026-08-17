@@ -43,7 +43,16 @@ echo json_encode([
     'scope'            => $base . '/',
     'id'               => $base . '/',
     'display'          => 'standalone',
-    'orientation'      => 'portrait-primary',
+    // Falls back gracefully on browsers that do not support the first choice.
+    'display_override' => ['standalone', 'minimal-ui', 'browser'],
+
+    // Deliberately NOT locked to portrait. 'portrait-primary' here forced the
+    // installed app upright, which is wrong on the device this is most used
+    // on after a phone: a tablet is normally held in landscape, and the wide
+    // tables in this system need the width. Letting the device decide serves
+    // phones, tablets and desktops from one manifest.
+    'orientation'      => 'any',
+
     'theme_color'      => '#0a0f1e',
     'background_color' => '#0a0f1e',
     'lang'             => 'en',

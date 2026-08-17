@@ -166,6 +166,11 @@ body{
 .vb-loc-n{ font-size:14.5px; font-weight:700; }
 .vb-loc-m{ font-size:11.5px; color:var(--vb-ink-3); margin-top:3px; }
 
+/* Held by another device. Shown rather than hidden, so it is clear the branch
+   exists and is simply busy — a missing tile just looks like a broken list. */
+.vb-loc-busy > div{ opacity:.5; cursor:not-allowed; border-style:dashed; }
+.vb-loc-busy > div:hover{ border-color:var(--vb-line); }
+
 /* The location this desk is signed in to, shown in the header on every page. */
 .vb-here{
     display:inline-flex; align-items:center; gap:7px; text-decoration:none;
