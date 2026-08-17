@@ -164,6 +164,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             setcookie('rm_user', '', time() - 3600, '/', '', isset($_SERVER['HTTPS']), true);
                         }
 
+                        // The visitors-book account has no dashboard and no menu
+                        // to reach one from, so it goes straight to the kiosk —
+                        // ignoring ?next, which would only land it on a page it
+                        // has no access to.
+                        if ($user['role'] === 'visitor_book') {
+                            header('Location: ' . BASE_URL . '/visitorbook/index.php');
+                            exit;
+                        }
+
                         $next = $_GET['next'] ?? '';
                         if ($next && str_starts_with(urldecode($next), '/')) {
                             header('Location: ' . urldecode($next));
@@ -191,7 +200,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!empty($_POST['remember_me'])) {
                         _issueRememberToken($db, (int)$user['id'], $user['username']);
                     }
-                    header('Location: ' . BASE_URL . '/index.php'); exit;
+                    header('Location: ' . BASE_URL . ($user['role'] === 'visitor_book'
+                        ? '/visitorbook/index.php' : '/index.php')); exit;
                 } else {
                     $error = 'Invalid username or password.';
                 }

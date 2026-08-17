@@ -354,6 +354,14 @@ if (authRole() === 'supervisor') {
         </a>
         <?php endif; ?>
 
+        <?php if (canAccess('visitors')): ?>
+        <a href="<?= BASE_URL ?>/modules/visitors/index.php"
+           class="nav-item <?= isActive('/modules/visitors/') ?>"
+           data-label="Visitors">
+            <i class="fa fa-book-open-reader"></i><span>Visitors</span>
+        </a>
+        <?php endif; ?>
+
         <?php if (canAccess('service_bookings')): ?>
         <a href="<?= BASE_URL ?>/modules/service_bookings/index.php"
            class="nav-item <?= isActive('/modules/service_bookings/') ?>"

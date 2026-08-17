@@ -13,6 +13,13 @@ $db   = getDB();
 $user = authUser();
 $role = $user['role'] ?? 'mechanic';
 
+// The reception kiosk account has no dashboard — it exists to sign visitors in
+// and nothing else. Sent back rather than shown an empty shell it cannot use.
+if ($role === 'visitor_book') {
+    header('Location: ' . BASE_URL . '/visitorbook/index.php');
+    exit;
+}
+
 // Admin role → simple focused portal (Workshop + Sales dashboards)
 if ($role === 'admin') {
     header('Location: ' . BASE_URL . '/modules/admin/workshop_dashboard.php');

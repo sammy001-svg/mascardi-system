@@ -85,6 +85,7 @@ function hrMigrate(PDO $db): void
                 'sales_manager', 'sales_officer', 'sales_person', 'customer_relations', 'receptionist',
                 'workshop_manager', 'mechanic', 'driver',
                 'inventory_manager', 'procurement_officer', 'hr_manager',
+                'visitor_book',
             ];
 
             // Union, preserving whatever the column already had first.

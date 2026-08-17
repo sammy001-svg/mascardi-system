@@ -19,8 +19,46 @@ function requireLogin(): void {
         header('Location: ' . BASE_URL . '/login.php' . ($back ? "?next={$back}" : ''));
         exit;
     }
+    _confineVisitorBook();
     // Verify CSRF on every authenticated POST request
     verifyCsrf();
+}
+
+/**
+ * Keeps the reception kiosk account on the visitors book.
+ *
+ * canAccess() already refuses every other module for this role, but not every
+ * page asks it — modules/cars/index.php, for one, has no access check at all, so
+ * any signed-in account could open the full stock listing. That is survivable for
+ * staff accounts; it is not survivable for an account that sits logged in on an
+ * unattended screen in reception, facing the public.
+ *
+ * So containment is enforced here, on the path every authenticated page already
+ * goes through, rather than by adding a guard to each file and hoping the next
+ * page added remembers one. Allowing by location (the visitorbook directory)
+ * rather than by a list of blocked modules means a new module is denied by
+ * default instead of being exposed until someone notices.
+ */
+function _confineVisitorBook(): void {
+    $u = authUser();
+    if (!$u || ($u['role'] ?? '') !== 'visitor_book') return;
+
+    $path = strtok($_SERVER['REQUEST_URI'] ?? '', '?');
+    // Compare on the path within the application, so this holds whether the
+    // system is served from the document root or a subdirectory.
+    $base = rtrim(parse_url(BASE_URL, PHP_URL_PATH) ?? '', '/');
+    if ($base !== '' && str_starts_with($path, $base)) $path = substr($path, strlen($base));
+    $path = '/' . ltrim($path, '/');
+
+    $allowed = ['/visitorbook/', '/logout.php', '/login.php'];
+    foreach ($allowed as $ok) {
+        if ($ok === $path || str_starts_with($path, rtrim($ok, '/') . '/')) return;
+    }
+    // Also allow the shared assets a page in that directory pulls in.
+    if (preg_match('~^/(assets|uploads|static)/~', $path)) return;
+
+    header('Location: ' . BASE_URL . '/visitorbook/index.php', true, 302);
+    exit;
 }
 
 function hasRole(string|array $roles): bool {
@@ -117,6 +155,41 @@ function _fixRolePermissions(): void {
  *
  * Cheap in the normal case — one indexed count that returns 0 and stops.
  */
+/**
+ * Makes sure users.role accepts a value, widening the ENUM if it does not.
+ *
+ * Strictly additive: it reads what the column already allows and appends. Never
+ * write a literal ENUM list against this column — one did, left 'super_admin'
+ * out, and with MySQL strict mode off the ALTER silently blanked every super
+ * admin's role instead of failing (see _repairBlankRoles above). Anything that
+ * introduces a new role goes through here.
+ *
+ * @return bool Whether the column now accepts the role.
+ */
+function ensureUserRole(string $role): bool {
+    if ($role === '' || !preg_match('/^[a-z_]+$/', $role)) return false;
+    try {
+        $db  = getDB();
+        $col = $db->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
+        if (!$col || !preg_match('/^enum\((.*)\)$/i', trim($col['Type']), $m)) return false;
+
+        $existing = [];
+        foreach (explode("','", trim($m[1], "'")) as $v) {
+            $v = trim($v, "' ");
+            if ($v !== '') $existing[] = $v;
+        }
+        if (in_array($role, $existing, true)) return true;
+
+        $all  = array_merge($existing, [$role]);
+        $list = implode(',', array_map(fn($v) => "'" . str_replace("'", "''", $v) . "'", $all));
+        $db->exec("ALTER TABLE users MODIFY COLUMN role ENUM({$list}) NOT NULL DEFAULT 'sales_person'");
+        return true;
+    } catch (\Throwable $e) {
+        error_log('ensureUserRole(' . $role . '): ' . $e->getMessage());
+        return false;
+    }
+}
+
 function _repairBlankRoles(): void {
     try {
         $db = getDB();
@@ -197,6 +270,13 @@ function canAccess(string $module): bool {
     _fixRolePermissions();
     $user = authUser();
     if (!$user) return false;
+
+    // The visitors-book kiosk sits in reception, logged in and unattended, in
+    // front of whoever walks through the door. It is deliberately outside every
+    // other grant — including the company-wide ones and any per-user database
+    // grant below — so the account can reach the sign-in form and nothing else.
+    if ($user['role'] === 'visitor_book') return $module === 'visitor_book';
+
     if ($user['role'] === 'admin' || $user['role'] === 'super_admin') return true;
     if (in_array($module, universalModules(), true)) return true;
     // DB grants are additive — role map is the floor (DB=0 falls through to role map)
@@ -309,6 +389,11 @@ function canAccess(string $module): bool {
 
 // Create/edit permission per module (non-destructive writes)
 function canWrite(string $module): bool {
+    // Mirrors the containment in canAccess(): the kiosk may record a visit and
+    // nothing else. Checked before hasRole(), which returns true for admin and
+    // super_admin on every module.
+    if (authRole() === 'visitor_book') return $module === 'visitor_book';
+
     if (hasRole('admin')) return true;
     // Anyone may schedule a meeting. What they can do to a meeting they are not
     // running is a separate, per-meeting question answered by meetingCanEdit().
