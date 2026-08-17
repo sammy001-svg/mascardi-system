@@ -12,7 +12,10 @@ if (!defined('BASE_URL')) {
     
     // Strip trailing /modules/... or /client/... from the directory
     // This allows BASE_URL to point to the project root even when called from subfolders
-    $basePath = preg_replace('/(\/(modules|portal|client|config|includes|assets|showroom))($|\/.*)/', '', $dir);
+    // Any directory that holds pages rather than being the project root must be
+    // listed here, or BASE_URL resolves to the subdirectory and every link built
+    // from it gains an extra path segment.
+    $basePath = preg_replace('/(\/(modules|portal|client|config|includes|assets|showroom|visitorbook|scripts))($|\/.*)/', '', $dir);
     $basePath = rtrim($basePath, '/');
 
     define('BASE_URL', $protocol . '://' . $host . $basePath);
