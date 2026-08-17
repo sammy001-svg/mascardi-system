@@ -221,8 +221,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try { logActivity('create', 'visitors', $visitorId, 'Visitor signed in: ' . $fullName); }
             catch (\Throwable $_) {}
 
-            // Redirect so a refresh cannot record the same visitor twice.
-            redirect(BASE_URL . '/visitorbook/index.php?done=' . $visitorId);
+            // Redirect so a refresh cannot record the same visitor twice. Sent by
+            // hand rather than through redirect(), which exits — the emails below
+            // have to run after the browser has been let go.
+            header('Location: ' . BASE_URL . '/visitorbook/index.php?done=' . $visitorId);
+
+            // Welcome the visitor and tell the officer somebody is waiting. Done
+            // once the response is on its way, because SMTP is a blocking socket
+            // and the desk must not sit there loading with a customer in front of
+            // it. The officer's in-system notification already went out above,
+            // which is the part that has to be immediate.
+            if ($purpose === 'buy_car' && $assignee) {
+                $__vid = $visitorId;
+                visitorFlushThenSend(function () use ($db, $__vid) {
+                    visitorSendAllocationEmails($db, $__vid);
+                });
+            }
+            exit;
 
         } catch (\Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();

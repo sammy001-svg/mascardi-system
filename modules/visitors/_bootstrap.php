@@ -402,6 +402,169 @@ function visitorCarPrice(array $car): ?float
     return $ask > 0 ? $ask : null;
 }
 
+// ── Allocation emails ────────────────────────────────────────────────────────
+
+/**
+ * Emails sent when a walk-in is handed to a customer relations officer: a welcome
+ * to the visitor naming who will look after them, and a nudge to the officer that
+ * somebody is waiting.
+ *
+ * On timing
+ * ---------
+ * These are sent AFTER the response has gone to the browser (see
+ * visitorFlushThenSend). SMTP here is a blocking socket with a 15-second
+ * connect timeout, and two messages in the request would leave reception staring
+ * at a spinner with a customer in front of them. The officer gets an in-system
+ * notification inside the request, which is the part that has to be instant.
+ *
+ * @return array{visitor:?bool,officer:?bool} null where there was no address.
+ */
+function visitorSendAllocationEmails(PDO $db, int $visitorId): array
+{
+    $out = ['visitor' => null, 'officer' => null];
+    require_once __DIR__ . '/../../includes/mailer.php';
+
+    try {
+        $st = $db->prepare("
+            SELECT v.*, u.name AS officer_name, u.email AS officer_email,
+                   l.name AS location_name,
+                   TRIM(CONCAT_WS(' ', c.year, c.make, c.model)) AS car_label
+            FROM visitors v
+            LEFT JOIN users u ON u.id = v.assigned_to
+            LEFT JOIN locations l ON l.id = v.location_id
+            LEFT JOIN cars c ON c.id = v.car_id
+            WHERE v.id = ?");
+        $st->execute([$visitorId]);
+        $v = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (\Throwable $e) {
+        error_log('visitorSendAllocationEmails: ' . $e->getMessage());
+        return $out;
+    }
+    if (!$v || empty($v['assigned_to'])) return $out;
+
+    $company  = getSetting('company_name',  'Mascardi');
+    $coPhone  = getSetting('company_phone', '');
+    $visitor  = visitorFullName($v);
+    $officer  = trim((string)($v['officer_name'] ?? ''));
+    $where    = trim((string)($v['location_name'] ?? ''));
+    $car      = trim((string)($v['car_label'] ?? ''));
+
+    // ── To the visitor ───────────────────────────────────────────────────────
+    $email = trim((string)($v['email'] ?? ''));
+    if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $body = visitorEmailShell(
+            'Welcome to ' . $company,
+            '<p style="font-size:15px;color:#111;margin:0 0 14px">Dear '
+                . htmlspecialchars($v['first_name'] ?: 'Customer') . ',</p>'
+            . '<p style="font-size:15px;color:#333;margin:0 0 14px">Thank you for visiting '
+                . htmlspecialchars($company) . ($where !== '' ? ' at ' . htmlspecialchars($where) : '')
+                . ' today. It was a pleasure to have you with us.</p>'
+            . ($officer !== ''
+                ? '<p style="font-size:15px;color:#333;margin:0 0 14px">Your enquiry is being looked '
+                  . 'after by <strong>' . htmlspecialchars($officer) . '</strong>, who will be in touch '
+                  . 'shortly to help you with the next steps.</p>'
+                : '')
+            . ($car !== ''
+                ? '<table style="width:100%;border-collapse:collapse;margin:0 0 16px;font-size:14px;color:#333">'
+                  . '<tr><td style="padding:7px 0;width:110px;color:#666">Vehicle</td>'
+                  . '<td style="padding:7px 0"><strong>' . htmlspecialchars($car) . '</strong></td></tr>'
+                  . ($officer !== '' ? '<tr><td style="padding:7px 0;color:#666">Looking after you</td>'
+                      . '<td style="padding:7px 0">' . htmlspecialchars($officer) . '</td></tr>' : '')
+                  . '</table>'
+                : '')
+            . '<p style="font-size:15px;color:#333;margin:0 0 14px">If you have any questions in the '
+                . 'meantime, do reply to this email'
+                . ($coPhone !== '' ? ' or call us on <strong>' . htmlspecialchars($coPhone) . '</strong>' : '')
+                . '.</p>'
+            . '<p style="font-size:15px;color:#333;margin:0">Warm regards,<br>'
+                . htmlspecialchars($company) . '</p>',
+            $company
+        );
+        $res = sendMail($email, $visitor, 'Welcome to ' . $company, $body, 'visitor', $visitorId);
+        $out['visitor'] = !empty($res['ok']);
+    }
+
+    // ── To the officer ───────────────────────────────────────────────────────
+    $oEmail = trim((string)($v['officer_email'] ?? ''));
+    if ($oEmail !== '' && filter_var($oEmail, FILTER_VALIDATE_EMAIL)) {
+        $link = rtrim(BASE_URL, '/') . '/modules/crm/view_lead.php?id=' . (int)$v['lead_id'];
+        $body = visitorEmailShell(
+            'A visitor has been allocated to you',
+            '<p style="font-size:15px;color:#111;margin:0 0 14px">Hi '
+                . htmlspecialchars($officer ?: 'there') . ',</p>'
+            . '<p style="font-size:15px;color:#333;margin:0 0 16px">'
+                . '<strong>' . htmlspecialchars($visitor) . '</strong> has signed in at reception'
+                . ($where !== '' ? ' at <strong>' . htmlspecialchars($where) . '</strong>' : '')
+                . ' and has been allocated to you. <strong>Please attend to them.</strong></p>'
+            . '<table style="width:100%;border-collapse:collapse;margin:0 0 18px;font-size:14px;color:#333">'
+            . '<tr><td style="padding:7px 0;width:110px;color:#666">Visitor</td>'
+                . '<td style="padding:7px 0"><strong>' . htmlspecialchars($visitor) . '</strong></td></tr>'
+            . '<tr><td style="padding:7px 0;color:#666">Phone</td>'
+                . '<td style="padding:7px 0">' . htmlspecialchars((string)$v['phone']) . '</td></tr>'
+            . ($car !== '' ? '<tr><td style="padding:7px 0;color:#666">Interested in</td>'
+                . '<td style="padding:7px 0">' . htmlspecialchars($car) . '</td></tr>' : '')
+            . ($where !== '' ? '<tr><td style="padding:7px 0;color:#666">Location</td>'
+                . '<td style="padding:7px 0">' . htmlspecialchars($where) . '</td></tr>' : '')
+            . '<tr><td style="padding:7px 0;color:#666">Signed in</td>'
+                . '<td style="padding:7px 0">' . date('D j M Y, H:i', strtotime($v['created_at'])) . '</td></tr>'
+            . '</table>'
+            . (trim((string)($v['buy_comment'] ?? '')) !== ''
+                ? '<p style="font-size:14px;color:#333;margin:0 0 16px;padding:12px 14px;'
+                  . 'background:#f8fafc;border-left:3px solid #7e22ce">'
+                  . '<em>' . nl2br(htmlspecialchars($v['buy_comment'])) . '</em></p>'
+                : '')
+            . ($v['lead_id']
+                ? '<p style="margin:0 0 8px"><a href="' . htmlspecialchars($link) . '" '
+                  . 'style="display:inline-block;background:#7e22ce;color:#fff;text-decoration:none;'
+                  . 'padding:11px 22px;border-radius:8px;font-weight:600;font-size:14px">'
+                  . 'Open the lead</a></p>'
+                : ''),
+            $company
+        );
+        $res = sendMail($oEmail, $officer, 'Visitor allocated to you: ' . $visitor, $body, 'visitor', $visitorId);
+        $out['officer'] = !empty($res['ok']);
+    }
+
+    return $out;
+}
+
+/** Shared wrapper so both emails look like they came from the same company. */
+function visitorEmailShell(string $heading, string $inner, string $company): string
+{
+    return '<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;'
+         . 'padding:0 4px">'
+         . '<div style="border-bottom:3px solid #7e22ce;padding:0 0 12px;margin:0 0 22px">'
+         . '<div style="font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;'
+         . 'color:#7e22ce">' . htmlspecialchars($company) . '</div>'
+         . '<h1 style="font-size:19px;font-weight:800;color:#111;margin:6px 0 0">'
+         . htmlspecialchars($heading) . '</h1></div>'
+         . $inner
+         . '<p style="font-size:11.5px;color:#94a3b8;margin:26px 0 0;padding-top:14px;'
+         . 'border-top:1px solid #e2e8f0">Sent automatically from the ' . htmlspecialchars($company)
+         . ' visitors book.</p></div>';
+}
+
+/**
+ * Ends the request, then runs $work with the browser already gone.
+ *
+ * The kiosk must feel instant — a member of the public is standing at the desk —
+ * but the emails go over a blocking SMTP socket. Under PHP-FPM the connection is
+ * closed properly; elsewhere the response is flushed and the work simply runs on
+ * with the abort handler disabled so a closing browser cannot kill it.
+ */
+function visitorFlushThenSend(callable $work): void
+{
+    @ignore_user_abort(true);
+    if (function_exists('fastcgi_finish_request')) {
+        @fastcgi_finish_request();
+    } else {
+        if (!headers_sent()) header('Content-Length: 0');
+        while (ob_get_level() > 0) @ob_end_flush();
+        @flush();
+    }
+    try { $work(); } catch (\Throwable $e) { error_log('visitor emails: ' . $e->getMessage()); }
+}
+
 /** Headline counts for the management module. */
 function visitorStats(PDO $db): array
 {

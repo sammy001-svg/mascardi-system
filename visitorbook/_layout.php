@@ -16,7 +16,36 @@ if (!defined('VB_LAYOUT')) {
     define('VB_LAYOUT', true);
 
     $vbCompany = getSetting('company_name', 'Mascardi');
-    $vbLogo    = getSetting('company_logo', '');
+
+    /**
+     * Resolve the logo to something that actually exists on disk.
+     *
+     * This previously built a path under /uploads/, which was simply wrong — the
+     * rest of the system keeps logos in assets/images/ (showroom/header.php) or
+     * uses the file at the web root (portal/track.php). With company_logo unset
+     * as well, the result was no image at all.
+     *
+     * Every candidate is checked against the filesystem, so an empty or stale
+     * setting produces the company name rather than a broken image icon on a
+     * screen the public is looking at.
+     */
+    $vbLogoSrc = null;
+    $__lg = trim((string)getSetting('company_logo', ''));
+    $__candidates = [];
+    if ($__lg !== '') {
+        $__lg = ltrim($__lg, '/');
+        // A setting may hold a bare filename or a path already relative to root.
+        $__candidates[] = 'assets/images/' . $__lg;
+        $__candidates[] = 'uploads/' . $__lg;
+        $__candidates[] = $__lg;
+    }
+    // What the rest of the system falls back on when nothing is configured.
+    $__candidates[] = 'Logo__Edit.webp';
+    $__candidates[] = 'assets/images/icons/icon-192.png';
+
+    foreach ($__candidates as $__c) {
+        if (is_file(BASE_PATH . '/' . $__c)) { $vbLogoSrc = BASE_URL . '/' . $__c; break; }
+    }
     ?><!DOCTYPE html>
 <html lang="en" data-theme="dark" data-bs-theme="dark">
 <head>
@@ -228,9 +257,8 @@ body{
 <header class="vb-top">
     <div class="vb-wrap vb-top-in">
         <div class="vb-brandline">
-            <?php if ($vbLogo): ?>
-            <img src="<?= htmlspecialchars(BASE_URL . '/uploads/' . ltrim($vbLogo, '/')) ?>"
-                 alt="<?= htmlspecialchars($vbCompany) ?>">
+            <?php if ($vbLogoSrc): ?>
+            <img src="<?= htmlspecialchars($vbLogoSrc) ?>" alt="<?= htmlspecialchars($vbCompany) ?>">
             <?php endif; ?>
             <div style="min-width:0">
                 <h1 class="vb-h1">Visitors Book</h1>
