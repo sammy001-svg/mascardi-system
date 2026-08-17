@@ -249,9 +249,35 @@ function _repairBlankRoles(): void {
 
         $rows = $db->query("SELECT id, username FROM users WHERE role = '' OR role IS NULL")
                    ->fetchAll(PDO::FETCH_ASSOC);
+
+        // Promote ONLY when the system has no administrator left.
+        //
+        // This repair exists for one situation: every super admin was blanked at
+        // once and nobody could administer anything. Applying it whenever a role
+        // is blank is dangerous, because any role can be blanked the same way —
+        // and the newest one, visitor_book, is the likeliest to be dropped by the
+        // next careless rewrite of this column. That account sits permanently
+        // signed in on an unattended screen in reception, so handing it
+        // super_admin would open the whole system to whoever walks in.
+        //
+        // With an administrator still present there is no lockout to recover
+        // from, so the rows are logged and left alone for a human to set
+        // deliberately. A blank role grants nothing, which fails safe.
+        $admins = (int)$db->query("SELECT COUNT(*) FROM users
+                                   WHERE role IN ('super_admin','admin') AND status = 'active'")->fetchColumn();
+        if ($admins > 0) {
+            foreach ($rows as $u) {
+                error_log("_repairBlankRoles: user #{$u['id']} ({$u['username']}) has a blank role. "
+                        . "NOT promoting — {$admins} administrator(s) still active. Set the role manually.");
+            }
+            _refreshSessionRole();
+            return;
+        }
+
         $db->exec("UPDATE users SET role = 'super_admin' WHERE role = '' OR role IS NULL");
         foreach ($rows as $u) {
-            error_log("_repairBlankRoles: restored super_admin for user #{$u['id']} ({$u['username']})");
+            error_log("_repairBlankRoles: no administrator remained — restored super_admin "
+                    . "for user #{$u['id']} ({$u['username']})");
         }
         _refreshSessionRole();
     } catch (\Throwable $_) {}
