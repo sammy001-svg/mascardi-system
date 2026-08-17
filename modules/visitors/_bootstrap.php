@@ -22,7 +22,8 @@
 if (!function_exists('visitorsMigrate')) {
 
 // 2 — check-out tracking (checked_out_at / checked_out_by).
-if (!defined('VISITORS_SCHEMA_VERSION')) define('VISITORS_SCHEMA_VERSION', '2');
+// 3 — visitors.location_id, so a walk-in is tied to the branch that received it.
+if (!defined('VISITORS_SCHEMA_VERSION')) define('VISITORS_SCHEMA_VERSION', '3');
 
 /** How long the kiosk sits untouched before it clears itself, in seconds. */
 if (!defined('VISITOR_KIOSK_IDLE')) define('VISITOR_KIOSK_IDLE', 120);
@@ -108,6 +109,10 @@ function visitorsMigrate(PDO $db, bool $force = false): void
         "ALTER TABLE visitors ADD COLUMN checked_out_by INT NULL AFTER checked_out_at",
         // Answers "who is in the building right now" off the index.
         "ALTER TABLE visitors ADD INDEX idx_v_onsite (checked_out_at, created_at)",
+        // Which branch received the visitor. Set from the location the kiosk was
+        // signed in to, and what lead allocation is scoped by.
+        "ALTER TABLE visitors ADD COLUMN location_id INT NULL AFTER purpose",
+        "ALTER TABLE visitors ADD INDEX idx_v_location (location_id, created_at)",
     ];
     foreach ($columns as $c) { try { $db->exec($c); } catch (\Throwable $_) {} }
 
@@ -133,6 +138,45 @@ function visitorFullName(array $v): string
     ])));
 }
 
+// ── Locations ────────────────────────────────────────────────────────────────
+
+/** Branches the kiosk can be signed in to. Empty is a valid state. */
+function visitorLocations(PDO $db): array
+{
+    try {
+        return $db->query("
+            SELECT l.id, l.name, l.type, l.address, l.phone,
+                   IFNULL(p.name, '') AS parent_name
+            FROM locations l
+            LEFT JOIN locations p ON p.id = l.parent_id
+            WHERE l.status IS NULL OR l.status = 'active'
+            ORDER BY COALESCE(p.name, l.name), l.name")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (\Throwable $_) { return []; }
+}
+
+function visitorLocationName(PDO $db, ?int $id): string
+{
+    if (!$id) return '';
+    try {
+        $st = $db->prepare("SELECT name FROM locations WHERE id = ?");
+        $st->execute([$id]);
+        return (string)($st->fetchColumn() ?: '');
+    } catch (\Throwable $_) { return ''; }
+}
+
+/**
+ * The location this kiosk is signed in to, or null.
+ *
+ * Held in the session rather than on the account, because one login can be moved
+ * between desks and the answer belongs to the sitting, not to the user row. The
+ * account keeps a copy separately, but only to pre-select the choice next time.
+ */
+function visitorSessionLocation(): ?int
+{
+    $id = (int)($_SESSION['vb_location_id'] ?? 0);
+    return $id > 0 ? $id : null;
+}
+
 /**
  * Which customer relations officer gets the next walk-in lead.
  *
@@ -142,18 +186,36 @@ function visitorFullName(array $v): string
  * of balance the moment one officer's leads are reassigned. Counting live load
  * every time is self-correcting.
  *
- * Falls back through the sales roles so a walk-in is never left unassigned just
- * because no one holds the customer_relations role.
+ * On location
+ * -----------
+ * A visitor who walks into a branch expects to be followed up by someone at that
+ * branch, so officers there are tried first. The tiers then widen: same location
+ * before role, because a sales person standing in front of the customer is more
+ * use than a customer relations officer in another town.
+ *
+ * The last tiers drop the location entirely. That is deliberate — an unassigned
+ * walk-in is a lead nobody follows up, which is worse than one followed up from
+ * the wrong branch. It also keeps the book working before locations have been
+ * set up or staff assigned to them, which is the state most installs start in.
  */
-function visitorNextCrmOfficer(PDO $db): ?int
+function visitorNextCrmOfficer(PDO $db, ?int $locationId = null): ?int
 {
-    $tiers = [
+    $roleTiers = [
         ['customer_relations'],
         ['sales_person', 'sales_officer'],
         ['sales_manager'],
     ];
-    foreach ($tiers as $roles) {
-        $in = implode(',', array_fill(0, count($roles), '?'));
+
+    // Each pass is (roles, restrict to this location?).
+    $passes = [];
+    if ($locationId) foreach ($roleTiers as $r) $passes[] = [$r, true];
+    foreach ($roleTiers as $r)                  $passes[] = [$r, false];
+
+    foreach ($passes as [$roles, $scoped]) {
+        $in   = implode(',', array_fill(0, count($roles), '?'));
+        $args = $roles;
+        $where = "u.role IN ({$in}) AND u.status = 'active'";
+        if ($scoped) { $where .= " AND u.location_id = ?"; $args[] = $locationId; }
         try {
             $st = $db->prepare("
                 SELECT u.id
@@ -161,13 +223,13 @@ function visitorNextCrmOfficer(PDO $db): ?int
                 LEFT JOIN crm_leads l
                        ON l.assigned_to = u.id
                       AND (l.stage IS NULL OR l.stage NOT IN ('won','lost','delivered'))
-                WHERE u.role IN ({$in}) AND u.status = 'active'
+                WHERE {$where}
                 GROUP BY u.id
                 ORDER BY COUNT(l.id) ASC,
                          COALESCE(MAX(l.created_at), '1970-01-01') ASC,
                          u.id ASC
                 LIMIT 1");
-            $st->execute($roles);
+            $st->execute($args);
             $id = $st->fetchColumn();
             if ($id) return (int)$id;
         } catch (\Throwable $_) {}

@@ -24,6 +24,16 @@ if (!$isKiosk && !canAccess('visitors')) {
     redirect(BASE_URL . '/index.php');
 }
 
+// ── Which desk is this? ──────────────────────────────────────────────────────
+// Answered once when staff open up, before the book is handed to visitors, so
+// everything recorded carries the branch that received it. location.php sends
+// itself straight back here when no locations have been set up, so this cannot
+// become a dead end on an install that does not use them.
+$locationId = visitorSessionLocation();
+if (!isset($_SESSION['vb_location_id'])) {
+    redirect(BASE_URL . '/visitorbook/location.php');
+}
+
 $errors = [];
 $done   = null;
 
@@ -96,11 +106,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($purpose === 'buy_car') {
                 // A walk-in who names a car is a lead, and a lead nobody owns is
                 // a lead nobody follows up — so it is assigned as it is created.
-                $assignee = visitorNextCrmOfficer($db);
+                // Scoped to the branch the visitor actually walked into, widening
+                // only if nobody there can take it.
+                $assignee = visitorNextCrmOfficer($db, $locationId);
                 $car = $db->prepare("SELECT make, model, year FROM cars WHERE id = ?");
                 $car->execute([$carId]);
                 $c = $car->fetch(PDO::FETCH_ASSOC) ?: [];
                 $interest = trim(($c['year'] ?? '') . ' ' . ($c['make'] ?? '') . ' ' . ($c['model'] ?? ''));
+                $locName  = visitorLocationName($db, $locationId);
 
                 $db->prepare("INSERT INTO crm_leads
                         (name, phone, email, id_number, source, interested_in, stage,
@@ -109,6 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    ->execute([$fullName, $phone, $email ?: null, $idNo ?: null,
                               'Walk-in', $interest ?: null, $assignee ?: null, $carId,
                               trim("Walked in on " . date('j M Y')
+                                   . ($locName ? " at {$locName}" : '')
                                    . ($heard ? ". Heard of us via: {$heard}" : '')
                                    . ($comment ? ".\n\nVisitor's comment: {$comment}" : '.'))]);
                 $leadId = (int)$db->lastInsertId();
@@ -126,6 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                   VALUES (?,?,?,?, 'active', ?, NOW())")
                        ->execute([$fullName, $phone, $email ?: null, $idNo ?: null,
                                   'Registered from the visitors book on ' . date('j M Y')
+                                  . (($__ln = visitorLocationName($db, $locationId)) ? ' at ' . $__ln : '')
                                   . ($heard ? '. Heard of us via: ' . $heard : '')]);
                     $clientId = (int)$db->lastInsertId();
                 } else {
@@ -145,10 +160,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     try {
                         $db->prepare("INSERT INTO cars
                                 (make, model, year, registration_number, mileage, car_type, status,
-                                 show_on_website, owner_name, owner_phone, client_id, created_at)
-                                VALUES (?,?,?,?,?, 'client', 'available', 0, ?,?,?, NOW())")
+                                 show_on_website, owner_name, owner_phone, client_id, location_id, created_at)
+                                VALUES (?,?,?,?,?, 'client', 'available', 0, ?,?,?,?, NOW())")
                            ->execute([$svc['make'], $svc['model'], $svc['year'] ?: null, $svc['reg'],
-                                      $svc['mileage'] ?: null, $fullName, $phone, $clientId]);
+                                      $svc['mileage'] ?: null, $fullName, $phone, $clientId,
+                                      $locationId ?: null]);
                     } catch (\Throwable $_) { /* a client vehicle is a bonus, not the point */ }
                 }
             }
@@ -156,12 +172,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // ── The visit itself ─────────────────────────────────────────────
             $db->prepare("INSERT INTO visitors
                     (first_name, middle_name, last_name, phone, id_number, email, heard_from, purpose,
+                     location_id,
                      car_id, buy_comment, svc_make, svc_model, svc_year, svc_reg, svc_mileage, svc_notes,
                      staff_id, visit_reason, lead_id, client_id, assigned_to, recorded_by, created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, NOW())")
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, NOW())")
                ->execute([
                    $first, $middle ?: null, $last ?: null, $phone, $idNo ?: null, $email ?: null,
                    $heard ?: null, $purpose,
+                   $locationId ?: null,
                    $purpose === 'buy_car' ? $carId : null,
                    $purpose === 'buy_car' ? ($comment ?: null) : null,
                    $purpose === 'car_service' ? $svc['make'] : null,

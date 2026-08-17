@@ -122,6 +122,31 @@ body{
 .vb-purpose input:checked + div i{ color:var(--vb-brand); }
 .vb-purpose input:focus-visible + div{ outline:3px solid color-mix(in srgb, var(--vb-brand) 55%, transparent); outline-offset:2px; }
 
+/* Location chooser — the first thing staff see, so the targets are large. */
+.vb-locs{ display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+.vb-loc input{ position:absolute; opacity:0; width:0; height:0; }
+.vb-loc > div{
+    border:2px solid var(--vb-line); border-radius:var(--vb-r); padding:18px 16px;
+    cursor:pointer; transition:.14s; height:100%;
+}
+.vb-loc > div:hover{ border-color:var(--vb-ink-3); }
+.vb-loc input:checked + div{ border-color:var(--vb-brand); background:var(--vb-brand-soft); }
+.vb-loc input:checked + div i{ color:var(--vb-brand); }
+.vb-loc input:focus-visible + div{ outline:3px solid color-mix(in srgb, var(--vb-brand) 55%, transparent); outline-offset:2px; }
+.vb-loc i{ font-size:22px; color:var(--vb-ink-3); display:block; margin-bottom:10px; }
+.vb-loc-n{ font-size:14.5px; font-weight:700; }
+.vb-loc-m{ font-size:11.5px; color:var(--vb-ink-3); margin-top:3px; }
+
+/* The location this desk is signed in to, shown in the header on every page. */
+.vb-here{
+    display:inline-flex; align-items:center; gap:7px; text-decoration:none;
+    background:var(--vb-brand-soft); border:1px solid var(--vb-brand-line);
+    color:var(--vb-brand); border-radius:20px; padding:5px 13px;
+    font-size:12px; font-weight:700; max-width:230px;
+}
+.vb-here:hover{ border-color:var(--vb-brand); }
+.vb-here span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
 /* Car filters — few controls, big targets, used standing at a counter. */
 .vb-filters{
     display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;
@@ -213,6 +238,19 @@ body{
             </div>
         </div>
         <div class="d-flex align-items-center gap-2">
+            <?php
+            // Which desk this is, on every page. Reception needs to be able to see
+            // at a glance that the book is pointed at the right branch, because
+            // everything recorded is attributed to it.
+            $vbHere = function_exists('visitorSessionLocation') ? visitorSessionLocation() : null;
+            if ($vbHere):
+                $vbHereName = visitorLocationName(getDB(), $vbHere);
+            ?>
+            <a href="<?= BASE_URL ?>/visitorbook/location.php" class="vb-here"
+               title="Signed in at <?= htmlspecialchars($vbHereName) ?> — tap to change">
+                <i class="fa fa-location-dot"></i><span><?= htmlspecialchars($vbHereName) ?></span>
+            </a>
+            <?php endif; ?>
             <button type="button" id="vbTheme" class="vb-theme" title="Switch between dark and light">
                 <i class="fa fa-moon" id="vbThemeIcon"></i>
                 <span class="d-none d-md-inline" id="vbThemeLabel">Dark</span>

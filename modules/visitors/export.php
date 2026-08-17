@@ -34,12 +34,14 @@ $rows = [];
 try {
     $st = $db->prepare("
         SELECT v.*, u.name AS staff_name, a.name AS officer_name, r.name AS recorded_by_name,
+               loc.name AS location_name,
                TRIM(CONCAT_WS(' ', c.year, c.make, c.model)) AS car_label
         FROM visitors v
         LEFT JOIN users u ON u.id = v.staff_id
         LEFT JOIN users a ON a.id = v.assigned_to
         LEFT JOIN users r ON r.id = v.recorded_by
         LEFT JOIN cars  c ON c.id = v.car_id
+        LEFT JOIN locations loc ON loc.id = v.location_id
         WHERE " . implode(' AND ', $where) . "
         ORDER BY v.created_at DESC");
     $st->execute($args);
@@ -57,7 +59,7 @@ $out = fopen('php://output', 'w');
 fwrite($out, "\xEF\xBB\xBF");
 
 fputcsv($out, [
-    'Date', 'Time in', 'Time out', 'Minutes on site',
+    'Date', 'Time in', 'Time out', 'Minutes on site', 'Location',
     'First name', 'Second name', 'Last name', 'Phone', 'ID number', 'Email',
     'Heard about us', 'Purpose',
     'Vehicle of interest', 'Comment',
@@ -74,6 +76,7 @@ foreach ($rows as $v) {
         date('H:i', $in),
         $out2 ? date('H:i', $out2) : '',
         $out2 ? (int)round(($out2 - $in) / 60) : '',
+        $v['location_name'],
         $v['first_name'], $v['middle_name'], $v['last_name'],
         $v['phone'], $v['id_number'], $v['email'],
         $v['heard_from'],

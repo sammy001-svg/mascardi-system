@@ -49,12 +49,14 @@ $rows = [];
 try {
     $st = $db->prepare("
         SELECT v.*, u.name AS staff_name, a.name AS officer_name, r.name AS recorded_by_name,
+               loc.name AS location_name,
                TRIM(CONCAT_WS(' ', c.year, c.make, c.model)) AS car_label
         FROM visitors v
         LEFT JOIN users u ON u.id = v.staff_id
         LEFT JOIN users a ON a.id = v.assigned_to
         LEFT JOIN users r ON r.id = v.recorded_by
         LEFT JOIN cars  c ON c.id = v.car_id
+        LEFT JOIN locations loc ON loc.id = v.location_id
         WHERE {$whereSql}
         ORDER BY v.created_at DESC
         LIMIT 500");
@@ -284,12 +286,12 @@ $stale  = !empty($_GET['stale']) ? visitorsStale($db) : [];
             <thead>
                 <tr>
                     <th>When</th><th>Visitor</th><th>Contact</th>
-                    <th>Purpose</th><th>Details</th><th>Outcome</th><th>Heard via</th>
+                    <th>Purpose</th><th>Location</th><th>Details</th><th>Outcome</th><th>Heard via</th>
                 </tr>
             </thead>
             <tbody>
             <?php if (!$rows): ?>
-            <tr><td colspan="7" class="text-center text-muted py-5">
+            <tr><td colspan="8" class="text-center text-muted py-5">
                 <i class="fa fa-book-open d-block mb-2" style="font-size:26px;opacity:.35"></i>
                 No visitors recorded for this period.
             </td></tr>
@@ -322,6 +324,11 @@ $stale  = !empty($_GET['stale']) ? visitorsStale($db) : [];
                     <span class="vs-tag" style="background:<?= $pc ?>1f;color:<?= $pc ?>">
                         <i class="fa <?= $pi ?>"></i><?= e($pl) ?>
                     </span>
+                </td>
+                <td style="font-size:12px">
+                    <?php if ($v['location_name']): ?>
+                    <span class="text-nowrap"><i class="fa fa-location-dot me-1 text-muted"></i><?= e($v['location_name']) ?></span>
+                    <?php else: ?><span class="text-muted">—</span><?php endif; ?>
                 </td>
                 <td style="font-size:12px;max-width:250px">
                     <?php if ($v['purpose'] === 'buy_car'): ?>

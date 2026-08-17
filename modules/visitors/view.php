@@ -18,7 +18,7 @@ $id   = (int)($_GET['id'] ?? 0);
 
 $st = $db->prepare("
     SELECT v.*, u.name AS staff_name, a.name AS officer_name, r.name AS recorded_by_name,
-           o.name AS checked_out_by_name,
+           o.name AS checked_out_by_name, loc.name AS location_name,
            TRIM(CONCAT_WS(' ', c.year, c.make, c.model)) AS car_label,
            c.registration_number AS car_reg, c.id AS car_ref
     FROM visitors v
@@ -27,6 +27,7 @@ $st = $db->prepare("
     LEFT JOIN users r ON r.id = v.recorded_by
     LEFT JOIN users o ON o.id = v.checked_out_by
     LEFT JOIN cars  c ON c.id = v.car_id
+    LEFT JOIN locations loc ON loc.id = v.location_id
     WHERE v.id = ?");
 $st->execute([$id]);
 $v = $st->fetch(PDO::FETCH_ASSOC);
@@ -135,6 +136,10 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="vv-row"><span class="k">ID number</span>
                     <span class="val"><?= e($v['id_number']) ?></span></div>
                 <?php endif; ?>
+                <div class="vv-row"><span class="k">Signed in at</span>
+                    <span class="val"><?= $v['location_name']
+                        ? '<i class="fa fa-location-dot me-1 text-muted"></i>' . e($v['location_name'])
+                        : '<span class="text-muted">No location recorded</span>' ?></span></div>
                 <div class="vv-row"><span class="k">Heard about us</span>
                     <span class="val"><?= e($v['heard_from'] ?: '—') ?></span></div>
                 <div class="vv-row"><span class="k">Signed in by</span>
