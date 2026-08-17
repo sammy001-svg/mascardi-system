@@ -141,10 +141,13 @@ body{
                 <p class="vb-sub"><?= htmlspecialchars($vbCompany) ?> &middot; please sign in below</p>
             </div>
         </div>
+        <?php /* Confirmed, because a visitor tapping this would sign the kiosk
+                 out and leave the next arrival unable to sign in at all. */ ?>
         <a href="<?= BASE_URL ?>/logout.php" class="btn btn-sm btn-outline-secondary"
-           title="Sign the reception account out">
-            <i class="fa fa-right-from-bracket"></i>
-            <span class="d-none d-sm-inline ms-1">Exit</span>
+           title="Close the visitors book (staff only)"
+           onclick="return confirm('Close the visitors book?\n\nThis signs the reception account out and staff will need to sign back in before the next visitor can be recorded.');">
+            <i class="fa fa-lock"></i>
+            <span class="d-none d-sm-inline ms-1">Staff exit</span>
         </a>
     </div>
 </header>

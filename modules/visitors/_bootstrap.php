@@ -21,7 +21,11 @@
 
 if (!function_exists('visitorsMigrate')) {
 
-if (!defined('VISITORS_SCHEMA_VERSION')) define('VISITORS_SCHEMA_VERSION', '1');
+// 2 — check-out tracking (checked_out_at / checked_out_by).
+if (!defined('VISITORS_SCHEMA_VERSION')) define('VISITORS_SCHEMA_VERSION', '2');
+
+/** How long the kiosk sits untouched before it clears itself, in seconds. */
+if (!defined('VISITOR_KIOSK_IDLE')) define('VISITOR_KIOSK_IDLE', 120);
 
 function visitorPurposes(): array
 {
@@ -97,6 +101,16 @@ function visitorsMigrate(PDO $db, bool $force = false): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     try { $db->exec($sql); } catch (\Throwable $_) {}
 
+    // Added after the table shipped, so CREATE TABLE IF NOT EXISTS above is a
+    // no-op for them on an existing install.
+    $columns = [
+        "ALTER TABLE visitors ADD COLUMN checked_out_at DATETIME NULL AFTER created_at",
+        "ALTER TABLE visitors ADD COLUMN checked_out_by INT NULL AFTER checked_out_at",
+        // Answers "who is in the building right now" off the index.
+        "ALTER TABLE visitors ADD INDEX idx_v_onsite (checked_out_at, created_at)",
+    ];
+    foreach ($columns as $c) { try { $db->exec($c); } catch (\Throwable $_) {} }
+
     // The kiosk logs in as its own account, so the role has to exist before one
     // can be created. Additive — see ensureUserRole().
     if (function_exists('ensureUserRole')) ensureUserRole('visitor_book');
@@ -161,14 +175,134 @@ function visitorNextCrmOfficer(PDO $db): ?int
     return null;
 }
 
-/** Staff a visitor can ask for by name at reception. */
+/**
+ * Staff a visitor can ask for by name at reception.
+ *
+ * `in_today` says whether they have been seen in the system today, which is used
+ * to warn reception that the person asked for may not be on site — better to
+ * find out at the desk than after the visitor has waited twenty minutes.
+ */
 function visitorStaffList(PDO $db): array
 {
+    // last_seen is maintained by ordinary page activity; last_login only moves on
+    // a fresh sign-in, so someone who stayed signed in from yesterday still shows
+    // as present. Take the later of the two.
     try {
-        return $db->query("SELECT id, name, role FROM users
-                           WHERE status = 'active' AND role <> 'visitor_book'
-                           ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+        return $db->query("
+            SELECT id, name, role,
+                   (DATE(GREATEST(COALESCE(last_seen,'1970-01-01'),
+                                  COALESCE(last_login,'1970-01-01'))) = CURDATE()) AS in_today
+            FROM users
+            WHERE status = 'active' AND role <> 'visitor_book'
+            ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (\Throwable $_) {
+        try {
+            return $db->query("SELECT id, name, role, 1 AS in_today FROM users
+                               WHERE status = 'active' AND role <> 'visitor_book'
+                               ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable $_) { return []; }
+    }
+}
+
+// ── Check-out ────────────────────────────────────────────────────────────────
+
+/**
+ * Everyone signed in and not yet signed out.
+ *
+ * Scoped to today by default. A visit left open overnight is almost always a
+ * forgotten check-out rather than someone still in the building, and carrying
+ * those forward would make the on-site figure meaningless.
+ */
+function visitorsOnSite(PDO $db, bool $todayOnly = true): array
+{
+    $where = 'v.checked_out_at IS NULL' . ($todayOnly ? ' AND DATE(v.created_at) = CURDATE()' : '');
+    try {
+        return $db->query("
+            SELECT v.*, u.name AS staff_name,
+                   TIMESTAMPDIFF(MINUTE, v.created_at, NOW()) AS minutes_here
+            FROM visitors v
+            LEFT JOIN users u ON u.id = v.staff_id
+            WHERE {$where}
+            ORDER BY v.created_at ASC")->fetchAll(PDO::FETCH_ASSOC);
     } catch (\Throwable $_) { return []; }
+}
+
+/** Visits left open from a previous day — a forgotten check-out, to be tidied. */
+function visitorsStale(PDO $db): array
+{
+    try {
+        return $db->query("
+            SELECT v.*, TIMESTAMPDIFF(HOUR, v.created_at, NOW()) AS hours_open
+            FROM visitors v
+            WHERE v.checked_out_at IS NULL AND DATE(v.created_at) < CURDATE()
+            ORDER BY v.created_at DESC
+            LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (\Throwable $_) { return []; }
+}
+
+/**
+ * Signs a visitor out.
+ *
+ * Only ever stamps a visit that is still open, so a second attempt cannot
+ * overwrite the original departure time with a later one.
+ *
+ * @return bool Whether this call is the one that checked them out.
+ */
+function visitorCheckOut(PDO $db, int $visitorId, ?int $byUserId = null): bool
+{
+    try {
+        $st = $db->prepare("UPDATE visitors SET checked_out_at = NOW(), checked_out_by = ?
+                            WHERE id = ? AND checked_out_at IS NULL");
+        $st->execute([$byUserId ?: null, $visitorId]);
+        return $st->rowCount() > 0;
+    } catch (\Throwable $_) { return false; }
+}
+
+/**
+ * The open visit for a phone number today, for self-service check-out at the
+ * kiosk. Matching on phone means the visitor identifies themselves without the
+ * screen having to list everybody who is on site to whoever is standing there.
+ */
+function visitorOpenVisitByPhone(PDO $db, string $phone): ?array
+{
+    $digits = preg_replace('/\D+/', '', $phone);
+    if (strlen($digits) < 7) return null;
+    try {
+        // Compare on the last 9 digits so 0711…, +254711… and 254711… all match.
+        $tail = substr($digits, -9);
+        $st = $db->prepare("
+            SELECT * FROM visitors
+            WHERE checked_out_at IS NULL
+              AND DATE(created_at) = CURDATE()
+              AND RIGHT(REPLACE(REPLACE(REPLACE(phone,' ',''),'-',''),'+',''), 9) = ?
+            ORDER BY created_at DESC LIMIT 1");
+        $st->execute([$tail]);
+        return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (\Throwable $_) { return null; }
+}
+
+/**
+ * A previous visitor's details, for prefilling the form when they come back.
+ *
+ * Deliberately narrow. It returns the fields the form needs and nothing else —
+ * no visit dates, no purposes, no history. The kiosk stands in a public place, so
+ * anyone can type a phone number into it; the most this can confirm is that a
+ * number has been here before, and it will not say when or what for.
+ */
+function visitorLookupByPhone(PDO $db, string $phone): ?array
+{
+    $digits = preg_replace('/\D+/', '', $phone);
+    if (strlen($digits) < 9) return null;   // full number only, never a prefix
+    try {
+        $tail = substr($digits, -9);
+        $st = $db->prepare("
+            SELECT first_name, middle_name, last_name, phone, id_number, email, heard_from
+            FROM visitors
+            WHERE RIGHT(REPLACE(REPLACE(REPLACE(phone,' ',''),'-',''),'+',''), 9) = ?
+            ORDER BY created_at DESC LIMIT 1");
+        $st->execute([$tail]);
+        return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (\Throwable $_) { return null; }
 }
 
 /**
@@ -222,6 +356,10 @@ function visitorStats(PDO $db): array
         foreach ($db->query("SELECT purpose, COUNT(*) c FROM visitors GROUP BY purpose") as $row) {
             $out['by_purpose'][$row['purpose']] = (int)$row['c'];
         }
+        $out['on_site'] = (int)$db->query("SELECT COUNT(*) FROM visitors
+            WHERE checked_out_at IS NULL AND DATE(created_at) = CURDATE()")->fetchColumn();
+        $out['stale'] = (int)$db->query("SELECT COUNT(*) FROM visitors
+            WHERE checked_out_at IS NULL AND DATE(created_at) < CURDATE()")->fetchColumn();
     } catch (\Throwable $_) {}
     return $out;
 }

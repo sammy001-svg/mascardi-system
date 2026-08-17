@@ -14,6 +14,18 @@ canAccess('visitors') || redirect(BASE_URL . '/index.php');
 
 $db = getDB();
 visitorsMigrate($db);
+$me = authUser();
+
+// ── Check a visitor out ──────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check_out') {
+    $vid = (int)($_POST['visitor_id'] ?? 0);
+    if ($vid && visitorCheckOut($db, $vid, (int)$me['id'])) {
+        setFlash('success', 'Visitor signed out.');
+    } else {
+        setFlash('error', 'That visitor was already signed out.');
+    }
+    redirect(BASE_URL . '/modules/visitors/index.php' . (empty($_POST['stale']) ? '' : '?stale=1'));
+}
 
 $purpose = (string)($_GET['purpose'] ?? '');
 $range   = in_array($_GET['range'] ?? '', ['today','week','month','all'], true) ? $_GET['range'] : 'month';
@@ -80,12 +92,23 @@ include __DIR__ . '/../../includes/header.php';
         </h1>
         <div class="small text-muted">Everyone who signed the visitors book at reception</div>
     </div>
-    <a href="<?= BASE_URL ?>/visitorbook/index.php" target="_blank" class="btn btn-sm btn-outline-primary">
-        <i class="fa fa-up-right-from-square me-1"></i>Open the sign-in form
-    </a>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="<?= BASE_URL ?>/modules/visitors/export.php?<?= http_build_query(['purpose'=>$purpose,'range'=>$range,'q'=>$search]) ?>"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-file-csv me-1"></i>Export CSV
+        </a>
+        <a href="<?= BASE_URL ?>/visitorbook/index.php" target="_blank" class="btn btn-sm btn-outline-primary">
+            <i class="fa fa-up-right-from-square me-1"></i>Open the sign-in form
+        </a>
+    </div>
 </div>
 
 <div class="vs-tiles">
+    <div class="vs-tile" style="border-color:#bbf7d0;background:#f0fdf4">
+        <div class="k"><i class="fa fa-location-dot me-1" style="color:#16a34a"></i>On site now</div>
+        <div class="v" style="color:#15803d"><?= (int)($stats['on_site'] ?? 0) ?></div>
+        <div class="s">signed in, not signed out</div>
+    </div>
     <div class="vs-tile">
         <div class="k">Today</div>
         <div class="v" style="color:var(--brand)"><?= (int)$stats['today'] ?></div>
@@ -141,6 +164,116 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </form>
 
+<?php
+// ── Who is in the building ───────────────────────────────────────────────────
+// The reason a visitors book exists: during an evacuation this is the list that
+// matters, so it sits above the historical log rather than inside it.
+$onSite = visitorsOnSite($db);
+$stale  = !empty($_GET['stale']) ? visitorsStale($db) : [];
+?>
+<div class="card mb-3" style="border-color:#bbf7d0;border-width:2px">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2"
+         style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-bottom-color:#bbf7d0">
+        <span style="color:#15803d">
+            <i class="fa fa-location-dot me-2"></i>On site now
+            <span class="badge ms-2" style="background:#16a34a;font-size:10px"><?= count($onSite) ?></span>
+        </span>
+        <?php if ((int)($stats['stale'] ?? 0) > 0): ?>
+        <a href="?stale=1" class="btn btn-xs btn-outline-warning">
+            <i class="fa fa-triangle-exclamation me-1"></i>
+            <?= (int)$stats['stale'] ?> not signed out from earlier days
+        </a>
+        <?php endif; ?>
+    </div>
+    <div class="card-body p-0">
+        <?php if (!$onSite): ?>
+        <div class="text-center text-muted py-4" style="font-size:13px">
+            <i class="fa fa-door-closed d-block mb-2" style="font-size:22px;opacity:.3"></i>
+            Nobody is currently signed in.
+        </div>
+        <?php else: ?>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle" style="font-size:13px">
+                <tbody>
+                <?php foreach ($onSite as $v):
+                    [$pl, $pi, $pc] = visitorPurposes()[$v['purpose']] ?? ['—','fa-user','#64748b'];
+                    $mins = (int)$v['minutes_here'];
+                    $long = $mins > 180;   // three hours is worth a second look
+                ?>
+                <tr>
+                    <td style="width:70px" class="text-nowrap">
+                        <span class="fw-semibold"><?= date('H:i', strtotime($v['created_at'])) ?></span>
+                    </td>
+                    <td>
+                        <a href="<?= BASE_URL ?>/modules/visitors/view.php?id=<?= (int)$v['id'] ?>"
+                           class="fw-semibold text-decoration-none"><?= e(visitorFullName($v)) ?></a>
+                        <div class="text-muted" style="font-size:11.5px"><?= e($v['phone']) ?></div>
+                    </td>
+                    <td>
+                        <span class="vs-tag" style="background:<?= $pc ?>1f;color:<?= $pc ?>">
+                            <i class="fa <?= $pi ?>"></i><?= e($pl) ?>
+                        </span>
+                        <?php if ($v['purpose'] === 'see_someone' && $v['staff_name']): ?>
+                        <span class="text-muted ms-1" style="font-size:11.5px">→ <?= e($v['staff_name']) ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="text-nowrap" style="font-size:12px;color:<?= $long ? '#b45309' : 'var(--text-2,#64748b)' ?>">
+                        <?php if ($mins < 60): ?><?= $mins ?> min
+                        <?php else: ?><?= floor($mins / 60) ?>h <?= $mins % 60 ?>m<?php endif; ?>
+                        <?= $long ? ' <i class="fa fa-clock ms-1" title="Here a long time — check they have not forgotten to sign out"></i>' : '' ?>
+                    </td>
+                    <td class="text-end" style="width:120px">
+                        <form method="POST" class="d-inline">
+                            <?= csrfField() ?>
+                            <input type="hidden" name="action" value="check_out">
+                            <input type="hidden" name="visitor_id" value="<?= (int)$v['id'] ?>">
+                            <button class="btn btn-xs btn-outline-success">
+                                <i class="fa fa-right-from-bracket me-1"></i>Sign out
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<?php if ($stale): ?>
+<div class="card mb-3" style="border-color:#fed7aa">
+    <div class="card-header fw-semibold" style="background:#fff7ed;color:#9a3412">
+        <i class="fa fa-triangle-exclamation me-2"></i>Not signed out from earlier days
+        <span class="text-muted fw-normal ms-1" style="font-size:12px">
+            — almost always a forgotten sign-out. Closing these keeps the on-site count honest.</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle" style="font-size:13px">
+            <tbody>
+            <?php foreach ($stale as $v): ?>
+            <tr>
+                <td class="text-nowrap" style="width:110px"><?= date('j M, H:i', strtotime($v['created_at'])) ?></td>
+                <td><span class="fw-semibold"><?= e(visitorFullName($v)) ?></span>
+                    <span class="text-muted ms-1" style="font-size:11.5px"><?= e($v['phone']) ?></span></td>
+                <td class="text-muted" style="font-size:12px"><?= (int)$v['hours_open'] ?>h open</td>
+                <td class="text-end" style="width:120px">
+                    <form method="POST" class="d-inline">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="check_out">
+                        <input type="hidden" name="visitor_id" value="<?= (int)$v['id'] ?>">
+                        <input type="hidden" name="stale" value="1">
+                        <button class="btn btn-xs btn-outline-secondary">Close</button>
+                    </form>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
+
 <div class="card">
     <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
         <span><i class="fa fa-list me-2"></i>Visitor log</span>
@@ -166,10 +299,17 @@ include __DIR__ . '/../../includes/header.php';
             <tr>
                 <td class="text-nowrap">
                     <div class="fw-semibold"><?= date('j M', strtotime($v['created_at'])) ?></div>
-                    <div class="text-muted" style="font-size:11.5px"><?= date('H:i', strtotime($v['created_at'])) ?></div>
+                    <div class="text-muted" style="font-size:11.5px">
+                        <?= date('H:i', strtotime($v['created_at'])) ?>
+                        <?= $v['checked_out_at'] ? ' – ' . date('H:i', strtotime($v['checked_out_at'])) : '' ?>
+                    </div>
+                    <?php if (!$v['checked_out_at']): ?>
+                    <span class="badge bg-success-subtle text-success" style="font-size:9.5px">still in</span>
+                    <?php endif; ?>
                 </td>
                 <td>
-                    <div class="fw-semibold"><?= e(visitorFullName($v)) ?></div>
+                    <a href="<?= BASE_URL ?>/modules/visitors/view.php?id=<?= (int)$v['id'] ?>"
+                       class="fw-semibold text-decoration-none"><?= e(visitorFullName($v)) ?></a>
                     <?php if ($v['id_number']): ?>
                     <div class="text-muted" style="font-size:11.5px">ID <?= e($v['id_number']) ?></div>
                     <?php endif; ?>

@@ -105,6 +105,19 @@ if (!isset($_SESSION['auth_user']) && !empty($_COOKIE['rm_tok']) && function_exi
 // ── Session timeout (30 min inactivity) ─────────────────────
 if (isset($_SESSION['auth_user'])) {
     $timeout = 1800;
+
+    // The reception kiosk is a shared, unattended screen that has to be ready
+    // whenever somebody walks in. Thirty quiet minutes is normal there, and being
+    // logged out means either turning visitors away or keeping the password
+    // written down beside the screen — so it gets a working day instead.
+    //
+    // Safe to lengthen for this role specifically because the account is confined
+    // to the visitors book (see _confineVisitorBook) and can reach nothing else,
+    // and because the kiosk page clears any half-typed personal details on its own
+    // after VISITOR_KIOSK_IDLE. It still expires overnight rather than never.
+    if (($_SESSION['auth_user']['role'] ?? '') === 'visitor_book') {
+        $timeout = 14 * 3600;
+    }
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeout) {
         session_unset();
         session_destroy();

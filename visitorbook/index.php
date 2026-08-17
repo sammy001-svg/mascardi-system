@@ -275,6 +275,15 @@ require __DIR__ . '/_layout.php';
 </div>
 <?php endif; ?>
 
+<div id="vbIdle" class="vb-hidden alert alert-warning d-flex align-items-center gap-2"
+     style="border-radius:var(--vb-r);font-size:14px">
+    <i class="fa fa-clock"></i>
+    <span>Still there? This form will clear in <strong id="vbIdleCount">15</strong> seconds.</span>
+    <?php /* Any interaction re-arms the timer via the document-level listener, so
+             this needs no handler of its own — it is here to make that obvious. */ ?>
+    <button type="button" class="btn btn-sm btn-warning ms-auto">I'm still here</button>
+</div>
+
 <form method="POST" id="vbForm" novalidate>
     <?= csrfField() ?>
 
@@ -300,8 +309,17 @@ require __DIR__ . '/_layout.php';
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Phone number <span class="req">*</span></label>
-                    <input type="tel" name="phone" class="form-control" required autocomplete="off"
+                    <input type="tel" name="phone" id="vbPhone" class="form-control" required autocomplete="off"
                            placeholder="07xx xxx xxx" value="<?= htmlspecialchars($P['phone'] ?? '') ?>">
+                    <div id="vbKnown" class="vb-hidden" style="font-size:12px;margin-top:6px">
+                        <span style="color:#16a34a;font-weight:600">
+                            <i class="fa fa-circle-check me-1"></i>You have been here before
+                        </span>
+                        <button type="button" class="btn btn-sm btn-outline-success mt-1 w-100"
+                                id="vbUseKnown" style="font-size:12px;padding:5px 8px">
+                            Use my saved details
+                        </button>
+                    </div>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">ID number</label>
@@ -453,13 +471,21 @@ require __DIR__ . '/_layout.php';
                     <select name="staff_id" class="form-select">
                         <option value="">Please choose…</option>
                         <?php foreach ($staff as $s): ?>
-                        <option value="<?= (int)$s['id'] ?>"
+                        <option value="<?= (int)$s['id'] ?>" data-in="<?= (int)$s['in_today'] ?>"
                             <?= (int)($P['staff_id'] ?? 0) === (int)$s['id'] ? 'selected' : '' ?>>
                             <?= htmlspecialchars($s['name']) ?>
                             <?= $s['role'] ? ' — ' . htmlspecialchars(ucwords(str_replace('_', ' ', $s['role']))) : '' ?>
                         </option>
                         <?php endforeach; ?>
                     </select>
+                    <?php /* A warning, never a block: someone can be on site without
+                             having opened the system today. */ ?>
+                    <div id="vbStaffWarn" class="vb-hidden"
+                         style="font-size:12px;color:#b45309;margin-top:6px">
+                        <i class="fa fa-triangle-exclamation me-1"></i>
+                        This person has not used the system today — they may not be in.
+                        Reception will check for you.
+                    </div>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Reason for your visit <span class="req">*</span></label>
@@ -476,6 +502,12 @@ require __DIR__ . '/_layout.php';
         </button>
         <div class="text-muted mt-2" style="font-size:12px" id="vbHint">
             Choose the purpose of your visit to continue.
+        </div>
+        <div class="mt-4 pt-3" style="border-top:1px solid var(--vb-line)">
+            <a href="<?= BASE_URL ?>/visitorbook/checkout.php"
+               style="font-size:13.5px;text-decoration:none;color:var(--vb-ink-2)">
+                <i class="fa fa-right-from-bracket me-1"></i>Leaving? Sign out here
+            </a>
         </div>
     </div>
 </form>
@@ -529,6 +561,117 @@ require __DIR__ . '/_layout.php';
         b.disabled = true;
         b.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Signing in…';
     });
+
+    // ── Returning visitor ───────────────────────────────────────────────────
+    // Typing a full number offers the details given last time. Offered, not
+    // applied: reception confirms it is the same person before anything is
+    // filled in, so one shared phone does not silently sign in the wrong name.
+    var phone = document.getElementById('vbPhone');
+    var known = document.getElementById('vbKnown');
+    var useBtn = document.getElementById('vbUseKnown');
+    var pending = null, lookupTimer = null;
+
+    function digits(s) { return String(s || '').replace(/\D+/g, ''); }
+
+    function lookup() {
+        var d = digits(phone.value);
+        if (d.length < 9) { known.classList.add('vb-hidden'); pending = null; return; }
+        fetch('<?= BASE_URL ?>/visitorbook/api/lookup.php?phone=' + encodeURIComponent(d),
+              { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+                if (!j || !j.found) { known.classList.add('vb-hidden'); pending = null; return; }
+                pending = j.fields;
+                known.classList.remove('vb-hidden');
+            })
+            .catch(function () { /* offline or blocked — typing by hand still works */ });
+    }
+
+    if (phone) {
+        phone.addEventListener('input', function () {
+            clearTimeout(lookupTimer);
+            lookupTimer = setTimeout(lookup, 400);
+        });
+    }
+    if (useBtn) {
+        useBtn.addEventListener('click', function () {
+            if (!pending) return;
+            Object.keys(pending).forEach(function (k) {
+                var el = form.querySelector('[name="' + k + '"]');
+                if (el && pending[k]) el.value = pending[k];
+            });
+            known.classList.add('vb-hidden');
+            var fn = form.querySelector('[name="first_name"]');
+            if (fn) fn.focus();
+        });
+    }
+
+    // ── Staff availability ──────────────────────────────────────────────────
+    var staffSel = form.querySelector('select[name="staff_id"]');
+    var staffWarn = document.getElementById('vbStaffWarn');
+    if (staffSel && staffWarn) {
+        staffSel.addEventListener('change', function () {
+            var o = staffSel.options[staffSel.selectedIndex];
+            var away = o && o.value && o.dataset.in === '0';
+            staffWarn.classList.toggle('vb-hidden', !away);
+        });
+    }
+
+    // ── Idle reset ──────────────────────────────────────────────────────────
+    // This screen stands in a public place. Someone half-fills it, is called
+    // away, and their name, phone and ID number sit there for the next visitor to
+    // read. So an untouched form clears itself — with a visible warning first, so
+    // nobody loses what they were typing without being told.
+    var IDLE = <?= (int)VISITOR_KIOSK_IDLE ?> * 1000;
+    var WARN = 15000;
+    var idleTimer = null, warnTimer = null, tick = null;
+    var banner = document.getElementById('vbIdle');
+    var countEl = document.getElementById('vbIdleCount');
+
+    function typedAnything() {
+        var els = form.querySelectorAll('input[type="text"], input[type="tel"], input[type="email"], input[type="number"], textarea');
+        for (var i = 0; i < els.length; i++) if (els[i].value.trim() !== '') return true;
+        return !!chosen();
+    }
+
+    function hideBanner() { if (banner) banner.classList.add('vb-hidden'); clearInterval(tick); }
+
+    function resetForm() {
+        hideBanner();
+        form.reset();
+        known.classList.add('vb-hidden');
+        pending = null;
+        if (staffWarn) staffWarn.classList.add('vb-hidden');
+        sync();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        var fn = form.querySelector('[name="first_name"]');
+        if (fn) fn.focus();
+    }
+
+    function showWarning() {
+        if (!typedAnything()) { armIdle(); return; }   // nothing to protect
+        if (!banner) { resetForm(); return; }
+        var left = Math.round(WARN / 1000);
+        if (countEl) countEl.textContent = left;
+        banner.classList.remove('vb-hidden');
+        clearInterval(tick);
+        tick = setInterval(function () {
+            left -= 1;
+            if (countEl) countEl.textContent = Math.max(0, left);
+            if (left <= 0) clearInterval(tick);
+        }, 1000);
+        warnTimer = setTimeout(resetForm, WARN);
+    }
+
+    function armIdle() {
+        clearTimeout(idleTimer); clearTimeout(warnTimer); hideBanner();
+        idleTimer = setTimeout(showWarning, IDLE);
+    }
+
+    ['click', 'keydown', 'input', 'touchstart', 'change'].forEach(function (ev) {
+        document.addEventListener(ev, armIdle, { passive: true });
+    });
+    armIdle();
 
     sync();
 }());
