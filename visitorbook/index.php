@@ -169,13 +169,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $vex->execute([$svc['reg']]);
                 if (!$vex->fetchColumn()) {
                     try {
+                        // Status via carAvailableStatus(): 'available' is not in the
+                        // cars.status ENUM here and, with strict mode off, would be
+                        // silently stored as '' — a vehicle with no status at all.
                         $db->prepare("INSERT INTO cars
                                 (make, model, year, registration_number, mileage, car_type, status,
                                  show_on_website, owner_name, owner_phone, client_id, location_id, created_at)
-                                VALUES (?,?,?,?,?, 'client', 'available', 0, ?,?,?,?, NOW())")
+                                VALUES (?,?,?,?,?, 'client', ?, 0, ?,?,?,?, NOW())")
                            ->execute([$svc['make'], $svc['model'], $svc['year'] ?: null, $svc['reg'],
-                                      $svc['mileage'] ?: null, $fullName, $phone, $clientId,
-                                      $locationId ?: null]);
+                                      $svc['mileage'] ?: null, carAvailableStatus($db),
+                                      $fullName, $phone, $clientId, $locationId ?: null]);
                     } catch (\Throwable $_) { /* a client vehicle is a bonus, not the point */ }
                 }
             }

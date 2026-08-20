@@ -764,6 +764,11 @@ function visitorEmailShell(string $heading, string $inner, string $company): str
  */
 function visitorFlushThenSend(callable $work): void
 {
+    // Delegates to the shared implementation in includes/functions.php so there
+    // is only one copy of this to get right. The inline fallback below covers
+    // this file being loaded without it.
+    if (function_exists('afterResponse')) { afterResponse($work); return; }
+
     @ignore_user_abort(true);
     if (function_exists('fastcgi_finish_request')) {
         @fastcgi_finish_request();

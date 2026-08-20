@@ -451,3 +451,65 @@ function numberToWords($number): string {
 
     return $string;
 }
+
+/**
+ * Ends the HTTP response, then runs $work with the browser already released.
+ *
+ * For work that must happen but that the user should not wait on — chiefly
+ * sending mail, which goes over a blocking SMTP socket with a connect timeout
+ * measured in seconds. Under PHP-FPM the connection is closed properly; on other
+ * SAPIs the buffers are flushed and the work simply runs on, with the abort
+ * handler disabled so a closing browser cannot kill it half way.
+ *
+ * Send any redirect header BEFORE calling this, then exit after it.
+ */
+function afterResponse(callable $work): void
+{
+    @ignore_user_abort(true);
+    if (function_exists('fastcgi_finish_request')) {
+        @fastcgi_finish_request();
+    } else {
+        if (!headers_sent()) header('Content-Length: 0');
+        while (ob_get_level() > 0) { @ob_end_flush(); }
+        @flush();
+    }
+    try { $work(); } catch (\Throwable $e) { error_log('afterResponse: ' . $e->getMessage()); }
+}
+
+/**
+ * The status meaning "back in stock, free to sell", as this database spells it.
+ *
+ * cars.status is an ENUM and does NOT contain 'available' — the values in use are
+ * 'arrived', 'completed' and so on. Writing 'available' looks harmless and is
+ * silently coerced to '' because MySQL strict mode is off here, which leaves the
+ * car with no status at all: it then matches no status filter and drops out of
+ * listings that select by state.
+ *
+ * So the value is resolved from the column rather than assumed. Preference order
+ * puts 'available' first so an installation that does have it keeps working, then
+ * falls back to what this schema actually uses.
+ */
+function carAvailableStatus(PDO $db): string
+{
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    $allowed = [];
+    try {
+        $col = $db->query("SHOW COLUMNS FROM cars LIKE 'status'")->fetch(PDO::FETCH_ASSOC);
+        if ($col && preg_match('/^enum\((.*)\)$/is', trim($col['Type']), $m)) {
+            foreach (explode("','", trim($m[1], "'")) as $v) {
+                $v = trim($v, "' ");
+                if ($v !== '') $allowed[] = $v;
+            }
+        }
+    } catch (\Throwable $_) {}
+
+    // Not an ENUM (or unreadable): any string is accepted, so use the plain word.
+    if (!$allowed) return $cached = 'available';
+
+    foreach (['available', 'arrived', 'completed', 'in_assessment'] as $want) {
+        if (in_array($want, $allowed, true)) return $cached = $want;
+    }
+    return $cached = $allowed[0];
+}

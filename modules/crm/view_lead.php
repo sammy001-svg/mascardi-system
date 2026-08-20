@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/credit_bootstrap.php';
+require_once __DIR__ . '/../reservations/_bootstrap.php';
 requireLogin();
 canAccess('crm') || redirect(BASE_URL . '/index.php');
 
@@ -758,36 +759,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
     }
 
-    if ($action === 'revoke_reservation' && $me['role'] === 'admin') {
-        $pinnedCarId = (int)($lead['pinned_car_id'] ?? 0);
-        // Free the car back to available
-        if ($pinnedCarId) {
-            try {
-                $db->prepare("UPDATE cars SET status = 'available', updated_at = NOW() WHERE id = ? AND status = 'reserved'")
-                   ->execute([$pinnedCarId]);
-            } catch (\Throwable $_) {}
+    if ($action === 'revoke_reservation' && reservationCanCancel()) {
+        // Delegated so both entry points behave identically. The shared function
+        // is what enforces the reason, snapshots the deposit before it is wiped,
+        // and records the cancellation for the audit — none of which this handler
+        // used to do when it reset the lead directly.
+        $res = reservationCancel($db, $id,
+            (string)($_POST['reason'] ?? ''), (string)($_POST['reason_code'] ?? 'other'), $uid);
+
+        if (!$res['ok']) {
+            setFlash('error', $res['error']);
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
         }
-        $db->prepare("
-            UPDATE crm_leads
-            SET stage             = 'active',
-                pinned_car_id     = NULL,
-                deposit_amount    = NULL,
-                deposit_date      = NULL,
-                deposit_notes     = NULL,
-                agreed_sale_price = NULL,
-                due_date          = NULL,
-                updated_at        = NOW()
-            WHERE id = ?
-        ")->execute([$id]);
+
         require_once __DIR__ . '/../../includes/notifications.php';
         notifyRoles(['sales_manager','general_manager'], 'alert',
             "Reservation Revoked: {$lead['name']}",
-            "Revoked by {$me['name']}. Lead returned to Active.",
+            "Revoked by {$me['name']}. Lead returned to Active. Reason: "
+                . trim((string)$_POST['reason']),
             BASE_URL . '/modules/crm/view_lead.php?id=' . $id
         );
-        logActivity('update', 'crm_leads', $id, "Reservation revoked by admin ({$me['name']}). Lead reset to active.");
-        setFlash('success', 'Reservation revoked. The lead has been returned to Active and the vehicle freed.');
-        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+        logActivity('update', 'crm_leads', $id,
+            "Reservation revoked by {$me['name']}: " . trim((string)$_POST['reason']));
+
+        $__who = $res['notify']['agent_name'] ?? '';
+        setFlash('success', 'Reservation revoked. The vehicle is free and the lead is back to Active'
+            . ($__who !== '' ? ' — ' . $__who . ' has been notified with your reason.' : '.'));
+
+        header('Location: ' . BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+        $__n = $res['notify'];
+        afterResponse(function () use ($db, $__n, $me) {
+            reservationNotifyCancelled($db, $__n, (string)$me['name']);
+        });
+        exit;
     }
 
     // ── Credit Payment Agreement ─────────────────────────────────────────────
@@ -1991,12 +1995,27 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         <i class="fa fa-pen me-1"></i>Update Reservation
                     </button>
                     <?php endif; ?>
-                    <?php if ($me['role'] === 'admin'): ?>
-                    <form method="POST" class="ms-2"
-                          onsubmit="return confirm('Revoke this reservation?\n\nThis will:\n• Return the lead to Active stage\n• Free the vehicle back to Available\n• Clear all deposit and pricing data\n\nThis cannot be undone.')">
+                    <?php /* Was gated on $me['role'] === 'admin', a strict comparison
+                             that excluded super_admin from the action it most
+                             obviously needed. reservationCanCancel() covers both. */ ?>
+                    <?php if (reservationCanCancel()): ?>
+                    <form method="POST" class="ms-2 d-flex align-items-start gap-2" id="revokeResForm">
                         <input type="hidden" name="action" value="revoke_reservation">
-                        <button type="submit" class="btn btn-danger btn-sm">
-                            <i class="fa fa-ban me-1"></i>Revoke Reservation
+                        <div style="min-width:240px">
+                            <select name="reason_code" class="form-select form-select-sm mb-1">
+                                <?php foreach (reservationCancelReasons() as $__k => $__l): ?>
+                                <option value="<?= e($__k) ?>"><?= e($__l) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <?php /* Required, and required server-side too: the officer who
+                                     took this reservation is told exactly what is typed here. */ ?>
+                            <textarea name="reason" class="form-control form-control-sm" rows="2"
+                                      required minlength="5"
+                                      placeholder="Why is this being cancelled? The officer will be sent this."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-danger btn-sm"
+                                onclick="return confirm('Cancel this reservation?\n\nThe vehicle returns to Available, the lead returns to Active, and the officer who took it is notified with your reason.')">
+                            <i class="fa fa-ban me-1"></i>Revoke
                         </button>
                     </form>
                     <?php endif; ?>
@@ -2005,6 +2024,56 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
         </div>
 
         <?php endif; /* ── end of the reserved-only reservation documents ── */ ?>
+
+        <?php
+        // ── Why a reservation on this lead was cancelled ─────────────────────
+        // The officer who took it is notified at the time, but a notification is
+        // read once and gone. The reason belongs on the lead itself, where anyone
+        // picking it up later can see what happened to the deposit and why the
+        // vehicle went back on the market.
+        $__cancel = reservationLastCancellation($db, $id);
+        if ($__cancel && ($lead['stage'] ?? '') !== 'reserved'):
+            $__rl = reservationCancelReasons()[$__cancel['reason_code']] ?? 'Other';
+        ?>
+        <div class="card mb-4" style="border-color:#fecaca;border-width:2px">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2"
+                 style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border-bottom-color:#fecaca">
+                <span style="color:#b91c1c">
+                    <i class="fa fa-ban me-2"></i>Reservation cancelled
+                </span>
+                <span class="text-muted" style="font-size:12px">
+                    <?= fmtDate($__cancel['cancelled_at'], 'd M Y, H:i') ?>
+                    <?= $__cancel['cancelled_by_name'] ? ' · by ' . e($__cancel['cancelled_by_name']) : '' ?>
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <span class="badge" style="background:#b91c1c;font-size:11px"><?= e($__rl) ?></span>
+                    <?php if ($__cancel['vehicle_label']): ?>
+                    <span class="text-muted ms-2" style="font-size:12.5px">
+                        <i class="fa fa-car me-1"></i><?= e($__cancel['vehicle_label']) ?>
+                    </span>
+                    <?php endif; ?>
+                    <?php if ($__cancel['deposit_amount'] !== null): ?>
+                    <span class="text-muted ms-2" style="font-size:12.5px">
+                        <i class="fa fa-coins me-1"></i>Deposit held was
+                        <?= money((float)$__cancel['deposit_amount']) ?>
+                    </span>
+                    <?php endif; ?>
+                </div>
+                <div style="font-size:14px;white-space:pre-wrap;padding:12px 14px;border-radius:8px;
+                            background:var(--surface-alt,#f8fafc);border-left:3px solid #b91c1c">
+                    <?= e($__cancel['reason']) ?>
+                </div>
+                <?php if ($__cancel['deposit_amount'] !== null): ?>
+                <div class="text-muted mt-2" style="font-size:11.5px">
+                    <i class="fa fa-circle-info me-1"></i>A deposit was held on this reservation —
+                    check with accounts whether a refund is due.
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- ══ CREDIT SUMMARY ══════════════════════════════════════════════════
              Sits directly under the Reservation Summary. Before an agreement

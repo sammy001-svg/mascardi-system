@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/_bootstrap.php';
 requireLogin();
 canAccess('crm') || redirect(BASE_URL . '/index.php');
 
@@ -8,6 +9,49 @@ $me  = authUser();
 $uid = (int)$me['id'];
 $isCrmAgent   = ($me['role'] === 'customer_relations');
 $canFilter    = in_array($me['role'], ['admin','super_admin','general_manager']);
+$canCancelRes = reservationCanCancel();
+
+reservationsMigrate($db);
+
+// ── Cancel a reservation ─────────────────────────────────────────────────────
+// Restricted to super admin, and the reason is not optional: releasing a held
+// deposit without telling the officer who took it is how a customer ends up
+// hearing it from us second-hand.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel_reservation') {
+    if (!$canCancelRes) {
+        setFlash('error', 'Only a super admin can cancel a reservation.');
+        redirect(BASE_URL . '/modules/reservations/index.php');
+    }
+
+    $res = reservationCancel(
+        $db,
+        (int)($_POST['lead_id'] ?? 0),
+        (string)($_POST['reason'] ?? ''),
+        (string)($_POST['reason_code'] ?? 'other'),
+        $uid
+    );
+
+    if (!$res['ok']) {
+        setFlash('error', $res['error']);
+        redirect(BASE_URL . '/modules/reservations/index.php');
+    }
+
+    logActivity('update', 'crm_leads', (int)$_POST['lead_id'],
+        'Reservation cancelled by ' . $me['name'] . ': ' . trim((string)$_POST['reason']));
+
+    $who = $res['notify']['agent_name'] ?? '';
+    setFlash('success', 'Reservation cancelled. The vehicle is back in available stock'
+        . ($who !== '' ? ' and ' . $who . ' has been notified with your reason.' : '.'));
+
+    // Header first, then the notification: the email goes over a blocking SMTP
+    // socket, and an admin should not watch a spinner for it.
+    header('Location: ' . BASE_URL . '/modules/reservations/index.php');
+    $__n = $res['notify'];
+    afterResponse(function () use ($db, $__n, $me) {
+        reservationNotifyCancelled($db, $__n, (string)$me['name']);
+    });
+    exit;
+}
 
 foreach ([
     "ALTER TABLE crm_leads ADD COLUMN pinned_car_id     INT           NULL DEFAULT NULL",
@@ -605,11 +649,118 @@ include __DIR__ . '/../../includes/header.php';
             <i class="fa fa-file-invoice-dollar me-1"></i>Sales Rcpt
         </a>
         <?php endif; ?>
+
+        <?php if ($canCancelRes): ?>
+        <button type="button" class="btn btn-sm btn-outline-danger ms-auto res-cancel-btn"
+                data-lead="<?= (int)$r['lead_id'] ?>"
+                data-customer="<?= e($r['client_name'] ?: $r['lead_name']) ?>"
+                data-vehicle="<?= e(trim(($r['year'] ?? '') . ' ' . ($r['make'] ?? '') . ' ' . ($r['model'] ?? ''))) ?>"
+                data-agent="<?= e($r['agent_name'] ?? '') ?>"
+                data-deposit="<?= $r['deposit_amount'] !== null ? number_format((float)$r['deposit_amount']) : '' ?>">
+            <i class="fa fa-ban me-1"></i>Cancel Reservation
+        </button>
+        <?php endif; ?>
     </div>
 
 </div>
 <?php endforeach; ?>
 </div>
+<?php endif; ?>
+
+<?php if ($canCancelRes): ?>
+<!-- ── Cancel a reservation ──────────────────────────────────────────────────
+     One modal reused by every card. The reason is required, and the dialog says
+     plainly who will be told — the officer finding out from the customer instead
+     of from us is exactly what this is meant to stop. -->
+<div class="modal fade" id="cancelResModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="POST" class="modal-content" id="cancelResForm">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="cancel_reservation">
+      <input type="hidden" name="lead_id" id="crLeadId" value="">
+
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa fa-ban me-2 text-danger"></i>Cancel reservation</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-warning py-2" style="font-size:13px">
+          <div id="crSummary" class="fw-semibold mb-1"></div>
+          <div id="crDeposit" class="mb-1"></div>
+          This releases the vehicle back to available stock and returns the lead to Active.
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Reason <span class="text-danger">*</span></label>
+          <select name="reason_code" class="form-select form-select-sm" id="crCode">
+            <?php foreach (reservationCancelReasons() as $k => $lbl): ?>
+            <option value="<?= e($k) ?>"><?= e($lbl) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">
+            Explain in your own words <span class="text-danger">*</span>
+          </label>
+          <textarea name="reason" id="crReason" class="form-control form-control-sm" rows="4" required
+                    minlength="5" placeholder="What happened, and anything the officer should do next — e.g. whether the deposit is being refunded."></textarea>
+          <div class="form-text" style="font-size:11.5px">
+            <span id="crWho">The officer who took this reservation</span> will receive this,
+            in the system and by email.
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Keep it</button>
+        <button type="submit" class="btn btn-sm btn-danger" id="crSubmit">
+          <i class="fa fa-ban me-1"></i>Cancel this reservation
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var modalEl = document.getElementById('cancelResModal');
+    if (!modalEl || typeof bootstrap === 'undefined') return;
+    var modal = new bootstrap.Modal(modalEl);
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('.res-cancel-btn') : null;
+        if (!btn) return;
+
+        document.getElementById('crLeadId').value = btn.dataset.lead || '';
+        var veh = (btn.dataset.vehicle || '').trim();
+        document.getElementById('crSummary').textContent =
+            (btn.dataset.customer || 'This customer') + (veh ? ' — ' + veh : '');
+
+        var dep = (btn.dataset.deposit || '').trim();
+        var depEl = document.getElementById('crDeposit');
+        depEl.textContent = dep ? ('Deposit held: KES ' + dep + ' — check whether a refund is due.') : '';
+        depEl.style.display = dep ? '' : 'none';
+
+        var agent = (btn.dataset.agent || '').trim();
+        document.getElementById('crWho').textContent =
+            agent ? agent : 'The officer who took this reservation';
+
+        document.getElementById('crReason').value = '';
+        modal.show();
+    });
+
+    // A double submit would not cancel twice — the lead is no longer reserved by
+    // then — but it would show a confusing error, so the button locks.
+    document.getElementById('cancelResForm').addEventListener('submit', function () {
+        var b = document.getElementById('crSubmit');
+        b.disabled = true;
+        b.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Cancelling…';
+    });
+}());
+</script>
 <?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
