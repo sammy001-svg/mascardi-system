@@ -390,11 +390,19 @@ function visitorActiveDesks(PDO $db): array
 /**
  * Which customer relations officer gets the next walk-in lead.
  *
- * Not a rotating pointer: whoever currently carries the fewest open leads takes
- * the next one, and ties go to whoever was given a lead least recently. A plain
- * round robin keeps handing work to someone on leave, and drifts permanently out
- * of balance the moment one officer's leads are reassigned. Counting live load
- * every time is self-correcting.
+ * A rotation: each walk-in goes to the officer who has gone longest without one,
+ * so they come round the whole team in turn.
+ *
+ * This replaced a load-balancing rule that gave the next walk-in to whoever
+ * carried the fewest open leads. That sounds fairer and is not: an officer who
+ * happens to start with fewer leads absorbs every new walk-in until they catch
+ * up, which from the desk looks like one person receiving everything.
+ *
+ * The turn order is derived from the assignment history in `visitors` rather
+ * than kept in a stored pointer. A pointer has to be maintained as officers join
+ * and leave, and goes wrong quietly when it is not; reading the history cannot
+ * drift, needs no migration, and puts a newly added officer first — they have no
+ * walk-ins at all, so they are furthest overdue.
  *
  * On location
  * -----------
@@ -427,16 +435,17 @@ function visitorNextCrmOfficer(PDO $db, ?int $locationId = null): ?int
         $where = "u.role IN ({$in}) AND u.status = 'active'";
         if ($scoped) { $where .= " AND u.location_id = ?"; $args[] = $locationId; }
         try {
+            // Whoever went longest without a walk-in takes the next one. Someone
+            // who has never had one sorts first (NULL below any real date), then
+            // the longest-waiting, and u.id only breaks exact ties so the order
+            // is stable rather than arbitrary.
             $st = $db->prepare("
                 SELECT u.id
                 FROM users u
-                LEFT JOIN crm_leads l
-                       ON l.assigned_to = u.id
-                      AND (l.stage IS NULL OR l.stage NOT IN ('won','lost','delivered'))
+                LEFT JOIN visitors v ON v.assigned_to = u.id
                 WHERE {$where}
                 GROUP BY u.id
-                ORDER BY COUNT(l.id) ASC,
-                         COALESCE(MAX(l.created_at), '1970-01-01') ASC,
+                ORDER BY COALESCE(MAX(v.created_at), '1000-01-01') ASC,
                          u.id ASC
                 LIMIT 1");
             $st->execute($args);
@@ -445,6 +454,39 @@ function visitorNextCrmOfficer(PDO $db, ?int $locationId = null): ?int
         } catch (\Throwable $_) {}
     }
     return null;
+}
+
+/**
+ * The rotation as it currently stands: who is next, and when each officer last
+ * took a walk-in.
+ *
+ * Same ordering as visitorNextCrmOfficer(), so the first row IS the next
+ * allocation. Used to show the queue on screen — a rotation nobody can see is
+ * one people assume is broken the first time it does not match their guess.
+ */
+function visitorRotationOrder(PDO $db, ?int $locationId = null, array $roles = ['customer_relations']): array
+{
+    if (!$roles) return [];
+    $in    = implode(',', array_fill(0, count($roles), '?'));
+    $args  = $roles;
+    $where = "u.role IN ({$in}) AND u.status = 'active'";
+    if ($locationId) { $where .= " AND u.location_id = ?"; $args[] = $locationId; }
+    try {
+        $st = $db->prepare("
+            SELECT u.id, u.name, u.location_id,
+                   l.name AS location_name,
+                   MAX(v.created_at)  AS last_at,
+                   COUNT(v.id)        AS total_walkins,
+                   SUM(DATE(v.created_at) = CURDATE()) AS today_walkins
+            FROM users u
+            LEFT JOIN visitors  v ON v.assigned_to = u.id
+            LEFT JOIN locations l ON l.id = u.location_id
+            WHERE {$where}
+            GROUP BY u.id
+            ORDER BY COALESCE(MAX(v.created_at), '1000-01-01') ASC, u.id ASC");
+        $st->execute($args);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
+    } catch (\Throwable $_) { return []; }
 }
 
 /**

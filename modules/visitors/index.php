@@ -167,6 +167,55 @@ include __DIR__ . '/../../includes/header.php';
 </form>
 
 <?php
+// ── Whose turn is next ───────────────────────────────────────────────────────
+// A rotation nobody can see is one people assume is broken the first time it
+// does not match their guess, so the queue is shown in the order it will
+// actually be used: whoever has gone longest without a walk-in is at the top.
+$rotation = visitorRotationOrder($db);
+?>
+<?php if ($rotation): ?>
+<div class="card mb-3">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="fa fa-arrows-rotate me-2"></i>Walk-in rotation</span>
+        <span class="text-muted small">each new buyer goes to the next officer in turn</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle" style="font-size:13px">
+            <thead><tr>
+                <th style="width:70px">Turn</th><th>Customer relations</th>
+                <th>Location</th><th>Last walk-in</th>
+                <th class="text-end">Today</th><th class="text-end">All time</th>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($rotation as $i => $o): ?>
+            <tr<?= $i === 0 ? ' style="background:#f0fdf4"' : '' ?>>
+                <td>
+                    <?php if ($i === 0): ?>
+                    <span class="badge bg-success" style="font-size:10px">NEXT</span>
+                    <?php else: ?>
+                    <span class="text-muted"><?= $i + 1 ?></span>
+                    <?php endif; ?>
+                </td>
+                <td class="fw-semibold"><?= e($o['name']) ?></td>
+                <td class="text-muted" style="font-size:12px">
+                    <?= $o['location_name'] ? '<i class="fa fa-location-dot me-1"></i>' . e($o['location_name'])
+                                            : '<span class="text-muted">—</span>' ?>
+                </td>
+                <td class="text-muted" style="font-size:12px">
+                    <?= $o['last_at'] ? fmtDate($o['last_at'], 'd M, H:i')
+                                      : '<em>never — first in line</em>' ?>
+                </td>
+                <td class="text-end"><?= (int)$o['today_walkins'] ?></td>
+                <td class="text-end text-muted"><?= (int)$o['total_walkins'] ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php
 // ── Which desks are open ─────────────────────────────────────────────────────
 // The visitors book runs on one device per branch under a shared login. When
 // somebody reports that they cannot sign in at a location, this is the answer:
