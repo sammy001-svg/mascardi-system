@@ -128,6 +128,22 @@ if (!$hasCustomPerms && $user['role'] !== 'admin') {
     foreach ($roleWriteDefaults[$user['role']]  ?? [] as $m) { $savedPerms[$m][1] = true; }
 }
 
+// ── Remove this user's photo ─────────────────────────────────────────────────
+// Its own POST so it does not have to pass the full form's validation just to
+// clear a picture.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_photo'])) {
+    if (!empty($user['profile_image'])) {
+        $old = BASE_PATH . '/uploads/profiles/' . $user['profile_image'];
+        if (is_file($old)) @unlink($old);
+        $thumb = BASE_PATH . '/uploads/profiles/thumbs/' . $user['profile_image'];
+        if (is_file($thumb)) @unlink($thumb);
+        $db->prepare("UPDATE users SET profile_image = NULL WHERE id = ?")->execute([$id]);
+        logActivity('update', 'users', $id, "Removed profile photo for {$user['name']}");
+    }
+    setFlash('success', 'Profile photo removed.');
+    redirect(BASE_URL . '/modules/users/edit.php?id=' . $id);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name       = trim($_POST['name']     ?? '');
     $username   = trim($_POST['username'] ?? '');
@@ -156,6 +172,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $db->prepare("UPDATE users SET name=?,username=?,email=?,role=?,linked_id=?,linked_type=?,status=?,location_id=? WHERE id=?")
                    ->execute([$name, $username, $email, $role, $li, $lt, $status, $locationId, $id]);
+            }
+
+            // ── Profile photo ────────────────────────────────────────────────
+            // Handled after the row is saved, and deliberately not fatal: a
+            // rejected image must not throw away a completed set of permission
+            // changes. The problem is reported and everything else stands.
+            if (!empty($_FILES['profile_photo']['name'])
+                && ($_FILES['profile_photo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                try {
+                    $dir = BASE_PATH . '/uploads/profiles';
+                    if (!is_dir($dir)) mkdir($dir, 0755, true);
+
+                    $newFile = handleUpload($_FILES['profile_photo'], $dir,
+                                            ['jpg','jpeg','png','webp'], 8 * 1024 * 1024);
+
+                    // Replace, not accumulate — old photos are of no use to
+                    // anyone and this directory is served to the public kiosk.
+                    if (!empty($user['profile_image'])) {
+                        foreach ([$dir . '/' . $user['profile_image'],
+                                  $dir . '/thumbs/' . $user['profile_image']] as $old) {
+                            if (is_file($old)) @unlink($old);
+                        }
+                    }
+                    $db->prepare("UPDATE users SET profile_image = ? WHERE id = ?")
+                       ->execute([$newFile, $id]);
+                } catch (\Throwable $e) {
+                    setFlash('error', 'The user was saved, but the photo was not accepted: '
+                           . $e->getMessage());
+                }
             }
 
             // Save permissions
@@ -197,7 +242,7 @@ include __DIR__ . '/../../includes/header.php';
 <div class="alert alert-danger"><ul class="mb-0"><?php foreach ($errors as $err) echo '<li>' . e($err) . '</li>'; ?></ul></div>
 <?php endif; ?>
 
-<form method="POST" autocomplete="off" id="userForm">
+<form method="POST" autocomplete="off" id="userForm" enctype="multipart/form-data">
 
 <!-- Basic Info -->
 <div class="card mb-4">
@@ -223,6 +268,46 @@ include __DIR__ . '/../../includes/header.php';
             <div class="col-md-6">
                 <label class="form-label">Email</label>
                 <input type="email" name="email" class="form-control" value="<?= e($user['email'] ?? '') ?>">
+            </div>
+
+            <?php /* Profile photo. Set here for ANY user, not only for oneself —
+                     the visitors book shows the assigned officer's picture to the
+                     customer waiting for them, so these have to be fillable
+                     centrally rather than depending on each person uploading one. */ ?>
+            <div class="col-12"><hr class="my-1"></div>
+            <div class="col-12">
+                <label class="form-label">Profile photo</label>
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <div style="width:74px;height:74px;border-radius:50%;overflow:hidden;flex:0 0 74px;
+                                background:var(--surface-alt,#f1f5f9);border:1px solid var(--border,#e2e8f0);
+                                display:flex;align-items:center;justify-content:center">
+                        <?php if (!empty($user['profile_image'])): ?>
+                        <img src="<?= BASE_URL ?>/uploads/profiles/<?= e($user['profile_image']) ?>"
+                             alt="<?= e($user['name']) ?>"
+                             style="width:100%;height:100%;object-fit:cover">
+                        <?php else: ?>
+                        <i class="fa fa-user" style="font-size:26px;color:var(--text-2,#94a3b8)"></i>
+                        <?php endif; ?>
+                    </div>
+                    <div style="flex:1;min-width:220px">
+                        <input type="file" name="profile_photo" class="form-control form-control-sm"
+                               accept="image/jpeg,image/png,image/webp">
+                        <div class="form-text" style="font-size:11.5px">
+                            JPG, PNG or WebP, up to 8MB. A head-and-shoulders photo works best —
+                            it is shown to visitors waiting to be seen.
+                        </div>
+                    </div>
+                    <?php if (!empty($user['profile_image'])): ?>
+                    <?php /* Its own submit so clearing a photo does not have to satisfy
+                             the whole form; name="remove_photo" is what the handler
+                             at the top of this file looks for. */ ?>
+                    <button type="submit" name="remove_photo" value="1" formnovalidate
+                            class="btn btn-sm btn-outline-danger"
+                            onclick="return confirm('Remove this photo?')">
+                        <i class="fa fa-trash me-1"></i>Remove
+                    </button>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     </div>

@@ -24,7 +24,8 @@ if (!function_exists('visitorsMigrate')) {
 // 2 — check-out tracking (checked_out_at / checked_out_by).
 // 3 — visitors.location_id, so a walk-in is tied to the branch that received it.
 // 4 — visitor_kiosk_sessions: one live desk per location, many desks per account.
-if (!defined('VISITORS_SCHEMA_VERSION')) define('VISITORS_SCHEMA_VERSION', '4');
+// 5 - guarantee users.profile_image, which the confirmation screen selects.
+if (!defined('VISITORS_SCHEMA_VERSION')) define('VISITORS_SCHEMA_VERSION', '5');
 
 /**
  * How long a desk's claim on a location survives without a heartbeat.
@@ -150,6 +151,13 @@ function visitorsMigrate(PDO $db, bool $force = false): void
         "ALTER TABLE visitors ADD INDEX idx_v_location (location_id, created_at)",
     ];
     foreach ($columns as $c) { try { $db->exec($c); } catch (\Throwable $_) {} }
+
+    // users.profile_image is created lazily by whichever staff page happens to be
+    // opened first. The confirmation screen selects it to show the visitor who is
+    // coming for them, and a missing column would throw and leave that screen
+    // blank — so the book guarantees it rather than hoping.
+    try { $db->exec("ALTER TABLE users ADD COLUMN profile_image VARCHAR(255) NULL DEFAULT NULL"); }
+    catch (\Throwable $_) {}
 
     // The kiosk logs in as its own account, so the role has to exist before one
     // can be created. Additive — see ensureUserRole().

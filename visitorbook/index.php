@@ -263,10 +263,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ── Confirmation ─────────────────────────────────────────────────────────────
 if (!empty($_GET['done'])) {
-    $st = $db->prepare("SELECT v.*, u.name AS staff_name, a.name AS officer_name
+    // The officer's own details come through here so the visitor can be shown who
+    // is coming and what they look like — a name alone leaves someone scanning a
+    // room for a stranger.
+    $st = $db->prepare("SELECT v.*, u.name AS staff_name,
+                               a.name AS officer_name, a.email AS officer_email,
+                               a.role AS officer_role, a.profile_image AS officer_photo,
+                               l.name AS officer_location
                         FROM visitors v
                         LEFT JOIN users u ON u.id = v.staff_id
                         LEFT JOIN users a ON a.id = v.assigned_to
+                        LEFT JOIN locations l ON l.id = a.location_id
                         WHERE v.id = ?");
     $st->execute([(int)$_GET['done']]);
     $done = $st->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -296,13 +303,53 @@ require __DIR__ . '/_layout.php';
                 has been notified that you are here. Please take a seat.
             <?php elseif ($done['purpose'] === 'buy_car'): ?>
                 <?= $done['officer_name']
-                    ? htmlspecialchars($done['officer_name']) . ' will be with you shortly'
-                    : 'One of our sales team will be with you shortly' ?>
-                to talk through the vehicle you selected.
+                    ? 'You will be looked after by'
+                    : 'One of our sales team will be with you shortly to talk through the vehicle you selected.' ?>
             <?php else: ?>
                 Your vehicle details have been recorded. Our service team will be with you shortly.
             <?php endif; ?>
         </p>
+
+        <?php /* Who is coming, and what they look like. A name on its own leaves a
+                 visitor scanning the room for a stranger; the photo is the part
+                 that actually helps them recognise the person walking over. */ ?>
+        <?php if ($done['purpose'] === 'buy_car' && $done['officer_name']): ?>
+        <div class="vb-officer">
+            <div class="vb-officer-pic">
+                <?php if (!empty($done['officer_photo'])): ?>
+                <img src="<?= BASE_URL ?>/uploads/profiles/<?= htmlspecialchars($done['officer_photo']) ?>"
+                     alt="<?= htmlspecialchars($done['officer_name']) ?>">
+                <?php else: ?>
+                <span class="vb-officer-initials">
+                    <?php
+                    $__p = preg_split('/\s+/', trim($done['officer_name']));
+                    echo htmlspecialchars(strtoupper(
+                        substr($__p[0] ?? '', 0, 1) . (count($__p) > 1 ? substr(end($__p), 0, 1) : '')
+                    ));
+                    ?>
+                </span>
+                <?php endif; ?>
+            </div>
+            <div class="vb-officer-who">
+                <div class="vb-officer-name"><?= htmlspecialchars($done['officer_name']) ?></div>
+                <div class="vb-officer-role">
+                    <?= htmlspecialchars(ucwords(str_replace('_', ' ', (string)$done['officer_role']))) ?>
+                </div>
+                <div class="vb-officer-meta">
+                    <?php if (!empty($done['officer_location'])): ?>
+                    <span><i class="fa fa-location-dot"></i><?= htmlspecialchars($done['officer_location']) ?></span>
+                    <?php endif; ?>
+                    <?php if (!empty($done['officer_email'])): ?>
+                    <span><i class="fa fa-envelope"></i><?= htmlspecialchars($done['officer_email']) ?></span>
+                    <?php endif; ?>
+                </div>
+                <div class="vb-officer-note">
+                    <i class="fa fa-clock"></i>They will be with you shortly. Please take a seat.
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <p style="color:var(--vb-ink-3);font-size:12.5px;margin:0 0 26px">
             Signed in at <?= date('H:i', strtotime($done['created_at'])) ?>
         </p>

@@ -151,6 +151,38 @@ body{
 .vb-purpose input:checked + div i{ color:var(--vb-brand); }
 .vb-purpose input:focus-visible + div{ outline:3px solid color-mix(in srgb, var(--vb-brand) 55%, transparent); outline-offset:2px; }
 
+/* The officer coming to meet the visitor, on the confirmation screen. Read from
+   a metre away across a reception counter, so it is deliberately large. */
+.vb-officer{
+    display:flex; align-items:center; gap:20px; text-align:left;
+    max-width:440px; margin:0 auto 22px; padding:20px;
+    background:var(--vb-brand-soft); border:1px solid var(--vb-brand-line);
+    border-radius:var(--vb-r);
+}
+@media(max-width:520px){ .vb-officer{ flex-direction:column; text-align:center; gap:14px; } }
+.vb-officer-pic{
+    width:92px; height:92px; flex:0 0 92px; border-radius:50%; overflow:hidden;
+    background:var(--vb-card-2); border:3px solid var(--vb-brand);
+    display:flex; align-items:center; justify-content:center;
+}
+.vb-officer-pic img{ width:100%; height:100%; object-fit:cover; display:block; }
+/* Initials rather than a generic silhouette when there is no photo — it still
+   tells the visitor something, and it does not look like a broken image. */
+.vb-officer-initials{ font-size:32px; font-weight:800; color:var(--vb-brand); letter-spacing:1px; }
+.vb-officer-who{ min-width:0; }
+.vb-officer-name{ font-size:19px; font-weight:800; letter-spacing:-.3px; line-height:1.2; }
+.vb-officer-role{ font-size:12.5px; color:var(--vb-brand); font-weight:700;
+    text-transform:uppercase; letter-spacing:.08em; margin-top:3px; }
+.vb-officer-meta{ margin-top:8px; display:flex; flex-direction:column; gap:3px; }
+.vb-officer-meta span{ font-size:12.5px; color:var(--vb-ink-2);
+    display:flex; align-items:center; gap:7px; word-break:break-word; }
+@media(max-width:520px){ .vb-officer-meta span{ justify-content:center; } }
+.vb-officer-meta i{ width:14px; color:var(--vb-ink-3); flex:0 0 14px; }
+.vb-officer-note{ margin-top:10px; font-size:12.5px; color:var(--vb-ink-2);
+    display:flex; align-items:center; gap:7px; }
+@media(max-width:520px){ .vb-officer-note{ justify-content:center; } }
+.vb-officer-note i{ color:var(--vb-brand); }
+
 /* Location chooser — the first thing staff see, so the targets are large. */
 .vb-locs{ display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
 .vb-loc input{ position:absolute; opacity:0; width:0; height:0; }

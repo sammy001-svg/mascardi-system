@@ -42,7 +42,25 @@ include __DIR__ . '/../../includes/header.php';
             <tbody>
                 <?php foreach ($users as $u): ?>
                 <tr>
-                    <td class="ps-3 fw-medium"><?= e($u['name']) ?></td>
+                    <td class="ps-3 fw-medium">
+                        <?php /* The photo sits beside the name so it is obvious at a
+                                 glance who still needs one — the visitors book shows
+                                 these to waiting customers. */ ?>
+                        <span class="d-inline-flex align-items-center gap-2">
+                            <span style="width:30px;height:30px;border-radius:50%;overflow:hidden;
+                                         flex:0 0 30px;background:var(--surface-alt,#f1f5f9);
+                                         border:1px solid var(--border,#e2e8f0);display:inline-flex;
+                                         align-items:center;justify-content:center">
+                                <?php if (!empty($u['profile_image'])): ?>
+                                <img src="<?= BASE_URL ?>/uploads/profiles/<?= e($u['profile_image']) ?>"
+                                     alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover">
+                                <?php else: ?>
+                                <i class="fa fa-user" style="font-size:12px;color:var(--text-2,#94a3b8)"></i>
+                                <?php endif; ?>
+                            </span>
+                            <?= e($u['name']) ?>
+                        </span>
+                    </td>
                     <td><code><?= e($u['username']) ?></code></td>
                     <td>
                         <?php
