@@ -151,6 +151,38 @@ body{
 .vb-purpose input:checked + div i{ color:var(--vb-brand); }
 .vb-purpose input:focus-visible + div{ outline:3px solid color-mix(in srgb, var(--vb-brand) 55%, transparent); outline-offset:2px; }
 
+/* Choosing who will attend — reception taps this while the customer waits, so
+   the targets are large and the state is unmistakable. */
+.vb-offs{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+.vb-off input{ position:absolute; opacity:0; width:0; height:0; }
+.vb-off > div{
+    position:relative; border:2px solid var(--vb-line); border-radius:var(--vb-r);
+    padding:16px 12px 14px; text-align:center; cursor:pointer; transition:.14s; height:100%;
+}
+.vb-off > div:hover{ border-color:var(--vb-ink-3); }
+.vb-off input:checked + div{ border-color:var(--vb-brand); background:var(--vb-brand-soft); }
+.vb-off input:focus-visible + div{ outline:3px solid color-mix(in srgb, var(--vb-brand) 55%, transparent); outline-offset:2px; }
+.vb-off-next{
+    position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+    background:var(--vb-brand); color:#fff; font-size:9.5px; font-weight:800;
+    letter-spacing:.06em; text-transform:uppercase; padding:2px 9px; border-radius:20px;
+    white-space:nowrap;
+}
+.vb-off-pic{
+    width:60px; height:60px; margin:0 auto 10px; border-radius:50%; overflow:hidden;
+    background:var(--vb-card-2); border:2px solid var(--vb-line);
+    display:flex; align-items:center; justify-content:center;
+}
+.vb-off input:checked + div .vb-off-pic{ border-color:var(--vb-brand); }
+.vb-off-pic img{ width:100%; height:100%; object-fit:cover; display:block; }
+.vb-off-pic span{ font-size:20px; font-weight:800; color:var(--vb-ink-3); }
+.vb-off-name{ font-size:13.5px; font-weight:700; line-height:1.25; }
+.vb-off-meta{ margin-top:5px; font-size:11px; }
+.vb-off-meta i{ font-size:6px; vertical-align:middle; margin-right:4px; }
+.vb-off-on{ color:#16a34a; font-weight:600; }
+.vb-off-off{ color:var(--vb-ink-3); }
+.vb-off-load{ margin-top:4px; font-size:11px; color:var(--vb-ink-3); }
+
 /* The officer coming to meet the visitor, on the confirmation screen. Read from
    a metre away across a reception counter, so it is deliberately large. */
 .vb-officer{

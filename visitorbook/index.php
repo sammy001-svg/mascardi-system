@@ -45,6 +45,28 @@ if ($locationId && !visitorDeskTouch($db, $locationId)) {
     redirect(BASE_URL . '/visitorbook/location.php');
 }
 
+// Nothing may be left ownerless. If a tablet was closed on the chooser, or the
+// visitor wandered off mid-screen, this hands those walk-ins to the rotation on
+// the next page load — one indexed query, and no cron to forget to install.
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    foreach (visitorSweepUnassigned($db) as $__swept) {
+        try {
+            require_once __DIR__ . '/../includes/notifications.php';
+            $__s = $db->prepare("SELECT v.*, u.id AS oid FROM visitors v
+                                 LEFT JOIN users u ON u.id = v.assigned_to WHERE v.id = ?");
+            $__s->execute([$__swept]);
+            if ($__r = $__s->fetch(PDO::FETCH_ASSOC)) {
+                if (!empty($__r['oid'])) {
+                    createNotification((int)$__r['oid'], 'lead',
+                        'Walk-in lead: ' . visitorFullName($__r),
+                        'Allocated automatically. Phone ' . $__r['phone'],
+                        BASE_URL . '/modules/crm/view_lead.php?id=' . (int)$__r['lead_id']);
+                }
+            }
+        } catch (\Throwable $_) {}
+    }
+}
+
 $errors = [];
 $done   = null;
 
@@ -115,11 +137,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // ── What the visit becomes ───────────────────────────────────────
             if ($purpose === 'buy_car') {
-                // A walk-in who names a car is a lead, and a lead nobody owns is
-                // a lead nobody follows up — so it is assigned as it is created.
-                // Scoped to the branch the visitor actually walked into, widening
-                // only if nobody there can take it.
-                $assignee = visitorNextCrmOfficer($db, $locationId);
+                // Left unassigned here on purpose. Reception picks the officer on
+                // the next screen, because they can see who is actually free; the
+                // rotation only steps in when that is skipped. Nothing is left
+                // ownerless either way — assign.php assigns on skip, and
+                // visitorSweepUnassigned() catches an abandoned tablet.
+                $assignee = null;
                 $car = $db->prepare("SELECT make, model, year FROM cars WHERE id = ?");
                 $car->execute([$carId]);
                 $c = $car->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -219,12 +242,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     createNotification($staffId, 'visitor',
                         $fullName . ' is at reception to see you',
                         $reason, BASE_URL . '/modules/visitors/index.php?range=today');
-                } elseif ($purpose === 'buy_car' && $assignee) {
-                    createNotification($assignee, 'lead',
-                        'Walk-in lead: ' . $fullName,
-                        'At reception now, interested in a vehicle. Phone ' . $phone,
-                        BASE_URL . '/modules/crm/view_lead.php?id=' . $leadId);
-                } elseif ($purpose === 'car_service') {
+                }
+                // buy_car is notified from assign.php instead — there is nobody to
+                // tell until an officer has actually been chosen, and notifying an
+                // auto-pick here would send a second message when reception then
+                // chose somebody else.
+                elseif ($purpose === 'car_service') {
                     notifyRoles(['workshop_manager', 'receptionist'], 'service',
                         'Service walk-in: ' . $fullName,
                         trim($svc['make'] . ' ' . $svc['model'] . ' — ' . $svc['reg']),
@@ -235,23 +258,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try { logActivity('create', 'visitors', $visitorId, 'Visitor signed in: ' . $fullName); }
             catch (\Throwable $_) {}
 
-            // Redirect so a refresh cannot record the same visitor twice. Sent by
-            // hand rather than through redirect(), which exits — the emails below
-            // have to run after the browser has been let go.
-            header('Location: ' . BASE_URL . '/visitorbook/index.php?done=' . $visitorId);
-
-            // Welcome the visitor and tell the officer somebody is waiting. Done
-            // once the response is on its way, because SMTP is a blocking socket
-            // and the desk must not sit there loading with a customer in front of
-            // it. The officer's in-system notification already went out above,
-            // which is the part that has to be immediate.
-            if ($purpose === 'buy_car' && $assignee) {
-                $__vid = $visitorId;
-                visitorFlushThenSend(function () use ($db, $__vid) {
-                    visitorSendAllocationEmails($db, $__vid);
-                });
-            }
-            exit;
+            // Redirect so a refresh cannot record the same visitor twice.
+            // A car buyer goes to the officer chooser; everyone else straight to
+            // the thank-you, since there is nobody to allocate for them.
+            redirect($purpose === 'buy_car'
+                ? BASE_URL . '/visitorbook/assign.php?v=' . $visitorId
+                : BASE_URL . '/visitorbook/index.php?done=' . $visitorId);
 
         } catch (\Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();

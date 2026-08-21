@@ -465,6 +465,137 @@ function visitorNextCrmOfficer(PDO $db, ?int $locationId = null): ?int
 }
 
 /**
+ * Officers reception can choose from, with enough context to choose well.
+ *
+ * `in_today` is a hint, not a gate. Someone can be on site all morning without
+ * touching the system, so an officer who looks absent is still selectable —
+ * reception is standing there and knows better than the login table does.
+ */
+function visitorAvailableOfficers(PDO $db, ?int $locationId = null): array
+{
+    $rows = visitorRotationOrder($db, $locationId);
+    if (!$rows && $locationId) $rows = visitorRotationOrder($db, null);   // widen if the branch has nobody
+    if (!$rows) return [];
+
+    $ids = array_map(fn($r) => (int)$r['id'], $rows);
+    $in  = implode(',', array_fill(0, count($ids), '?'));
+
+    $extra = [];
+    try {
+        $st = $db->prepare("
+            SELECT u.id, u.profile_image, u.email,
+                   (DATE(GREATEST(COALESCE(u.last_seen,'1970-01-01'),
+                                  COALESCE(u.last_login,'1970-01-01'))) = CURDATE()) AS in_today,
+                   (SELECT COUNT(*) FROM crm_leads l
+                     WHERE l.assigned_to = u.id
+                       AND (l.stage IS NULL OR l.stage NOT IN ('won','lost','delivered'))) AS open_leads
+            FROM users u WHERE u.id IN ({$in})");
+        $st->execute($ids);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $extra[(int)$r['id']] = $r;
+    } catch (\Throwable $_) {}
+
+    foreach ($rows as &$r) {
+        $e = $extra[(int)$r['id']] ?? [];
+        $r['profile_image'] = $e['profile_image'] ?? null;
+        $r['email']         = $e['email'] ?? null;
+        $r['in_today']      = (int)($e['in_today'] ?? 1);
+        $r['open_leads']    = (int)($e['open_leads'] ?? 0);
+    }
+    return $rows;
+}
+
+/**
+ * Puts a walk-in in an officer's hands — chosen by reception, or by the rotation
+ * when that step is skipped.
+ *
+ * Idempotent by design: it only assigns a visit that is still unassigned, so a
+ * reception tap racing the automatic sweep cannot produce two owners or two
+ * notifications. The caller finds out which of them won from `assigned`.
+ *
+ * @return array{ok:bool,assigned:bool,officer_id:int,notify:?array}
+ */
+function visitorAssignOfficer(PDO $db, int $visitorId, ?int $officerId = null): array
+{
+    $out = ['ok' => false, 'assigned' => false, 'officer_id' => 0, 'notify' => null];
+    try {
+        $st = $db->prepare("SELECT * FROM visitors WHERE id = ?");
+        $st->execute([$visitorId]);
+        $v = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (\Throwable $_) { return $out; }
+
+    if (!$v || $v['purpose'] !== 'buy_car') return $out;
+
+    // Already owned — succeed, but report that this call did not do it.
+    if (!empty($v['assigned_to'])) {
+        return ['ok' => true, 'assigned' => false,
+                'officer_id' => (int)$v['assigned_to'], 'notify' => null];
+    }
+
+    // A chosen officer must be one this kiosk was actually offered, so a stale
+    // page cannot assign to somebody deactivated in the meantime.
+    $chosen = 0;
+    if ($officerId) {
+        foreach (visitorAvailableOfficers($db, (int)($v['location_id'] ?? 0) ?: null) as $o) {
+            if ((int)$o['id'] === $officerId) { $chosen = $officerId; break; }
+        }
+    }
+    if (!$chosen) $chosen = (int)(visitorNextCrmOfficer($db, (int)($v['location_id'] ?? 0) ?: null) ?? 0);
+    if (!$chosen) return $out;
+
+    try {
+        // The WHERE clause is the lock: whichever request gets here first wins,
+        // and the loser's rowCount is 0.
+        $up = $db->prepare("UPDATE visitors SET assigned_to = ?
+                            WHERE id = ? AND assigned_to IS NULL");
+        $up->execute([$chosen, $visitorId]);
+        if ($up->rowCount() === 0) {
+            $st->execute([$visitorId]);
+            $again = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+            return ['ok' => true, 'assigned' => false,
+                    'officer_id' => (int)($again['assigned_to'] ?? 0), 'notify' => null];
+        }
+        if (!empty($v['lead_id'])) {
+            $db->prepare("UPDATE crm_leads SET assigned_to = ?, updated_at = NOW() WHERE id = ?")
+               ->execute([$chosen, (int)$v['lead_id']]);
+        }
+    } catch (\Throwable $e) {
+        error_log('visitorAssignOfficer: ' . $e->getMessage());
+        return $out;
+    }
+
+    return ['ok' => true, 'assigned' => true, 'officer_id' => $chosen,
+            'notify' => ['visitor_id' => $visitorId, 'officer_id' => $chosen,
+                         'lead_id' => (int)($v['lead_id'] ?? 0)]];
+}
+
+/**
+ * Assigns any walk-in left sitting without an owner.
+ *
+ * The safety net behind the chooser: if reception starts that step and the tablet
+ * is closed, or the visitor wanders off mid-screen, nothing should be left with
+ * no one following it up. Runs on kiosk page loads, so it costs one indexed
+ * query and needs no cron.
+ *
+ * @return int[] Visitor ids newly assigned, so the caller can notify them.
+ */
+function visitorSweepUnassigned(PDO $db, int $olderThanSeconds = 180): array
+{
+    $done = [];
+    try {
+        $st = $db->prepare("SELECT id FROM visitors
+                            WHERE purpose = 'buy_car' AND assigned_to IS NULL
+                              AND created_at < DATE_SUB(NOW(), INTERVAL ? SECOND)
+                            ORDER BY created_at LIMIT 20");
+        $st->execute([$olderThanSeconds]);
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $vid) {
+            $r = visitorAssignOfficer($db, (int)$vid, null);
+            if (!empty($r['assigned'])) $done[] = (int)$vid;
+        }
+    } catch (\Throwable $_) {}
+    return $done;
+}
+
+/**
  * The rotation as it currently stands: who is next, and when each officer last
  * took a walk-in.
  *
