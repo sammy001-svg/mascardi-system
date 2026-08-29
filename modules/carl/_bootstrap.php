@@ -143,13 +143,26 @@ function carlSay(string $text): string
 function carlSkills(): array
 {
     return [
+        // Ordinary conversation, matched as a first-class skill so a greeting is
+        // answered instantly rather than falling through the whole matcher first.
+        // Handled natively by carlSkillChitchat: saying hello is not a business
+        // query, and an assistant that needs a working API key and a network
+        // round trip to say "good morning" looks broken in the first three
+        // seconds of use.
         'chitchat' => [
             'label'    => 'Greetings and polite conversation',
             'module'   => null,
-            'patterns' => ['hallo', 'hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening',
-                           'habari', 'jambo', 'sasa', 'mambo', 'sup', 'greetings', 'howdy',
-                           'how are you', 'how are you doing', 'who are you', 'what is your name',
-                           'thanks', 'thank you', 'asante', 'goodbye', 'bye', 'see you', 'hi carl', 'hello carl'],
+            'hidden'   => true,   // works, but is not a capability worth advertising
+            'patterns' => ['hallo', 'hello', 'helo', 'hi', 'hey', 'heya', 'yo', 'sup',
+                           'greetings', 'howdy', 'hi carl', 'hello carl',
+                           'good morning', 'good afternoon', 'good evening', 'morning',
+                           // Swahili — this is a Nairobi yard, and people greet in it.
+                           'habari', 'jambo', 'sasa', 'mambo', 'asante',
+                           'how are you', 'how are you doing', 'how are things',
+                           'you there', 'are you there', 'you awake', 'anyone there',
+                           'who are you', 'what is your name', 'your name',
+                           'thanks', 'thank you', 'cheers', 'well done', 'nice one',
+                           'goodbye', 'bye', 'see you', 'good night'],
         ],
         'help' => [
             'label'    => 'What Carl can do',

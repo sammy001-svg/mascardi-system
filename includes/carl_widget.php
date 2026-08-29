@@ -346,37 +346,61 @@ if (!defined('CARL_WIDGET')) {
         }
 
         // ── Typewriter ────────────────────────────────────────────────────────
-        // Characters up to FAST_LIMIT are revealed one per interval;
-        // beyond that the remainder appears instantly so long replies finish
-        // in a reasonable time while still feeling hand-typed.
-        var FAST_LIMIT = 80;   // characters typed individually
-        var INTERVAL   = 18;   // ms per character
+        // The whole reply is typed, start to finish. This used to print the
+        // first 80 characters and dump the remainder at once, which is worse
+        // than not animating at all: the eye starts following along and is then
+        // overtaken by a wall of text.
+        //
+        // The rate adapts instead. Short replies are typed at a comfortable
+        // reading pace; long ones speed up so the whole message still lands
+        // within a few seconds. Nobody waits twenty seconds to be told a number.
+        var chars = Array.from(said);            // multi-byte safe
+        var TARGET = Math.min(5200, Math.max(900, chars.length * 17));
+        var perFrame = Math.max(1, chars.length / (TARGET / 16.7));   // chars per ~60fps frame
 
-        var chars  = Array.from(said);  // handles multi-byte / emoji correctly
         var cursor = document.createElement('span');
         cursor.className = 'carl-cursor';
         bubble.appendChild(cursor);
 
-        var i = 0;
-        var timer = setInterval(function () {
-            if (i < chars.length) {
-                cursor.insertAdjacentText('beforebegin', chars[i]);
-                i++;
-                // Dump the rest at once when we hit the fast-forward threshold.
-                if (i === FAST_LIMIT && chars.length > FAST_LIMIT) {
-                    cursor.insertAdjacentText('beforebegin', chars.slice(i).join(''));
-                    i = chars.length;
-                }
-                body.scrollTop = body.scrollHeight;
-            } else {
-                clearInterval(timer);
-                cursor.remove();
-                // Rich HTML appears now that the bubble has finished printing.
-                if (richDiv) { richDiv.innerHTML = html; body.scrollTop = body.scrollHeight; }
-                if (onDone) onDone();
-            }
-        }, INTERVAL);
+        var i = 0, raf = null, finished = false;
 
+        function finish() {
+            if (finished) return;
+            finished = true;
+            if (raf) cancelAnimationFrame(raf);
+            // Whatever has not been printed yet goes in now.
+            if (i < chars.length) cursor.insertAdjacentText('beforebegin', chars.slice(i).join(''));
+            i = chars.length;
+            cursor.remove();
+            d.removeEventListener('click', finish);
+            // The card appears once the sentence has finished, so the panel does
+            // not jump while the bubble is still growing.
+            if (richDiv) { richDiv.innerHTML = html; }
+            body.scrollTop = body.scrollHeight;
+            if (onDone) onDone();
+        }
+
+        function step() {
+            var take = Math.ceil(perFrame);
+            if (i < chars.length) {
+                cursor.insertAdjacentText('beforebegin', chars.slice(i, i + take).join(''));
+                i += take;
+                // Only follow the text down if the reader has not scrolled up to
+                // re-read something — yanking them back is infuriating.
+                if (body.scrollHeight - body.scrollTop - body.clientHeight < 80) {
+                    body.scrollTop = body.scrollHeight;
+                }
+                raf = requestAnimationFrame(step);
+            } else {
+                finish();
+            }
+        }
+
+        // Impatience is legitimate: tapping the message prints the rest at once.
+        d.addEventListener('click', finish);
+        d.__carlFinish = finish;      // so a new question can cut the previous reply short
+
+        raf = requestAnimationFrame(step);
         return d;
     }
 
@@ -395,6 +419,13 @@ if (!defined('CARL_WIDGET')) {
         var msg = (preset != null ? preset : text.value).trim();
         if (!msg || busy) return;
         busy = true;
+
+        // If Carl is still typing the last answer, print it in full before the
+        // new question goes up — a half-finished sentence stranded above a new
+        // one reads like she was interrupted and lost her place.
+        var last = body.querySelector('.carl-msg.from-carl:last-child');
+        if (last && typeof last.__carlFinish === 'function') last.__carlFinish();
+
         add('user', msg, '', false, null);
         text.value = ''; text.style.height = 'auto';
         thinking(true);
@@ -412,10 +443,12 @@ if (!defined('CARL_WIDGET')) {
                 add('carl', 'Sorry — something went wrong at my end. Try again?', '', false, null);
                 return;
             }
-            // Typewriter for Carl's reply; voice fires when typing completes.
+            // Speech starts WITH the typing, not after it. Waiting for the
+            // sentence to finish printing and only then hearing it read out
+            // makes Carl feel slow and repeats what has just been read.
+            speak(j.say);
             add('carl', j.say, j.html, true, function () {
                 busy = false;
-                speak(j.say);
                 // Navigation is delayed so Carl finishes her sentence before the
                 // page changes under the person reading it.
                 if (j.go) setTimeout(function () { window.location.href = j.go; }, speakOn ? 1400 : 400);
@@ -475,10 +508,8 @@ if (!defined('CARL_WIDGET')) {
                     });
                 }
                 if (j.greeting) {
-                    // Greeting gets typewriter; voice fires after typing finishes.
-                    add('carl', j.greeting.say, j.greeting.html, true, function () {
-                        speak(j.greeting.say);
-                    });
+                    speak(j.greeting.say);
+                    add('carl', j.greeting.say, j.greeting.html, true, null);
                 }
                 if (!body.childElementCount) {
                     add('carl', 'Hello. I am ' + NAME + '. Ask me for a briefing, or say \u201chelp\u201d '

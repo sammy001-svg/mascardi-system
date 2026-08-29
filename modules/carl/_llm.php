@@ -36,14 +36,19 @@ function carlLlmAvailable(): bool
 function carlLlmModel(): string
 {
     $m = trim(getSetting('anthropic_model', ''));
+    // Whitelisted so a stray settings value is never sent to the API verbatim.
+    //
+    // These are current model ids. The previous list was 2024 and early-2025
+    // snapshots; a retired id makes every request fail, and this layer swallows
+    // failures into a silent fallback — which looks from the outside exactly
+    // like "we connected the key and nothing happened".
     $allowed = [
-        'claude-3-5-haiku-20241022',
-        'claude-3-5-sonnet-20241022',
-        'claude-3-haiku-20240307',
-        'claude-sonnet-4-5',
-        'claude-opus-4-5',
+        'claude-opus-5',      // most capable — the default
+        'claude-sonnet-5',    // cheaper, still strong
+        'claude-haiku-4-5',   // fastest, for high chat volume
+        'claude-opus-4-8',
     ];
-    return in_array($m, $allowed, true) ? $m : 'claude-3-5-haiku-20241022';
+    return in_array($m, $allowed, true) ? $m : 'claude-opus-5';
 }
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────

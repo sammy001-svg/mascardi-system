@@ -141,6 +141,8 @@ function carlSkillHelp(PDO $db, array $user, string $u): array
 {
     $mine = carlSkillsFor();
     unset($mine['help']);
+    // Small talk works but is not something to advertise as a capability.
+    $mine = array_filter($mine, fn($s) => empty($s['hidden']));
     $h = '<p class="carl-p">Here is what I can do for you right now.</p><div class="carl-chips">';
     foreach ($mine as $s) {
         $h .= '<button type="button" class="carl-chip" data-ask="' . e($s['patterns'][0]) . '">'
