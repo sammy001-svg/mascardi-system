@@ -42,6 +42,8 @@ $defaults = [
     'seo_google_verification' => '',
     'seo_ga_id'                => '',
     'seo_allow_indexing'       => '1',
+    'anthropic_api_key'        => '',
+    'anthropic_model'          => 'claude-3-5-haiku-20241022',
 ];
 
 $rows     = $db->query("SELECT setting_key, setting_value FROM settings")->fetchAll();
@@ -159,6 +161,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             'mpesa_callback_url'    => trim($_POST['mpesa_callback_url']    ?? ''),
         ];
 
+    } elseif ($activeTab === 'carl') {
+        $updates = [
+            'anthropic_model' => in_array($_POST['anthropic_model'] ?? '', [
+                'claude-3-5-haiku-20241022',
+                'claude-3-5-sonnet-20241022',
+                'claude-3-haiku-20240307',
+                'claude-sonnet-4-5',
+                'claude-opus-4-5',
+            ]) ? $_POST['anthropic_model'] : 'claude-3-5-haiku-20241022',
+        ];
+        // Only update the key when a value was supplied — preserves the current key
+        // when the admin opens settings and saves without touching the field.
+        if (!empty($_POST['anthropic_api_key'])) {
+            $updates['anthropic_api_key'] = trim($_POST['anthropic_api_key']);
+        }
+
     } elseif ($activeTab === 'seo') {
         $updates = [
             'seo_default_title'       => trim($_POST['seo_default_title']       ?? ''),
@@ -241,13 +259,14 @@ include __DIR__ . '/../../includes/header.php';
 <ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
     <?php
     $tabs = [
-        'branding'     => ['fa-palette',          'Branding'],
-        'documents'    => ['fa-file-lines',        'Documents'],
-        'email'        => ['fa-envelope',          'Email'],
+        'branding'     => ['fa-palette',           'Branding'],
+        'documents'    => ['fa-file-lines',         'Documents'],
+        'email'        => ['fa-envelope',           'Email'],
         'integrations' => ['fa-mobile-screen-button','Integrations'],
-        'seo'          => ['fa-magnifying-glass',  'SEO'],
-        'permissions'  => ['fa-shield-halved',     'Permissions'],
-        'system'       => ['fa-server',            'System'],
+        'carl'         => ['fa-wand-magic-sparkles', 'Carl AI'],
+        'seo'          => ['fa-magnifying-glass',   'SEO'],
+        'permissions'  => ['fa-shield-halved',      'Permissions'],
+        'system'       => ['fa-server',             'System'],
     ];
     foreach ($tabs as $tid => [$icon, $label]): ?>
     <li class="nav-item" role="presentation">
@@ -638,6 +657,107 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
 </div>
 </form>
 </div><!-- /integrations pane -->
+
+<!-- ══ CARL AI ══════════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade <?= $activeTab === 'carl' ? 'show active' : '' ?>" id="pane-carl" role="tabpanel">
+<form method="POST">
+<input type="hidden" name="action" value="save">
+<input type="hidden" name="_tab" value="carl">
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="fa fa-wand-magic-sparkles" style="background:linear-gradient(135deg,#a855f7,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent"></i>
+                <span>Carl AI — Anthropic / Claude</span>
+                <?php $carlOk = !empty($settings['anthropic_api_key'] ?? ''); ?>
+                <span class="badge bg-<?= $carlOk ? 'success' : 'secondary' ?> ms-auto">
+                    <?= $carlOk ? 'Active' : 'Not Configured' ?>
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info py-2 small mb-4">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Carl works fully offline with no key. Adding a Claude key enables natural-language
+                    intent routing, conversational answers to any business question, and varied daily greetings.
+                    Get a key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Anthropic API Key</label>
+                    <div class="input-group">
+                        <span class="input-group-text font-monospace text-muted" style="font-size:11px">sk-ant-…</span>
+                        <input type="password" name="anthropic_api_key" id="anthropicKeyInput" class="form-control font-monospace"
+                               autocomplete="new-password"
+                               placeholder="<?= $carlOk ? '••••••• (unchanged if blank)' : 'Paste your API key here' ?>">
+                        <button type="button" class="btn btn-outline-secondary"
+                                onclick="var f=document.getElementById('anthropicKeyInput');f.type=f.type==='text'?'password':'text'">
+                            <i class="fa fa-eye"></i>
+                        </button>
+                    </div>
+                    <div class="form-text">Leave blank to keep the current key. Clear it by pasting a single space and saving.</div>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label">Claude Model</label>
+                    <select name="anthropic_model" class="form-select">
+                        <?php
+                        $models = [
+                            'claude-3-5-haiku-20241022'  => 'claude-3-5-haiku — Fastest, lowest cost (recommended for chat)',
+                            'claude-3-5-sonnet-20241022' => 'claude-3-5-sonnet — More capable, slightly slower',
+                            'claude-sonnet-4-5'          => 'claude-sonnet-4-5 — Latest Sonnet',
+                            'claude-opus-4-5'            => 'claude-opus-4-5 — Most capable (highest cost)',
+                        ];
+                        foreach ($models as $val => $label):
+                        ?>
+                        <option value="<?= $val ?>" <?= ($settings['anthropic_model'] ?? 'claude-3-5-haiku-20241022') === $val ? 'selected' : '' ?>>
+                            <?= e($label) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="form-text">Haiku is the fastest model and is ideal for real-time chat. Switch to Sonnet for more nuanced answers.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header"><i class="fa fa-circle-info me-2"></i>How Carl uses Claude</div>
+            <div class="list-group list-group-flush" style="font-size:12.5px">
+                <div class="list-group-item py-3">
+                    <div class="fw-semibold mb-1"><i class="fa fa-route me-1 text-purple"></i>Intent routing</div>
+                    Carl uses Claude to understand natural questions she wouldn't otherwise match — like
+                    <em>"anything slipping?"</em> or <em>"how's business looking?"</em>
+                </div>
+                <div class="list-group-item py-3">
+                    <div class="fw-semibold mb-1"><i class="fa fa-comments me-1 text-purple"></i>Conversational answers</div>
+                    Questions that don't match any skill get a real, data-backed answer instead of
+                    <em>"I did not catch that."</em>
+                </div>
+                <div class="list-group-item py-3">
+                    <div class="fw-semibold mb-1"><i class="fa fa-sun me-1 text-purple"></i>Personalised greetings</div>
+                    Each morning Carl's opening message is freshly written — varied, warm, and based on
+                    the live state of your business.
+                </div>
+                <div class="list-group-item py-3">
+                    <div class="fw-semibold mb-1"><i class="fa fa-shield-halved me-1 text-success"></i>Always safe</div>
+                    Claude only receives the figures Carl already has. It cannot browse, cannot write to
+                    the database, and cannot invent a number. If it is unavailable, Carl works offline as before.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="mt-4">
+    <button type="submit" class="btn btn-primary px-5"><i class="fa fa-check me-2"></i>Save Carl AI Settings</button>
+    <?php if ($carlOk): ?>
+    <a href="#" class="btn btn-outline-secondary ms-2" id="clearCarlKey"
+       onclick="document.getElementById('anthropicKeyInput').type='text';
+                document.getElementById('anthropicKeyInput').value=' ';
+                this.closest('form').submit(); return false;">
+        <i class="fa fa-trash me-1"></i>Remove API Key
+    </a>
+    <?php endif; ?>
+</div>
+</form>
+</div><!-- /carl pane -->
 
 <!-- ══ SEO ═══════════════════════════════════════════════════════════════════ -->
 <div class="tab-pane fade <?= $activeTab === 'seo' ? 'show active' : '' ?>" id="pane-seo" role="tabpanel">

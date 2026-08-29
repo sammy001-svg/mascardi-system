@@ -17,6 +17,7 @@
 if (!function_exists('carlRun')) {
 
 require_once __DIR__ . '/_bootstrap.php';
+require_once __DIR__ . '/_llm.php';
 
 /** Dispatches to a handler, refusing anything this user may not see. */
 function carlRun(PDO $db, array $user, string $skill, string $utterance): array
@@ -58,8 +59,25 @@ function carlLink(string $href, string $label, string $icon = 'fa-arrow-right'):
          . e($label) . '</a>';
 }
 
-function carlSkillUnknown(array $user): array
+/**
+ * When no skill matches, try freeform LLM if available, otherwise return the
+ * static fallback so offline mode is indistinguishable from a graceful miss.
+ *
+ * @param  array    $user  Auth user row
+ * @param  PDO|null $db    If provided, passes live figures to the LLM
+ */
+function carlSkillUnknown(array $user, ?PDO $db = null): array
 {
+    if ($db !== null && carlLlmAvailable()) {
+        $figures = carlFigures($db);
+        $res     = carlLlmFreeform(
+            $_POST['message'] ?? '',   // original utterance from the current request
+            $figures,
+            $user
+        );
+        if (!empty($res['say'])) return $res;
+    }
+
     return ['skill' => 'unknown', 'done' => true,
             'say'   => 'I did not quite catch that. You can ask me for today\'s briefing, '
                      . 'the sales pipeline, stock, visitors, or what needs attention. '
@@ -685,24 +703,35 @@ function carlGreetingFor(PDO $db, array $user): ?array
         if ($ins->rowCount() === 0) return null;
     } catch (\Throwable $_) { return null; }
 
-    $name = carlFirstName((string)$user['name']);
-    $f    = carlFigures($db);
+    $name      = carlFirstName((string)$user['name']);
+    $f         = carlFigures($db);
+    $partOfDay = carlPartOfDay($db);
 
-    $say = 'Good ' . carlPartOfDay($db) . ', ' . $name . '. I am ' . CARL_NAME
-         . ', and I am here to help you through the day.';
-
+    // Gather human-readable facts for the LLM (and for the offline template).
     $bits = [];
-    if (canAccess('crm') && $f['leads_new_today'])   $bits[] = carlPlural($f['leads_new_today'], 'new lead');
+    if (canAccess('crm') && $f['leads_new_today'])    $bits[] = carlPlural($f['leads_new_today'], 'new lead');
     if (canAccess('visitors') && $f['visitors_today']) $bits[] = carlPlural($f['visitors_today'], 'visitor') . ' so far';
-    if (canAccess('jobs') && $f['jobs_open'])        $bits[] = carlPlural($f['jobs_open'], 'open job card');
-    if ($bits) $say .= ' You have ' . carlJoin($bits) . '.';
+    if (canAccess('jobs') && $f['jobs_open'])          $bits[] = carlPlural($f['jobs_open'], 'open job card');
 
     $flag = carlTopConcern($f);
-    if ($flag) $say .= ' ' . $flag['say'];
+    if ($flag) $bits[] = lcfirst(rtrim($flag['say'], '.'));
 
-    $say .= ' Ask me for a briefing whenever you are ready, or anything else you need.';
+    // Try the LLM first — it produces a varied, warm greeting each day.
+    $say = '';
+    if (carlLlmAvailable()) {
+        $say = carlLlmGreeting($name, $partOfDay, $bits);
+    }
 
-    return ['say' => $say, 'html' => $flag['html'] ?? ''];
+    // Offline fallback: same deterministic template as before.
+    if ($say === '') {
+        $say = 'Good ' . $partOfDay . ', ' . $name . '. I am ' . CARL_NAME
+             . ', and I am here to help you through the day.';
+        if ($bits) $say .= ' You have ' . carlJoin(array_slice($bits, 0, 2)) . '.';
+        if ($flag) $say .= ' ' . $flag['say'];
+        $say .= ' Ask me for a briefing whenever you are ready, or anything else you need.';
+    }
+
+    return ['say' => $say, 'html' => $flag ? $flag['html'] : ''];
 }
 
 } // function_exists('carlRun')

@@ -174,6 +174,11 @@ if (!defined('CARL_WIDGET')) {
     animation:carlBounce 1.3s infinite; }
 .carl-typing i:nth-child(2){ animation-delay:.18s } .carl-typing i:nth-child(3){ animation-delay:.36s }
 @keyframes carlBounce{ 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-5px);opacity:1} }
+/* Typewriter cursor — a blinking bar after the last character. */
+.carl-cursor{ display:inline-block; width:2px; height:1em; background:currentColor;
+    vertical-align:text-bottom; margin-left:1px;
+    animation:carlBlink .7s step-start infinite; }
+@keyframes carlBlink{ 0%,100%{opacity:1} 50%{opacity:0} }
 @media(max-width:520px){ .carl-panel{ width:100vw; } }
 </style>
 
@@ -299,15 +304,81 @@ if (!defined('CARL_WIDGET')) {
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
     }
-    function add(role, said, html) {
+
+    /**
+     * Append a message bubble to the chat body.
+     *
+     * @param {string}   role      'carl' | 'user'
+     * @param {string}   said      Plain-text content of the bubble.
+     * @param {string}   html      Optional rich panel below the bubble.
+     * @param {boolean}  animate   If true (Carl messages only), reveal the text
+     *                             character-by-character like it is being typed.
+     * @param {Function} onDone    Called when the message is fully rendered.
+     */
+    function add(role, said, html, animate, onDone) {
         var d = document.createElement('div');
         d.className = 'carl-msg from-' + role;
-        d.innerHTML = '<div class="bubble">' + esc(said) + '</div>'
-                    + (html ? '<div class="carl-rich">' + html + '</div>' : '');
+
+        var bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        d.appendChild(bubble);
+
+        var richDiv = null;
+        if (html) {
+            richDiv = document.createElement('div');
+            richDiv.className = 'carl-rich';
+            // Rich HTML only appears after typing is done — inserting it early
+            // makes the panel jump while the bubble is still being written.
+            d.appendChild(richDiv);
+        }
+
         body.appendChild(d);
         body.scrollTop = body.scrollHeight;
+
+        if (!animate || role !== 'carl' || !said) {
+            // Instant render for user messages and history replay.
+            bubble.textContent = said || '';
+            if (richDiv) richDiv.innerHTML = html;
+            body.scrollTop = body.scrollHeight;
+            if (onDone) onDone();
+            return d;
+        }
+
+        // ── Typewriter ────────────────────────────────────────────────────────
+        // Characters up to FAST_LIMIT are revealed one per interval;
+        // beyond that the remainder appears instantly so long replies finish
+        // in a reasonable time while still feeling hand-typed.
+        var FAST_LIMIT = 80;   // characters typed individually
+        var INTERVAL   = 18;   // ms per character
+
+        var chars  = Array.from(said);  // handles multi-byte / emoji correctly
+        var cursor = document.createElement('span');
+        cursor.className = 'carl-cursor';
+        bubble.appendChild(cursor);
+
+        var i = 0;
+        var timer = setInterval(function () {
+            if (i < chars.length) {
+                cursor.insertAdjacentText('beforebegin', chars[i]);
+                i++;
+                // Dump the rest at once when we hit the fast-forward threshold.
+                if (i === FAST_LIMIT && chars.length > FAST_LIMIT) {
+                    cursor.insertAdjacentText('beforebegin', chars.slice(i).join(''));
+                    i = chars.length;
+                }
+                body.scrollTop = body.scrollHeight;
+            } else {
+                clearInterval(timer);
+                cursor.remove();
+                // Rich HTML appears now that the bubble has finished printing.
+                if (richDiv) { richDiv.innerHTML = html; body.scrollTop = body.scrollHeight; }
+                if (onDone) onDone();
+            }
+        }, INTERVAL);
+
         return d;
     }
+
     function thinking(on) {
         var t = document.getElementById('carlThinking');
         if (!on) { if (t) t.remove(); return; }
@@ -323,7 +394,7 @@ if (!defined('CARL_WIDGET')) {
         var msg = (preset != null ? preset : text.value).trim();
         if (!msg || busy) return;
         busy = true;
-        add('user', msg, '');
+        add('user', msg, '', false, null);
         text.value = ''; text.style.height = 'auto';
         thinking(true);
 
@@ -334,17 +405,24 @@ if (!defined('CARL_WIDGET')) {
         })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
-            thinking(false); busy = false;
-            if (!j || !j.ok) { add('carl', 'Sorry — something went wrong at my end. Try again?', ''); return; }
-            add('carl', j.say, j.html);
-            speak(j.say);
-            // Navigation is deliberately delayed: Carl finishes her sentence and
-            // the person sees what she said before the page changes under them.
-            if (j.go) setTimeout(function () { window.location.href = j.go; }, speakOn ? 1400 : 550);
+            thinking(false);
+            if (!j || !j.ok) {
+                busy = false;
+                add('carl', 'Sorry — something went wrong at my end. Try again?', '', false, null);
+                return;
+            }
+            // Typewriter for Carl's reply; voice fires when typing completes.
+            add('carl', j.say, j.html, true, function () {
+                busy = false;
+                speak(j.say);
+                // Navigation is delayed so Carl finishes her sentence before the
+                // page changes under the person reading it.
+                if (j.go) setTimeout(function () { window.location.href = j.go; }, speakOn ? 1400 : 400);
+            });
         })
         .catch(function () {
             thinking(false); busy = false;
-            add('carl', 'I could not reach the system just then. Check your connection and try again.', '');
+            add('carl', 'I could not reach the system just then. Check your connection and try again.', '', false, null);
         });
     }
 
@@ -390,17 +468,20 @@ if (!defined('CARL_WIDGET')) {
             .then(function (j) {
                 if (!j || !j.ok) return;
                 if (!body.childElementCount) {
+                    // History replayed instantly — no typewriter for old messages.
                     (j.history || []).forEach(function (m) {
-                        add(m.role === 'user' ? 'user' : 'carl', m.body, m.html || '');
+                        add(m.role === 'user' ? 'user' : 'carl', m.body, m.html || '', false, null);
                     });
                 }
                 if (j.greeting) {
-                    add('carl', j.greeting.say, j.greeting.html);
-                    speak(j.greeting.say);
+                    // Greeting gets typewriter; voice fires after typing finishes.
+                    add('carl', j.greeting.say, j.greeting.html, true, function () {
+                        speak(j.greeting.say);
+                    });
                 }
                 if (!body.childElementCount) {
-                    add('carl', 'Hello. I am ' + NAME + '. Ask me for a briefing, or say “help” '
-                              + 'to see what I can do.', '');
+                    add('carl', 'Hello. I am ' + NAME + '. Ask me for a briefing, or say \u201chelp\u201d '
+                              + 'to see what I can do.', '', true, null);
                 }
             })
             .catch(function () {});
@@ -416,13 +497,15 @@ if (!defined('CARL_WIDGET')) {
                 if (!j || !j.ok || !j.greeting) return;
                 loaded = true;
                 (j.history || []).forEach(function (m) {
-                    if (m.skill !== 'greeting') add(m.role === 'user' ? 'user' : 'carl', m.body, m.html || '');
+                    if (m.skill !== 'greeting') add(m.role === 'user' ? 'user' : 'carl', m.body, m.html || '', false, null);
                 });
-                add('carl', j.greeting.say, j.greeting.html);
+                // Typewriter + voice for the proactive greeting.
+                add('carl', j.greeting.say, j.greeting.html, true, function () {
+                    speak(j.greeting.say);
+                });
                 btn.classList.add('has-news');
-                // The panel opens itself only for the greeting — this is the one
-                // moment Carl initiates rather than responds.
-                setTimeout(function () { open(); speak(j.greeting.say); }, 900);
+                // The panel opens itself only for the greeting.
+                setTimeout(function () { open(); }, 900);
             })
             .catch(function () {});
     }());

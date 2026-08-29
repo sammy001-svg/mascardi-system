@@ -5,12 +5,22 @@
  *   GET                 the conversation so far, plus the greeting if one is due
  *   POST {message}      an utterance; returns what Carl says, shows, and does
  *
- * A task already under way is continued BEFORE intent matching. Otherwise a bare
- * "0712345678" — a perfectly good answer to the question Carl just asked — would
- * be run through the matcher, match nothing, and lose the thread.
+ * Intent resolution order
+ * -----------------------
+ * 1. If a multi-step task is already pending, continue it (e.g. collecting
+ *    a phone number for "add lead").
+ * 2. Try the offline pattern-matcher (carlMatchSkill) — fast, deterministic,
+ *    works with no API key.
+ * 3. If the key is configured, let Claude pick the skill. This handles
+ *    natural phrasing the offline matcher misses ("what's looking thin?").
+ * 4. If no skill matches at all but the LLM is available, send the question
+ *    to carlLlmFreeform() — Carl answers from live figures rather than
+ *    refusing.
+ * 5. Final fallback: the static "I didn't catch that" reply.
  */
 require_once __DIR__ . '/../../../includes/functions.php';
 require_once __DIR__ . '/../_skills.php';
+require_once __DIR__ . '/../_llm.php';
 requireLogin();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -72,6 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         'history'  => $history,
         'greeting' => $greeting,
         'pending'  => carlPendingGet($db, $uid) !== null,
+        'llm'      => carlLlmAvailable(),       // lets the widget know typing animation should feel longer
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -88,12 +99,42 @@ if (mb_strlen($msg) > 500) $msg = mb_substr($msg, 0, 500);
 
 carlRemember($db, $uid, 'user', $msg);
 
+// ── Step 1: continue a multi-step task already in progress ────────────────────
 $pending = carlPendingGet($db, $uid);
 if ($pending) {
     $res = carlContinue($db, $me, $pending, $msg);
+    carlRemember($db, $uid, 'carl', $res['say'], $res['skill'] ?? null, $res['html'] ?? '');
+    echo json_encode([
+        'ok'    => true,
+        'say'   => carlSay($res['say']),
+        'html'  => $res['html'] ?? '',
+        'skill' => $res['skill'] ?? null,
+        'done'  => $res['done'] ?? true,
+        'go'    => $res['go'] ?? null,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// ── Step 2: offline pattern-matcher ──────────────────────────────────────────
+$skill = carlMatchSkill($msg);
+
+// ── Step 3: LLM intent routing (if offline matcher found nothing) ─────────────
+if ($skill === null && carlLlmAvailable()) {
+    $availableSkills = array_map(fn($s) => $s['label'], carlSkillsFor());
+    $skill = carlLlmPickSkill($msg, $availableSkills);
+}
+
+// ── Step 4: run skill or freeform ────────────────────────────────────────────
+if ($skill !== null) {
+    $res = carlRun($db, $me, $skill, $msg);
+    // When the LLM is on, optionally rephrase the spoken line for more warmth —
+    // only for the short "say" text, never for the rich HTML panel.
+    if (carlLlmAvailable() && isset($res['say']) && strlen($res['say']) < 300) {
+        $res['say'] = carlLlmPhrase($res['say'], carlFirstName((string)$me['name']));
+    }
 } else {
-    $skill = carlMatchSkill($msg);
-    $res = $skill ? carlRun($db, $me, $skill, $msg) : carlSkillUnknown($me);
+    // Step 4b: freeform — Carl tries to answer from live figures.
+    $res = carlSkillUnknown($me, $db);
 }
 
 carlRemember($db, $uid, 'carl', $res['say'], $res['skill'] ?? null, $res['html'] ?? '');
@@ -104,6 +145,5 @@ echo json_encode([
     'html'  => $res['html'] ?? '',
     'skill' => $res['skill'] ?? null,
     'done'  => $res['done'] ?? true,
-    // Present only when Carl was asked to open something; the panel navigates.
     'go'    => $res['go'] ?? null,
 ], JSON_UNESCAPED_UNICODE);
