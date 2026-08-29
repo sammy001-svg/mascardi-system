@@ -37,10 +37,11 @@ if (!defined('CARL_WIDGET')) {
 @media(max-width:640px){ .carl-btn{ padding:0; width:36px; } .carl-btn .carl-label{ display:none; } }
 
 .carl-btn .carl-dot{
-    position:absolute; top:-3px; right:-3px; width:10px; height:10px; border-radius:50%;
-    background:#22c55e; box-shadow:0 0 0 2px var(--surface,#fff); display:none;
+    position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; border-radius:10px; padding:0 4px;
+    background:#ef4444; color:#fff; font-size:9.5px; font-weight:800; line-height:16px; text-align:center;
+    box-shadow:0 0 0 2px var(--surface,#fff); display:none; justify-content:center; align-items:center;
 }
-.carl-btn.has-news .carl-dot{ display:block; animation:carlPulse 2s infinite; }
+.carl-btn.has-news .carl-dot{ display:flex; animation:carlPulse 2s infinite; }
 @keyframes carlPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
 /* On dark backgrounds the halo ring must match the bar, not stay white. */
 [data-theme="dark"] .carl-btn .carl-dot{ box-shadow:0 0 0 2px var(--surface,#0f172a); }
@@ -506,6 +507,23 @@ if (!defined('CARL_WIDGET')) {
                 btn.classList.add('has-news');
                 // The panel opens itself only for the greeting.
                 setTimeout(function () { open(); }, 900);
+            })
+            .catch(function () {});
+    }());
+
+    // ── Proactive alert polling ─────────────────────────────────────────────
+    (function checkAlerts() {
+        var ALERTS_API = '<?= BASE_URL ?>/modules/carl/api/alerts.php';
+        fetch(ALERTS_API, { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+                if (j && j.ok && j.count > 0) {
+                    btn.classList.add('has-news');
+                    var dot = btn.querySelector('.carl-dot');
+                    if (dot) {
+                        dot.textContent = j.count > 9 ? '9+' : j.count;
+                    }
+                }
             })
             .catch(function () {});
     }());

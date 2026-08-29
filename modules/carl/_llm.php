@@ -271,7 +271,8 @@ SYS;
 
     if ($text === '') return $fallback;
 
-    return ['say' => $text, 'html' => '', 'skill' => 'freeform', 'done' => true];
+    $chips = carlChips(['Show today\'s briefing', 'What needs attention?', 'Show sales pipeline']);
+    return ['say' => $text, 'html' => $chips, 'skill' => 'freeform', 'done' => true];
 }
 
 /**
@@ -300,24 +301,30 @@ function carlLlmDedupeRoles(array $msgs): array
  */
 function carlLlmFigureSnapshot(array $f): string
 {
+    $prev = $f['prev'] ?? [];
     $lines = [
         'Vehicles available to sell: '  . ($f['stock_available'] ?? 0),
         'Vehicles total on books: '     . ($f['stock_total']     ?? 0),
         'Vehicles reserved: '           . ($f['stock_reserved']  ?? 0),
         'Vehicles in transit: '         . ($f['stock_transit']   ?? 0),
-        'Cars sold this month: '        . ($f['sold_month']      ?? 0),
+        'Cars sold this month: '        . ($f['sold_month']      ?? 0) . ' (last month: ' . ($prev['sold_month'] ?? 0) . ')',
         'Open leads in pipeline: '      . ($f['leads_total']     ?? 0),
         'New leads today: '             . ($f['leads_new_today'] ?? 0),
+        'New leads this week: '         . ($f['leads_new_week']  ?? 0) . ' (last week: ' . ($prev['leads_new_week'] ?? 0) . ')',
+        'New leads this month: '        . ($f['leads_new_month'] ?? 0) . ' (last month: ' . ($prev['leads_new_month'] ?? 0) . ')',
         'Leads with deposit (reserved): ' . ($f['leads_reserved']  ?? 0),
         'Leads overdue for follow-up: ' . ($f['leads_overdue']   ?? 0),
         'Leads missing follow-up date: ' . ($f['leads_nofollow']  ?? 0),
         'Deposits held (KES): '         . 'KES ' . number_format((float)($f['deposits_held'] ?? 0)),
         'Visitors today: '              . ($f['visitors_today']  ?? 0),
         'Visitors still on site: '      . ($f['visitors_onsite'] ?? 0),
+        'Visitors this week: '          . ($f['visitors_week']   ?? 0) . ' (last week: ' . ($prev['visitors_week'] ?? 0) . ')',
+        'Visitors this month: '         . ($f['visitors_month']  ?? 0) . ' (last month: ' . ($prev['visitors_month'] ?? 0) . ')',
         'Open workshop job cards: '     . ($f['jobs_open']       ?? 0),
         'Job cards opened today: '      . ($f['jobs_today']      ?? 0),
         'Service bookings today: '      . ($f['bookings_today']  ?? 0),
-        'Revenue this month (KES): '    . 'KES ' . number_format((float)($f['paid_month'] ?? 0)),
+        'Revenue this month (KES): '    . 'KES ' . number_format((float)($f['paid_month'] ?? 0)) . ' (last month: KES ' . number_format((float)($prev['paid_month'] ?? 0)) . ')',
+        'Revenue this week (KES): '     . 'KES ' . number_format((float)($f['paid_week']  ?? 0)) . ' (last week: KES ' . number_format((float)($prev['paid_week'] ?? 0)) . ')',
         'Revenue today (KES): '         . 'KES ' . number_format((float)($f['paid_today'] ?? 0)),
         'Unpaid invoices: '             . ($f['invoices_unpaid'] ?? 0),
     ];

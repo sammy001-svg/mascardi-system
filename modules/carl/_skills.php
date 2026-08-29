@@ -725,6 +725,217 @@ function carlParseDate(string $text): ?string
     return null;
 }
 
+// ── Continuation handlers for lead actions ───────────────────────────────
+
+function carlContinuePriorityLead(PDO $db, array $user, array $pending, string $reply): array
+{
+    $uid = (int)$user['id'];
+    $got = $pending['collected'];
+    $awaiting = $pending['awaiting'];
+
+    if ($awaiting === 'lead_name') {
+        $lead = carlFindLead($db, $reply);
+        if (!$lead) {
+            return ['skill' => 'priority_lead', 'done' => false,
+                    'say'   => 'I could not find a lead matching "' . $reply . '". Please give me their name or phone number, or say "cancel".',
+                    'html'  => ''];
+        }
+        $got['lead_id']   = $lead['id'];
+        $got['lead_name'] = $lead['name'];
+        if (empty($got['stage'])) {
+            carlPendingSet($db, $uid, 'priority_lead', $got, 'stage');
+            return ['skill' => 'priority_lead', 'done' => false,
+                    'say'   => 'Got it, ' . $lead['name'] . '. Should I mark them as hot, lukewarm, or cold?',
+                    'html'  => carlLeadMini($lead) . '<div class="carl-chips">'
+                             . '<button type="button" class="carl-chip" data-ask="hot">Hot</button>'
+                             . '<button type="button" class="carl-chip" data-ask="lukewarm">Lukewarm</button>'
+                             . '<button type="button" class="carl-chip" data-ask="cold">Cold</button></div>'];
+        }
+    }
+
+    if ($awaiting === 'stage') {
+        $t = strtolower($reply);
+        if      (str_contains($t, 'hot'))      $stage = 'hot';
+        elseif  (str_contains($t, 'lukewarm') || str_contains($t, 'warm')) $stage = 'lukewarm';
+        elseif  (str_contains($t, 'cold'))     $stage = 'cold';
+        else {
+            return ['skill' => 'priority_lead', 'done' => false,
+                    'say'   => 'Please choose hot, lukewarm, or cold.',
+                    'html'  => ''];
+        }
+        $got['stage'] = $stage;
+    }
+
+    if ($awaiting === 'confirm' || isset($got['lead_id'], $got['stage'])) {
+        if ($awaiting === 'confirm') {
+            if (preg_match('/^(yes|yeah|yep|correct|confirm|save|go ahead|do it|ok|okay)\b/i', $reply)) {
+                try {
+                    $db->prepare("UPDATE crm_leads SET stage = ?, updated_at = NOW() WHERE id = ?")
+                       ->execute([$got['stage'], $got['lead_id']]);
+                    try { logActivity('update', 'crm_leads', $got['lead_id'], CARL_NAME . ': marked lead stage as ' . $got['stage']); } catch (\Throwable $_) {}
+                } catch (\Throwable $e) {
+                    error_log('carlContinuePriorityLead: ' . $e->getMessage());
+                }
+                carlPendingClear($db, $uid);
+                return ['skill' => 'priority_lead', 'done' => true,
+                        'say'   => 'Done. ' . $got['lead_name'] . ' is now marked as ' . $got['stage'] . '.',
+                        'html'  => carlLink(BASE_URL . '/modules/crm/view_lead.php?id=' . $got['lead_id'], 'Open lead')];
+            }
+            if (preg_match('/^(no|nope|cancel)\b/i', $reply)) {
+                carlPendingClear($db, $uid);
+                return ['skill' => 'priority_lead', 'done' => true,
+                        'say'   => 'Cancelled — no changes were made.', 'html' => ''];
+            }
+        }
+
+        carlPendingSet($db, $uid, 'priority_lead', $got, 'confirm');
+        $say = 'Shall I mark ' . $got['lead_name'] . ' as ' . $got['stage'] . '?';
+        $h   = carlLeadMini(['name' => $got['lead_name'], 'stage' => $got['stage']])
+             . '<div class="carl-chips"><button type="button" class="carl-chip carl-yes" data-ask="yes">Yes, update</button>'
+             . '<button type="button" class="carl-chip" data-ask="no">Cancel</button></div>';
+        return ['skill' => 'priority_lead', 'done' => false, 'say' => $say, 'html' => $h];
+    }
+
+    return carlSkillUnknown($user);
+}
+
+function carlContinueFollowupLead(PDO $db, array $user, array $pending, string $reply): array
+{
+    $uid = (int)$user['id'];
+    $got = $pending['collected'];
+    $awaiting = $pending['awaiting'];
+
+    if ($awaiting === 'lead_name') {
+        $lead = carlFindLead($db, $reply);
+        if (!$lead) {
+            return ['skill' => 'followup_lead', 'done' => false,
+                    'say'   => 'I could not find a lead matching "' . $reply . '". Please give me their name or phone number, or say "cancel".',
+                    'html'  => ''];
+        }
+        $got['lead_id']   = $lead['id'];
+        $got['lead_name'] = $lead['name'];
+        if (empty($got['date'])) {
+            carlPendingSet($db, $uid, 'followup_lead', $got, 'date');
+            return ['skill' => 'followup_lead', 'done' => false,
+                    'say'   => 'Got it, ' . $lead['name'] . '. When should the follow-up be? (e.g. tomorrow, Friday, or in 3 days)',
+                    'html'  => carlLeadMini($lead)];
+        }
+    }
+
+    if ($awaiting === 'date') {
+        $date = carlParseDate($reply);
+        if (!$date) {
+            return ['skill' => 'followup_lead', 'done' => false,
+                    'say'   => 'I didn\'t recognize that date. Try saying "tomorrow", "Friday", or "in 3 days".',
+                    'html'  => ''];
+        }
+        $got['date'] = $date;
+    }
+
+    if ($awaiting === 'confirm' || isset($got['lead_id'], $got['date'])) {
+        if ($awaiting === 'confirm') {
+            if (preg_match('/^(yes|yeah|yep|correct|confirm|save|go ahead|do it|ok|okay)\b/i', $reply)) {
+                try {
+                    $db->prepare("UPDATE crm_leads SET follow_up_date = ?, updated_at = NOW() WHERE id = ?")
+                       ->execute([$got['date'], $got['lead_id']]);
+                    try { logActivity('update', 'crm_leads', $got['lead_id'], CARL_NAME . ': set follow-up date to ' . $got['date']); } catch (\Throwable $_) {}
+                } catch (\Throwable $e) {
+                    error_log('carlContinueFollowupLead: ' . $e->getMessage());
+                }
+                carlPendingClear($db, $uid);
+                $fmtDate = date('d M Y', strtotime($got['date']));
+                return ['skill' => 'followup_lead', 'done' => true,
+                        'say'   => 'Set! Follow-up for ' . $got['lead_name'] . ' is scheduled for ' . $fmtDate . '.',
+                        'html'  => carlLink(BASE_URL . '/modules/crm/view_lead.php?id=' . $got['lead_id'], 'Open lead')];
+            }
+            if (preg_match('/^(no|nope|cancel)\b/i', $reply)) {
+                carlPendingClear($db, $uid);
+                return ['skill' => 'followup_lead', 'done' => true,
+                        'say'   => 'Cancelled — no date was set.', 'html' => ''];
+            }
+        }
+
+        carlPendingSet($db, $uid, 'followup_lead', $got, 'confirm');
+        $fmtDate = date('d M Y', strtotime($got['date']));
+        $say = 'Shall I set the follow-up date for ' . $got['lead_name'] . ' to ' . $fmtDate . '?';
+        $h   = carlLeadMini(['name' => $got['lead_name'], 'stage' => 'Follow-up: ' . $fmtDate])
+             . '<div class="carl-chips"><button type="button" class="carl-chip carl-yes" data-ask="yes">Set date</button>'
+             . '<button type="button" class="carl-chip" data-ask="no">Cancel</button></div>';
+        return ['skill' => 'followup_lead', 'done' => false, 'say' => $say, 'html' => $h];
+    }
+
+    return carlSkillUnknown($user);
+}
+
+function carlContinueNoteLead(PDO $db, array $user, array $pending, string $reply): array
+{
+    $uid = (int)$user['id'];
+    $got = $pending['collected'];
+    $awaiting = $pending['awaiting'];
+
+    if ($awaiting === 'lead_name') {
+        $lead = carlFindLead($db, $reply);
+        if (!$lead) {
+            return ['skill' => 'note_lead', 'done' => false,
+                    'say'   => 'I could not find a lead matching "' . $reply . '". Please give me their name or phone number, or say "cancel".',
+                    'html'  => ''];
+        }
+        $got['lead_id']   = $lead['id'];
+        $got['lead_name'] = $lead['name'];
+        if (empty($got['note'])) {
+            carlPendingSet($db, $uid, 'note_lead', $got, 'note');
+            return ['skill' => 'note_lead', 'done' => false,
+                    'say'   => 'Got it, ' . $lead['name'] . '. What note would you like me to add?',
+                    'html'  => carlLeadMini($lead)];
+        }
+    }
+
+    if ($awaiting === 'note') {
+        if (trim($reply) === '') {
+            return ['skill' => 'note_lead', 'done' => false,
+                    'say'   => 'Please tell me what note to write.', 'html' => ''];
+        }
+        $got['note'] = trim($reply);
+    }
+
+    if ($awaiting === 'confirm' || isset($got['lead_id'], $got['note'])) {
+        if ($awaiting === 'confirm') {
+            if (preg_match('/^(yes|yeah|yep|correct|confirm|save|go ahead|do it|ok|okay)\b/i', $reply)) {
+                try {
+                    $noteEntry = "\n[" . date('d M Y H:i') . ' by ' . $user['name'] . ' via ' . CARL_NAME . ']: ' . $got['note'];
+                    $db->prepare("UPDATE crm_leads SET notes = CONCAT(COALESCE(notes, ''), ?), updated_at = NOW() WHERE id = ?")
+                       ->execute([$noteEntry, $got['lead_id']]);
+                    try {
+                        $db->prepare("INSERT INTO crm_activities (lead_id, type, summary, created_by) VALUES (?, 'note', ?, ?)")
+                           ->execute([$got['lead_id'], $got['note'], $uid]);
+                    } catch (\Throwable $_) {}
+                    try { logActivity('update', 'crm_leads', $got['lead_id'], CARL_NAME . ': added note'); } catch (\Throwable $_) {}
+                } catch (\Throwable $e) {
+                    error_log('carlContinueNoteLead: ' . $e->getMessage());
+                }
+                carlPendingClear($db, $uid);
+                return ['skill' => 'note_lead', 'done' => true,
+                        'say'   => 'Note added to ' . $got['lead_name'] . '\'s lead record.',
+                        'html'  => carlLink(BASE_URL . '/modules/crm/view_lead.php?id=' . $got['lead_id'], 'Open lead')];
+            }
+            if (preg_match('/^(no|nope|cancel)\b/i', $reply)) {
+                carlPendingClear($db, $uid);
+                return ['skill' => 'note_lead', 'done' => true,
+                        'say'   => 'Cancelled — no note was added.', 'html' => ''];
+            }
+        }
+
+        carlPendingSet($db, $uid, 'note_lead', $got, 'confirm');
+        $say = 'Shall I add this note to ' . $got['lead_name'] . '? "' . $got['note'] . '"';
+        $h   = carlLeadMini(['name' => $got['lead_name'], 'stage' => 'Note: ' . $got['note']])
+             . '<div class="carl-chips"><button type="button" class="carl-chip carl-yes" data-ask="yes">Save note</button>'
+             . '<button type="button" class="carl-chip" data-ask="no">Cancel</button></div>';
+        return ['skill' => 'note_lead', 'done' => false, 'say' => $say, 'html' => $h];
+    }
+
+    return carlSkillUnknown($user);
+}
+
 // ── Adding a lead ────────────────────────────────────────────────────────────
 //
 // The only skill that writes. It is deliberately the most cautious thing Carl
