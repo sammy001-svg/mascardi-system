@@ -5,12 +5,11 @@
  * for existing uploads.
  *
  * Run from CLI:  php scripts/reprocess_images.php
- * Or via browser with ?secret=YOURKEY (set REPROCESS_SECRET below)
+ * Or from the browser while signed in as a super admin.
  *
  * Dry-run mode:  php scripts/reprocess_images.php --dry-run
  */
 
-define('REPROCESS_SECRET', 'mascardi_reprocess_2024');
 define('MAX_W', 1920);
 define('MAX_H', 1200);
 define('THUMB_W', 480);
@@ -22,10 +21,12 @@ $isCli = (PHP_SAPI === 'cli');
 $isDry = $isCli && in_array('--dry-run', $argv ?? []);
 
 if (!$isCli) {
-    $secret = $_GET['secret'] ?? '';
-    if ($secret !== REPROCESS_SECRET) {
+    require_once dirname(__DIR__) . '/includes/functions.php';
+    requireLogin();
+    if (!isSuperAdmin()) {
         http_response_code(403);
-        exit('Forbidden. Pass ?secret=YOURKEY');
+        exit('Only a super admin can reprocess images, '
+           . 'or run it from the cPanel terminal: php scripts/reprocess_images.php');
     }
     header('Content-Type: text/plain; charset=utf-8');
     // Stream output immediately

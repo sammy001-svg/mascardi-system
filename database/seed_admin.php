@@ -22,12 +22,78 @@ $credentials = [
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 define('SEED_RUN', true);
 $root = dirname(__DIR__);
-require_once $root . '/config/database.php';
+require_once $root . '/includes/functions.php';
+
+$isCli = PHP_SAPI === 'cli';
 
 try {
     $db = getDB();
 } catch (\Throwable $e) {
     die('DB connection failed: ' . $e->getMessage() . PHP_EOL);
+}
+
+// ── Who may run this ─────────────────────────────────────────────────────────
+//
+// This script rewrites the super-admin password to the value hard-coded above,
+// so left open to the web it is an unauthenticated account takeover: anyone who
+// loads the URL owns the admin account. It still has to work for genuine
+// first-time setup, though, when nobody can possibly be signed in yet — so the
+// rule is: the console always; the browser only while no admin exists, or when a
+// super admin is already signed in and is deliberately resetting.
+if (!$isCli) {
+    try {
+        $admins = (int)$db->query(
+            "SELECT COUNT(*) FROM users WHERE role IN ('admin','super_admin') AND status = 'active'"
+        )->fetchColumn();
+    } catch (\Throwable $e) {
+        $admins = 1;   // cannot tell — assume set up, and refuse
+    }
+
+    if ($admins > 0) {
+        requireLogin();
+        if (!isSuperAdmin()) {
+            http_response_code(403);
+            exit('An admin account already exists. Only a signed-in super admin may reset it, '
+               . 'or run it from the cPanel terminal: php database/seed_admin.php');
+        }
+
+        // Being signed in is not the same as meaning to do this. A bare GET that
+        // rewrites the password can be fired by anything that makes the browser
+        // fetch a URL, so require a posted confirmation carrying the CSRF token.
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            seedAdminConfirmPage($credentials['username']);
+        }
+        verifyCsrf();
+    }
+}
+
+function seedAdminConfirmPage(string $username): void
+{
+    $t = htmlspecialchars(csrfToken(), ENT_QUOTES);
+    $u = htmlspecialchars($username, ENT_QUOTES);
+    http_response_code(200);
+    echo <<<HTML
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Reset the admin account</title>
+<style>body{font-family:"Segoe UI",system-ui,sans-serif;background:#0d1219;color:#e8eaed;
+margin:0;display:grid;place-items:center;min-height:100vh;padding:24px}
+.c{max-width:520px;background:#151c26;border:1px solid #2a3442;border-radius:14px;padding:26px}
+h1{font-size:19px;margin:0 0 12px}p{font-size:14px;line-height:1.7;color:#cbd5e1;margin:0 0 14px}
+b{color:#fff}button{background:#b91c1c;color:#fff;border:0;border-radius:9px;padding:11px 20px;
+font-size:14px;font-weight:600;cursor:pointer}a{color:#9aa4b2;font-size:13px;margin-left:14px}
+</style></head><body><div class="c">
+<h1>Reset the admin account?</h1>
+<p>This overwrites the password for <b>$u</b> with the value hard-coded in
+<b>database/seed_admin.php</b>, and that value is committed to the repository.
+If the password has since been changed, this throws that change away.</p>
+<p>Only continue if you are deliberately recovering the account.</p>
+<form method="post"><input type="hidden" name="csrf_token" value="$t">
+<button type="submit">Yes, reset it</button>
+<a href="../index.php">Cancel</a></form>
+</div></body></html>
+HTML;
+    exit;
 }
 
 // ── Seed ───────────────────────────────────────────────────────────────────

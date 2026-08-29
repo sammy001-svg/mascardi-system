@@ -148,6 +148,20 @@ if (!defined('CARL_WIDGET')) {
 .carl-rec-f b{ font-weight:600; text-align:right; word-break:break-word; }
 .carl-rec-f b.carl-t-bad{ color:#dc2626; }
 .carl-rec-f b.carl-t-warn{ color:#b45309; }
+/* Cards that are themselves the link — a document to print, a deal to open.
+   The greyed variant is a span, not an anchor, so a document that is not yet
+   available cannot be clicked at all rather than opening and failing. */
+a.carl-rec, span.carl-rec{ display:block; text-decoration:none; color:inherit; }
+a.carl-rec{ transition:border-color .15s, background .15s; }
+a.carl-rec:hover{ border-color:#a855f7; background:var(--surface-alt,#faf7ff); }
+.carl-rec > b{ display:block; font-size:13.5px; font-weight:700; color:var(--text,#0f172a); }
+.carl-rec > b i{ width:16px; margin-right:6px; color:#a855f7; }
+.carl-rec > span{ display:block; font-size:12px; color:var(--text-2,#64748b); margin-top:2px; }
+.carl-rec > em{ display:block; font-size:11.5px; font-style:normal; color:#b45309; margin-top:4px; }
+a.carl-rec > em{ color:#7c3aed; }
+.carl-rec.is-off{ opacity:.55; }
+.carl-rec.is-off > b{ font-weight:600; }
+.carl-rec.is-off > em{ color:var(--text-2,#64748b); }
 
 .carl-confirm{ background:var(--surface-alt,#f6f7fb); border-radius:10px; padding:11px 13px; margin:4px 0; }
 .carl-confirm .r{ display:flex; justify-content:space-between; font-size:13px; padding:3px 0; }

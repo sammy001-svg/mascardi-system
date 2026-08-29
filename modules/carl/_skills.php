@@ -18,6 +18,7 @@ if (!function_exists('carlRun')) {
 
 require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/_llm.php';
+require_once __DIR__ . '/_tasks.php';
 
 /** Dispatches to a handler, refusing anything this user may not see. */
 function carlRun(PDO $db, array $user, string $skill, string $utterance): array
@@ -538,22 +539,9 @@ function carlSkillNavigate(PDO $db, array $user, string $u): array
             'html'  => ''];
 }
 
-function carlSkillDocument(PDO $db, array $user, string $u): array
-{
-    $h = '<p class="carl-p">Documents are generated from the record they belong to, so the figures '
-       . 'and the customer details are always the real ones. Open the record and the document '
-       . 'buttons are on it.</p>';
-    $h .= carlLink(BASE_URL . '/modules/crm/leads.php', 'Proforma, sales agreement, receipts — from a lead', 'fa-file-invoice');
-    if (canAccess('invoices'))   $h .= carlLink(BASE_URL . '/modules/invoices/index.php', 'Invoices', 'fa-file-invoice-dollar');
-    if (canAccess('quotations')) $h .= carlLink(BASE_URL . '/modules/quotations/index.php', 'Quotations', 'fa-file-lines');
-    if (canAccess('visitors'))   $h .= carlLink(BASE_URL . '/modules/visitors/index.php', 'Visitor log — export or badge', 'fa-id-badge');
+// carlSkillDocument now lives in _tasks.php — it resolves a record and
+// produces the real documents for it.
 
-    return ['skill' => 'document', 'done' => true,
-            'say'   => 'I can take you to the right place. Proformas, sales agreements and receipts '
-                     . 'are generated from the lead they belong to, so the customer details and '
-                     . 'figures come out correct. Which record is it for?',
-            'html'  => $h];
-}
 
 // ── Trends & comparisons ─────────────────────────────────────────────────────
 
@@ -1049,6 +1037,8 @@ function carlContinue(PDO $db, array $user, array $pending, string $reply): arra
     if ($skill === 'priority_lead') return carlContinuePriorityLead($db, $user, $pending, $r);
     if ($skill === 'followup_lead') return carlContinueFollowupLead($db, $user, $pending, $r);
     if ($skill === 'note_lead')     return carlContinueNoteLead($db, $user, $pending, $r);
+    if ($skill === 'reserve')       return carlContinueReserve($db, $user, $pending, $r);
+    if ($skill === 'document')      return carlContinueDocument($db, $user, $pending, $r);
     if ($skill !== 'add_lead') { carlPendingClear($db, $uid); return carlSkillUnknown($user); }
 
     $got = $pending['collected'];

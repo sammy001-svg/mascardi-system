@@ -184,17 +184,35 @@ function carlSkills(): array
         'leads' => [
             'label'    => 'Sales pipeline',
             'module'   => 'crm',
-            'patterns' => ['lead', 'leads', 'pipeline', 'prospects', 'enquiries', 'enquiry'],
+            'patterns' => ['lead', 'leads', 'pipeline', 'prospects', 'enquiries', 'enquiry',
+                           'follow up date', 'past their follow up', 'overdue follow up',
+                           'due for follow up'],
         ],
         'reservations' => [
             'label'    => 'Reservations',
             'module'   => 'crm',
             'patterns' => ['reservation', 'reservations', 'reserved', 'deposits', 'deposit'],
         ],
+        'reserve' => [
+            'label'    => 'Make a reservation',
+            'module'   => 'crm',
+            'patterns' => ['make a reservation', 'reserve a car', 'reserve a vehicle',
+                           'take a deposit', 'put a deposit', 'hold a car', 'hold the car',
+                           'book a car', 'new reservation', 'create a reservation',
+                           'reserve it for', 'place a deposit'],
+        ],
+        'deliveries' => [
+            'label'    => 'Deliveries',
+            'module'   => 'crm',
+            'patterns' => ['delivery', 'deliveries', 'delivered', 'handover', 'hand over',
+                           'ready to deliver', 'delivery pipeline', 'delivery protocol',
+                           'what is holding up', 'due for delivery'],
+        ],
         'visitors' => [
             'label'    => 'Visitors today',
             'module'   => 'visitors',
-            'patterns' => ['visitor', 'visitors', 'walk in', 'walk-in', 'walkins', 'reception'],
+            'patterns' => ['visitor', 'visitors', 'walk in', 'walk-in', 'walkins', 'reception',
+                           'visited', 'who came in', 'signed in'],
         ],
         'workshop' => [
             'label'    => 'Workshop',
@@ -242,9 +260,14 @@ function carlSkills(): array
         'followup_lead' => [
             'label'    => 'Set a follow-up date on a lead',
             'module'   => 'crm',
-            'patterns' => ['follow up', 'follow-up', 'followup', 'set a follow up', 'schedule follow up',
-                           'remind me', 'chase', 'set a date', 'book a call', 'follow up date',
-                           'set follow up for', 'remind about'],
+            // Imperatives only. 'follow up' on its own also appears in
+            // "leads past their follow up date", which is a question about the
+            // pipeline — answering it by starting to write a date is worse than
+            // useless, because it changes a record nobody asked to change.
+            'patterns' => ['set a follow up', 'set follow up', 'schedule follow up',
+                           'schedule a follow up', 'change the follow up', 'remind me',
+                           'chase', 'set a date', 'book a call', 'set follow up for',
+                           'remind about'],
         ],
         'note_lead' => [
             'label'    => 'Add a note to a lead',
@@ -261,7 +284,10 @@ function carlSkills(): array
             'label'    => 'Generate a document',
             'module'   => 'crm',
             'patterns' => ['document', 'proforma', 'invoice for', 'quotation', 'agreement',
-                           'receipt', 'print', 'generate'],
+                           'receipt', 'print', 'generate',
+                           // Longer than the 'delivery' the deliveries skill matches on,
+                           // so asking for the note reaches the printer, not the report.
+                           'delivery note', 'handover note', 'gate pass'],
         ],
         'navigate' => [
             'label'    => 'Open a page',
@@ -327,7 +353,10 @@ function carlMatchSkill(string $text): ?string
         $score = 0.0;
         foreach ($s['patterns'] as $p) {
             // A whole phrase present verbatim is the strongest signal there is.
-            if (str_contains($t, ' ' . $p . ' ') || str_contains($t, ' ' . $p)) {
+            // Anchored at BOTH ends, with only a genuine suffix allowed. Matching
+            // on a word start alone meant the greeting "hi" fired inside
+            // "history", and Carl answered a question about the record with hello.
+            if (preg_match('/\b' . preg_quote($p, '/') . '(s|es|ed|ing)?\b/', $t)) {
                 $score = max($score, 10 + strlen($p) / 10);
                 continue;
             }
@@ -344,7 +373,12 @@ function carlMatchSkill(string $text): ?string
             foreach ($pw as $w) {
                 foreach ($words as $uw) {
                     // Tolerates plurals and simple endings: lead/leads, reserve/reserved.
-                    if ($uw === $w || (strlen($w) > 3 && (str_starts_with($uw, $w) || str_starts_with($w, $uw)))) {
+                    // Both sides need length. With a floor on only one of them, the
+                    // bare "a" in "a spaceship" prefix-matched "asante" and scored a
+                    // full greeting.
+                    if ($uw === $w
+                        || (strlen($w) > 3 && strlen($uw) > 3
+                            && (str_starts_with($uw, $w) || str_starts_with($w, $uw)))) {
                         $hit++; break;
                     }
                 }
@@ -355,8 +389,10 @@ function carlMatchSkill(string $text): ?string
     }
 
     // Below this the "match" is one incidental word and a guess would be worse
-    // than admitting she did not follow.
-    return $bestScore >= 3.0 ? $best : null;
+    // than admitting she did not follow. The bar sits just above half of a
+    // two-word pattern (3.0), because matching only "one" of "nice one" is what
+    // made "the blue one" read as a greeting.
+    return $bestScore >= 3.5 ? $best : null;
 }
 
 // ── Figures ──────────────────────────────────────────────────────────────────
