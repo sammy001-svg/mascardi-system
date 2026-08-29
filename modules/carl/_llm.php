@@ -62,17 +62,20 @@ function carlLlmModel(): string
  * @param  int     $maxTok   Maximum tokens in the reply
  * @return array|null        Decoded JSON response or null
  */
-function carlLlmRequest(string $system, array $msgs, int $maxTok = 512): ?array
+function carlLlmRequest(string $system, array $msgs, int $maxTok = 512, array $tools = []): ?array
 {
     $key = trim(getSetting('anthropic_api_key', ''));
     if ($key === '') return null;
 
-    $payload = json_encode([
+    $body = [
         'model'      => carlLlmModel(),
         'max_tokens' => $maxTok,
         'system'     => $system,
         'messages'   => $msgs,
-    ]);
+    ];
+    // Only sent when there are tools — the classifier calls have none.
+    if ($tools) $body['tools'] = $tools;
+    $payload = json_encode($body);
 
     $ctx = stream_context_create(['http' => [
         'method'        => 'POST',
@@ -83,7 +86,7 @@ function carlLlmRequest(string $system, array $msgs, int $maxTok = 512): ?array
             'Content-Length: ' . strlen($payload),
         ]),
         'content'        => $payload,
-        'timeout'        => 15,
+        'timeout'        => 30,
         'ignore_errors'  => true,
     ]]);
 

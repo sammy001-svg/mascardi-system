@@ -29,6 +29,7 @@
 require_once __DIR__ . '/../../../includes/functions.php';
 require_once __DIR__ . '/../_skills.php';
 require_once __DIR__ . '/../_llm.php';
+require_once __DIR__ . '/../_agent.php';
 requireLogin();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -132,29 +133,40 @@ if ($pending) {
     exit;
 }
 
-// ── Step 2: offline pattern-matcher ──────────────────────────────────────────
-$skill = carlMatchSkill($msg);
-
-// ── Step 3: LLM intent routing ────────────────────────────────────────────────
-// Only invoked when offline matcher finds nothing. We pass skill keys+labels
-// so Claude understands context but must reply with the key only.
-if ($skill === null && carlLlmAvailable()) {
-    $skillsForUser = carlSkillsFor();
-    $skillLabels   = array_map(fn($s) => $s['label'], $skillsForUser);
-    $skill         = carlLlmPickSkill($msg, $skillLabels);
+// ── Step 2: let Carl actually converse ───────────────────────────────────────
+// Claude answers with the tools in _agent.php doing the looking-up, so the
+// prose is hers but every figure in it came out of the database. When no key
+// is configured, or the call fails, we fall through to the offline matcher —
+// Carl still works without the API, she is simply more literal.
+$history = carlRecentHistory($db, $uid, 8);
+$res = carlConverse($db, $me, $msg, $history);
+if ($res !== null) {
+    carlRemember($db, $uid, 'carl', $res['say'], $res['skill'] ?? null, $res['html'] ?? '');
+    echo json_encode([
+        'ok'    => true,
+        'say'   => carlSay($res['say']),
+        'html'  => $res['html'] ?? '',
+        'skill' => $res['skill'] ?? null,
+        'done'  => $res['done'] ?? true,
+        'go'    => $res['go'] ?? null,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
-// ── Step 4: run skill or hand off to freeform conversation ────────────────────
+// ── Step 3: offline pattern-matcher — the fallback ───────────────────────────
+$skill = carlMatchSkill($msg);
+
+// Reaching here means the API is unavailable or the call failed, so asking
+// Claude to classify would fail for the same reason. Carl answers offline.
+
+// ── Step 4: run the matched skill ────────────────────────────────────────────
 if ($skill !== null) {
     // A skill matched — run the deterministic, DB-backed handler.
     // No rephrasing step: the skill answers are already well-written and
     // adding a second Claude call just adds latency and risks distorting numbers.
     $res = carlRun($db, $me, $skill, $msg);
 } else {
-    // Nothing matched. If the LLM is configured, let Carl answer conversationally
-    // from the live figures — with the last few turns for context so follow-ups work.
-    $history = carlRecentHistory($db, $uid, 8);
-    $res     = carlSkillUnknown($me, $db, $msg, $history);
+    $res = carlSkillUnknown($me, $db, $msg, $history);
 }
 
 carlRemember($db, $uid, 'carl', $res['say'], $res['skill'] ?? null, $res['html'] ?? '');
