@@ -7,16 +7,24 @@
  *
  * Intent resolution order
  * -----------------------
- * 1. If a multi-step task is already pending, continue it (e.g. collecting
- *    a phone number for "add lead").
+ * 1. If a multi-step task is already pending, continue it (e.g. "add lead").
  * 2. Try the offline pattern-matcher (carlMatchSkill) — fast, deterministic,
  *    works with no API key.
- * 3. If the key is configured, let Claude pick the skill. This handles
- *    natural phrasing the offline matcher misses ("what's looking thin?").
- * 4. If no skill matches at all but the LLM is available, send the question
- *    to carlLlmFreeform() — Carl answers from live figures rather than
- *    refusing.
- * 5. Final fallback: the static "I didn't catch that" reply.
+ * 3. If the key is configured and offline matcher found nothing, let Claude
+ *    pick the skill. Handles natural phrasing the offline matcher misses.
+ * 4. If still no skill match, send the whole question to carlLlmFreeform()
+ *    with the live figures and recent history for context. Carl answers
+ *    conversationally rather than refusing.
+ * 5. Final static fallback (no API key, truly unrecognised question).
+ *
+ * What was removed vs the original
+ * ---------------------------------
+ * carlLlmPhrase() — the "rephrase this skill answer" step — was removed.
+ * It made a second API call on every single reply, doubling latency, and
+ * often made structured skill answers worse by stripping numbers or
+ * introducing a stilted rephrased tone. Carl's skill answers are already
+ * well-written. Claude is reserved for what it is actually needed for:
+ * intent routing and freeform conversation.
  */
 require_once __DIR__ . '/../../../includes/functions.php';
 require_once __DIR__ . '/../_skills.php';
@@ -32,7 +40,6 @@ carlMigrate($db);
 $me  = authUser();
 $uid = (int)$me['id'];
 
-// The kiosk account is public-facing and has no business asking about margins.
 if (authRole() === 'visitor_book') {
     http_response_code(403);
     echo json_encode(['error' => 'forbidden']);
@@ -46,14 +53,23 @@ function carlRemember(PDO $db, int $uid, string $role, string $body, ?string $sk
         $db->prepare("INSERT INTO carl_messages (user_id, role, body, skill, html)
                       VALUES (?,?,?,?,?)")
            ->execute([$uid, $role, $body, $skill, $html !== '' ? $html : null]);
-        // Keep it short. This is a working conversation, not an archive, and an
-        // unbounded transcript is a table that only ever grows.
         $db->prepare("DELETE FROM carl_messages WHERE user_id = ? AND id < (
                           SELECT x.id FROM (
                               SELECT id FROM carl_messages WHERE user_id = ?
                               ORDER BY id DESC LIMIT 1 OFFSET 40
                           ) x)")->execute([$uid, $uid]);
     } catch (\Throwable $_) {}
+}
+
+/** Fetch the last N turns for this user — used to give Claude conversation context. */
+function carlRecentHistory(PDO $db, int $uid, int $turns = 8): array
+{
+    try {
+        $st = $db->prepare("SELECT role, body FROM carl_messages
+                            WHERE user_id = ? ORDER BY id DESC LIMIT ?");
+        $st->execute([$uid, $turns]);
+        return array_reverse($st->fetchAll(PDO::FETCH_ASSOC));
+    } catch (\Throwable $_) { return []; }
 }
 
 // ── History and the daily greeting ───────────────────────────────────────────
@@ -82,12 +98,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         'history'  => $history,
         'greeting' => $greeting,
         'pending'  => carlPendingGet($db, $uid) !== null,
-        'llm'      => carlLlmAvailable(),       // lets the widget know typing animation should feel longer
+        'llm'      => carlLlmAvailable(),
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 // ── An utterance ─────────────────────────────────────────────────────────────
+// Read from the JSON body — the widget posts application/json, so $_POST is empty.
 $raw = json_decode(file_get_contents('php://input'), true) ?: $_POST;
 $msg = trim((string)($raw['message'] ?? ''));
 
@@ -118,23 +135,26 @@ if ($pending) {
 // ── Step 2: offline pattern-matcher ──────────────────────────────────────────
 $skill = carlMatchSkill($msg);
 
-// ── Step 3: LLM intent routing (if offline matcher found nothing) ─────────────
+// ── Step 3: LLM intent routing ────────────────────────────────────────────────
+// Only invoked when offline matcher finds nothing. We pass skill keys+labels
+// so Claude understands context but must reply with the key only.
 if ($skill === null && carlLlmAvailable()) {
-    $availableSkills = array_map(fn($s) => $s['label'], carlSkillsFor());
-    $skill = carlLlmPickSkill($msg, $availableSkills);
+    $skillsForUser = carlSkillsFor();
+    $skillLabels   = array_map(fn($s) => $s['label'], $skillsForUser);
+    $skill         = carlLlmPickSkill($msg, $skillLabels);
 }
 
-// ── Step 4: run skill or freeform ────────────────────────────────────────────
+// ── Step 4: run skill or hand off to freeform conversation ────────────────────
 if ($skill !== null) {
+    // A skill matched — run the deterministic, DB-backed handler.
+    // No rephrasing step: the skill answers are already well-written and
+    // adding a second Claude call just adds latency and risks distorting numbers.
     $res = carlRun($db, $me, $skill, $msg);
-    // When the LLM is on, optionally rephrase the spoken line for more warmth —
-    // only for the short "say" text, never for the rich HTML panel.
-    if (carlLlmAvailable() && isset($res['say']) && strlen($res['say']) < 300) {
-        $res['say'] = carlLlmPhrase($res['say'], carlFirstName((string)$me['name']));
-    }
 } else {
-    // Step 4b: freeform — Carl tries to answer from live figures.
-    $res = carlSkillUnknown($me, $db);
+    // Nothing matched. If the LLM is configured, let Carl answer conversationally
+    // from the live figures — with the last few turns for context so follow-ups work.
+    $history = carlRecentHistory($db, $uid, 8);
+    $res     = carlSkillUnknown($me, $db, $msg, $history);
 }
 
 carlRemember($db, $uid, 'carl', $res['say'], $res['skill'] ?? null, $res['html'] ?? '');

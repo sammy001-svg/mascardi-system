@@ -63,27 +63,26 @@ function carlLink(string $href, string $label, string $icon = 'fa-arrow-right'):
  * When no skill matches, try freeform LLM if available, otherwise return the
  * static fallback so offline mode is indistinguishable from a graceful miss.
  *
- * @param  array    $user  Auth user row
- * @param  PDO|null $db    If provided, passes live figures to the LLM
+ * @param  array    $user      Auth user row
+ * @param  PDO|null $db        If provided, passes live figures to the LLM
+ * @param  string   $utterance The original user message (must be passed explicitly)
+ * @param  array    $history   Recent conversation turns for context
  */
-function carlSkillUnknown(array $user, ?PDO $db = null): array
+function carlSkillUnknown(array $user, ?PDO $db = null, string $utterance = '', array $history = []): array
 {
-    if ($db !== null && carlLlmAvailable()) {
+    if ($db !== null && $utterance !== '' && carlLlmAvailable()) {
         $figures = carlFigures($db);
-        $res     = carlLlmFreeform(
-            $_POST['message'] ?? '',   // original utterance from the current request
-            $figures,
-            $user
-        );
+        $res     = carlLlmFreeform($utterance, $figures, $user, $history);
         if (!empty($res['say'])) return $res;
     }
 
     return ['skill' => 'unknown', 'done' => true,
-            'say'   => 'I did not quite catch that. You can ask me for today\'s briefing, '
-                     . 'the sales pipeline, stock, visitors, or what needs attention. '
-                     . 'Say "help" and I will list everything I can do.',
+            'say'   => 'I\'m not sure how to answer that from the data I have. '
+                     . 'Try asking for a briefing, the sales pipeline, stock, visitors, or revenue — '
+                     . 'or say "help" to see everything I can do.',
             'html'  => ''];
 }
+
 
 // ── Skills ───────────────────────────────────────────────────────────────────
 
