@@ -1,0 +1,396 @@
+<?php
+/**
+ * Carl — the navbar button and her panel.
+ *
+ * Included from includes/header.php, immediately before the notification bell.
+ *
+ * Voice is browser-native: SpeechSynthesis to speak, SpeechRecognition to
+ * listen. No audio ever leaves the machine and there is no service to pay for or
+ * configure — but recognition is Chrome and Edge only, so the microphone is
+ * shown only where it works and typing is always available.
+ *
+ * Speaking is off until the person turns it on, and the choice is remembered.
+ * An assistant that starts talking out loud in a shared office the first time
+ * someone opens the system is one they switch off and never switch back on.
+ */
+if (!defined('CARL_WIDGET')) {
+    define('CARL_WIDGET', true);
+    if (authRole() === 'visitor_book') return;   // public kiosk: no assistant
+?>
+<style>
+.carl-btn{ position:relative; }
+.carl-btn .carl-dot{
+    position:absolute; top:6px; right:6px; width:8px; height:8px; border-radius:50%;
+    background:#a855f7; box-shadow:0 0 0 2px var(--surface,#fff); display:none;
+}
+.carl-btn.has-news .carl-dot{ display:block; animation:carlPulse 2s infinite; }
+@keyframes carlPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+
+.carl-panel{
+    position:fixed; top:0; right:0; bottom:0; width:420px; max-width:100vw;
+    background:var(--surface,#fff); border-left:1px solid var(--border,#e2e8f0);
+    box-shadow:-16px 0 44px rgba(0,0,0,.16); z-index:1090;
+    display:flex; flex-direction:column; transform:translateX(100%);
+    transition:transform .26s cubic-bezier(.4,0,.2,1); visibility:hidden;
+}
+.carl-panel.open{ transform:translateX(0); visibility:visible; }
+.carl-backdrop{
+    position:fixed; inset:0; background:rgba(2,6,23,.42); z-index:1089;
+    opacity:0; visibility:hidden; transition:opacity .26s;
+}
+.carl-backdrop.open{ opacity:1; visibility:visible; }
+
+.carl-head{
+    padding:16px 18px; border-bottom:1px solid var(--border,#e2e8f0);
+    display:flex; align-items:center; gap:12px; flex:0 0 auto;
+}
+.carl-ava{
+    width:42px; height:42px; border-radius:50%; flex:0 0 42px;
+    background:linear-gradient(135deg,#a855f7,#6d28d9); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:17px; font-weight:800;
+}
+.carl-who{ flex:1; min-width:0; }
+.carl-who b{ font-size:15px; display:block; letter-spacing:-.2px; }
+.carl-who span{ font-size:11.5px; color:var(--text-2,#64748b); display:flex; align-items:center; gap:5px; }
+.carl-who span i{ font-size:6px; color:#16a34a; }
+.carl-head-btn{
+    background:transparent; border:1px solid var(--border,#e2e8f0); color:var(--text-2,#64748b);
+    width:34px; height:34px; border-radius:9px; cursor:pointer; font-size:13px;
+}
+.carl-head-btn:hover{ border-color:#a855f7; color:#a855f7; }
+.carl-head-btn.on{ background:#a855f7; border-color:#a855f7; color:#fff; }
+
+.carl-body{ flex:1; overflow-y:auto; padding:18px; }
+.carl-msg{ margin-bottom:16px; }
+.carl-msg .bubble{
+    display:inline-block; max-width:92%; padding:11px 14px; border-radius:14px;
+    font-size:13.8px; line-height:1.62; white-space:pre-wrap;
+}
+.carl-msg.from-carl .bubble{ background:var(--surface-alt,#f6f7fb); border-bottom-left-radius:4px; }
+.carl-msg.from-user{ text-align:right; }
+.carl-msg.from-user .bubble{
+    background:linear-gradient(135deg,#a855f7,#7c3aed); color:#fff; border-bottom-right-radius:4px;
+}
+.carl-rich{ margin-top:10px; }
+
+.carl-tiles{ display:grid; grid-template-columns:repeat(auto-fit,minmax(96px,1fr)); gap:8px; margin:4px 0 10px; }
+.carl-tile{ background:var(--surface-alt,#f6f7fb); border:1px solid var(--border,#e2e8f0);
+    border-radius:10px; padding:11px 10px; text-align:center; }
+.carl-tile .v{ font-size:17px; font-weight:800; letter-spacing:-.4px; }
+.carl-tile .k{ font-size:10.5px; color:var(--text-2,#64748b); margin-top:2px; }
+.carl-tile.carl-good .v{ color:#16a34a; }
+.carl-tile.carl-warn .v{ color:#b45309; }
+.carl-tile.carl-bad  .v{ color:#dc2626; }
+
+.carl-act{
+    display:flex; align-items:center; gap:9px; padding:10px 12px; margin-top:7px;
+    border:1px solid var(--border,#e2e8f0); border-radius:10px; font-size:13px;
+    font-weight:600; text-decoration:none; color:var(--text,#0f172a); background:var(--surface,#fff);
+}
+.carl-act:hover{ border-color:#a855f7; color:#a855f7; }
+.carl-act i{ color:#a855f7; }
+
+.carl-chips{ display:flex; flex-wrap:wrap; gap:7px; margin:8px 0 4px; }
+.carl-chip{
+    background:var(--surface-alt,#f6f7fb); border:1px solid var(--border,#e2e8f0);
+    border-radius:20px; padding:7px 13px; font-size:12.5px; font-weight:600;
+    cursor:pointer; color:var(--text,#0f172a);
+}
+.carl-chip:hover{ border-color:#a855f7; color:#a855f7; }
+.carl-chip.carl-yes{ background:#a855f7; border-color:#a855f7; color:#fff; }
+
+.carl-p{ font-size:13.5px; margin:0 0 8px; }
+.carl-note{ font-size:11.5px; color:var(--text-2,#64748b); margin:8px 0 0; }
+.carl-list{ margin:6px 0 8px; }
+.carl-row{ display:flex; justify-content:space-between; font-size:12.5px; padding:5px 2px;
+    border-bottom:1px solid var(--border,#e2e8f0); }
+.carl-row:last-child{ border-bottom:0; }
+.carl-flag{ display:flex; gap:9px; align-items:flex-start; background:#fff7ed; border:1px solid #fed7aa;
+    color:#9a3412; border-radius:10px; padding:10px 12px; font-size:12.5px; margin:2px 0 8px; }
+.carl-advice{ border:1px solid var(--border,#e2e8f0); border-left-width:3px; border-radius:10px;
+    padding:11px 13px; margin-bottom:9px; }
+.carl-advice.carl-bad{ border-left-color:#dc2626; }
+.carl-advice.carl-warn{ border-left-color:#f59e0b; }
+.carl-advice.carl-good{ border-left-color:#16a34a; }
+.carl-advice .t{ font-size:13px; font-weight:700; }
+.carl-advice .w{ font-size:12px; color:var(--text-2,#64748b); margin:3px 0 6px; }
+.carl-confirm{ background:var(--surface-alt,#f6f7fb); border-radius:10px; padding:11px 13px; margin:4px 0; }
+.carl-confirm .r{ display:flex; justify-content:space-between; font-size:13px; padding:3px 0; }
+.carl-ok{ display:flex; align-items:center; gap:8px; background:#f0fdf4; border:1px solid #bbf7d0;
+    color:#15803d; border-radius:10px; padding:10px 12px; font-size:13px; font-weight:600; }
+
+.carl-foot{ border-top:1px solid var(--border,#e2e8f0); padding:12px 14px; flex:0 0 auto; }
+.carl-input{ display:flex; gap:8px; align-items:flex-end; }
+.carl-input textarea{
+    flex:1; resize:none; border:1px solid var(--border,#e2e8f0); border-radius:11px;
+    padding:10px 12px; font-size:13.5px; font-family:inherit; max-height:110px;
+    background:var(--surface,#fff); color:var(--text,#0f172a);
+}
+.carl-input textarea:focus{ outline:none; border-color:#a855f7; }
+.carl-send, .carl-mic{
+    width:40px; height:40px; border-radius:11px; border:0; cursor:pointer; flex:0 0 40px;
+    display:flex; align-items:center; justify-content:center; font-size:14px;
+}
+.carl-send{ background:linear-gradient(135deg,#a855f7,#7c3aed); color:#fff; }
+.carl-mic{ background:var(--surface-alt,#f6f7fb); color:var(--text-2,#64748b);
+    border:1px solid var(--border,#e2e8f0); }
+.carl-mic.listening{ background:#dc2626; color:#fff; border-color:#dc2626; animation:carlPulse 1.2s infinite; }
+.carl-typing{ display:flex; gap:4px; padding:11px 14px; }
+.carl-typing i{ width:6px; height:6px; border-radius:50%; background:var(--text-2,#94a3b8);
+    animation:carlBounce 1.3s infinite; }
+.carl-typing i:nth-child(2){ animation-delay:.18s } .carl-typing i:nth-child(3){ animation-delay:.36s }
+@keyframes carlBounce{ 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-5px);opacity:1} }
+@media(max-width:520px){ .carl-panel{ width:100vw; } }
+</style>
+
+<button type="button" class="topbar-icon-btn carl-btn" id="carlBtn"
+        title="Ask <?= e(CARL_NAME) ?>" aria-label="Ask <?= e(CARL_NAME) ?>">
+    <i class="fa fa-wand-magic-sparkles"></i>
+    <span class="carl-dot"></span>
+</button>
+
+<div class="carl-backdrop" id="carlBackdrop"></div>
+<aside class="carl-panel" id="carlPanel" aria-label="<?= e(CARL_NAME) ?>, your assistant">
+    <div class="carl-head">
+        <div class="carl-ava"><?= e(strtoupper(substr(CARL_NAME, 0, 1))) ?></div>
+        <div class="carl-who">
+            <b><?= e(CARL_NAME) ?></b>
+            <span><i class="fa fa-circle"></i>Here to help</span>
+        </div>
+        <button type="button" class="carl-head-btn" id="carlVoiceToggle"
+                title="Read answers aloud"><i class="fa fa-volume-xmark"></i></button>
+        <button type="button" class="carl-head-btn" id="carlClose" title="Close"><i class="fa fa-xmark"></i></button>
+    </div>
+
+    <div class="carl-body" id="carlBody"></div>
+
+    <div class="carl-foot">
+        <div class="carl-input">
+            <button type="button" class="carl-mic" id="carlMic" title="Speak to Carl" style="display:none">
+                <i class="fa fa-microphone"></i>
+            </button>
+            <textarea id="carlText" rows="1" placeholder="Ask <?= e(CARL_NAME) ?> anything…"></textarea>
+            <button type="button" class="carl-send" id="carlSend" title="Send"><i class="fa fa-paper-plane"></i></button>
+        </div>
+    </div>
+</aside>
+
+<script>
+(function () {
+    'use strict';
+    var API   = '<?= BASE_URL ?>/modules/carl/api/ask.php';
+    var NAME  = <?= json_encode(CARL_NAME) ?>;
+    var panel = document.getElementById('carlPanel');
+    var back  = document.getElementById('carlBackdrop');
+    var body  = document.getElementById('carlBody');
+    var text  = document.getElementById('carlText');
+    var micBtn = document.getElementById('carlMic');
+    var vBtn  = document.getElementById('carlVoiceToggle');
+    var btn   = document.getElementById('carlBtn');
+    var loaded = false, busy = false;
+
+    // Every authenticated POST is CSRF-checked. The token is published in a meta
+    // tag by the header — read it from there rather than assuming a global.
+    var CSRF = (function () {
+        var m = document.querySelector('meta[name="csrf-token"]');
+        return m ? m.getAttribute('content') : '';
+    }());
+
+    // ── Speaking ────────────────────────────────────────────────────────────
+    // Off by default and remembered per browser. See the note at the top of this
+    // file: an assistant that speaks unprompted in a shared office gets muted
+    // permanently on day one.
+    var canSpeak = 'speechSynthesis' in window;
+    var speakOn  = false;
+    try { speakOn = localStorage.getItem('carlVoice') === 'on'; } catch (e) {}
+
+    function paintVoice() {
+        vBtn.classList.toggle('on', speakOn);
+        vBtn.innerHTML = '<i class="fa fa-volume-' + (speakOn ? 'high' : 'xmark') + '"></i>';
+        vBtn.title = speakOn ? 'Stop reading answers aloud' : 'Read answers aloud';
+    }
+    if (!canSpeak) vBtn.style.display = 'none'; else paintVoice();
+
+    vBtn.addEventListener('click', function () {
+        speakOn = !speakOn;
+        try { localStorage.setItem('carlVoice', speakOn ? 'on' : 'off'); } catch (e) {}
+        if (!speakOn) window.speechSynthesis.cancel();
+        paintVoice();
+    });
+
+    function speak(t) {
+        if (!speakOn || !canSpeak || !t) return;
+        try {
+            window.speechSynthesis.cancel();
+            var u = new SpeechSynthesisUtterance(t);
+            u.rate = 1.02; u.pitch = 1.05; u.lang = 'en-GB';
+            // Prefer a British English voice where the device has one, so she
+            // sounds consistent rather than whatever the machine defaults to.
+            var vs = window.speechSynthesis.getVoices() || [];
+            var pick = vs.find(function (v) { return /en-GB/i.test(v.lang) && /female|Google UK English Female|Serena|Kate/i.test(v.name); })
+                    || vs.find(function (v) { return /en-GB/i.test(v.lang); })
+                    || vs.find(function (v) { return /^en/i.test(v.lang); });
+            if (pick) u.voice = pick;
+            window.speechSynthesis.speak(u);
+        } catch (e) {}
+    }
+    if (canSpeak && window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = function () {};   // populates getVoices()
+    }
+
+    // ── Listening ───────────────────────────────────────────────────────────
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var rec = null, listening = false;
+    if (SR) {
+        micBtn.style.display = '';
+        rec = new SR();
+        rec.lang = 'en-GB'; rec.interimResults = false; rec.maxAlternatives = 1;
+        rec.onresult = function (e) {
+            var said = e.results[0][0].transcript;
+            text.value = said;
+            send();
+        };
+        rec.onend = function () { listening = false; micBtn.classList.remove('listening'); };
+        rec.onerror = rec.onend;
+        micBtn.addEventListener('click', function () {
+            if (listening) { rec.stop(); return; }
+            try { rec.start(); listening = true; micBtn.classList.add('listening'); } catch (e) {}
+        });
+    }
+
+    // ── Rendering ───────────────────────────────────────────────────────────
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function add(role, said, html) {
+        var d = document.createElement('div');
+        d.className = 'carl-msg from-' + role;
+        d.innerHTML = '<div class="bubble">' + esc(said) + '</div>'
+                    + (html ? '<div class="carl-rich">' + html + '</div>' : '');
+        body.appendChild(d);
+        body.scrollTop = body.scrollHeight;
+        return d;
+    }
+    function thinking(on) {
+        var t = document.getElementById('carlThinking');
+        if (!on) { if (t) t.remove(); return; }
+        if (t) return;
+        var d = document.createElement('div');
+        d.id = 'carlThinking'; d.className = 'carl-msg from-carl';
+        d.innerHTML = '<div class="bubble carl-typing"><i></i><i></i><i></i></div>';
+        body.appendChild(d); body.scrollTop = body.scrollHeight;
+    }
+
+    // ── Talking to Carl ─────────────────────────────────────────────────────
+    function send(preset) {
+        var msg = (preset != null ? preset : text.value).trim();
+        if (!msg || busy) return;
+        busy = true;
+        add('user', msg, '');
+        text.value = ''; text.style.height = 'auto';
+        thinking(true);
+
+        fetch(API, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+            body: JSON.stringify({ message: msg })
+        })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+            thinking(false); busy = false;
+            if (!j || !j.ok) { add('carl', 'Sorry — something went wrong at my end. Try again?', ''); return; }
+            add('carl', j.say, j.html);
+            speak(j.say);
+            // Navigation is deliberately delayed: Carl finishes her sentence and
+            // the person sees what she said before the page changes under them.
+            if (j.go) setTimeout(function () { window.location.href = j.go; }, speakOn ? 1400 : 550);
+        })
+        .catch(function () {
+            thinking(false); busy = false;
+            add('carl', 'I could not reach the system just then. Check your connection and try again.', '');
+        });
+    }
+
+    // Suggestion chips and Carl's own action buttons.
+    body.addEventListener('click', function (e) {
+        var chip = e.target.closest ? e.target.closest('[data-ask]') : null;
+        if (chip) { e.preventDefault(); send(chip.dataset.ask); }
+    });
+
+    document.getElementById('carlSend').addEventListener('click', function () { send(); });
+    text.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+    text.addEventListener('input', function () {
+        text.style.height = 'auto';
+        text.style.height = Math.min(text.scrollHeight, 110) + 'px';
+    });
+
+    // ── Opening and closing ─────────────────────────────────────────────────
+    function open() {
+        panel.classList.add('open'); back.classList.add('open');
+        btn.classList.remove('has-news');
+        if (!loaded) { loaded = true; load(false); }
+        setTimeout(function () { text.focus(); }, 260);
+    }
+    function close() {
+        panel.classList.remove('open'); back.classList.remove('open');
+        if (canSpeak) window.speechSynthesis.cancel();
+        if (listening && rec) rec.stop();
+    }
+    btn.addEventListener('click', function () {
+        panel.classList.contains('open') ? close() : open();
+    });
+    document.getElementById('carlClose').addEventListener('click', close);
+    back.addEventListener('click', close);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && panel.classList.contains('open')) close();
+    });
+
+    function load(greet) {
+        fetch(API + (greet ? '?greet=1' : ''), { credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+                if (!j || !j.ok) return;
+                if (!body.childElementCount) {
+                    (j.history || []).forEach(function (m) {
+                        add(m.role === 'user' ? 'user' : 'carl', m.body, m.html || '');
+                    });
+                }
+                if (j.greeting) {
+                    add('carl', j.greeting.say, j.greeting.html);
+                    speak(j.greeting.say);
+                }
+                if (!body.childElementCount) {
+                    add('carl', 'Hello. I am ' + NAME + '. Ask me for a briefing, or say “help” '
+                              + 'to see what I can do.', '');
+                }
+            })
+            .catch(function () {});
+    }
+
+    // ── The morning greeting ────────────────────────────────────────────────
+    // Asked for once per page load; the server decides whether one is actually
+    // due, so opening five tabs does not produce five greetings.
+    (function greetIfDue() {
+        fetch(API + '?greet=1', { credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+                if (!j || !j.ok || !j.greeting) return;
+                loaded = true;
+                (j.history || []).forEach(function (m) {
+                    if (m.skill !== 'greeting') add(m.role === 'user' ? 'user' : 'carl', m.body, m.html || '');
+                });
+                add('carl', j.greeting.say, j.greeting.html);
+                btn.classList.add('has-news');
+                // The panel opens itself only for the greeting — this is the one
+                // moment Carl initiates rather than responds.
+                setTimeout(function () { open(); speak(j.greeting.say); }, 900);
+            })
+            .catch(function () {});
+    }());
+}());
+</script>
+<?php } ?>

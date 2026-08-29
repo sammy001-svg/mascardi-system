@@ -285,6 +285,19 @@ window.addEventListener('beforeinstallprompt', function(e) {
 
         <span class="topbar-date d-none d-lg-inline"><?= date('d M Y') ?></span>
 
+        <?php /* Carl — sits immediately before the bell. Loaded here rather than
+                 in the footer so she is present in the navbar itself; the file
+                 returns early for the public visitors-book account. */ ?>
+        <?php
+        try {
+            require_once __DIR__ . '/../modules/carl/_skills.php';
+            carlMigrate(getDB());
+            include __DIR__ . '/carl_widget.php';
+        } catch (\Throwable $__carlErr) {
+            error_log('carl widget: ' . $__carlErr->getMessage());
+        }
+        ?>
+
         <!-- Notifications bell -->
         <div class="dropdown">
             <button type="button" class="topbar-icon-btn position-relative" id="notifBell"
