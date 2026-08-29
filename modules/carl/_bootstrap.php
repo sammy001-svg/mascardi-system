@@ -191,7 +191,10 @@ function carlSkills(): array
             'label'    => 'What needs attention',
             'module'   => null,
             'patterns' => ['advice', 'advise', 'what should i do', 'what needs attention',
-                           'priorities', 'what is urgent', 'anything urgent', 'recommend'],
+                           'priorities', 'what is urgent', 'anything urgent', 'recommend',
+                           'worry', 'worrying', 'worried', 'concern', 'concerns', 'problem',
+                           'problems', 'issues', 'focus on', 'needs doing', 'anything wrong',
+                           'chase', 'slipping', 'falling behind'],
         ],
         'add_lead' => [
             'label'    => 'Add a lead',
@@ -229,6 +232,16 @@ function carlSkillsFor(): array
  * Longest pattern first, so "add a lead" beats the bare "lead" — otherwise every
  * request to create something is answered with a pipeline report.
  */
+/** Words too common to identify a subject — they carry no signal about topic. */
+function carlIsStopWord(string $w): bool
+{
+    static $stop = ['what','how','who','when','where','which','why','the','are','you','can','and',
+                    'for','with','was','were','have','has','had','our','its','from','that','this',
+                    'about','any','all','give','get','tell','show','see','many','much','doing','did',
+                    'does','done','been','being','into','over','than','then','them','they','there'];
+    return in_array($w, $stop, true);
+}
+
 function carlMatchSkill(string $text): ?string
 {
     $t = ' ' . strtolower(trim(preg_replace('/\s+/u', ' ', $text))) . ' ';
@@ -246,15 +259,49 @@ function carlMatchSkill(string $text): ?string
     // something this account cannot see should be answered "that is not open to
     // your account" — which carlRun() does — rather than falling through to
     // "I did not catch that", which is both untrue and unhelpful.
-    $best = null; $bestLen = 0;
+    //
+    // Scored rather than exact-matched. Requiring the phrase verbatim made Carl
+    // brittle in exactly the way people notice: "leads" worked, "any leads that
+    // went cold?" did not. Scoring on word overlap means a question only has to
+    // be recognisably about something, not phrased the way the table happens to
+    // spell it.
+    $words = array_values(array_filter(explode(' ', trim($t)), fn($w) => $w !== ''));
+    $best = null; $bestScore = 0.0;
+
     foreach (carlSkills() as $key => $s) {
+        $score = 0.0;
         foreach ($s['patterns'] as $p) {
+            // A whole phrase present verbatim is the strongest signal there is.
             if (str_contains($t, ' ' . $p . ' ') || str_contains($t, ' ' . $p)) {
-                if (strlen($p) > $bestLen) { $best = $key; $bestLen = strlen($p); }
+                $score = max($score, 10 + strlen($p) / 10);
+                continue;
             }
+            // Otherwise credit the words of the pattern that do appear, so a
+            // multi-word pattern is not all-or-nothing.
+            //
+            // Question words are excluded. Nearly every question begins "what"
+            // or "how", so counting them scored "what vehicles are on the yard"
+            // against help's "what can you do" and answered the wrong question
+            // entirely. Only the words that actually name a subject count.
+            $pw = array_filter(explode(' ', $p), fn($w) => strlen($w) > 2 && !carlIsStopWord($w));
+            if (!$pw) continue;
+            $hit = 0;
+            foreach ($pw as $w) {
+                foreach ($words as $uw) {
+                    // Tolerates plurals and simple endings: lead/leads, reserve/reserved.
+                    if ($uw === $w || (strlen($w) > 3 && (str_starts_with($uw, $w) || str_starts_with($w, $uw)))) {
+                        $hit++; break;
+                    }
+                }
+            }
+            if ($hit) $score = max($score, ($hit / count($pw)) * 6);
         }
+        if ($score > $bestScore) { $bestScore = $score; $best = $key; }
     }
-    return $best;
+
+    // Below this the "match" is one incidental word and a guess would be worse
+    // than admitting she did not follow.
+    return $bestScore >= 3.0 ? $best : null;
 }
 
 // ── Figures ──────────────────────────────────────────────────────────────────

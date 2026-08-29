@@ -214,13 +214,55 @@ function carlSkillStock(PDO $db, array $user, string $u): array
     return ['skill' => 'stock', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
+/**
+ * The pipeline — answered at the level the question was asked.
+ *
+ * A bare "how are the leads" gets the overview. Anything narrower ("which are
+ * overdue", "who has no follow-up date", "leads nobody owns") gets the actual
+ * records: names, numbers, whose they are, and how late. A count alone tells
+ * somebody there is a problem without telling them whose it is.
+ */
 function carlSkillLeads(PDO $db, array $user, string $u): array
 {
-    $f = carlFigures($db);
+    require_once __DIR__ . '/_detail.php';
+    $f    = carlFigures($db);
+    $q    = carlQualifier($u);
+
+    // A narrowing word turns this into a "which ones" answer.
+    $named = [
+        'overdue'    => 'leads past their follow-up date',
+        'nofollow'   => 'leads with no follow-up date set',
+        'unassigned' => 'leads with nobody assigned',
+        'today'      => 'leads that came in today',
+        'new'        => 'leads at the new stage',
+        'week'       => 'leads from the past week',
+        'month'      => 'leads this month',
+        'reserved'   => 'reserved leads',
+    ];
+
+    if ($q !== null && isset($named[$q])) {
+        $rows  = carlLeadRows($db, $q, 8);
+        $total = carlLeadCount($db, $q);
+        $say   = carlLeadSpeech($rows, $total, $named[$q]);
+
+        $h = carlTiles([
+            [ucfirst($named[$q]), $total, $total ? ($q === 'overdue' ? 'bad' : 'warn') : 'good'],
+            ['Open leads in total', $f['leads_total'], ''],
+        ]);
+        $h .= carlLeadCards($rows);
+        if ($total > count($rows)) {
+            $h .= '<p class="carl-note">Showing the first ' . count($rows) . ' of ' . $total . '.</p>';
+        }
+        $h .= carlLink(BASE_URL . '/modules/crm/leads.php', 'Open the pipeline', 'fa-filter');
+        return ['skill' => 'leads', 'done' => true, 'say' => $say, 'html' => $h];
+    }
+
+    // No qualifier — the overview, but still with the leads that need work,
+    // because that is what the next question would have been anyway.
     $say = 'You have ' . carlPlural($f['leads_total'], 'open lead');
     $say .= $f['leads_new_today'] ? ', ' . $f['leads_new_today'] . ' of them new today.' : '.';
-    if ($f['leads_overdue'])  $say .= ' ' . $f['leads_overdue'] . ($f['leads_overdue']===1?' is':' are') . ' past their follow-up date.';
-    elseif ($f['leads_nofollow']) $say .= ' ' . $f['leads_nofollow'] . ($f['leads_nofollow']===1?' has':' have') . ' no follow-up date set.';
+    if ($f['leads_overdue'])  $say .= ' ' . carlPlural($f['leads_overdue'], 'is', 'are') . ' past the follow-up date.';
+    elseif ($f['leads_nofollow']) $say .= ' ' . carlPlural($f['leads_nofollow'], 'has', 'have') . ' no follow-up date set.';
 
     $h = carlTiles([
         ['Open',        $f['leads_total'], ''],
@@ -228,6 +270,13 @@ function carlSkillLeads(PDO $db, array $user, string $u): array
         ['Overdue',     $f['leads_overdue'], $f['leads_overdue'] ? 'bad' : ''],
         ['No follow-up', $f['leads_nofollow'], $f['leads_nofollow'] ? 'warn' : ''],
     ]);
+
+    $attention = carlLeadRows($db, $f['leads_overdue'] ? 'overdue' : ($f['leads_nofollow'] ? 'nofollow' : null), 5);
+    if ($attention) {
+        $h .= '<p class="carl-p" style="margin-top:6px"><b>'
+            . ($f['leads_overdue'] ? 'Past their follow-up date' : 'Waiting on a follow-up date')
+            . '</b></p>' . carlLeadCards($attention);
+    }
     $h .= carlLink(BASE_URL . '/modules/crm/leads.php', 'Open the pipeline', 'fa-filter');
     return ['skill' => 'leads', 'done' => true, 'say' => $say, 'html' => $h];
 }

@@ -18,13 +18,32 @@ if (!defined('CARL_WIDGET')) {
     if (authRole() === 'visitor_book') return;   // public kiosk: no assistant
 ?>
 <style>
-.carl-btn{ position:relative; }
+/* The shared .topbar-icon-btn is transparent with a grey icon, which left Carl
+   invisible against the navbar. She is the one control here that is not a
+   utility icon, so she gets her own colour rather than borrowing the set. */
+.carl-btn{
+    position:relative; width:auto; padding:0 13px 0 10px; gap:8px;
+    background:linear-gradient(135deg,#a855f7,#7c3aed) !important;
+    border-color:transparent !important; color:#fff !important;
+    box-shadow:0 2px 10px rgba(124,58,237,.34);
+    font-size:12.5px; font-weight:700; letter-spacing:.01em;
+}
+.carl-btn:hover{
+    background:linear-gradient(135deg,#9333ea,#6d28d9) !important; color:#fff !important;
+    box-shadow:0 4px 16px rgba(124,58,237,.46);
+}
+.carl-btn i{ font-size:13.5px; }
+.carl-btn .carl-label{ line-height:1; }
+@media(max-width:640px){ .carl-btn{ padding:0; width:36px; } .carl-btn .carl-label{ display:none; } }
+
 .carl-btn .carl-dot{
-    position:absolute; top:6px; right:6px; width:8px; height:8px; border-radius:50%;
-    background:#a855f7; box-shadow:0 0 0 2px var(--surface,#fff); display:none;
+    position:absolute; top:-3px; right:-3px; width:10px; height:10px; border-radius:50%;
+    background:#22c55e; box-shadow:0 0 0 2px var(--surface,#fff); display:none;
 }
 .carl-btn.has-news .carl-dot{ display:block; animation:carlPulse 2s infinite; }
 @keyframes carlPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+/* On dark backgrounds the halo ring must match the bar, not stay white. */
+[data-theme="dark"] .carl-btn .carl-dot{ box-shadow:0 0 0 2px var(--surface,#0f172a); }
 
 .carl-panel{
     position:fixed; top:0; right:0; bottom:0; width:420px; max-width:100vw;
@@ -114,6 +133,21 @@ if (!defined('CARL_WIDGET')) {
 .carl-advice.carl-good{ border-left-color:#16a34a; }
 .carl-advice .t{ font-size:13px; font-weight:700; }
 .carl-advice .w{ font-size:12px; color:var(--text-2,#64748b); margin:3px 0 6px; }
+/* Real records behind a figure — names, owners, dates. */
+.carl-recs{ margin:6px 0 10px; }
+.carl-rec{
+    border:1px solid var(--border,#e2e8f0); border-radius:10px;
+    padding:10px 12px; margin-bottom:8px; background:var(--surface,#fff);
+}
+.carl-rec-t{ font-size:13.5px; font-weight:700; margin-bottom:6px; }
+.carl-rec-t a{ color:#a855f7; text-decoration:none; }
+.carl-rec-t a:hover{ text-decoration:underline; }
+.carl-rec-f{ display:flex; justify-content:space-between; gap:12px; font-size:12px; padding:2px 0; }
+.carl-rec-f span{ color:var(--text-2,#64748b); flex:0 0 auto; }
+.carl-rec-f b{ font-weight:600; text-align:right; word-break:break-word; }
+.carl-rec-f b.carl-t-bad{ color:#dc2626; }
+.carl-rec-f b.carl-t-warn{ color:#b45309; }
+
 .carl-confirm{ background:var(--surface-alt,#f6f7fb); border-radius:10px; padding:11px 13px; margin:4px 0; }
 .carl-confirm .r{ display:flex; justify-content:space-between; font-size:13px; padding:3px 0; }
 .carl-ok{ display:flex; align-items:center; gap:8px; background:#f0fdf4; border:1px solid #bbf7d0;
@@ -146,6 +180,7 @@ if (!defined('CARL_WIDGET')) {
 <button type="button" class="topbar-icon-btn carl-btn" id="carlBtn"
         title="Ask <?= e(CARL_NAME) ?>" aria-label="Ask <?= e(CARL_NAME) ?>">
     <i class="fa fa-wand-magic-sparkles"></i>
+    <span class="carl-label"><?= e(CARL_NAME) ?></span>
     <span class="carl-dot"></span>
 </button>
 
