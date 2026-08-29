@@ -143,6 +143,14 @@ function carlSay(string $text): string
 function carlSkills(): array
 {
     return [
+        'chitchat' => [
+            'label'    => 'Greetings and polite conversation',
+            'module'   => null,
+            'patterns' => ['hallo', 'hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening',
+                           'habari', 'jambo', 'sasa', 'mambo', 'sup', 'greetings', 'howdy',
+                           'how are you', 'how are you doing', 'who are you', 'what is your name',
+                           'thanks', 'thank you', 'asante', 'goodbye', 'bye', 'see you', 'hi carl', 'hello carl'],
+        ],
         'help' => [
             'label'    => 'What Carl can do',
             'module'   => null,

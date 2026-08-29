@@ -86,6 +86,12 @@ function carlChips(array $prompts): string
  */
 function carlSkillUnknown(array $user, ?PDO $db = null, string $utterance = '', array $history = []): array
 {
+    // Check if the utterance is a simple greeting or smalltalk.
+    $t = strtolower(trim($utterance));
+    if (preg_match('/\b(hallo|hello|hi|hey|habari|jambo|sasa|mambo|sup|good morning|good afternoon|good evening|how are you|who are you)\b/i', $t)) {
+        return carlSkillChitchat($db ?: getDB(), $user, $utterance);
+    }
+
     if ($db !== null && $utterance !== '' && carlLlmAvailable()) {
         $figures = carlFigures($db);
         $res     = carlLlmFreeform($utterance, $figures, $user, $history);
@@ -96,11 +102,40 @@ function carlSkillUnknown(array $user, ?PDO $db = null, string $utterance = '', 
             'say'   => 'I\'m not sure how to answer that from the data I have. '
                      . 'Try asking for a briefing, the sales pipeline, stock, visitors, or revenue — '
                      . 'or say "help" to see everything I can do.',
-            'html'  => ''];
+            'html'  => carlChips(['Today\'s briefing', 'Vehicles in stock', 'Sales pipeline', 'What needs attention?'])];
 }
 
 
 // ── Skills ───────────────────────────────────────────────────────────────────
+
+function carlSkillChitchat(PDO $db, array $user, string $u): array
+{
+    $name      = carlFirstName((string)$user['name']);
+    $partOfDay = carlPartOfDay($db);
+    $t         = strtolower(trim($u));
+
+    // If LLM is available, let Claude generate a warm, natural response.
+    if (carlLlmAvailable()) {
+        $figures = carlFigures($db);
+        $res     = carlLlmFreeform($u, $figures, $user);
+        if (!empty($res['say'])) return $res;
+    }
+
+    if (preg_match('/(thank|asante)/i', $t)) {
+        $say = "You're very welcome, $name! Let me know if you need anything else.";
+    } elseif (preg_match('/(bye|goodbye|see you)/i', $t)) {
+        $say = "Goodbye, $name! Have a wonderful $partOfDay.";
+    } elseif (preg_match('/(who are you|what is your name)/i', $t)) {
+        $say = "I am " . CARL_NAME . ", your AI assistant for Mascardi Luxury Cars. I can provide briefings, track leads, check stock, report revenue, and update your records.";
+    } elseif (preg_match('/(how are you)/i', $t)) {
+        $say = "I'm doing great, thank you $name! How can I assist you at Mascardi Luxury Cars today?";
+    } else {
+        $say = "Hello $name! Good $partOfDay. I'm " . CARL_NAME . ", your assistant at Mascardi Luxury Cars. What can I do for you today?";
+    }
+
+    $h = carlChips(['Today\'s briefing', 'Vehicles in stock', 'Sales pipeline', 'What needs attention?']);
+    return ['skill' => 'chitchat', 'done' => true, 'say' => $say, 'html' => $h];
+}
 
 function carlSkillHelp(PDO $db, array $user, string $u): array
 {
