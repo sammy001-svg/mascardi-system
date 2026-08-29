@@ -163,6 +163,8 @@ a.carl-rec > em{ color:#7c3aed; }
 .carl-rec.is-off > b{ font-weight:600; }
 .carl-rec.is-off > em{ color:var(--text-2,#64748b); }
 
+.carl-notice{ margin:8px 0 4px; padding:9px 12px; border-radius:9px; font-size:12.5px;
+    line-height:1.6; background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; }
 .carl-confirm{ background:var(--surface-alt,#f6f7fb); border-radius:10px; padding:11px 13px; margin:4px 0; }
 .carl-confirm .r{ display:flex; justify-content:space-between; font-size:13px; padding:3px 0; }
 .carl-ok{ display:flex; align-items:center; gap:8px; background:#f0fdf4; border:1px solid #bbf7d0;
@@ -528,6 +530,15 @@ a.carl-rec > em{ color:#7c3aed; }
                 if (!body.childElementCount) {
                     add('carl', 'Hello. I am ' + NAME + '. Ask me for a briefing, or say \u201chelp\u201d '
                               + 'to see what I can do.', '', true, null);
+                }
+                // Shown to managers only, and only while something is actually wrong.
+                // Carl still answers; this explains why she is answering plainly.
+                if (j.notice) {
+                    var n = document.createElement('div');
+                    n.className = 'carl-notice';
+                    n.textContent = j.notice;
+                    body.appendChild(n);
+                    body.scrollTop = body.scrollHeight;
                 }
             })
             .catch(function () {});

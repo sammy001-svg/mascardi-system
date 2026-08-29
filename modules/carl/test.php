@@ -158,14 +158,24 @@ $spoke = $live && $live['status'] === 200 && !isset($live['json']['error']);
     <p class="m" style="margin-top:12px">
         <?php
         $t = (string)($live['json']['error']['type'] ?? '');
-        echo match ($t) {
-            'authentication_error' => 'The key was rejected. Check it is complete, active, and from the right organisation.',
-            'not_found_error'      => 'The model id was rejected. Set anthropic_model to one of: claude-opus-5, claude-sonnet-5, claude-haiku-4-5.',
-            'permission_error'     => 'The key is valid but not permitted to use this model.',
-            'rate_limit_error'     => 'Rate limited. Wait and retry.',
-            'invalid_request_error'=> 'The request shape was rejected — see the message above.',
-            default                => 'See the message above.',
-        };
+        $m = strtolower((string)($live['json']['error']['message'] ?? ''));
+        // Billing arrives as invalid_request_error, which reads like a code fault
+        // and is not one — the key is fine and the account simply has no credit.
+        if (str_contains($m, 'credit balance') || str_contains($m, 'billing')
+            || str_contains($m, 'quota') || str_contains($m, 'purchase credits')) {
+            echo 'Nothing is wrong with the key or the code — the Anthropic account has run '
+               . 'out of credit. Add credits at console.anthropic.com under Plans &amp; Billing, '
+               . 'and Carl starts using the API again on her next message. No redeploy needed.';
+        } else {
+            echo match ($t) {
+                'authentication_error' => 'The key was rejected. Check it is complete, active, and from the right organisation.',
+                'not_found_error'      => 'The model id was rejected. Set anthropic_model to one of: claude-opus-5, claude-sonnet-5, claude-haiku-4-5.',
+                'permission_error'     => 'The key is valid but not permitted to use this model.',
+                'rate_limit_error'     => 'Rate limited. Wait and retry.',
+                'invalid_request_error'=> 'The request was rejected — see the message above.',
+                default                => 'See the message above.',
+            };
+        }
         ?>
     </p>
     <?php endif; ?>

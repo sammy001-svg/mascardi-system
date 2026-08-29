@@ -94,12 +94,13 @@ function carlLlmRequest(string $system, array $msgs, int $maxTok = 512, array $t
         $raw = @file_get_contents('https://api.anthropic.com/v1/messages', false, $ctx);
         if ($raw === false) return null;
         $decoded = json_decode($raw, true);
-        // Surface API errors to the log so they are diagnosable.
         if (isset($decoded['error'])) {
             error_log('[Carl LLM] API error: ' . json_encode($decoded['error']));
+            carlLlmNoteFailure((string)($decoded['error']['message'] ?? ''));
             return null;
         }
-        return is_array($decoded) ? $decoded : null;
+        if (is_array($decoded)) { carlLlmNoteFailure(null); return $decoded; }
+        return null;
     } catch (\Throwable $e) {
         error_log('[Carl LLM] Request failed: ' . $e->getMessage());
         return null;
@@ -337,6 +338,65 @@ function carlLlmFigureSnapshot(array $f): string
         'Unpaid invoices: '             . ($f['invoices_unpaid'] ?? 0),
     ];
     return implode("\n", $lines);
+}
+
+/**
+ * Remember why the last call failed, so the fallback is not silent.
+ *
+ * Carl degrading quietly is right for the person at the desk — they get an
+ * answer either way — but wrong for whoever runs the system, who otherwise has
+ * no way to tell an expired key from an empty account from a firewall. Passing
+ * null clears it, so a working call heals the warning by itself.
+ */
+function carlLlmNoteFailure(?string $message): void
+{
+    static $last = false;
+    $value = $message === null ? '' : trim($message) . ' | ' . date('Y-m-d H:i');
+    if ($last === $value) return;   // one write per request, not one per retry
+    $last = $value;
+    try {
+        getDB()->prepare(
+            "INSERT INTO settings (setting_key, setting_value) VALUES ('carl_llm_last_error', ?)
+             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)"
+        )->execute([$value]);
+    } catch (\Throwable $e) {
+        // Diagnostics must never be the reason a reply fails.
+    }
+}
+
+/** The stored reason, or empty when the last call worked. */
+function carlLlmLastError(): string
+{
+    try {
+        $st = getDB()->prepare("SELECT setting_value FROM settings WHERE setting_key = 'carl_llm_last_error'");
+        $st->execute();
+        return trim((string)$st->fetchColumn());
+    } catch (\Throwable $e) { return ''; }
+}
+
+/** Turns an API message into something worth showing a manager. */
+function carlLlmExplain(string $raw): string
+{
+    if (trim($raw) === '') return '';
+    // The API writes the same fault several ways — x-api-key, rate_limit,
+    // not_found_error — so flatten the separators before looking for words.
+    $m = strtolower(str_replace(['_', '-'], ' ', $raw));
+    if (str_contains($m, 'credit balance') || str_contains($m, 'purchase credits')
+        || str_contains($m, 'billing') || str_contains($m, 'quota')) {
+        return 'The Anthropic account is out of credit, so I am answering from your own '
+             . 'data rather than in full. Add credits under Plans and Billing and I pick '
+             . 'up again straight away.';
+    }
+    if (str_contains($m, 'authentication') || str_contains($m, 'api key')) {
+        return 'My API key is being rejected, so I am answering from your own data only.';
+    }
+    if (str_contains($m, 'rate limit')) {
+        return 'The API is rate limiting us at the moment, so I am keeping to short answers.';
+    }
+    if (str_contains($m, 'model')) {
+        return 'The configured model was rejected, so I am answering from your own data only.';
+    }
+    return 'I cannot reach the Anthropic API, so I am answering from your own data only.';
 }
 
 } // function_exists('carlLlmAvailable')

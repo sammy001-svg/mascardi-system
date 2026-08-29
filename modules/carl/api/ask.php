@@ -100,6 +100,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         'greeting' => $greeting,
         'pending'  => carlPendingGet($db, $uid) !== null,
         'llm'      => carlLlmAvailable(),
+        // Only to those who can do something about it. A salesperson seeing
+        // "the account is out of credit" learns nothing they can act on.
+        'notice'   => (isSuperAdmin() || authRole() === 'admin')
+                        ? carlLlmExplain(carlLlmLastError()) : '',
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
