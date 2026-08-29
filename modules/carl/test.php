@@ -163,9 +163,18 @@ $spoke = $live && $live['status'] === 200 && !isset($live['json']['error']);
         // and is not one — the key is fine and the account simply has no credit.
         if (str_contains($m, 'credit balance') || str_contains($m, 'billing')
             || str_contains($m, 'quota') || str_contains($m, 'purchase credits')) {
-            echo 'Nothing is wrong with the key or the code — the Anthropic account has run '
-               . 'out of credit. Add credits at console.anthropic.com under Plans &amp; Billing, '
-               . 'and Carl starts using the API again on her next message. No redeploy needed.';
+            echo '<strong>Nothing is wrong with the key or the code.</strong> The key authenticated '
+               . 'and Anthropic\x27s billing declined the call — the API balance is empty.<br><br>'
+               . '<strong>A Claude Pro or Max subscription does not pay for this.</strong> '
+               . 'claude.ai and the API are separate products with separate billing: a subscription '
+               . 'covers chat on claude.ai and Claude Code, while anything calling api.anthropic.com '
+               . 'draws on a prepaid API balance that starts at zero. Having tokens on the '
+               . 'subscription puts nothing into it.<br><br>'
+               . 'Go to <strong>console.anthropic.com</strong> (not claude.ai) &rarr; Plans &amp; Billing '
+               . '&rarr; buy credits. Check the organisation switcher top-left matches the org that '
+               . 'issued this key, and if you use Workspaces, that the workspace spend limit is not '
+               . 'zero — a zero limit gives this same error even when the org has credit.<br><br>'
+               . 'Carl picks up on her next message. No redeploy needed.';
         } else {
             echo match ($t) {
                 'authentication_error' => 'The key was rejected. Check it is complete, active, and from the right organisation.',
