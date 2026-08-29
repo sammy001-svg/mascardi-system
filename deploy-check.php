@@ -56,6 +56,14 @@ $expected = [
         'database/seed_visitor_book.php', 'visitor_book'],
     'Deployment config'               => [
         '.cpanel.yml', 'DEPLOYPATH'],
+    'Carl — greeting fix'             => [
+        'modules/carl/_bootstrap.php', 'bestScore >= 3.5'],
+    'Carl — reservations & documents' => [
+        'modules/carl/_tasks.php', 'carlCreateReservation'],
+    'Carl — conversational layer'     => [
+        'modules/carl/_agent.php', 'carlConverse'],
+    'Admin seed guarded'              => [
+        'database/seed_admin.php', 'seedAdminConfirmPage'],
 ];
 
 /** settings key => version this build expects. */
@@ -155,7 +163,133 @@ foreach ($expected as $label => [$path, $marker]) {
 </div>
 <?php endif; ?>
 
-<h2>2. Database</h2>
+
+<h2>2. Does Carl actually understand a greeting?</h2>
+<?php
+// File markers prove which bytes are on disk. This proves what the running
+// server does with them, which is the question actually being asked — and it
+// catches the case where the files are current but PHP is still serving a
+// cached compile of the old ones.
+$carlRows = '';
+$carlFails = 0;
+$carlLoaded = false;
+
+$carlBootstrap = __DIR__ . '/modules/carl/_bootstrap.php';
+if (is_file($carlBootstrap)) {
+    try {
+        require_once $carlBootstrap;
+        $carlLoaded = function_exists('carlMatchSkill');
+    } catch (\Throwable $e) {
+        $carlLoaded = false;
+    }
+}
+
+if ($carlLoaded) {
+    // Greetings must reach chitchat; the rest must not be swallowed by it.
+    $probes = [
+        ['Hallow?',      'chitchat',   'greeting'],
+        ['Hallo',        'chitchat',   'greeting'],
+        ['Hello?',       'chitchat',   'greeting'],
+        ['Hi',           'chitchat',   'greeting'],
+        ['Good morning', 'chitchat',   'greeting'],
+        ['Habari',       'chitchat',   'greeting (Swahili)'],
+        ['Thanks',       'chitchat',   'courtesy'],
+        ['history',      null,         'must NOT be read as "hi"'],
+        ['how many leads do we have', 'leads', 'a real question'],
+    ];
+    foreach ($probes as [$say, $want, $note]) {
+        $got = carlMatchSkill($say);
+        $ok  = $got === $want;
+        if (!$ok) $carlFails++;
+        $carlRows .= '<tr><td><code>' . htmlspecialchars($say) . '</code>'
+                   . '<div class="m">' . htmlspecialchars($note) . '</div></td>'
+                   . '<td class="m">' . htmlspecialchars($got ?? 'not understood') . '</td>'
+                   . '<td style="text-align:right">' . badge($ok, 'OK', 'WRONG') . '</td></tr>';
+    }
+} else {
+    $carlRows = '<tr><td colspan="3" class="m">Carl is not installed on this server — '
+              . 'modules/carl/_bootstrap.php is missing. The deploy has not run.</td></tr>';
+    $carlFails = 1;
+}
+?>
+<div class="verdict <?= $carlFails ? 'vno' : 'vok' ?>">
+<?php if (!$carlLoaded): ?>
+    Carl is not on this server at all.
+<?php elseif ($carlFails): ?>
+    <?= $carlFails ?> of <?= count($probes) ?> failed — this server is running the OLD matcher.
+    The files may be in place, but what is executing is out of date. Check OPcache below.
+<?php else: ?>
+    Carl understands greetings correctly on this server. If she still answers badly in the
+    browser, the problem is the API key or the browser cache, not the code.
+<?php endif; ?>
+</div>
+<div class="box"><table><?= $carlRows ?></table></div>
+
+<h2>3. PHP OPcache</h2>
+<?php
+// The quiet cause of "I deployed it and nothing changed". OPcache compiles PHP
+// once and reuses it; if validate_timestamps is off, or revalidate_freq is long,
+// new files sit on disk while the old compile keeps being served.
+$oc = function_exists('opcache_get_status') ? @opcache_get_status(false) : null;
+$ocOn = is_array($oc) && !empty($oc['opcache_enabled']);
+$validate = (bool)ini_get('opcache.validate_timestamps');
+$freq = (int)ini_get('opcache.revalidate_freq');
+$stale = $ocOn && (!$validate || $freq > 60);
+?>
+<div class="box"><table>
+    <tr><td>OPcache running</td><td style="text-align:right"><?= badge(true, $ocOn ? 'YES' : 'NO', '') ?></td></tr>
+    <?php if ($ocOn): ?>
+    <tr><td>Notices changed files
+        <div class="m">opcache.validate_timestamps</div></td>
+        <td style="text-align:right"><?= badge($validate, 'YES', 'NO — new code is ignored') ?></td></tr>
+    <tr><td>How often it re-checks
+        <div class="m">opcache.revalidate_freq — seconds</div></td>
+        <td style="text-align:right"><?= badge($freq <= 60, $freq . 's', $freq . 's — too long') ?></td></tr>
+    <?php endif; ?>
+</table>
+<?php if ($stale): ?>
+    <p style="font-size:13.5px;line-height:1.7;color:#fcd34d;margin:12px 0 0">
+        This is very likely your problem. PHP is serving a cached compile of the old files.
+        Clear it in cPanel — <strong>Select PHP Version → Options</strong>, toggle any setting
+        to force a restart — or ask your host to reload PHP. Touching the files
+        (<code>find . -name '*.php' -exec touch {} +</code> over SSH) also works when
+        timestamps are being checked.
+    </p>
+<?php elseif ($ocOn): ?>
+    <p class="m" style="margin:12px 0 0">OPcache is on but re-checks files promptly, so it is
+    not what is holding the old code in place.</p>
+<?php else: ?>
+    <p class="m" style="margin:12px 0 0">Not enabled, so it cannot be masking a deploy.</p>
+<?php endif; ?>
+</div>
+
+<h2>4. Carl's connection to Claude</h2>
+<?php
+$carlKey   = trim((string)getSetting('anthropic_api_key', ''));
+$carlModel = trim((string)getSetting('anthropic_model', ''));
+$hasAgent  = is_file(__DIR__ . '/modules/carl/_agent.php');
+?>
+<div class="box"><table>
+    <tr><td>API key saved
+        <div class="m">Settings → anthropic_api_key</div></td>
+        <td style="text-align:right"><?= badge($carlKey !== '',
+            $carlKey !== '' ? substr($carlKey, 0, 10) . '…' : '', 'NOT SET') ?></td></tr>
+    <tr><td>Model
+        <div class="m">blank means the default, claude-opus-5</div></td>
+        <td class="m" style="text-align:right"><?= htmlspecialchars($carlModel ?: 'claude-opus-5 (default)') ?></td></tr>
+    <tr><td>Conversational layer deployed
+        <div class="m">modules/carl/_agent.php — lets Claude actually talk</div></td>
+        <td style="text-align:right"><?= badge($hasAgent) ?></td></tr>
+</table>
+<p class="m" style="margin:12px 0 0">
+    Without a key Carl still answers from your own data, but only in her fixed phrasings.
+    <a href="<?= BASE_URL ?>/modules/carl/test.php" style="color:#c084fc">Run the connection test</a>
+    to see exactly what the API says.
+</p>
+</div>
+
+
+<h2>5. Database</h2>
 <div class="box">
 <?php if (!$db): ?>
     <p style="color:#f87171">Could not connect to the database.</p>
@@ -203,7 +337,7 @@ foreach ($columns as $tbl => $cols) {
 <?php endif; ?>
 </div>
 
-<h2>3. Configuration</h2>
+<h2>6. Configuration</h2>
 <div class="box"><table>
 <?php
 // Things that are deployed correctly but still need setting up before they do
