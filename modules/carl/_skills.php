@@ -60,6 +60,22 @@ function carlLink(string $href, string $label, string $icon = 'fa-arrow-right'):
 }
 
 /**
+ * Suggested follow-up chips — the questions someone would naturally ask next,
+ * pre-typed so they can be tapped without typing.
+ *
+ * @param  string[] $prompts  Short phrases — each becomes a clickable chip.
+ */
+function carlChips(array $prompts): string
+{
+    if (!$prompts) return '';
+    $h = '<div class="carl-chips carl-follow-chips">';
+    foreach ($prompts as $p) {
+        $h .= '<button type="button" class="carl-chip" data-ask="' . e($p) . '">' . e($p) . '</button>';
+    }
+    return $h . '</div>';
+}
+
+/**
  * When no skill matches, try freeform LLM if available, otherwise return the
  * static fallback so offline mode is indistinguishable from a graceful miss.
  *
@@ -153,6 +169,12 @@ function carlSkillBriefing(PDO $db, array $user, string $u): array
     if ($flag) $h .= '<div class="carl-flag"><i class="fa fa-circle-exclamation"></i>'
                    . e($flag['say']) . '</div>' . $flag['html'];
 
+    $chips = [];
+    if (canAccess('crm'))      $chips[] = 'Show me overdue leads';
+    if (canAccess('payments')) $chips[] = 'How much have we taken this month?';
+    if (canAccess('crm'))      $chips[] = 'What needs attention?';
+    $h .= carlChips($chips);
+
     return ['skill' => 'briefing', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
@@ -228,6 +250,7 @@ function carlSkillStock(PDO $db, array $user, string $u): array
     } catch (\Throwable $_) {}
 
     $h .= carlLink(BASE_URL . '/modules/cars/index.php', 'Open the vehicle list', 'fa-car');
+    $h .= carlChips(['What sold this month?', 'Show me the leads', 'How much have we taken?']);
     return ['skill' => 'stock', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
@@ -271,6 +294,7 @@ function carlSkillLeads(PDO $db, array $user, string $u): array
             $h .= '<p class="carl-note">Showing the first ' . count($rows) . ' of ' . $total . '.</p>';
         }
         $h .= carlLink(BASE_URL . '/modules/crm/leads.php', 'Open the pipeline', 'fa-filter');
+        $h .= carlChips(['Set a follow-up', 'What needs attention?', 'Show overdue leads']);
         return ['skill' => 'leads', 'done' => true, 'say' => $say, 'html' => $h];
     }
 
@@ -295,6 +319,7 @@ function carlSkillLeads(PDO $db, array $user, string $u): array
             . '</b></p>' . carlLeadCards($attention);
     }
     $h .= carlLink(BASE_URL . '/modules/crm/leads.php', 'Open the pipeline', 'fa-filter');
+    $h .= carlChips(['Which are overdue?', 'Who has no follow-up date?', 'Show this week\'s leads']);
     return ['skill' => 'leads', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
@@ -312,6 +337,7 @@ function carlSkillReservations(PDO $db, array $user, string $u): array
         ['Cars reserved', $f['stock_reserved'], ''],
     ]);
     $h .= carlLink(BASE_URL . '/modules/reservations/index.php', 'Open reservations', 'fa-bookmark');
+    $h .= carlChips(['Show all leads', 'How much have we taken?']);
     return ['skill' => 'reservations', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
@@ -329,6 +355,7 @@ function carlSkillVisitors(PDO $db, array $user, string $u): array
         ['On site now', $f['visitors_onsite'], $f['visitors_onsite'] ? 'good' : ''],
     ]);
     $h .= carlLink(BASE_URL . '/modules/visitors/index.php', 'Open the visitors book', 'fa-book-open-reader');
+    $h .= carlChips(['Add a lead from a visitor', 'How many visitors this week?']);
     return ['skill' => 'visitors', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
@@ -347,6 +374,7 @@ function carlSkillWorkshop(PDO $db, array $user, string $u): array
         ['Bookings today', $f['bookings_today'], ''],
     ]);
     $h .= carlLink(BASE_URL . '/modules/jobs/index.php', 'Open job cards', 'fa-toolbox');
+    $h .= carlChips(['What needs attention?', 'Show service bookings']);
     return ['skill' => 'workshop', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
@@ -367,6 +395,7 @@ function carlSkillMoney(PDO $db, array $user, string $u): array
         ['Deposits held',   carlMoney($f['deposits_held']), ''],
     ]);
     $h .= carlLink(BASE_URL . '/modules/payments/index.php', 'Open payments', 'fa-money-bill-transfer');
+    $h .= carlChips(['How does this month compare to last month?', 'Show overdue invoices']);
     return ['skill' => 'money', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
@@ -474,22 +503,226 @@ function carlSkillNavigate(PDO $db, array $user, string $u): array
 
 function carlSkillDocument(PDO $db, array $user, string $u): array
 {
-    // Carl does not invent documents. The system already generates proper ones
-    // from real records, so she takes you to the record that produces the
-    // document you asked for rather than producing a lookalike.
     $h = '<p class="carl-p">Documents are generated from the record they belong to, so the figures '
        . 'and the customer details are always the real ones. Open the record and the document '
        . 'buttons are on it.</p>';
     $h .= carlLink(BASE_URL . '/modules/crm/leads.php', 'Proforma, sales agreement, receipts — from a lead', 'fa-file-invoice');
-    if (canAccess('invoices')) $h .= carlLink(BASE_URL . '/modules/invoices/index.php', 'Invoices', 'fa-file-invoice-dollar');
+    if (canAccess('invoices'))   $h .= carlLink(BASE_URL . '/modules/invoices/index.php', 'Invoices', 'fa-file-invoice-dollar');
     if (canAccess('quotations')) $h .= carlLink(BASE_URL . '/modules/quotations/index.php', 'Quotations', 'fa-file-lines');
-    if (canAccess('visitors')) $h .= carlLink(BASE_URL . '/modules/visitors/index.php', 'Visitor log — export or badge', 'fa-id-badge');
+    if (canAccess('visitors'))   $h .= carlLink(BASE_URL . '/modules/visitors/index.php', 'Visitor log — export or badge', 'fa-id-badge');
 
     return ['skill' => 'document', 'done' => true,
             'say'   => 'I can take you to the right place. Proformas, sales agreements and receipts '
                      . 'are generated from the lead they belong to, so the customer details and '
                      . 'figures come out correct. Which record is it for?',
             'html'  => $h];
+}
+
+// ── Trends & comparisons ─────────────────────────────────────────────────────
+
+function carlSkillTrends(PDO $db, array $user, string $u): array
+{
+    $f    = carlFigures($db);
+    $prev = $f['prev'];
+
+    // Determine which period the user is asking about.
+    $t = strtolower($u);
+    $isWeek = str_contains($t, 'week') || str_contains($t, '7 day');
+
+    if ($isWeek) {
+        $label     = 'this week vs last week';
+        $leadsNow  = $f['leads_new_week']  ?? 0;
+        $leadsPrev = $prev['leads_new_week'] ?? 0;
+        $revNow    = $f['paid_week']        ?? 0;
+        $revPrev   = $prev['paid_week']     ?? 0;
+        $visNow    = $f['visitors_week']    ?? 0;
+        $visPrev   = $prev['visitors_week'] ?? 0;
+    } else {
+        $label     = 'this month vs last month';
+        $leadsNow  = $f['leads_new_month']  ?? 0;
+        $leadsPrev = $prev['leads_new_month'] ?? 0;
+        $revNow    = $f['paid_month']         ?? 0;
+        $revPrev   = $prev['paid_month']      ?? 0;
+        $visNow    = $f['visitors_month']     ?? 0;
+        $visPrev   = $prev['visitors_month']  ?? 0;
+    }
+
+    // Helper: direction arrow + plain-English delta.
+    $delta = function (int|float $now, int|float $prev, bool $money = false) {
+        if ($prev == 0) return $now > 0 ? 'up from nothing' : 'flat';
+        $pct = round((($now - $prev) / $prev) * 100);
+        $fmt = $money ? carlMoney($now) : (int)$now;
+        if ($pct > 0)  return "$fmt — up {$pct}%";
+        if ($pct < 0)  return "$fmt — down " . abs($pct) . '%';
+        return "$fmt — flat";
+    };
+
+    $say = 'Comparing ' . $label . '. '
+         . 'Leads: ' . $delta($leadsNow, $leadsPrev) . '. '
+         . 'Revenue: ' . $delta($revNow, $revPrev, true) . '. '
+         . 'Visitors: ' . $delta($visNow, $visPrev) . '.';
+
+    $tone = fn ($now, $prev) => $now >= $prev ? 'good' : 'bad';
+
+    $h = carlTiles([
+        ['Leads — now',   $leadsNow,  $tone($leadsNow, $leadsPrev)],
+        ['Leads — before', $leadsPrev, ''],
+        ['Revenue — now',  carlMoney($revNow),  $tone($revNow, $revPrev)],
+        ['Revenue — before', carlMoney($revPrev), ''],
+        ['Visitors — now',   $visNow,  $tone($visNow, $visPrev)],
+        ['Visitors — before', $visPrev, ''],
+    ]);
+    $h .= carlChips([
+        $isWeek ? 'Compare this month to last month' : 'Compare this week to last week',
+        'How much have we taken?',
+        'What needs attention?',
+    ]);
+
+    return ['skill' => 'trends', 'done' => true, 'say' => $say, 'html' => $h];
+}
+
+// ── Lead action skills ────────────────────────────────────────────────────────
+//
+// These write to the database. Every write goes through a two-step flow:
+// Carl reads back what she understood and waits for a yes. Nothing is saved
+// on the strength of a single spoken sentence that might have been misheared.
+
+/** Find a lead by a loose name or make — returns the best match row, or null. */
+function carlFindLead(PDO $db, string $hint): ?array
+{
+    $hint = trim($hint);
+    if ($hint === '') return null;
+    try {
+        // Exact name match first, then fuzzy.
+        $st = $db->prepare("SELECT id, name, phone, stage, assigned_to, follow_up_date
+                            FROM crm_leads
+                            WHERE stage NOT IN ('won','lost')
+                              AND (name LIKE ? OR interested_in LIKE ? OR phone LIKE ?)
+                            ORDER BY updated_at DESC LIMIT 1");
+        $like = '%' . $hint . '%';
+        $st->execute([$like, $like, $like]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    } catch (\Throwable $_) { return null; }
+}
+
+/** Render a mini lead card for confirmation screens. */
+function carlLeadMini(array $lead): string
+{
+    return '<div class="carl-confirm">'
+         . '<div class="r"><span>Name</span><b>' . e($lead['name']) . '</b></div>'
+         . '<div class="r"><span>Phone</span><b>' . e($lead['phone'] ?? '—') . '</b></div>'
+         . '<div class="r"><span>Stage</span><b>' . e(ucfirst($lead['stage'] ?? '—')) . '</b></div>'
+         . '</div>';
+}
+
+// ── priority_lead — change a lead\'s stage/priority ─────────────────────────
+
+function carlSkillPriorityLead(PDO $db, array $user, string $u): array
+{
+    // Detect the requested priority from the utterance.
+    $t = strtolower($u);
+    if      (str_contains($t, 'hot'))      $newStage = 'hot';
+    elseif  (str_contains($t, 'lukewarm') || str_contains($t, 'warm')) $newStage = 'lukewarm';
+    elseif  (str_contains($t, 'cold'))     $newStage = 'cold';
+    else    $newStage = null;
+
+    carlPendingSet($db, (int)$user['id'], 'priority_lead',
+        ['stage' => $newStage], 'lead_name');
+
+    $stageWord = $newStage ? ' as ' . $newStage : '';
+    return ['skill' => 'priority_lead', 'done' => false,
+            'say'   => 'Which lead would you like to mark' . $stageWord . '? Give me the name or the car they are interested in.',
+            'html'  => '<p class="carl-note">Say "cancel" at any point to stop.</p>'];
+}
+
+// ── followup_lead — set a follow-up date ─────────────────────────────────────
+
+function carlSkillFollowupLead(PDO $db, array $user, string $u): array
+{
+    // Try to extract a date from the utterance (tomorrow, Friday, 2025-09-05, etc.).
+    $date = carlParseDate($u);
+    carlPendingSet($db, (int)$user['id'], 'followup_lead',
+        ['date' => $date], 'lead_name');
+
+    return ['skill' => 'followup_lead', 'done' => false,
+            'say'   => 'Which lead should I set the follow-up for?',
+            'html'  => '<p class="carl-note">Say "cancel" at any point to stop.</p>'];
+}
+
+// ── note_lead — add an activity note ─────────────────────────────────────────
+
+function carlSkillNoteLead(PDO $db, array $user, string $u): array
+{
+    carlPendingSet($db, (int)$user['id'], 'note_lead', [], 'lead_name');
+    return ['skill' => 'note_lead', 'done' => false,
+            'say'   => 'Which lead should I add the note to?',
+            'html'  => '<p class="carl-note">Say "cancel" at any point to stop.</p>'];
+}
+
+// ── call_lead — open a tel: link for a lead\'s phone number ──────────────────
+
+function carlSkillCallLead(PDO $db, array $user, string $u): array
+{
+    // Try to find the lead from the utterance itself.
+    // Strip common action words so "call John Kamau" → search for "John Kamau".
+    $cleaned = trim(preg_replace('/^(call|ring|phone|dial)\s+/i', '', $u));
+    $lead    = carlFindLead($db, $cleaned);
+
+    if (!$lead) {
+        return ['skill' => 'call_lead', 'done' => true,
+                'say'   => 'I could not find a lead matching that name. Try: "call John Kamau" or check the pipeline.',
+                'html'  => carlLink(BASE_URL . '/modules/crm/leads.php', 'Open the pipeline')];
+    }
+
+    $phone = preg_replace('/\D/', '', $lead['phone'] ?? '');
+    if (!$phone) {
+        return ['skill' => 'call_lead', 'done' => true,
+                'say'   => $lead['name'] . ' does not have a phone number on their lead.',
+                'html'  => carlLink(BASE_URL . '/modules/crm/view_lead.php?id=' . $lead['id'], 'Open the lead to add one')];
+    }
+
+    return ['skill' => 'call_lead', 'done' => true,
+            'say'   => 'Calling ' . $lead['name'] . ' on ' . $lead['phone'] . '.',
+            'html'  => '<a class="carl-act carl-call" href="tel:' . e($phone) . '"><i class="fa fa-phone"></i>Call ' . e($lead['name']) . ' — ' . e($lead['phone']) . '</a>',
+            'go'    => 'tel:' . $phone];
+}
+
+/**
+ * Parse a natural date expression from free text.
+ * Returns a Y-m-d string or null.
+ */
+function carlParseDate(string $text): ?string
+{
+    $t = strtolower(trim($text));
+    $today = new \DateTime('today');
+
+    if (str_contains($t, 'tomorrow')) {
+        return (clone $today)->modify('+1 day')->format('Y-m-d');
+    }
+    if (str_contains($t, 'next week')) {
+        return (clone $today)->modify('next monday')->format('Y-m-d');
+    }
+    // Day names: monday, tuesday, …
+    $days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+    foreach ($days as $day) {
+        if (str_contains($t, $day)) {
+            return (clone $today)->modify('next ' . $day)->format('Y-m-d');
+        }
+    }
+    // "in X days"
+    if (preg_match('/in\s+(\d+)\s+day/i', $text, $m)) {
+        return (clone $today)->modify('+' . $m[1] . ' days')->format('Y-m-d');
+    }
+    // ISO date pattern YYYY-MM-DD
+    if (preg_match('/\b(\d{4}-\d{2}-\d{2})\b/', $text, $m)) {
+        return $m[1];
+    }
+    // D/M/YYYY or D-M-YYYY
+    if (preg_match('/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/', $text, $m)) {
+        return sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+    }
+    return null;
 }
 
 // ── Adding a lead ────────────────────────────────────────────────────────────
@@ -559,10 +792,16 @@ function carlContinue(PDO $db, array $user, array $pending, string $reply): arra
 
     if (preg_match('/^(cancel|stop|forget it|never mind|nevermind)$/i', $r)) {
         carlPendingClear($db, $uid);
-        return ['skill' => 'add_lead', 'done' => true,
+        return ['skill' => $pending['skill'] ?? 'add_lead', 'done' => true,
                 'say'   => 'No problem, I have dropped it.', 'html' => ''];
     }
-    if ($pending['skill'] !== 'add_lead') { carlPendingClear($db, $uid); return carlSkillUnknown($user); }
+
+    // Route to the correct skill's continuation handler.
+    $skill = $pending['skill'] ?? 'add_lead';
+    if ($skill === 'priority_lead') return carlContinuePriorityLead($db, $user, $pending, $r);
+    if ($skill === 'followup_lead') return carlContinueFollowupLead($db, $user, $pending, $r);
+    if ($skill === 'note_lead')     return carlContinueNoteLead($db, $user, $pending, $r);
+    if ($skill !== 'add_lead') { carlPendingClear($db, $uid); return carlSkillUnknown($user); }
 
     $got = $pending['collected'];
 

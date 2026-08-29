@@ -187,6 +187,14 @@ function carlSkills(): array
                            'invoiced', 'invoices', 'turnover', 'income',
                            'did we take', 'have we taken', 'how much have we', 'collected', 'cash'],
         ],
+        'trends' => [
+            'label'    => 'Trends and comparisons',
+            'module'   => null,
+            'patterns' => ['compare', 'comparison', 'trend', 'trends', 'last month', 'last week',
+                           'previous month', 'previous week', 'vs last', 'versus last', 'better than',
+                           'worse than', 'ahead', 'behind', 'improve', 'improved', 'growth', 'decline',
+                           'this month vs', 'this week vs', 'year to date'],
+        ],
         'advice' => [
             'label'    => 'What needs attention',
             'module'   => null,
@@ -201,6 +209,32 @@ function carlSkills(): array
             'module'   => 'crm',
             'patterns' => ['add a lead', 'new lead', 'create a lead', 'capture a lead',
                            'add lead', 'log a lead', 'register a lead'],
+        ],
+        'priority_lead' => [
+            'label'    => 'Change lead priority (hot / lukewarm / cold)',
+            'module'   => 'crm',
+            'patterns' => ['mark as hot', 'mark hot', 'mark as lukewarm', 'mark lukewarm',
+                           'mark as cold', 'mark cold', 'lead is hot', 'lead is cold',
+                           'set priority', 'change priority', 'flag as hot', 'flag lead',
+                           'hot lead', 'cold lead', 'move to hot', 'move to cold'],
+        ],
+        'followup_lead' => [
+            'label'    => 'Set a follow-up date on a lead',
+            'module'   => 'crm',
+            'patterns' => ['follow up', 'follow-up', 'followup', 'set a follow up', 'schedule follow up',
+                           'remind me', 'chase', 'set a date', 'book a call', 'follow up date',
+                           'set follow up for', 'remind about'],
+        ],
+        'note_lead' => [
+            'label'    => 'Add a note to a lead',
+            'module'   => 'crm',
+            'patterns' => ['add a note', 'note on', 'log a note', 'add note', 'note to lead',
+                           'record a note', 'log a call', 'note down', 'make a note', 'log note'],
+        ],
+        'call_lead' => [
+            'label'    => 'Call a lead',
+            'module'   => 'crm',
+            'patterns' => ['call', 'ring', 'phone', 'dial', 'call the lead', 'ring the lead'],
         ],
         'document' => [
             'label'    => 'Generate a document',
@@ -327,7 +361,8 @@ function carlSum(PDO $db, string $sql, array $args = []): float
  */
 function carlFigures(PDO $db): array
 {
-    return [
+    // ── Current period ────────────────────────────────────────────────────────
+    $now = [
         'stock_total'     => carlNum($db, "SELECT COUNT(*) FROM cars WHERE car_type IN ('inventory','sale_on_behalf')"),
         'stock_available' => carlNum($db, "SELECT COUNT(*) FROM cars WHERE car_type IN ('inventory','sale_on_behalf')
                                            AND (status IS NULL OR status NOT IN ('sold','delivered','reserved','in_transit'))"),
@@ -338,6 +373,8 @@ function carlFigures(PDO $db): array
 
         'leads_total'     => carlNum($db, "SELECT COUNT(*) FROM crm_leads WHERE stage NOT IN ('won','lost')"),
         'leads_new_today' => carlNum($db, "SELECT COUNT(*) FROM crm_leads WHERE DATE(created_at) = CURDATE()"),
+        'leads_new_week'  => carlNum($db, "SELECT COUNT(*) FROM crm_leads WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)"),
+        'leads_new_month' => carlNum($db, "SELECT COUNT(*) FROM crm_leads WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')"),
         'leads_reserved'  => carlNum($db, "SELECT COUNT(*) FROM crm_leads WHERE stage = 'reserved'"),
         'leads_nofollow'  => carlNum($db, "SELECT COUNT(*) FROM crm_leads
                                            WHERE stage NOT IN ('won','lost') AND follow_up_date IS NULL"),
@@ -348,6 +385,8 @@ function carlFigures(PDO $db): array
         'visitors_today'  => carlNum($db, "SELECT COUNT(*) FROM visitors WHERE DATE(created_at) = CURDATE()"),
         'visitors_onsite' => carlNum($db, "SELECT COUNT(*) FROM visitors
                                            WHERE checked_out_at IS NULL AND DATE(created_at) = CURDATE()"),
+        'visitors_week'   => carlNum($db, "SELECT COUNT(*) FROM visitors WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)"),
+        'visitors_month'  => carlNum($db, "SELECT COUNT(*) FROM visitors WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')"),
 
         'jobs_open'       => carlNum($db, "SELECT COUNT(*) FROM workshop_jobs WHERE status NOT IN ('completed','cancelled')"),
         'jobs_today'      => carlNum($db, "SELECT COUNT(*) FROM workshop_jobs WHERE DATE(created_at) = CURDATE()"),
@@ -358,8 +397,37 @@ function carlFigures(PDO $db): array
                                            WHERE payment_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')"),
         'paid_today'      => carlSum($db, "SELECT COALESCE(SUM(amount),0) FROM payments
                                            WHERE DATE(payment_date) = CURDATE()"),
+        'paid_week'       => carlSum($db, "SELECT COALESCE(SUM(amount),0) FROM payments
+                                           WHERE payment_date >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)"),
         'invoices_unpaid' => carlNum($db, "SELECT COUNT(*) FROM invoices WHERE status <> 'paid'"),
     ];
+
+    // ── Comparison period (previous full calendar month) ────────────────────
+    $prev = [
+        'sold_month'      => carlNum($db, "SELECT COUNT(*) FROM cars WHERE status IN ('sold','delivered')
+                                           AND updated_at >= DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m-01')
+                                           AND updated_at <  DATE_FORMAT(CURDATE(), '%Y-%m-01')"),
+        'leads_new_month' => carlNum($db, "SELECT COUNT(*) FROM crm_leads
+                                           WHERE created_at >= DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m-01')
+                                           AND created_at  <  DATE_FORMAT(CURDATE(), '%Y-%m-01')"),
+        'leads_new_week'  => carlNum($db, "SELECT COUNT(*) FROM crm_leads
+                                           WHERE created_at >= DATE_SUB(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 7 DAY)
+                                           AND created_at  <  DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)"),
+        'visitors_month'  => carlNum($db, "SELECT COUNT(*) FROM visitors
+                                           WHERE created_at >= DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m-01')
+                                           AND created_at  <  DATE_FORMAT(CURDATE(), '%Y-%m-01')"),
+        'visitors_week'   => carlNum($db, "SELECT COUNT(*) FROM visitors
+                                           WHERE created_at >= DATE_SUB(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 7 DAY)
+                                           AND created_at  <  DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)"),
+        'paid_month'      => carlSum($db, "SELECT COALESCE(SUM(amount),0) FROM payments
+                                           WHERE payment_date >= DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m-01')
+                                           AND payment_date  <  DATE_FORMAT(CURDATE(), '%Y-%m-01')"),
+        'paid_week'       => carlSum($db, "SELECT COALESCE(SUM(amount),0) FROM payments
+                                           WHERE payment_date >= DATE_SUB(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 7 DAY)
+                                           AND payment_date  <  DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)"),
+    ];
+
+    return array_merge($now, ['prev' => $prev]);
 }
 
 } // function_exists('carlMigrate')
