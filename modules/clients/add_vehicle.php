@@ -12,6 +12,7 @@
  * (modules/clients/add.php), plus the few extras a workshop actually needs.
  */
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../cars/_bootstrap.php';
 requireLogin();
 canAccess('clients') || die('Access denied.');
 
@@ -37,8 +38,66 @@ $d = [
     'engine_number' => '', 'body_type' => '', 'notes' => '',
 ];
 
+carsEnsureServiceBilling($db);
+
+// Vehicles still on the forecourt, offered instead of retyping one that exists.
+$stockCars = $db->query(
+    "SELECT id, make, model, year, chassis_number, registration_number
+       FROM cars
+      WHERE car_type = 'inventory'
+        AND (status IS NULL OR status NOT IN ('delivered','sold'))
+   ORDER BY make, model"
+)->fetchAll(PDO::FETCH_ASSOC);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
+
+    // ── Attaching a vehicle that already exists ──────────────────────────────
+    //
+    // Two quite different intentions, and conflating them is what put stock in
+    // the wrong place before. Servicing a forecourt car for a client bills the
+    // work to them and leaves the vehicle for sale; handing it over transfers
+    // ownership and takes it out of inventory. The form asks which.
+    if (($_POST['action'] ?? '') === 'attach_stock') {
+        $carId = (int)($_POST['stock_car_id'] ?? 0);
+        $mode  = ($_POST['stock_mode'] ?? 'service') === 'handover' ? 'handover' : 'service';
+
+        $sc = $db->prepare("SELECT * FROM cars WHERE id = ?");
+        $sc->execute([$carId]);
+        $stockCar = $sc->fetch(PDO::FETCH_ASSOC);
+
+        if (!$stockCar) {
+            $errors[] = 'Choose a vehicle from stock first.';
+        } elseif ($mode === 'handover' && !canWrite('cars')) {
+            $errors[] = 'Handing a vehicle over changes who owns it, which needs vehicle rights. '
+                      . 'You can still attach it for service.';
+        } else {
+            $label = trim($stockCar['year'] . ' ' . $stockCar['make'] . ' ' . $stockCar['model']);
+            try {
+                if ($mode === 'handover') {
+                    $db->prepare("UPDATE cars
+                                     SET car_type = 'client', client_id = ?, service_client_id = ?,
+                                         owner_name = ?, owner_phone = ?, updated_at = NOW()
+                                   WHERE id = ?")
+                       ->execute([$id, $id, $client['name'], $client['phone'] ?: null, $carId]);
+                    logActivity('update', 'cars', $carId,
+                        "Handed over to client {$client['name']} — moved out of inventory.");
+                    setFlash('success', $label . ' now belongs to ' . $client['name']
+                        . ' and has left inventory.');
+                } else {
+                    carSetBillingClient($db, $carId, $id);
+                    logActivity('update', 'cars', $carId,
+                        "Service for this vehicle billed to {$client['name']} — kept in inventory.");
+                    setFlash('success', 'Work on the ' . $label . ' is now billed to '
+                        . $client['name'] . '. It stays in inventory and stays for sale.');
+                }
+                redirect(BASE_URL . '/modules/clients/view.php?id=' . $id);
+            } catch (\Throwable $e) {
+                error_log('clients/add_vehicle attach: ' . $e->getMessage());
+                $errors[] = 'Could not attach that vehicle.';
+            }
+        }
+    } else {
     foreach ($d as $k => $_) $d[$k] = trim($_POST[$k] ?? '');
 
     if ($d['make'] === '')           $errors[] = 'Make is required.';
@@ -86,6 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Could not save the vehicle: ' . $e->getMessage();
         }
     }
+    }   // end of the new-vehicle path
 }
 
 $existing = $db->prepare("SELECT make, model, year, chassis_number FROM cars WHERE client_id = ? ORDER BY id");
@@ -151,7 +211,62 @@ include __DIR__ . '/../../includes/header.php';
                     </div>
                 </div>
 
-                <div class="av-head"><h2 class="av-title"><i class="fa fa-circle-info"></i>Vehicle Details</h2></div>
+                <div class="av-head">
+                    <h2 class="av-title"><i class="fa fa-warehouse"></i>Take one from stock</h2>
+                </div>
+                <div class="av-body">
+                    <p class="text-muted mb-3" style="font-size:12px">
+                        If the vehicle is already on the yard, pick it here rather than typing it
+                        again — retyping the chassis would only be rejected as a duplicate.
+                    </p>
+
+                    <?php if (!$stockCars): ?>
+                        <p class="text-muted mb-0" style="font-size:12.5px">
+                            <i class="fa fa-circle-info me-1"></i>
+                            No vehicles in stock at the moment.
+                        </p>
+                    <?php else: ?>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Vehicle in stock</label>
+                            <select name="stock_car_id" class="form-select" id="stockCar">
+                                <option value="">— choose a vehicle —</option>
+                                <?php foreach ($stockCars as $sc): ?>
+                                    <option value="<?= (int)$sc['id'] ?>">
+                                        <?= e(trim($sc['year'] . ' ' . $sc['make'] . ' ' . $sc['model'])) ?>
+                                        <?= $sc['registration_number'] ? ' — ' . e($sc['registration_number']) : '' ?>
+                                        (<?= e($sc['chassis_number']) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">What is this for?</label>
+                            <select name="stock_mode" class="form-select">
+                                <option value="service">Service only — keep it in stock</option>
+                                <option value="handover">Hand it over — this client now owns it</option>
+                            </select>
+                            <div class="form-text" style="font-size:11.5px">
+                                Service only bills the work to this client and leaves the vehicle on the
+                                forecourt, still for sale. Handing over transfers ownership and takes it
+                                out of inventory.
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <!-- formnovalidate: the new-vehicle fields below are required,
+                                 and they are not being filled in on this path. -->
+                            <button name="action" value="attach_stock" formnovalidate
+                                    class="btn btn-primary btn-sm">
+                                <i class="fa fa-link me-1"></i>Attach this vehicle
+                            </button>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="av-head">
+                    <h2 class="av-title"><i class="fa fa-circle-info"></i>Or register a new vehicle</h2>
+                </div>
                 <div class="av-body">
                     <div class="row g-3">
                         <div class="col-md-4">
