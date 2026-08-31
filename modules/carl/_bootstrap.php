@@ -178,7 +178,7 @@ function carlSkills(): array
         'stock' => [
             'label'    => 'Vehicles in stock',
             'module'   => 'cars',
-            'patterns' => ['stock', 'inventory', 'how many cars', 'vehicles available',
+            'patterns' => ['stock', 'inventory', 'on the yard', 'in the yard', 'the yard', 'how many cars', 'vehicles available',
                            'cars available', 'what cars', 'fleet'],
         ],
         'leads' => [
@@ -186,7 +186,8 @@ function carlSkills(): array
             'module'   => 'crm',
             'patterns' => ['lead', 'leads', 'pipeline', 'prospects', 'enquiries', 'enquiry',
                            'follow up date', 'past their follow up', 'overdue follow up',
-                           'due for follow up'],
+                           'due for follow up', 'not been followed', 'been followed up',
+                           'needs calling', 'need calling', 'to call'],
         ],
         'reservations' => [
             'label'    => 'Reservations',
@@ -206,7 +207,8 @@ function carlSkills(): array
             'module'   => 'crm',
             'patterns' => ['delivery', 'deliveries', 'delivered', 'handover', 'hand over',
                            'ready to deliver', 'delivery pipeline', 'delivery protocol',
-                           'what is holding up', 'due for delivery'],
+                           'what is holding up', 'due for delivery', 'delivering',
+                           'when are we delivering', 'ready for handover'],
         ],
         'visitors' => [
             'label'    => 'Visitors today',
@@ -224,7 +226,8 @@ function carlSkills(): array
             'module'   => 'payments',
             'patterns' => ['revenue', 'payments', 'money', 'sales figures', 'takings',
                            'invoiced', 'invoices', 'turnover', 'income',
-                           'did we take', 'have we taken', 'how much have we', 'collected', 'cash'],
+                           'did we take', 'have we taken', 'how much have we', 'collected', 'cash',
+                           'our sales', 'sales this', 'total sales'],
         ],
         'trends' => [
             'label'    => 'Trends and comparisons',
@@ -247,7 +250,8 @@ function carlSkills(): array
             'label'    => 'Add a lead',
             'module'   => 'crm',
             'patterns' => ['add a lead', 'new lead', 'create a lead', 'capture a lead',
-                           'add lead', 'log a lead', 'register a lead'],
+                           'add lead', 'log a lead', 'register a lead',
+                           'add a customer', 'new customer', 'add a client', 'capture a customer'],
         ],
         'priority_lead' => [
             'label'    => 'Change lead priority (hot / lukewarm / cold)',
@@ -331,9 +335,12 @@ function carlMatchSkill(string $text): ?string
     // "open the leads page" scored on the longer word "leads" and returned a
     // pipeline report, while "show me the leads" navigated — the same request
     // answered two different ways depending on which word happened to be longer.
+    // Only when the command LEADS the sentence. Matching the verb anywhere sent
+    // "any job cards open" to the navigator, because it happens to end in "open".
+    $lead = preg_replace('/^ (?:please|can you|could you|would you|kindly|carl,?) /', ' ', $t);
     $verbs = [' open ', ' go to ', ' take me to ', ' show me the ', ' navigate '];
     foreach ($verbs as $v) {
-        if (str_contains($t, $v) && isset(carlSkillsFor()['navigate'])) return 'navigate';
+        if (str_starts_with($lead, $v) && isset(carlSkillsFor()['navigate'])) return 'navigate';
     }
 
     // Matched against EVERY skill, not only the permitted ones. A question about
