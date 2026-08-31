@@ -65,6 +65,8 @@ include __DIR__ . '/../../includes/header.php';
             <?php if($ship['bl_number']): ?> · B/L: <span class="font-monospace"><?= e($ship['bl_number']) ?></span><?php endif; ?>
         </div>
     </div>
+    <a href="print.php?type=manifest&id=<?= $id ?>" target="_blank" rel="noopener"
+       class="btn btn-sm btn-outline-primary"><i class="fa fa-list me-1"></i>Shipment Manifest</a>
     <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
 </div>
 

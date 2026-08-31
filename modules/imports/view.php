@@ -178,6 +178,10 @@ include __DIR__ . '/../../includes/header.php';
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <?php if(canWrite('imports')): ?>
+        <a href="print.php?type=order&id=<?= $id ?>" target="_blank" rel="noopener"
+           class="btn btn-sm btn-outline-primary"><i class="fa fa-file-lines me-1"></i>Import Order</a>
+        <a href="print.php?type=landed&id=<?= $id ?>" target="_blank" rel="noopener"
+           class="btn btn-sm btn-outline-primary"><i class="fa fa-coins me-1"></i>Landed Cost</a>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
