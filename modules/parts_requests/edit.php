@@ -37,12 +37,23 @@ try {
                qa.client_name, qa.client_phone,
                COALESCE(NULLIF(qa.client_email,''), cl.email) AS client_email,
                qa.car_make, qa.car_model, qa.car_registration,
-               COALESCE(c.chassis_number, c2.chassis_number) AS chassis_number
+               -- A correlated subquery, not a join. Joining on the registration
+               -- multiplied the row: an assessment with a blank plate matched every
+               -- car with a blank plate, so one assessment appeared once per such
+               -- car, and duplicate plates did the same. A scalar subquery can only
+               -- ever return one value, so the list is one row per assessment.
+               COALESCE(
+                   c.chassis_number,
+                   (SELECT c2.chassis_number
+                      FROM cars c2
+                     WHERE qa.car_id IS NULL
+                       AND NULLIF(TRIM(qa.car_registration), '') IS NOT NULL
+                       AND c2.registration_number = qa.car_registration
+                  ORDER BY c2.id LIMIT 1)
+               ) AS chassis_number
         FROM quick_assessments qa
         LEFT JOIN clients cl  ON cl.id  = qa.client_id
         LEFT JOIN cars c      ON c.id   = qa.car_id
-        LEFT JOIN cars c2     ON c2.registration_number = qa.car_registration
-                              AND qa.car_id IS NULL
         ORDER BY qa.id DESC
         LIMIT 150
     ")->fetchAll(PDO::FETCH_ASSOC);

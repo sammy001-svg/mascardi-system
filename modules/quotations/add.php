@@ -45,10 +45,17 @@ if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
                 $qa = $db->prepare("
                     SELECT qa.client_name, qa.client_phone, qa.client_email,
                            qa.car_make, qa.car_model, qa.car_registration,
-                           COALESCE(c.chassis_number, c2.chassis_number) AS chassis_number
+                           COALESCE(
+                               c.chassis_number,
+                               (SELECT c2.chassis_number
+                                  FROM cars c2
+                                 WHERE qa.car_id IS NULL
+                                   AND NULLIF(TRIM(qa.car_registration), '') IS NOT NULL
+                                   AND c2.registration_number = qa.car_registration
+                              ORDER BY c2.id LIMIT 1)
+                           ) AS chassis_number
                     FROM quick_assessments qa
                     LEFT JOIN cars c  ON c.id  = qa.car_id
-                    LEFT JOIN cars c2 ON c2.registration_number = qa.car_registration AND qa.car_id IS NULL
                     WHERE qa.id = ?
                 ");
                 $qa->execute([$fromQr['quick_assessment_id']]);
@@ -152,13 +159,20 @@ try {
         SELECT pr.id, pr.request_number, pr.created_at,
                pr.client_name, pr.client_phone, pr.client_email,
                pr.car_make, pr.car_model, pr.car_registration, pr.car_chassis,
-               COALESCE(c.id, c2.id) AS matched_car_id
-        FROM parts_requests pr
-        LEFT JOIN cars c  ON pr.car_chassis IS NOT NULL AND pr.car_chassis != ''
-                          AND c.chassis_number = pr.car_chassis
-        LEFT JOIN cars c2 ON (pr.car_chassis IS NULL OR pr.car_chassis = '')
-                          AND pr.car_registration IS NOT NULL AND pr.car_registration != ''
-                          AND c2.registration_number = pr.car_registration
+                 -- Subqueries rather than joins: two cars sharing a chassis or a
+                 -- plate would otherwise list the same quote request twice.
+                 COALESCE(
+                     (SELECT c.id FROM cars c
+                       WHERE NULLIF(TRIM(pr.car_chassis), '') IS NOT NULL
+                         AND c.chassis_number = pr.car_chassis
+                    ORDER BY c.id LIMIT 1),
+                     (SELECT c2.id FROM cars c2
+                       WHERE NULLIF(TRIM(pr.car_chassis), '') IS NULL
+                         AND NULLIF(TRIM(pr.car_registration), '') IS NOT NULL
+                         AND c2.registration_number = pr.car_registration
+                    ORDER BY c2.id LIMIT 1)
+                 ) AS matched_car_id
+          FROM parts_requests pr
         ORDER BY pr.id DESC
         LIMIT 150
     ")->fetchAll(PDO::FETCH_ASSOC);
