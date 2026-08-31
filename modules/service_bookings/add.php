@@ -48,12 +48,19 @@ $clients = $db->query("
     WHERE c.status='active'
     ORDER BY c.name
 ")->fetchAll(PDO::FETCH_ASSOC);
+// Chassis and type come through as well: the booking desk identifies a vehicle
+// by its chassis as often as by its plate, and knowing which cars are our own
+// stock is what lets the picker fall back to inventory for a client who has
+// none of their own on file.
 $cars    = $db->query("
-    SELECT c.id, c.make, c.model, c.year, c.registration_number, 
-           cl.id as client_id, cl.name as client_name, cl.email as client_email, cl.phone as client_phone
-    FROM cars c
-    LEFT JOIN clients cl ON cl.id = c.client_id
-    ORDER BY c.make, c.model LIMIT 200
+    SELECT c.id, c.make, c.model, c.year, c.registration_number, c.chassis_number,
+           c.car_type, c.status,
+           cl.id AS client_id, cl.name AS client_name, cl.email AS client_email,
+           cl.phone AS client_phone
+      FROM cars c
+ LEFT JOIN clients cl ON cl.id = c.client_id
+     WHERE c.status IS NULL OR c.status NOT IN ('sold')
+  ORDER BY c.make, c.model
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $errors = [];
@@ -251,12 +258,18 @@ include __DIR__ . '/../../includes/header.php';
                                 data-client-name="<?= e($c['client_name'] ?? '') ?>"
                                 data-client-email="<?= e($c['client_email'] ?? '') ?>"
                                 data-client-phone="<?= e($c['client_phone'] ?? '') ?>"
+                                data-chassis="<?= e($c['chassis_number'] ?? '') ?>"
+                                data-car-type="<?= e($c['car_type'] ?? '') ?>"
+                                data-year="<?= e($c['year'] ?? '') ?>"
                                 <?= ($d['car_id'] == $c['id']) ? 'selected' : '' ?>>
-                            <?= e($c['make'].' '.$c['model']) ?>
+                            <?= e(trim(($c['year'] ? $c['year'].' ' : '').$c['make'].' '.$c['model'])) ?>
                             <?= $c['registration_number'] ? ' — '.e($c['registration_number']) : '' ?>
+                            <?= $c['chassis_number'] ? ' · '.e($c['chassis_number']) : '' ?>
                         </option>
                         <?php endforeach; ?>
                     </select>
+                    <div class="form-text mt-1" id="carSourceNote" hidden
+                         style="font-size:11.5px"></div>
                 </div>
                 <div class="row g-3">
                     <div class="col-md-4">
@@ -270,6 +283,12 @@ include __DIR__ . '/../../includes/header.php';
                     <div class="col-md-4">
                         <label class="form-label">Registration Number</label>
                         <input type="text" name="car_registration" id="carReg" class="form-control" placeholder="e.g. KDA 000Q" value="<?= e($d['car_registration']) ?>" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Chassis Number</label>
+                        <input type="text" id="carChassis" class="form-control" readonly
+                               placeholder="Filled in from the selected vehicle"
+                               style="background:var(--surface-alt,#f8fafc)">
                     </div>
                 </div>
             </div>
@@ -380,54 +399,158 @@ include __DIR__ . '/../../includes/header.php';
 <script>
 $(document).ready(function() {
     // Client select auto-fill
+    /* ── Narrowing the vehicle list to the client ──────────────────────────────
+       The picker used to list every vehicle on the books regardless of who was
+       being served, and the client dropdown only ever carried ONE of a client's
+       cars, so anyone with two vehicles could not reach the second at all.
+
+       Selecting a client now rebuilds the list from their own vehicles. A client
+       with none on file gets our inventory instead, because that is what they are
+       there to be shown — and every entry carries its chassis, which is how the
+       desk identifies a car when the plate is missing or not yet issued.
+
+       The full list is kept in memory once at load, so switching client is a
+       redraw rather than a request. */
+    var CARL_ALL_CARS = (function () {
+        var out = [];
+        var sel = document.getElementById('carSelect');
+        if (!sel) return out;
+        Array.prototype.forEach.call(sel.options, function (o) {
+            if (!o.value) return;
+            out.push({
+                id: o.value,
+                label: o.textContent.replace(/\s+/g, ' ').trim(),
+                clientId: o.dataset.clientId || '',
+                carType: o.dataset.carType || '',
+                make: o.dataset.make || '',
+                model: o.dataset.model || '',
+                reg: o.dataset.reg || '',
+                chassis: o.dataset.chassis || '',
+                clientName: o.dataset.clientName || '',
+                clientEmail: o.dataset.clientEmail || '',
+                clientPhone: o.dataset.clientPhone || ''
+            });
+        });
+        return out;
+    }());
+
+    function carlOption(car) {
+        var o = document.createElement('option');
+        o.value = car.id;
+        o.textContent = car.label;
+        o.dataset.make = car.make;
+        o.dataset.model = car.model;
+        o.dataset.reg = car.reg;
+        o.dataset.chassis = car.chassis;
+        o.dataset.carType = car.carType;
+        o.dataset.clientId = car.clientId;
+        o.dataset.clientName = car.clientName;
+        o.dataset.clientEmail = car.clientEmail;
+        o.dataset.clientPhone = car.clientPhone;
+        return o;
+    }
+
+    /* Rebuilds the vehicle picker for one client. Returns how many of their own
+       vehicles were found, so the caller can decide what to auto-fill. */
+    function carlFilterCars(clientId, keepSelected) {
+        var sel = document.getElementById('carSelect');
+        var note = document.getElementById('carSourceNote');
+        if (!sel) return 0;
+
+        var mine = clientId
+            ? CARL_ALL_CARS.filter(function (c) { return c.clientId === String(clientId); })
+            : [];
+        var stock = CARL_ALL_CARS.filter(function (c) { return c.carType === 'inventory'; });
+
+        sel.innerHTML = '';
+        var blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = '— Walk-in / Manual Entry —';
+        sel.appendChild(blank);
+
+        if (mine.length) {
+            var g1 = document.createElement('optgroup');
+            g1.label = 'Vehicles on file for this client';
+            mine.forEach(function (c) { g1.appendChild(carlOption(c)); });
+            sel.appendChild(g1);
+            if (note) {
+                note.textContent = mine.length === 1
+                    ? 'One vehicle is on file for this client and has been filled in below.'
+                    : mine.length + ' vehicles are on file for this client — choose which one.';
+                note.hidden = false;
+            }
+        } else if (clientId && stock.length) {
+            var g2 = document.createElement('optgroup');
+            g2.label = 'From our inventory';
+            stock.forEach(function (c) { g2.appendChild(carlOption(c)); });
+            sel.appendChild(g2);
+            if (note) {
+                note.textContent = 'No vehicle is on file for this client, so our inventory is listed '
+                                 + 'instead — each with its registration and chassis number.';
+                note.hidden = false;
+            }
+        } else {
+            // No client chosen: everything, as before.
+            var g3 = document.createElement('optgroup');
+            g3.label = 'All vehicles';
+            CARL_ALL_CARS.forEach(function (c) { g3.appendChild(carlOption(c)); });
+            sel.appendChild(g3);
+            if (note) { note.hidden = true; }
+        }
+
+        if (keepSelected && sel.querySelector('option[value="' + keepSelected + '"]')) {
+            sel.value = keepSelected;
+        }
+        if (window.jQuery) { $(sel).trigger('change.select2'); }
+        return mine.length;
+    }
+
+    /* Copies a vehicle's details into the manual fields. */
+    function carlFillVehicle(car) {
+        var mk = document.getElementById('carMake');
+        var md = document.getElementById('carModel');
+        var rg = document.getElementById('carReg');
+        var ch = document.getElementById('carChassis');
+        if (mk) mk.value = car ? (car.make || '') : '';
+        if (md) md.value = car ? (car.model || '') : '';
+        if (rg) rg.value = car ? (car.reg || '') : '';
+        if (ch) ch.value = car ? (car.chassis || '') : '';
+    }
+
     $('#clientSelect').on('change', function() {
-        const opt = this.options[this.selectedIndex];
+        var opt = this.options[this.selectedIndex];
         if (!opt) return;
-        
+
         document.getElementById('clientName').value  = opt.dataset.name  || '';
         document.getElementById('clientEmail').value = opt.dataset.email || '';
         document.getElementById('clientPhone').value = opt.dataset.phone || '';
-        
-        // Auto-populate vehicle details if they exist on the client
-        if (opt.dataset.carId) {
-            if ($('#carSelect').val() !== opt.dataset.carId) {
-                // If the car exists in the list, select it
-                if ($('#carSelect option[value="' + opt.dataset.carId + '"]').length > 0) {
-                    $('#carSelect').val(opt.dataset.carId).trigger('change');
-                } else {
-                    // Otherwise, fill inputs directly
-                    document.getElementById('carMake').value  = opt.dataset.carMake  || '';
-                    document.getElementById('carModel').value = opt.dataset.carModel || '';
-                    document.getElementById('carReg').value   = opt.dataset.carReg   || '';
-                    if ($('#carSelect').val() !== '') {
-                        $('#carSelect').val('').trigger('change');
-                    }
-                }
-            }
-        } else if (opt.dataset.carMake) {
-            document.getElementById('carMake').value  = opt.dataset.carMake  || '';
-            document.getElementById('carModel').value = opt.dataset.carModel || '';
-            document.getElementById('carReg').value   = opt.dataset.carReg   || '';
-            if ($('#carSelect').val() !== '') {
-                $('#carSelect').val('').trigger('change');
+
+        // Keep whatever vehicle is already chosen if it survives the rebuild —
+        // picking a car sets the client, which lands back here, and clearing the
+        // selection at that point would undo what the user just did.
+        var wasSelected = document.getElementById('carSelect').value;
+        var owned = carlFilterCars(this.value, wasSelected);
+        if (wasSelected && document.getElementById('carSelect').value === wasSelected) {
+            return;
+        }
+
+        if (owned === 1) {
+            // Exactly one vehicle on file, so there is nothing to choose between.
+            var only = CARL_ALL_CARS.filter(function (c) {
+                return c.clientId === String(document.getElementById('clientSelect').value);
+            })[0];
+            if (only) {
+                $('#carSelect').val(only.id).trigger('change.select2');
+                carlFillVehicle(only);
             }
         } else {
-            // No vehicle details for this client, or walk-in client
-            document.getElementById('carMake').value  = '';
-            document.getElementById('carModel').value = '';
-            document.getElementById('carReg').value   = '';
-            if ($('#carSelect').val() !== '') {
-                $('#carSelect').val('').trigger('change');
-            }
-            if (!opt.value) {
-                document.getElementById('clientName').value = '';
-                document.getElementById('clientEmail').value = '';
-                document.getElementById('clientPhone').value = '';
-            }
+            // Several to pick from, or none of their own — leave the fields empty
+            // rather than guessing which vehicle is being brought in.
+            $('#carSelect').val('').trigger('change.select2');
+            carlFillVehicle(null);
         }
     });
 
-    // Car select auto-fill
     $('#carSelect').on('change', function() {
         const opt = this.options[this.selectedIndex];
         if (!opt) return;
@@ -435,6 +558,8 @@ $(document).ready(function() {
         document.getElementById('carMake').value  = opt.dataset.make  || '';
         document.getElementById('carModel').value = opt.dataset.model || '';
         document.getElementById('carReg').value   = opt.dataset.reg   || '';
+        var __ch = document.getElementById('carChassis');
+        if (__ch) __ch.value = opt.dataset.chassis || '';
         
         if (opt.dataset.clientId) {
             if ($('#clientSelect').val() !== opt.dataset.clientId) {
