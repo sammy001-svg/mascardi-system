@@ -28,10 +28,16 @@ $jobs    = $db->query("SELECT id, job_number FROM workshop_jobs WHERE status NOT
 $clients = $db->query("SELECT id, name, phone, email, kra_pin FROM clients WHERE status='active' ORDER BY name")->fetchAll();
 
 $errors = [];
+// Arriving from a vehicle: "raise an invoice for this car, billed to this client".
+// Without these the link from the car page opened an empty form and the person
+// had to find the vehicle again in a list of every car we have ever held.
+$preCarId    = (int)($_GET['car_id'] ?? 0);
+$preClientId = (int)($_GET['client_id'] ?? 0);
+
 $d = [
-    'car_id'         => $prefillJob['car_id'] ?? '',
+    'car_id'         => $prefillJob['car_id'] ?? ($preCarId ?: ''),
     'job_id'         => $prefillJob ? $prefillJob['id'] : '',
-    'client_id'         => '',
+    'client_id'         => $preClientId ?: '',
     'date'              => date('Y-m-d'),
     'due_date'          => date('Y-m-d', strtotime('+30 days')),
     'customer_name'     => $prefillJob['owner_name']  ?? '',

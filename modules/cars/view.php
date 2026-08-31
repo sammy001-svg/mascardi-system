@@ -1,8 +1,38 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/_bootstrap.php';
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/cars/index.php');
 $db = getDB();
+
+carsEnsureServiceBilling($db);
+
+// Changing who work is billed to. Post-redirect-get so a refresh does not resave.
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'set_billing') {
+    verifyCsrf();
+    if (!canWrite('cars')) { http_response_code(403); exit('Not permitted.'); }
+    $raw = trim((string)($_POST['service_client_id'] ?? ''));
+    if ($raw === 'internal') {
+        $ic = carInternalClient($db);
+        $target = $ic ? (int)$ic['id'] : null;
+    } else {
+        $target = $raw === '' ? null : (int)$raw;
+    }
+    if (carSetBillingClient($db, $id, $target)) {
+        $who = 'nobody';
+        if ($target) {
+            $q = $db->prepare("SELECT name FROM clients WHERE id = ?");
+            $q->execute([$target]); $who = (string)$q->fetchColumn();
+        }
+        logActivity('update', 'cars', $id, 'Service billing set to ' . $who . '.');
+        setFlash('success', $target
+            ? 'Work on this vehicle is now billed to ' . $who . '. It stays in inventory.'
+            : 'Service billing cleared.');
+    } else {
+        setFlash('error', 'Could not change the service billing.');
+    }
+    redirect(BASE_URL . '/modules/cars/view.php?id=' . $id);
+}
 
 $car = $db->prepare("SELECT c.*, l.name AS location_name, cl.phone AS owner_phone FROM cars c LEFT JOIN locations l ON l.id = c.location_id LEFT JOIN clients cl ON cl.id = c.client_id WHERE c.id=?");
 $car->execute([$id]);
@@ -26,6 +56,7 @@ $assessments->execute([$id]); $assessments = $assessments->fetchAll();
 $jobs = $db->prepare("SELECT j.*, m.name AS mechanic_name FROM workshop_jobs j LEFT JOIN mechanics m ON m.id=j.mechanic_id WHERE j.car_id=? ORDER BY j.id DESC");
 $jobs->execute([$id]); $jobs = $jobs->fetchAll();
 
+$billingClients = $db->query("SELECT id, name FROM clients WHERE status = 'active' ORDER BY name")->fetchAll();
 $quotations = $db->prepare("SELECT * FROM quotations WHERE car_id=? ORDER BY id DESC");
 $quotations->execute([$id]); $quotations = $quotations->fetchAll();
 
@@ -87,6 +118,99 @@ include __DIR__ . '/../../includes/header.php';
         <a href="edit.php?id=<?= $id ?>" class="btn btn-sm btn-outline-secondary"><i class="fa fa-pen me-1"></i>Edit</a>
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
+    </div>
+</div>
+
+<?php
+// ── Service billing ──────────────────────────────────────────────────────────
+// Who pays for work on this vehicle, which is not always who owns it. Setting
+// it writes service_client_id and nothing else, so an inventory car billed to
+// ourselves stays in inventory and stays for sale.
+$billTo   = carBillingClient($db, $car);
+$internal = (int)($car['service_client_id'] ?? 0) > 0
+         && $billTo && stripos((string)$billTo['name'], 'mascardi') !== false;
+$isStock  = ($car['car_type'] ?? '') === 'inventory';
+?>
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="fa fa-file-invoice-dollar me-2"></i>Service Billing</span>
+        <?php if ($billTo): ?>
+            <span class="badge <?= $internal ? 'bg-warning text-dark' : 'bg-info' ?>">
+                <?= $internal ? 'Internal expense' : 'Billed to customer' ?>
+            </span>
+        <?php endif; ?>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            Quotations and invoices for work on this vehicle are raised against the client
+            below. This is separate from who owns it — billing our own stock to ourselves
+            records the expense without taking the car out of inventory.
+        </p>
+
+        <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label small text-muted mb-1">Currently billed to</label>
+                <div class="fw-semibold">
+                    <?php if ($billTo): ?>
+                        <?= e($billTo['name']) ?>
+                        <?php if ((int)($car['service_client_id'] ?? 0) === 0): ?>
+                            <span class="text-muted small fw-normal">(the vehicle owner)</span>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <span class="text-muted fw-normal">Nobody yet</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <?php if (canWrite('cars')): ?>
+            <div class="col-md-7">
+                <form method="post" class="d-flex gap-2 flex-wrap align-items-end">
+                    <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                    <input type="hidden" name="action" value="set_billing">
+                    <div class="flex-grow-1" style="min-width:200px">
+                        <label class="form-label small text-muted mb-1">Change to</label>
+                        <select name="service_client_id" class="form-select form-select-sm">
+                            <option value="">— nobody —</option>
+                            <?php foreach ($billingClients as $bc): ?>
+                                <option value="<?= (int)$bc['id'] ?>"
+                                    <?= (int)($car['service_client_id'] ?? 0) === (int)$bc['id'] ? 'selected' : '' ?>>
+                                    <?= e($bc['name']) ?><?= stripos($bc['name'], 'mascardi') !== false ? ' (internal)' : '' ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <button class="btn btn-sm btn-primary"><i class="fa fa-check me-1"></i>Save</button>
+                    <?php if ($isStock && !$internal): ?>
+                        <button name="service_client_id" value="internal"
+                                class="btn btn-sm btn-outline-warning" title="Bill this work to Mascardi as an expense">
+                            <i class="fa fa-building me-1"></i>Bill to Mascardi
+                        </button>
+                    <?php endif; ?>
+                </form>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($billTo): ?>
+        <hr class="my-3">
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="<?= BASE_URL ?>/modules/quotations/add.php?car_id=<?= $id ?>&client_id=<?= (int)$billTo['id'] ?>"
+               class="btn btn-sm btn-outline-primary"><i class="fa fa-file-lines me-1"></i>New Quotation</a>
+            <a href="<?= BASE_URL ?>/modules/invoices/add.php?car_id=<?= $id ?>&client_id=<?= (int)$billTo['id'] ?>"
+               class="btn btn-sm btn-outline-primary"><i class="fa fa-file-invoice me-1"></i>New Invoice</a>
+            <a href="<?= BASE_URL ?>/modules/jobs/add.php?car_id=<?= $id ?>"
+               class="btn btn-sm btn-outline-secondary"><i class="fa fa-screwdriver-wrench me-1"></i>New Job Card</a>
+            <a href="<?= BASE_URL ?>/modules/clients/view.php?id=<?= (int)$billTo['id'] ?>"
+               class="btn btn-sm btn-outline-secondary"><i class="fa fa-user me-1"></i>Open <?= e($billTo['name']) ?></a>
+        </div>
+        <?php if ($isStock && $internal): ?>
+        <p class="text-muted small mb-0 mt-3">
+            <i class="fa fa-circle-info me-1"></i>
+            This vehicle is still in inventory and still for sale. When it is delivered,
+            billing moves to the buyer automatically.
+        </p>
+        <?php endif; ?>
+        <?php endif; ?>
     </div>
 </div>
 

@@ -9,7 +9,8 @@ $errors = [];
 $preCarId = (int)($_GET['car_id'] ?? 0);
 $preJobId = (int)($_GET['job_id'] ?? 0);
 $preBookingId = (int)($_GET['booking_id'] ?? 0);
-$preClientId = null;
+// A client may also be named directly, when coming from the vehicle page.
+$preClientId = ((int)($_GET['client_id'] ?? 0)) ?: null;
 
 if ($preBookingId) {
     $sbCheck = $db->prepare("SELECT car_id, client_id, job_id FROM service_bookings WHERE id = ?");

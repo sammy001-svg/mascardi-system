@@ -232,14 +232,20 @@ function crmDeliverLeadToClient(PDO $db, array $lead): int
         // Trade-In module can still find and settle them.
         $carId = (int)($lead['pinned_car_id'] ?? 0);
         if ($carId) {
+            // Service billing follows ownership. Without this the vehicle changes
+            // hands while its work keeps being quoted to whoever paid before — for
+            // ex-stock that means invoicing ourselves for a car we no longer own.
+            require_once __DIR__ . '/../cars/_bootstrap.php';
+            carsEnsureServiceBilling($db);
             $db->prepare("UPDATE cars
                           SET client_id = ?,
+                              service_client_id = ?,
                               car_type  = CASE WHEN car_type = 'inventory' THEN 'client' ELSE car_type END,
                               owner_name  = COALESCE(NULLIF(owner_name,''), ?),
                               owner_phone = COALESCE(NULLIF(owner_phone,''), ?),
                               updated_at  = NOW()
                           WHERE id = ?")
-               ->execute([$clientId, $name, $phone, $carId]);
+               ->execute([$clientId, $clientId, $name, $phone, $carId]);
             logActivity('update', 'cars', $carId, "Vehicle assigned to client #{$clientId} on delivery of lead #{$leadId}");
         }
 
