@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/_bootstrap.php';
 requireWrite('clients');
 $db = getDB();
 $id = (int)($_GET['id'] ?? 0);
@@ -45,20 +46,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Save failed: ' . $e->getMessage();
         }
 
-        // ── 2. Propagate KRA PIN to all linked invoices ────────────────────────
-        // Runs in its own try-catch so any failure here never blocks the redirect
-        // or shows a false "Save failed" to the user.
-        if (empty($errors) && $d['kra_pin'] !== '') {
-            // Invoices linked by client_id
+        // ── 2. Carry the change onto their paperwork ───────────────────────────
+        // Invoices, quotations, receipts, assessments and service bookings each
+        // keep their own copy of the name and contact details, so correcting the
+        // client record alone leaves every document showing the old ones. Its own
+        // try-catch: a document that will not update must never turn a successful
+        // save into a "Save failed".
+        if (empty($errors)) {
             try {
-                $db->prepare("UPDATE invoices SET customer_kra_pin=? WHERE client_id=?")
-                   ->execute([$d['kra_pin'], $id]);
-            } catch (\Throwable $_) {}
-            // Invoices created without a client_id but with a matching customer name
-            try {
-                $db->prepare("UPDATE invoices SET customer_kra_pin=? WHERE client_id IS NULL AND LOWER(TRIM(customer_name))=LOWER(TRIM(?))")
-                   ->execute([$d['kra_pin'], $d['name']]);
-            } catch (\Throwable $_) {}
+                $sync = clientSyncDocuments($db, $id, $d, $client);
+                $note = clientSyncSummary($sync);
+                if ($note !== '') {
+                    setFlash('success', 'Client updated. ' . $note);
+                    logActivity('update', 'clients', $id,
+                        'Details propagated to documents: ' . $note);
+                }
+            } catch (\Throwable $e) {
+                error_log('client document sync: ' . $e->getMessage());
+            }
         }
 
         if (empty($errors)) {

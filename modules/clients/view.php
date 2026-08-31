@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../../includes/mailer.php';
 requireLogin();
 canAccess('clients') || die('Access denied.');
@@ -64,26 +65,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_notice'])) {
 }
 
 $cars     = $db->prepare("SELECT * FROM cars WHERE client_id=? ORDER BY make,model"); $cars->execute([$id]); $cars=$cars->fetchAll();
-$invoices = $db->prepare("SELECT i.*,c.make,c.model FROM invoices i JOIN cars c ON c.id=i.car_id WHERE i.client_id=? ORDER BY i.created_at DESC"); $invoices->execute([$id]); $invoices=$invoices->fetchAll();
-$quotes   = $db->prepare("SELECT q.*,c.make,c.model FROM quotations q JOIN cars c ON c.id=q.car_id WHERE q.client_id=? ORDER BY q.created_at DESC"); $quotes->execute([$id]); $quotes=$quotes->fetchAll();
+// Documents belonging to this client.
+//
+// LEFT JOIN, not JOIN: the vehicle is a detail on the invoice, not the reason
+// it exists. An inner join meant a workshop invoice, or one whose car link had
+// broken, vanished from the profile entirely rather than simply showing no
+// vehicle — the paperwork was there, the page just would not admit it.
+$mInv = clientDocumentMatch($client, 'i', 'customer_name', 'customer_phone', 'customer_email');
+$invoices = $db->prepare("SELECT i.*, c.make, c.model
+                            FROM invoices i
+                       LEFT JOIN cars c ON c.id = i.car_id
+                           WHERE " . $mInv['sql'] . "
+                        ORDER BY i.date DESC, i.id DESC");
+$invoices->execute($mInv['params']); $invoices = $invoices->fetchAll();
+
+$mQuo = clientDocumentMatch($client, 'q', 'customer_name', 'customer_phone', 'customer_email');
+$quotes = $db->prepare("SELECT q.*, c.make, c.model
+                          FROM quotations q
+                     LEFT JOIN cars c ON c.id = q.car_id
+                         WHERE " . $mQuo['sql'] . "
+                      ORDER BY q.date DESC, q.id DESC");
+$quotes->execute($mQuo['params']); $quotes = $quotes->fetchAll();
 $bookings = $db->prepare("SELECT * FROM service_bookings WHERE client_id=? ORDER BY created_at DESC"); $bookings->execute([$id]); $bookings=$bookings->fetchAll();
 $notices  = $db->prepare("SELECT * FROM client_notices WHERE client_id=? ORDER BY created_at DESC LIMIT 20"); $notices->execute([$id]); $notices=$notices->fetchAll();
 
 // Financial summary
-$finStmt = $db->prepare("SELECT COALESCE(SUM(total),0) AS total_billed, COALESCE(SUM(amount_paid),0) AS total_paid FROM invoices WHERE client_id=? AND status NOT IN ('cancelled')");
-$finStmt->execute([$id]); $fin = $finStmt->fetch();
+// Counted over exactly the invoices the tab lists, so the summary and the
+// table can never tell the user two different stories.
+$mFin = clientDocumentMatch($client, 'i', 'customer_name', 'customer_phone', 'customer_email');
+$finStmt = $db->prepare("SELECT COALESCE(SUM(total),0) AS total_billed,
+                                 COALESCE(SUM(amount_paid),0) AS total_paid
+                            FROM invoices i
+                           WHERE " . $mFin['sql'] . " AND i.status NOT IN ('cancelled')");
+$finStmt->execute($mFin['params']); $fin = $finStmt->fetch();
 $outstanding = (float)$fin['total_billed'] - (float)$fin['total_paid'];
 
 // All payment records for this client (all statuses)
+$mPay = clientDocumentMatch($client, 'p', 'client_name', 'client_phone');
 $paymentsStmt = $db->prepare("
     SELECT p.*, i.invoice_number, i.id AS inv_id, sb.booking_number
     FROM payments p
     LEFT JOIN invoices i ON i.id = p.invoice_id
     LEFT JOIN service_bookings sb ON sb.id = p.service_booking_id
-    WHERE (p.client_id = ? OR i.client_id = ? OR sb.client_id = ?)
+    WHERE " . $mPay['sql'] . " OR i.client_id = ? OR sb.client_id = ?
     ORDER BY p.payment_date DESC, p.id DESC
 ");
-$paymentsStmt->execute([$id, $id, $id]);
+$paymentsStmt->execute([...$mPay['params'], $id, $id]);
 $clientPayments = $paymentsStmt->fetchAll();
 
 // Car purchase history — matched by explicit client_id OR phone/email
@@ -457,7 +484,7 @@ include __DIR__ . '/../../includes/header.php';
                 <tr>
                     <td class="ps-3 text-muted small"><?= fmtDate($inv['date']) ?></td>
                     <td class="fw-bold"><?= e($inv['invoice_number']) ?></td>
-                    <td class="small text-muted"><?= e($inv['make'] . ' ' . $inv['model']) ?></td>
+                    <td class="small text-muted"><?= e(trim(($inv['make'] ?? '') . ' ' . ($inv['model'] ?? ''))) ?: '—' ?></td>
                     <td class="text-end"><?= money((float)$inv['total']) ?></td>
                     <td class="text-end text-success"><?= money((float)$inv['amount_paid']) ?></td>
                     <td class="text-end fw-semibold <?= $bal > 0 ? 'text-danger' : 'text-success' ?>"><?= money($bal) ?></td>
@@ -500,7 +527,7 @@ include __DIR__ . '/../../includes/header.php';
                 <tr>
                     <td class="ps-3 text-muted small"><?= fmtDate($q['date']) ?></td>
                     <td class="fw-bold"><?= e($q['quotation_number']) ?></td>
-                    <td class="small text-muted"><?= e($q['make'] . ' ' . $q['model']) ?></td>
+                    <td class="small text-muted"><?= e(trim(($q['make'] ?? '') . ' ' . ($q['model'] ?? ''))) ?: '—' ?></td>
                     <td class="text-end"><?= money((float)$q['total']) ?></td>
                     <td class="small text-muted"><?= $q['valid_until'] ? fmtDate($q['valid_until']) : '—' ?></td>
                     <td><?= statusBadge($q['status']) ?></td>
