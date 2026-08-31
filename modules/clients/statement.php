@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/_bootstrap.php';
 requireLogin();
 canAccess('clients') || die('Access denied.');
 
@@ -32,19 +33,27 @@ $company = [
 // Opening balance = invoices - payments BEFORE $fromDate (if a start date is set)
 $openingBalance = 0.00;
 if ($fromDate) {
+    $mOb = clientDocumentMatch($client, 'i', 'customer_name', 'customer_phone', 'customer_email');
     $obStmt = $db->prepare("
-        SELECT COALESCE(SUM(total),0) AS billed, COALESCE(SUM(amount_paid),0) AS paid
-        FROM invoices
-        WHERE client_id=? AND status NOT IN ('cancelled') AND DATE(created_at) < ?
+        SELECT COALESCE(SUM(i.total),0) AS billed, COALESCE(SUM(i.amount_paid),0) AS paid
+        FROM invoices i
+        WHERE " . $mOb['sql'] . " AND i.status NOT IN ('cancelled') AND DATE(i.created_at) < ?
     ");
-    $obStmt->execute([$id, $fromDate]);
+    $obStmt->execute([...$mOb['params'], $fromDate]);
     $ob = $obStmt->fetch();
     $openingBalance = (float)$ob['billed'] - (float)$ob['paid'];
 }
 
 // Invoices in range
-$invSql = "SELECT i.*, c.make, c.model, c.chassis_number FROM invoices i JOIN cars c ON c.id=i.car_id WHERE i.client_id=? AND i.status NOT IN ('cancelled')";
-$invParams = [$id];
+// LEFT JOIN, and matched the same way the profile matches: an invoice raised
+// without picking the client off the list, or one whose car link has broken,
+// still belongs on their statement.
+$mInv = clientDocumentMatch($client, 'i', 'customer_name', 'customer_phone', 'customer_email');
+$invSql = "SELECT i.*, c.make, c.model, c.chassis_number
+             FROM invoices i
+        LEFT JOIN cars c ON c.id = i.car_id
+            WHERE " . $mInv['sql'] . " AND i.status NOT IN ('cancelled')";
+$invParams = $mInv['params'];
 if ($fromDate) { $invSql .= " AND DATE(i.created_at) >= ?"; $invParams[] = $fromDate; }
 if ($toDate)   { $invSql .= " AND DATE(i.created_at) <= ?"; $invParams[] = $toDate; }
 $invSql .= " ORDER BY i.created_at ASC";
@@ -53,14 +62,15 @@ $invStmt->execute($invParams);
 $invoices = $invStmt->fetchAll();
 
 // Payments in range (confirmed, linked to this client via client_id, invoice, or booking)
+$mPay = clientDocumentMatch($client, 'p', 'client_name', 'client_phone');
 $paySql = "
     SELECT p.*, i.invoice_number, i.id AS inv_id, sb.booking_number
     FROM payments p
     LEFT JOIN invoices i ON i.id = p.invoice_id
     LEFT JOIN service_bookings sb ON sb.id = p.service_booking_id
-    WHERE (p.client_id = ? OR i.client_id = ? OR sb.client_id = ?) AND p.status = 'confirmed'
+    WHERE (" . $mPay['sql'] . " OR i.client_id = ? OR sb.client_id = ?) AND p.status = 'confirmed'
 ";
-$payParams = [$id, $id, $id];
+$payParams = [...$mPay['params'], $id, $id];
 if ($fromDate) { $paySql .= " AND DATE(p.payment_date) >= ?"; $payParams[] = $fromDate; }
 if ($toDate)   { $paySql .= " AND DATE(p.payment_date) <= ?"; $payParams[] = $toDate; }
 $paySql .= " ORDER BY p.payment_date ASC, p.id ASC";
@@ -73,13 +83,28 @@ $outStmt = $db->prepare("
     SELECT i.*, c.make, c.model, c.chassis_number,
            (i.total - i.amount_paid) AS balance_due
     FROM invoices i
-    JOIN cars c ON c.id = i.car_id
-    WHERE i.client_id = ?
+    LEFT JOIN cars c ON c.id = i.car_id
+    WHERE " . $mInv['sql'] . "
       AND i.status NOT IN ('paid', 'cancelled')
     ORDER BY i.date ASC
 ");
-$outStmt->execute([$id]);
+$outStmt->execute($mInv['params']);
 $outstandingInvoices = $outStmt->fetchAll();
+
+// Quotations for reference. Kept out of $transactions on purpose: an offer is
+// not a debt, and adding one as a debit would overstate what the client owes.
+$mQuo = clientDocumentMatch($client, 'q', 'customer_name', 'customer_phone', 'customer_email');
+$qSql = "SELECT q.*, c.make, c.model
+           FROM quotations q
+      LEFT JOIN cars c ON c.id = q.car_id
+          WHERE " . $mQuo['sql'];
+$qParams = $mQuo['params'];
+if ($fromDate) { $qSql .= " AND DATE(q.created_at) >= ?"; $qParams[] = $fromDate; }
+if ($toDate)   { $qSql .= " AND DATE(q.created_at) <= ?"; $qParams[] = $toDate; }
+$qSql .= " ORDER BY q.created_at ASC";
+$qStmt = $db->prepare($qSql);
+$qStmt->execute($qParams);
+$statementQuotes = $qStmt->fetchAll();
 
 // Merge transactions chronologically
 $transactions = [];
@@ -295,6 +320,46 @@ $periodLabel = ($fromDate || $toDate)
                     <td></td>
                 </tr>
             </tfoot>
+        </table>
+    </div>
+    <?php endif; ?>
+
+    <!-- Quotations -->
+    <?php if ($statementQuotes): ?>
+    <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0" style="font-size:13px">
+                <i class="fa fa-file-lines me-2 text-primary"></i>Quotations
+            </h6>
+            <span class="badge bg-primary"><?= count($statementQuotes) ?> quotation<?= count($statementQuotes) !== 1 ? 's' : '' ?></span>
+        </div>
+        <p class="text-muted mb-2" style="font-size:11px">
+            Shown for reference only. A quotation is an offer, not money owed, so these are
+            deliberately kept out of the running balance below.
+        </p>
+        <table class="table table-bordered mb-0" style="font-size:12.5px">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-2" style="width:90px">Date</th>
+                    <th style="width:130px">Quotation #</th>
+                    <th>Vehicle</th>
+                    <th style="width:110px">Status</th>
+                    <th class="text-end" style="width:120px">Amount (KES)</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($statementQuotes as $qz): ?>
+                <tr>
+                    <td class="ps-2 text-muted"><?= fmtDate($qz['date'] ?? $qz['created_at']) ?></td>
+                    <td class="fw-semibold"><?= e($qz['quotation_number']) ?></td>
+                    <td class="text-muted">
+                        <?= e(trim(($qz['make'] ?? '') . ' ' . ($qz['model'] ?? ''))) ?: '—' ?>
+                    </td>
+                    <td><?= statusBadge($qz['status']) ?></td>
+                    <td class="text-end"><?= number_format((float)$qz['total'], 2) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
         </table>
     </div>
     <?php endif; ?>
