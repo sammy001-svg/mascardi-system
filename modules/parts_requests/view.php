@@ -12,10 +12,19 @@ if (!$id) redirect(BASE_URL . '/modules/parts_requests/index.php');
 $stmt = $db->prepare("
     SELECT pr.*,
            qa.assessment_number, qa.assessment_date,
-           m.name AS mechanic_name
+           m.name AS mechanic_name,
+           -- When the request is linked to a vehicle, the vehicle is the truth.
+           -- The car columns on the request are a copy taken when it was raised,
+           -- and a copy drifts: correcting a chassis in inventory must show here.
+           COALESCE(NULLIF(c.chassis_number, ''),      pr.car_chassis)      AS chassis_shown,
+           COALESCE(NULLIF(c.registration_number, ''), pr.car_registration) AS reg_shown,
+           COALESCE(NULLIF(c.make, ''),  pr.car_make)  AS make_shown,
+           COALESCE(NULLIF(c.model, ''), pr.car_model) AS model_shown,
+           c.id AS linked_car_id
     FROM parts_requests pr
     LEFT JOIN quick_assessments qa ON qa.id = pr.quick_assessment_id
     LEFT JOIN mechanics m ON m.id = pr.mechanic_id
+    LEFT JOIN cars c ON c.id = pr.car_id
     WHERE pr.id = ?
 ");
 $stmt->execute([$id]);
@@ -194,10 +203,10 @@ include __DIR__ . '/../../includes/header.php';
                         <span class="badge bg-dark"><?= e($req['car_registration']) ?></span>
                     </div>
                     <?php endif; ?>
-                    <?php if ($req['car_chassis']): ?>
+                    <?php if (($req['chassis_shown'] ?? $req['car_chassis'])): ?>
                     <div>
                         <div class="text-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px">Chassis No.</div>
-                        <code class="small"><?= e($req['car_chassis']) ?></code>
+                        <code class="small"><?= e(($req['chassis_shown'] ?? $req['car_chassis'])) ?></code>
                     </div>
                     <?php endif; ?>
                 </div>

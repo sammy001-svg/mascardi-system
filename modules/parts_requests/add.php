@@ -16,9 +16,56 @@ foreach ([
     "ALTER TABLE parts_requests ADD COLUMN car_model        VARCHAR(100) NULL",
     "ALTER TABLE parts_requests ADD COLUMN car_registration VARCHAR(50)  NULL",
     "ALTER TABLE parts_requests ADD COLUMN car_chassis      VARCHAR(100) NULL",
+    // The vehicle was only ever free text on a quote request, so its chassis was
+    // typed or guessed and then frozen — which is how the same car ended up with
+    // one chassis here and another on its service booking. Linking to the actual
+    // vehicle lets the number be READ from inventory rather than copied.
+    "ALTER TABLE parts_requests ADD COLUMN car_id INT NULL AFTER job_id",
+    "CREATE INDEX idx_pr_car ON parts_requests (car_id)",
     "ALTER TABLE parts_request_items ADD COLUMN part_number VARCHAR(100) NULL AFTER id",
 ] as $_mig) {
     try { $db->exec($_mig); } catch (\Throwable $_e) { /* already applied */ }
+}
+
+// Vehicles on the books, so the chassis on a quote comes from inventory rather
+// than from whatever was typed. Sold cars are still listed: a quote can be for
+// work on a vehicle that has already been handed over.
+try {
+    $fleet = $db->query(
+        "SELECT id, make, model, year, registration_number, chassis_number, car_type
+           FROM cars
+       ORDER BY make, model"
+    )->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $e) { $fleet = []; }
+
+// One-time backfill: link requests raised before car_id existed, but ONLY where
+// the identifier picks out a single vehicle. Chassis first, because it is the
+// unique one; a registration is trusted only when nothing else shares it.
+// Anything ambiguous is left alone rather than linked to a guess.
+if (getSetting('parts_requests_car_link_version', '') !== '1') {
+    try {
+        $db->exec(
+            "UPDATE parts_requests pr
+                SET pr.car_id = (
+                    SELECT CASE WHEN COUNT(*) = 1 THEN MAX(c.id) END FROM cars c
+                     WHERE NULLIF(TRIM(pr.car_chassis), '') IS NOT NULL
+                       AND c.chassis_number = pr.car_chassis)
+              WHERE pr.car_id IS NULL"
+        );
+        $db->exec(
+            "UPDATE parts_requests pr
+                SET pr.car_id = (
+                    SELECT CASE WHEN COUNT(*) = 1 THEN MAX(c.id) END FROM cars c
+                     WHERE NULLIF(TRIM(pr.car_registration), '') IS NOT NULL
+                       AND c.registration_number = pr.car_registration)
+              WHERE pr.car_id IS NULL"
+        );
+        $db->prepare("INSERT INTO settings (setting_key, setting_value)
+                      VALUES ('parts_requests_car_link_version', '1')
+                      ON DUPLICATE KEY UPDATE setting_value = '1'")->execute();
+    } catch (\Throwable $e) {
+        error_log('parts_requests car backfill: ' . $e->getMessage());
+    }
 }
 
 $errors = [];
@@ -66,6 +113,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $carModel     = trim($_POST['car_model']       ?? '');
     $carReg       = strtoupper(trim($_POST['car_registration'] ?? ''));
     $carChassis   = trim($_POST['car_chassis']     ?? '');
+    $carId        = (int)($_POST['car_id'] ?? 0) ?: null;
+
+    // When a real vehicle was chosen, its details are the truth — not whatever
+    // happens to be sitting in the text boxes.
+    if ($carId) {
+        $cq = $db->prepare("SELECT make, model, registration_number, chassis_number
+                               FROM cars WHERE id = ?");
+        $cq->execute([$carId]);
+        if ($row = $cq->fetch(PDO::FETCH_ASSOC)) {
+            $carMake    = $row['make']  ?: $carMake;
+            $carModel   = $row['model'] ?: $carModel;
+            $carReg     = $row['registration_number'] ?: $carReg;
+            $carChassis = $row['chassis_number']      ?: $carChassis;
+        } else {
+            $carId = null;
+        }
+    }
     $notes        = trim($_POST['notes']           ?? '');
 
     $partNos   = $_POST['part_number'] ?? [];
@@ -97,12 +161,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 INSERT INTO parts_requests
                     (request_number, quick_assessment_id, mechanic_id, requested_by,
                      client_name, client_phone, client_email,
-                     car_make, car_model, car_registration, car_chassis, notes)
-                VALUES (?,?,?,?, ?,?,?, ?,?,?,?,?)
+                     car_make, car_model, car_registration, car_chassis, car_id, notes)
+                VALUES (?,?,?,?, ?,?,?, ?,?,?,?,?,?)
             ")->execute([
                 $reqNum, $assessmentId, null, $user['id'],
                 $clientName ?: null, $clientPhone ?: null, $clientEmail ?: null,
-                $carMake ?: null, $carModel ?: null, $carReg ?: null, $carChassis ?: null,
+                $carMake ?: null, $carModel ?: null, $carReg ?: null, $carChassis ?: null, $carId,
                 $notes ?: null,
             ]);
             $reqId = (int)$db->lastInsertId();
@@ -213,7 +277,33 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-md-6">
+                                                <div class="col-12">
+                            <label class="form-label small fw-semibold">
+                                Vehicle from inventory
+                                <span class="text-muted fw-normal">— chassis is taken from the record</span>
+                            </label>
+                            <select name="car_id" id="fleetCar" class="form-select">
+                                <option value="">— not one of ours / type it below —</option>
+                                <?php foreach ($fleet as $fc): ?>
+                                    <option value="<?= (int)$fc['id'] ?>"
+                                            data-make="<?= e($fc['make']) ?>"
+                                            data-model="<?= e($fc['model']) ?>"
+                                            data-reg="<?= e($fc['registration_number'] ?? '') ?>"
+                                            data-chassis="<?= e($fc['chassis_number'] ?? '') ?>"
+                                            <?= (string)($_POST['car_id'] ?? '') === (string)$fc['id'] ? 'selected' : '' ?>>
+                                        <?= e(trim(($fc['year'] ? $fc['year'] . ' ' : '') . $fc['make'] . ' ' . $fc['model'])) ?>
+                                        <?= $fc['registration_number'] ? ' — ' . e($fc['registration_number']) : '' ?>
+                                        <?= $fc['chassis_number'] ? ' · ' . e($fc['chassis_number']) : '' ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text" style="font-size:11.5px">
+                                Choosing a vehicle here keeps the chassis on this quote identical to the
+                                one on its service booking. Leave it blank only for a vehicle we do not
+                                have on file.
+                            </div>
+                        </div>
+<div class="col-md-6">
                             <label class="form-label small fw-semibold">Make</label>
                             <input type="text" name="car_make" id="carMake" class="form-control"
                                    placeholder="e.g. Toyota"
@@ -326,6 +416,32 @@ $(function () {
         set('carChassis',  opt.dataset.chassis);
     }
     $('#assessmentSelect').on('select2:select select2:clear', applyAssessmentFill);
+
+    // ── Vehicle from inventory ───────────────────────────────────────────
+    // Picking a real vehicle fills the details from its record and locks the
+    // chassis, because that is the number the whole document is identified by
+    // and a typed one is how the quote and the service booking came to disagree.
+    var fleetSel = document.getElementById('fleetCar');
+    function applyFleet() {
+        var chassis = document.getElementById('carChassis');
+        var opt = fleetSel.options[fleetSel.selectedIndex];
+        if (!opt || !opt.value) {
+            if (chassis) { chassis.readOnly = false; chassis.title = ''; }
+            return;
+        }
+        set('carMake',    opt.dataset.make);
+        set('carModel',   opt.dataset.model);
+        set('carReg',     (opt.dataset.reg || '').toUpperCase());
+        set('carChassis', opt.dataset.chassis);
+        if (chassis) {
+            chassis.readOnly = true;
+            chassis.title = 'Taken from the vehicle record. Clear the vehicle above to type one.';
+        }
+    }
+    if (fleetSel) {
+        fleetSel.addEventListener('change', applyFleet);
+        applyFleet();   // a re-rendered form after a validation error
+    }
 
     // ── Dynamic rows ─────────────────────────────────────────────────────
     function renumberRows() {
