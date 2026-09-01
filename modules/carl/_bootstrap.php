@@ -248,6 +248,24 @@ function carlSkills(): array
                            'problems', 'issues', 'focus on', 'needs doing', 'anything wrong',
                            'chase', 'slipping', 'falling behind'],
         ],
+        // Checked before anything else it might resemble: "delete that lead" would
+        // otherwise score on 'lead' and open the pipeline report, which reads as
+        // though she is about to do it.
+        'no_delete' => [
+            'label'    => 'Removing records',
+            'module'   => null,
+            'patterns' => ['delete', 'remove the', 'remove this', 'remove that',
+                           'erase', 'wipe', 'get rid of', 'clear out', 'purge',
+                           'drop the', 'take it off the system', 'take off the system'],
+        ],
+        'add_deposit' => [
+            'label'    => 'Record another deposit',
+            'module'   => 'crm',
+            'patterns' => ['additional deposit', 'another deposit', 'extra deposit',
+                           'add a deposit', 'add deposit', 'top up the deposit',
+                           'topped up', 'further deposit', 'part payment',
+                           'record a payment', 'paid more', 'more deposit'],
+        ],
         'add_lead' => [
             'label'    => 'Add a lead',
             'module'   => 'crm',
@@ -293,7 +311,14 @@ function carlSkills(): array
                            'receipt', 'print', 'generate',
                            // Longer than the 'delivery' the deliveries skill matches on,
                            // so asking for the note reaches the printer, not the report.
-                           'delivery note', 'handover note', 'gate pass'],
+                           'delivery note', 'handover note', 'gate pass',
+                           // Named in full. "Print a deposit receipt" tied with the
+                           // reservations report on the word 'deposit', and the report
+                           // won on iteration order — so asking for the receipt gave a
+                           // count of deposits held instead.
+                           'deposit receipt', 'deposit slip', 'sales receipt',
+                           'proforma invoice', 'sales agreement', 'credit agreement',
+                           'print a', 'print the', 'print me', 'generate a', 'generate the'],
         ],
         'navigate' => [
             'label'    => 'Open a page',
@@ -551,6 +576,94 @@ function carlNeedsModel(string $msg, ?string $skill, array $history = []): bool
 
     // Everything else the matcher recognised, it can answer for nothing.
     return false;
+}
+
+// ── Carl may never destroy anything ──────────────────────────────────────────
+//
+// This is a standing rule, not a preference, so it is enforced here rather than
+// left to whoever adds the next task remembering it. Every write Carl makes goes
+// through carlGuardedExec(), which refuses anything destructive outright.
+//
+// The point is that Carl grows. Tasks get added by people who are thinking about
+// the feature, not about the guarantee — and a guarantee that depends on nobody
+// forgetting is not a guarantee. A DELETE reaching this function is a bug, and
+// it is stopped and logged rather than executed.
+//
+// Note what this does NOT prevent, deliberately: a person doing the same thing
+// through the normal pages, where the module's own permissions and confirmations
+// apply. This constrains Carl, not the system.
+
+/** SQL Carl is never allowed to run, however it is spelled. */
+function carlForbiddenSql(string $sql): ?string
+{
+    // Comments stripped first: a destructive verb hidden behind /* */ or --
+    // would otherwise slip past a naive scan and still execute.
+    $bare = preg_replace('~/\*.*?\*/~s', ' ', $sql);
+    $bare = preg_replace('~--[^\n]*~', ' ', (string)$bare);
+    $bare = strtolower(preg_replace('/\s+/', ' ', (string)$bare));
+
+    foreach ([
+        'delete'   => 'delete rows',
+        'drop'     => 'drop a table or column',
+        'truncate' => 'empty a table',
+        'rename'   => 'rename a table',
+    ] as $verb => $what) {
+        if (preg_match('/\b' . $verb . '\b/', $bare)) return $what;
+    }
+
+    // An UPDATE with no WHERE rewrites every row in the table, which is
+    // destruction by another name.
+    if (preg_match('/^\s*update\b/', $bare) && !preg_match('/\bwhere\b/', $bare)) {
+        return 'change every row in a table at once';
+    }
+
+    return null;
+}
+
+/**
+ * The only way Carl writes to the database.
+ *
+ * Returns true when the statement ran. A refusal is logged with the statement
+ * that caused it, so an attempt shows up in the log rather than failing quietly.
+ */
+function carlGuardedExec(PDO $db, string $sql, array $params = []): bool
+{
+    $forbidden = carlForbiddenSql($sql);
+    if ($forbidden !== null) {
+        error_log('[Carl] REFUSED — a task tried to ' . $forbidden . ': ' . trim($sql));
+        try {
+            logActivity('blocked', 'carl', null,
+                'Carl was asked to ' . $forbidden . ' and refused. She is not permitted to '
+                . 'remove anything from the system.');
+        } catch (\Throwable $e) { /* never let logging break the refusal */ }
+        return false;
+    }
+
+    try {
+        $db->prepare($sql)->execute($params);
+        return true;
+    } catch (\Throwable $e) {
+        error_log('[Carl] write failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * What Carl says when asked to remove something.
+ *
+ * Plainly, once, without lecturing — and pointing at who can, so the person is
+ * not left stuck.
+ */
+function carlRefuseDeletion(string $what = 'that'): array
+{
+    return [
+        'skill' => 'refused', 'done' => true,
+        'say'   => 'I am not able to delete ' . $what . '. Removing records is deliberately '
+                 . 'outside what I can do — it needs a person on the record\'s own page, where '
+                 . 'the permissions and the confirmation live. I can correct, update or add '
+                 . 'instead, if that would do.',
+        'html'  => '',
+    ];
 }
 
 } // function_exists('carlMigrate')

@@ -139,6 +139,23 @@ function carlSkillChitchat(PDO $db, array $user, string $u): array
     return ['skill' => 'chitchat', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
+/**
+ * Asked to remove something.
+ *
+ * Named as a skill so the refusal is a deliberate answer rather than a failure to
+ * understand — being told plainly that she will not is far better than being told
+ * she did not follow the question.
+ */
+function carlSkillNoDelete(PDO $db, array $user, string $u): array
+{
+    $what = 'that';
+    if (preg_match('/\b(lead|client|customer|car|vehicle|invoice|quotation|receipt|'
+                 . 'booking|job|user|record|reservation|payment)s?\b/i', $u, $m)) {
+        $what = 'the ' . strtolower($m[1]);
+    }
+    return carlRefuseDeletion($what);
+}
+
 function carlSkillHelp(PDO $db, array $user, string $u): array
 {
     $mine = carlSkillsFor();
@@ -1040,6 +1057,7 @@ function carlContinue(PDO $db, array $user, array $pending, string $reply): arra
     if ($skill === 'note_lead')     return carlContinueNoteLead($db, $user, $pending, $r);
     if ($skill === 'reserve')       return carlContinueReserve($db, $user, $pending, $r);
     if ($skill === 'document')      return carlContinueDocument($db, $user, $pending, $r);
+    if ($skill === 'add_deposit')   return carlContinueAddDeposit($db, $user, $pending, $r);
     if ($skill !== 'add_lead') { carlPendingClear($db, $uid); return carlSkillUnknown($user); }
 
     $got = $pending['collected'];

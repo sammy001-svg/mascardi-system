@@ -392,6 +392,154 @@ function carlSkillDeliveries(PDO $db, array $user, string $u): array
     return ['skill' => 'deliveries', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
+// ── add_deposit — record a further payment against a reservation ─────────────
+//
+// A customer rarely pays the whole deposit at once. Until now the only way to
+// record a second payment was to open the lead and overwrite deposit_amount by
+// hand, which loses the fact that it arrived in instalments and makes the
+// receipt wrong. This adds to what is already held and keeps a dated note of
+// each payment, so the receipt shows the true running total.
+
+function carlSkillAddDeposit(PDO $db, array $user, string $u): array
+{
+    carlPendingSet($db, (int)$user['id'], 'add_deposit', [], 'lead_name');
+    return ['skill' => 'add_deposit', 'done' => false,
+            'say'   => 'Certainly. Which customer has paid? Give me their name or phone number.',
+            'html'  => '<p class="carl-note">Say "cancel" at any point to stop.</p>'];
+}
+
+function carlContinueAddDeposit(PDO $db, array $user, array $pending, string $r): array
+{
+    $uid  = (int)$user['id'];
+    $got  = $pending['collected'];
+    $step = (string)$pending['awaiting'];
+    $ask  = function (string $say, string $html = '') {
+        return ['skill' => 'add_deposit', 'done' => false, 'say' => $say, 'html' => $html];
+    };
+
+    if ($step === 'lead_name') {
+        $lead = carlFindLead($db, $r);
+        if (!$lead) {
+            return $ask('I could not find that customer. Try the surname on its own, '
+                      . 'or the phone number.');
+        }
+        $st = $db->prepare("SELECT l.*, c.make, c.model, c.year, c.registration_number
+                              FROM crm_leads l
+                         LEFT JOIN cars c ON c.id = l.pinned_car_id
+                             WHERE l.id = ?");
+        $st->execute([(int)$lead['id']]);
+        $full = $st->fetch(PDO::FETCH_ASSOC) ?: $lead;
+
+        $got['lead_id']   = (int)$full['id'];
+        $got['lead_name'] = $full['name'];
+        $got['held']      = (float)($full['deposit_amount'] ?? 0);
+        carlPendingSet($db, $uid, 'add_deposit', $got, 'amount');
+
+        $car = trim(($full['year'] ?? '') . ' ' . ($full['make'] ?? '') . ' ' . ($full['model'] ?? ''));
+        $h = '<div class="carl-confirm">'
+           . '<div class="r"><span>Customer</span><b>' . e($full['name']) . '</b></div>'
+           . ($car !== '' ? '<div class="r"><span>Vehicle</span><b>' . e($car) . '</b></div>' : '')
+           . '<div class="r"><span>Already held</span><b>' . e(carlMoney($got['held'])) . '</b></div></div>';
+
+        return $ask($got['held'] > 0
+            ? 'We are holding ' . carlMoney($got['held']) . ' for ' . $full['name']
+              . '. How much have they paid this time?'
+            : 'Nothing is held for ' . $full['name'] . ' yet. How much have they paid?', $h);
+    }
+
+    if ($step === 'amount') {
+        $amt = carlParseMoney($r);
+        if ($amt === null || $amt <= 0) {
+            return $ask('I did not catch an amount there. How much have they paid?');
+        }
+        $got['amount'] = $amt;
+        carlPendingSet($db, $uid, 'add_deposit', $got, 'confirm');
+
+        $newTotal = $got['held'] + $amt;
+        $h = '<div class="carl-confirm">'
+           . '<div class="r"><span>Customer</span><b>' . e($got['lead_name']) . '</b></div>'
+           . '<div class="r"><span>Already held</span><b>' . e(carlMoney($got['held'])) . '</b></div>'
+           . '<div class="r"><span>Paid now</span><b>' . e(carlMoney($amt)) . '</b></div>'
+           . '<div class="r"><span>New total</span><b>' . e(carlMoney($newTotal)) . '</b></div></div>'
+           . '<div class="carl-chips">'
+           . '<button type="button" class="carl-chip carl-yes" data-ask="yes">Record it</button>'
+           . '<button type="button" class="carl-chip" data-ask="no">Cancel</button></div>';
+
+        return $ask('That takes ' . $got['lead_name'] . ' from ' . carlMoney($got['held'])
+                  . ' to ' . carlMoney($newTotal) . '. Shall I record it?', $h);
+    }
+
+    if ($step === 'confirm') {
+        if (preg_match('/^(yes|yeah|yep|correct|confirm|save|record it|go ahead|do it|ok|okay)\b/i', $r)) {
+            return carlRecordDeposit($db, $user, $got);
+        }
+        if (preg_match('/^(no|nope|wrong|cancel)\b/i', $r)) {
+            carlPendingClear($db, $uid);
+            return ['skill' => 'add_deposit', 'done' => true,
+                    'say' => 'Dropped — nothing was recorded.', 'html' => ''];
+        }
+        return $ask('Shall I record it? Please say yes or no.');
+    }
+
+    carlPendingClear($db, $uid);
+    return carlSkillUnknown($user);
+}
+
+/**
+ * Adds to the deposit held and hands back the receipt.
+ *
+ * Adds rather than replaces, and appends a dated line to deposit_notes so the
+ * history of how the money arrived survives — a receipt that shows only the
+ * latest payment is no use to anybody.
+ */
+function carlRecordDeposit(PDO $db, array $user, array $got): array
+{
+    $uid = (int)$user['id'];
+    carlPendingClear($db, $uid);
+
+    $leadId = (int)$got['lead_id'];
+    $amount = (float)$got['amount'];
+    $total  = (float)$got['held'] + $amount;
+    $url    = BASE_URL . '/modules/crm/view_lead.php?id=' . $leadId;
+    $line   = date('j M Y') . ': ' . carlMoney($amount) . ' received, recorded by '
+            . $user['name'] . ' through ' . CARL_NAME . '.';
+
+    try {
+        $db->prepare(
+            "UPDATE crm_leads
+                SET deposit_amount = COALESCE(deposit_amount, 0) + ?,
+                    deposit_date   = CURDATE(),
+                    deposit_notes  = TRIM(CONCAT(COALESCE(deposit_notes, ''), '\n', ?)),
+                    updated_at     = NOW()
+              WHERE id = ?"
+        )->execute([$amount, $line, $leadId]);
+
+        logActivity('update', 'crm_leads', $leadId,
+            'Additional deposit of ' . number_format($amount, 2) . ' recorded via ' . CARL_NAME
+            . ' by ' . $user['name'] . '. New total: ' . number_format($total, 2));
+    } catch (\Throwable $e) {
+        error_log('carlRecordDeposit: ' . $e->getMessage());
+        return ['skill' => 'add_deposit', 'done' => true,
+                'say'   => 'I could not record that — something went wrong at my end. Nothing was '
+                         . 'saved, so please add it from the lead page.',
+                'html'  => carlLink($url, 'Open ' . $got['lead_name'], 'fa-user')];
+    }
+
+    $h = '<div class="carl-confirm">'
+       . '<div class="r"><span>Customer</span><b>' . e($got['lead_name']) . '</b></div>'
+       . '<div class="r"><span>Paid now</span><b>' . e(carlMoney($amount)) . '</b></div>'
+       . '<div class="r"><span>Total held</span><b>' . e(carlMoney($total)) . '</b></div></div>'
+       . carlLink(BASE_URL . '/modules/crm/deposit_receipt.php?lead_id=' . $leadId,
+                  'Deposit receipt — showing ' . carlMoney($total), 'fa-receipt')
+       . carlLink($url, 'Open ' . $got['lead_name'], 'fa-user');
+
+    return ['skill' => 'add_deposit', 'done' => true,
+            'say'   => 'Recorded. ' . $got['lead_name'] . ' has now paid ' . carlMoney($total)
+                     . ' in total. The deposit receipt is ready and shows the full amount.',
+            'html'  => $h,
+            'go'    => BASE_URL . '/modules/crm/deposit_receipt.php?lead_id=' . $leadId];
+}
+
 // ── document — produce the real paperwork for a named record ─────────────────
 
 /**
