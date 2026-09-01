@@ -38,12 +38,16 @@ try {
                -- ever return one value, so the list is one row per assessment.
                COALESCE(
                    c.chassis_number,
-                   (SELECT c2.chassis_number
+                   -- Only when the plate identifies ONE car. Two vehicles can carry the
+                   -- same registration in the records, and taking the lower id put a
+                   -- confident but wrong chassis on the quote — one that disagreed with
+                   -- what the service booking showed for the very same vehicle. A blank
+                   -- field somebody fills in is honest; a wrong chassis on paperwork is not.
+                   (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(c2.chassis_number) END
                       FROM cars c2
                      WHERE qa.car_id IS NULL
                        AND NULLIF(TRIM(qa.car_registration), '') IS NOT NULL
-                       AND c2.registration_number = qa.car_registration
-                  ORDER BY c2.id LIMIT 1)
+                       AND c2.registration_number = qa.car_registration)
                ) AS chassis_number
         FROM quick_assessments qa
         LEFT JOIN clients cl  ON cl.id  = qa.client_id

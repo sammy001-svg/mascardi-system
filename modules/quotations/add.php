@@ -47,12 +47,16 @@ if ($fromQrId && $_SERVER['REQUEST_METHOD'] === 'GET') {
                            qa.car_make, qa.car_model, qa.car_registration,
                            COALESCE(
                                c.chassis_number,
-                               (SELECT c2.chassis_number
+                               -- Only when the plate identifies ONE car. Two vehicles can carry the
+                               -- same registration in the records, and taking the lower id put a
+                               -- confident but wrong chassis on the quote — one that disagreed with
+                               -- what the service booking showed for the very same vehicle. A blank
+                               -- field somebody fills in is honest; a wrong chassis on paperwork is not.
+                               (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(c2.chassis_number) END
                                   FROM cars c2
                                  WHERE qa.car_id IS NULL
                                    AND NULLIF(TRIM(qa.car_registration), '') IS NOT NULL
-                                   AND c2.registration_number = qa.car_registration
-                              ORDER BY c2.id LIMIT 1)
+                                   AND c2.registration_number = qa.car_registration)
                            ) AS chassis_number
                     FROM quick_assessments qa
                     LEFT JOIN cars c  ON c.id  = qa.car_id
@@ -166,11 +170,13 @@ try {
                        WHERE NULLIF(TRIM(pr.car_chassis), '') IS NOT NULL
                          AND c.chassis_number = pr.car_chassis
                     ORDER BY c.id LIMIT 1),
-                     (SELECT c2.id FROM cars c2
+                     -- The plate only when it identifies ONE car. Chassis above is the
+                     -- unique identifier and can be trusted; a shared plate cannot, and
+                     -- guessing here attaches the quote to the wrong vehicle.
+                     (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(c2.id) END FROM cars c2
                        WHERE NULLIF(TRIM(pr.car_chassis), '') IS NULL
                          AND NULLIF(TRIM(pr.car_registration), '') IS NOT NULL
-                         AND c2.registration_number = pr.car_registration
-                    ORDER BY c2.id LIMIT 1)
+                         AND c2.registration_number = pr.car_registration)
                  ) AS matched_car_id
           FROM parts_requests pr
         ORDER BY pr.id DESC
