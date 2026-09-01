@@ -196,7 +196,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             'seo_default_title'       => trim($_POST['seo_default_title']       ?? ''),
             'seo_default_description' => trim($_POST['seo_default_description'] ?? ''),
             'seo_og_image_url'        => trim($_POST['seo_og_image_url']        ?? ''),
-            'seo_google_verification' => trim($_POST['seo_google_verification'] ?? ''),
+            // Google shows the DNS form (google-site-verification=TOKEN) and the meta
+            // form (just TOKEN) on the same screen, and the two are easy to confuse.
+            // Pasting the DNS form into a meta tag makes Google reject the page, so
+            // the prefix and any stray quotes are stripped here rather than leaving
+            // someone to work out why verification keeps failing.
+            'seo_google_verification' => preg_replace(
+                '/^\s*(?:<meta[^>]*content=)?[\x27"]*(?:google-site-verification[=:])?\s*|[\x27">\s]*$/i',
+                '', (string)($_POST['seo_google_verification'] ?? '')
+            ),
             'seo_ga_id'               => trim($_POST['seo_ga_id']               ?? ''),
             'seo_allow_indexing'      => isset($_POST['seo_allow_indexing']) ? '1' : '0',
         ];

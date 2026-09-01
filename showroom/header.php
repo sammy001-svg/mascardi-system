@@ -35,7 +35,10 @@ $__canonicalUrl    = isset($canonicalUrl) ? $canonicalUrl : (rtrim(BASE_URL, '/'
 
 $__allowIndexing = getSetting('seo_allow_indexing', '1') !== '0';
 $__forceNoIndex  = !empty($noIndex);
-$__googleVerify  = getSetting('seo_google_verification', '');
+// Tolerant of the DNS form being pasted in: a value saved before the settings
+// page started stripping it would otherwise render a meta tag Google rejects.
+$__googleVerify  = preg_replace('/^\s*(?:google-site-verification[=:])?\s*/i', '',
+                                 getSetting('seo_google_verification', ''));
 $__gaId          = getSetting('seo_ga_id', '');
 
 $__navOverlay = !empty($navOverlay);
