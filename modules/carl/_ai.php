@@ -275,11 +275,33 @@ function carlAiRound(string $system, array $msgs, array $tools, int $maxTok = 90
     return ['text' => trim($text), 'calls' => $calls, 'parts' => $blocks];
 }
 
+/**
+ * Gemini's own parts, ready to be sent back.
+ *
+ * A function call with no arguments arrives as args:{}, which json_decode turns
+ * into an empty PHP array — and an empty PHP array re-encodes as [], a JSON list.
+ * Google's schema expects an object there and rejects the whole request:
+ *   "Unknown name args … Proto field is not repeating, cannot start list"
+ * which killed every follow-up question after a no-argument tool was used.
+ */
+function carlGeminiEchoParts(array $parts): array
+{
+    foreach ($parts as $i => $p) {
+        if (!isset($p['functionCall'])) continue;
+        $args = $p['functionCall']['args'] ?? null;
+        if ($args === null || $args === [] || $args === '') {
+            $parts[$i]['functionCall']['args'] = new stdClass();
+        }
+    }
+    return $parts;
+}
+
 /** Records the model's own turn, so the next round sees what it said. */
 function carlAiAppendModelTurn(array &$msgs, array $round): void
 {
     if (carlAiProvider() === 'google') {
-        $msgs[] = ['role' => 'model', 'parts' => $round['parts'] ?: [['text' => $round['text']]]];
+        $parts = $round['parts'] ?: [['text' => $round['text']]];
+        $msgs[] = ['role' => 'model', 'parts' => carlGeminiEchoParts($parts)];
     } else {
         $msgs[] = ['role' => 'assistant', 'content' => $round['parts']];
     }

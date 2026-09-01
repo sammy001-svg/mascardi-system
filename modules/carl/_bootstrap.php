@@ -155,7 +155,9 @@ function carlSkills(): array
             'hidden'   => true,   // works, but is not a capability worth advertising
             'patterns' => ['hallo', 'hello', 'helo', 'hi', 'hey', 'heya', 'yo', 'sup',
                            'greetings', 'howdy', 'hi carl', 'hello carl',
-                           'good morning', 'good afternoon', 'good evening', 'morning',
+                           // Only the greeting forms. A bare 'morning' also sits inside
+                           // "how is business this morning", which was answered with hello.
+                           'good morning', 'good afternoon', 'good evening',
                            // Swahili — this is a Nairobi yard, and people greet in it.
                            'habari', 'jambo', 'sasa', 'mambo', 'asante',
                            'how are you', 'how are you doing', 'how are things',
