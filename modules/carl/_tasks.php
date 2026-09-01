@@ -392,6 +392,182 @@ function carlSkillDeliveries(PDO $db, array $user, string $u): array
     return ['skill' => 'deliveries', 'done' => true, 'say' => $say, 'html' => $h];
 }
 
+// ── add_car — put a vehicle into inventory ──────────────────────────────────
+//
+// The fields asked for are only the four the cars table actually requires, plus
+// the registration, which is what people identify a car by day to day. Price,
+// photographs, website copy and the rest belong on the vehicle page where there
+// is room for them — asking for twenty things in a conversation is how a
+// two-minute job becomes a five-minute one.
+
+/** What the conversation asks for, in order. */
+function carlCarFields(): array
+{
+    return [
+        'make'    => 'What make is it? Toyota, BMW, Mercedes and so on.',
+        'model'   => 'And the model?',
+        'year'    => 'What year?',
+        'chassis' => 'What is the chassis number?',
+        'reg'     => 'And the registration? Say "none" if it has not been plated yet.',
+    ];
+}
+
+function carlSkillAddCar(PDO $db, array $user, string $u): array
+{
+    if (!canWrite('cars')) {
+        return ['skill' => 'add_car', 'done' => true,
+                'say'   => 'Adding a vehicle needs stock rights, which your account does not '
+                         . 'have. A manager can add it, or I can note it against a lead for you.',
+                'html'  => ''];
+    }
+    carlPendingSet($db, (int)$user['id'], 'add_car', [], 'make');
+    return ['skill' => 'add_car', 'done' => false,
+            'say'   => 'Of course. ' . carlCarFields()['make'],
+            'html'  => '<p class="carl-note">Say "cancel" at any point to stop.</p>'];
+}
+
+function carlContinueAddCar(PDO $db, array $user, array $pending, string $r): array
+{
+    $uid  = (int)$user['id'];
+    $got  = $pending['collected'];
+    $step = (string)$pending['awaiting'];
+    $ask  = function (string $say, string $html = '') {
+        return ['skill' => 'add_car', 'done' => false, 'say' => $say, 'html' => $html];
+    };
+
+    if ($step === 'confirm') {
+        if (preg_match('/^(yes|yeah|yep|correct|confirm|save|add it|go ahead|do it|ok|okay)\b/i', $r)) {
+            return carlCreateCar($db, $user, $got);
+        }
+        if (preg_match('/^(no|nope|wrong|cancel)\b/i', $r)) {
+            carlPendingClear($db, $uid);
+            return ['skill' => 'add_car', 'done' => true,
+                    'say' => 'Dropped — nothing was added.', 'html' => ''];
+        }
+        return $ask('Shall I add it? Please say yes or no.');
+    }
+
+    $value = trim($r);
+
+    if ($step === 'year') {
+        // Spoken years arrive as "twenty twenty one" or with stray words around them.
+        if (!preg_match('/\b(19[5-9]\d|20[0-4]\d)\b/', $value, $m)) {
+            return $ask('That does not look like a year. Which year is it, as four digits?');
+        }
+        $value = $m[1];
+    }
+
+    if ($step === 'chassis') {
+        $value = strtoupper(preg_replace('/\s+/', '', $value));
+        if (strlen($value) < 5) {
+            return $ask('That looks too short for a chassis number. Could you give it to me again?');
+        }
+        // Named up front rather than letting the insert fail on the unique key.
+        $c = $db->prepare("SELECT id, make, model, car_type FROM cars WHERE chassis_number = ?");
+        $c->execute([$value]);
+        if ($clash = $c->fetch(PDO::FETCH_ASSOC)) {
+            carlPendingClear($db, $uid);
+            return ['skill' => 'add_car', 'done' => true,
+                    'say'   => 'That chassis number is already on the system — '
+                             . trim($clash['make'] . ' ' . $clash['model'])
+                             . ', held as ' . $clash['car_type'] . '. I have not added a second one.',
+                    'html'  => carlLink(BASE_URL . '/modules/cars/view.php?id=' . (int)$clash['id'],
+                                        'Open the vehicle already on file', 'fa-car')];
+        }
+    }
+
+    if ($step === 'reg') {
+        $value = preg_match('/^(none|no|not yet|n\/a|skip)$/i', $value)
+               ? '' : strtoupper($value);
+    }
+
+    if ($step !== 'reg' && $value === '') {
+        return $ask(carlCarFields()[$step] ?? 'Sorry, could you say that again?');
+    }
+
+    $got[$step] = $value;
+
+    foreach (carlCarFields() as $k => $question) {
+        if (!array_key_exists($k, $got)) {
+            carlPendingSet($db, $uid, 'add_car', $got, $k);
+            return $ask($question);
+        }
+    }
+
+    carlPendingSet($db, $uid, 'add_car', $got, 'confirm');
+    $label = trim($got['year'] . ' ' . $got['make'] . ' ' . $got['model']);
+    $h = '<div class="carl-confirm">'
+       . '<div class="r"><span>Vehicle</span><b>' . e($label) . '</b></div>'
+       . '<div class="r"><span>Chassis</span><b>' . e($got['chassis']) . '</b></div>'
+       . '<div class="r"><span>Registration</span><b>'
+       . e($got['reg'] !== '' ? $got['reg'] : 'not plated yet') . '</b></div>'
+       . '<div class="r"><span>Goes in as</span><b>Inventory, arrived</b></div></div>'
+       . '<div class="carl-chips">'
+       . '<button type="button" class="carl-chip carl-yes" data-ask="yes">Add it</button>'
+       . '<button type="button" class="carl-chip" data-ask="no">Cancel</button></div>';
+
+    return $ask('Let me read that back. ' . $label . ', chassis ' . $got['chassis']
+              . ($got['reg'] !== '' ? ', registration ' . $got['reg'] : ', not yet plated')
+              . '. Shall I add it to inventory?', $h);
+}
+
+/**
+ * Writes the vehicle.
+ *
+ * Goes in as inventory/arrived — ours to sell, on the yard — which is what
+ * "add a car to inventory" means. Anything else about it is edited on the
+ * vehicle page afterwards, and the reply links straight there.
+ */
+function carlCreateCar(PDO $db, array $user, array $got): array
+{
+    $uid = (int)$user['id'];
+    carlPendingClear($db, $uid);
+
+    if (!canWrite('cars')) {
+        return ['skill' => 'add_car', 'done' => true,
+                'say' => 'Adding a vehicle needs stock rights.', 'html' => ''];
+    }
+
+    $label = trim($got['year'] . ' ' . $got['make'] . ' ' . $got['model']);
+    try {
+        $ok = carlGuardedExec($db,
+            "INSERT INTO cars (chassis_number, registration_number, make, model, year,
+                               car_type, status, show_on_website, notes, created_at)
+             VALUES (?,?,?,?,?, 'inventory', 'arrived', 0, ?, NOW())",
+            [
+                $got['chassis'], $got['reg'] !== '' ? $got['reg'] : null,
+                $got['make'], $got['model'], (int)$got['year'],
+                'Added through ' . CARL_NAME . ' by ' . $user['name'] . ' on ' . date('j M Y') . '.',
+            ]
+        );
+        if (!$ok) throw new \RuntimeException('the write was refused');
+        $carId = (int)$db->lastInsertId();
+        logActivity('create', 'cars', $carId,
+            'Vehicle ' . $label . ' (' . $got['chassis'] . ') added via ' . CARL_NAME
+            . ' by ' . $user['name'] . '.');
+    } catch (\Throwable $e) {
+        error_log('carlCreateCar: ' . $e->getMessage());
+        return ['skill' => 'add_car', 'done' => true,
+                'say'   => 'I could not add it — something went wrong at my end. Nothing was '
+                         . 'saved, so please add it from the vehicles page.',
+                'html'  => carlLink(BASE_URL . '/modules/cars/add.php', 'Add a vehicle', 'fa-plus')];
+    }
+
+    $h = '<div class="carl-confirm">'
+       . '<div class="r"><span>Vehicle</span><b>' . e($label) . '</b></div>'
+       . '<div class="r"><span>Chassis</span><b>' . e($got['chassis']) . '</b></div>'
+       . '<div class="r"><span>Status</span><b>In inventory</b></div></div>'
+       . carlLink(BASE_URL . '/modules/cars/view.php?id=' . $carId, 'Open ' . $label, 'fa-car')
+       . carlLink(BASE_URL . '/modules/cars/edit.php?id=' . $carId,
+                  'Add price, photos and description', 'fa-pen')
+       . carlChips(['How many cars do we have', 'What is on the yard']);
+
+    return ['skill' => 'add_car', 'done' => true,
+            'say'   => 'Added. The ' . $label . ' is in inventory. It has no price or photographs '
+                     . 'yet — open it when you are ready to put those on.',
+            'html'  => $h];
+}
+
 // ── add_deposit — record a further payment against a reservation ─────────────
 //
 // A customer rarely pays the whole deposit at once. Until now the only way to

@@ -258,6 +258,16 @@ function carlSkills(): array
                            'erase', 'wipe', 'get rid of', 'clear out', 'purge',
                            'drop the', 'take it off the system', 'take off the system'],
         ],
+        // Ahead of the stock report: "add a car to inventory" scored on 'inventory'
+        // and answered with how many we hold, which is not what was asked.
+        'add_car' => [
+            'label'    => 'Add a vehicle to inventory',
+            'module'   => 'cars',
+            'patterns' => ['add a car', 'add car', 'add a vehicle', 'add vehicle',
+                           'new car', 'new vehicle', 'register a car', 'register a vehicle',
+                           'put a car in', 'bring in a car', 'add to inventory',
+                           'add a car in our inventory', 'add stock', 'log a vehicle'],
+        ],
         'add_deposit' => [
             'label'    => 'Record another deposit',
             'module'   => 'crm',

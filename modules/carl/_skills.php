@@ -1058,6 +1058,7 @@ function carlContinue(PDO $db, array $user, array $pending, string $reply): arra
     if ($skill === 'reserve')       return carlContinueReserve($db, $user, $pending, $r);
     if ($skill === 'document')      return carlContinueDocument($db, $user, $pending, $r);
     if ($skill === 'add_deposit')   return carlContinueAddDeposit($db, $user, $pending, $r);
+    if ($skill === 'add_car')       return carlContinueAddCar($db, $user, $pending, $r);
     if ($skill !== 'add_lead') { carlPendingClear($db, $uid); return carlSkillUnknown($user); }
 
     $got = $pending['collected'];

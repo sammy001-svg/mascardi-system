@@ -182,8 +182,11 @@ function carlTools(array $user): array
     // Tasks hand over to the guided flow rather than writing anything here.
     $tasks = [];
     if (canAccess('crm')) {
-        $tasks = ['add_lead', 'reserve', 'document', 'followup_lead', 'note_lead', 'priority_lead'];
+        $tasks = ['add_lead', 'reserve', 'document', 'followup_lead', 'note_lead',
+                  'priority_lead', 'add_deposit'];
     }
+    if (canWrite('cars')) $tasks[] = 'add_car';
+
     if ($tasks) {
         $t[] = [
             'name' => 'start_task',
@@ -200,7 +203,10 @@ function carlTools(array $user): array
                         'description' => 'add_lead = capture a new lead. reserve = take a deposit and '
                                        . 'hold a vehicle. document = print a proforma, agreement or '
                                        . 'receipt. followup_lead = set a follow-up date. note_lead = '
-                                       . 'add a note. priority_lead = mark hot, lukewarm or cold.',
+                                       . 'add a note. priority_lead = mark hot, lukewarm or cold. '
+                                       . 'add_deposit = record a further payment against a '
+                                       . 'reservation and produce the receipt. '
+                                       . 'add_car = put a new vehicle into inventory.',
                     ],
                 ],
                 'required' => ['task'],
