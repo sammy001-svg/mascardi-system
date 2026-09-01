@@ -48,7 +48,11 @@ function carlLlmModel(): string
         'claude-haiku-4-5',   // fastest, for high chat volume
         'claude-opus-4-8',
     ];
-    return in_array($m, $allowed, true) ? $m : 'claude-opus-5';
+    // Sonnet by default rather than Opus. Carl's answers are grounded in tool
+    // results rather than open reasoning, which is the case where the gap between
+    // the two is smallest and the price difference largest. Set anthropic_model to
+    // claude-opus-5 in Settings if you want the stronger model back.
+    return in_array($m, $allowed, true) ? $m : 'claude-sonnet-5';
 }
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
@@ -67,10 +71,17 @@ function carlLlmRequest(string $system, array $msgs, int $maxTok = 512, array $t
     $key = trim(getSetting('anthropic_api_key', ''));
     if ($key === '') return null;
 
+    // The system prompt and the tool list are byte-identical on every call and
+    // are most of the input. Marking the end of the system prompt as cacheable
+    // means Anthropic reuses it instead of charging full price to re-read it.
     $body = [
         'model'      => carlLlmModel(),
         'max_tokens' => $maxTok,
-        'system'     => $system,
+        'system'     => [[
+            'type'          => 'text',
+            'text'          => $system,
+            'cache_control' => ['type' => 'ephemeral'],
+        ]],
         'messages'   => $msgs,
     ];
     // Only sent when there are tools — the classifier calls have none.
@@ -386,6 +397,10 @@ function carlLlmExplain(string $raw): string
         return 'The Anthropic account is out of credit, so I am answering from your own '
              . 'data rather than in full. Add credits under Plans and Billing and I pick '
              . 'up again straight away.';
+    }
+    if (str_contains($m, 'leaked')) {
+        return 'My API key was published somewhere public and the provider disabled it. '
+             . 'A new key is needed before I can do more than read your own data back.';
     }
     if (str_contains($m, 'authentication') || str_contains($m, 'api key')) {
         return 'My API key is being rejected, so I am answering from your own data only.';

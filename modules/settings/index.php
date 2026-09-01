@@ -43,7 +43,10 @@ $defaults = [
     'seo_ga_id'                => '',
     'seo_allow_indexing'       => '1',
     'anthropic_api_key'        => '',
-    'anthropic_model'          => 'claude-3-5-haiku-20241022',
+    'anthropic_model'          => 'claude-sonnet-5',
+    'ai_provider'              => 'google',
+    'google_api_key'           => '',
+    'google_model'             => 'gemini-2.5-flash',
 ];
 
 $rows     = $db->query("SELECT setting_key, setting_value FROM settings")->fetchAll();
@@ -175,6 +178,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         // when the admin opens settings and saves without touching the field.
         if (!empty($_POST['anthropic_api_key'])) {
             $updates['anthropic_api_key'] = trim($_POST['anthropic_api_key']);
+        }
+
+        // Google, same rule: a blank field means "leave the key alone".
+        if (!empty($_POST['google_api_key'])) {
+            $updates['google_api_key'] = trim($_POST['google_api_key']);
+        }
+        if (isset($_POST['ai_provider'])) {
+            $updates['ai_provider'] = $_POST['ai_provider'] === 'anthropic' ? 'anthropic' : 'google';
+        }
+        if (isset($_POST['google_model'])) {
+            $updates['google_model'] = trim($_POST['google_model']);
         }
 
     } elseif ($activeTab === 'seo') {
@@ -665,6 +679,78 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
 <input type="hidden" name="_tab" value="carl">
 <div class="row g-4">
     <div class="col-lg-7">
+        <div class="card mb-4">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="fa fa-wand-magic-sparkles" style="color:#4285f4"></i>
+                <span>Carl AI — Google AI Studio</span>
+                <?php
+                $gOk   = !empty($settings['google_api_key'] ?? '');
+                $using = ($settings['ai_provider'] ?? 'google') === 'google';
+                ?>
+                <span class="badge bg-<?= $gOk ? ($using ? 'success' : 'secondary') : 'secondary' ?> ms-auto">
+                    <?= $gOk ? ($using ? 'Active' : 'Configured, not in use') : 'Not Configured' ?>
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info py-2 small mb-4">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Carl works fully offline with no key at all — greetings, figures, the pipeline,
+                    the workshop and every task still answer from your own data. A key adds free-form
+                    conversation for questions her vocabulary does not cover. Google AI Studio has a
+                    free tier that is generous enough for a business this size. Get a key at
+                    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Which service should Carl use?</label>
+                    <select name="ai_provider" class="form-select">
+                        <option value="google" <?= $using ? 'selected' : '' ?>>Google AI Studio (Gemini)</option>
+                        <option value="anthropic" <?= $using ? '' : 'selected' ?>>Anthropic (Claude)</option>
+                    </select>
+                    <div class="form-text">
+                        Whichever you choose, Carl falls back to answering from your own data if the
+                        service cannot be reached — she never stops working.
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Google API Key</label>
+                    <div class="input-group">
+                        <span class="input-group-text font-monospace text-muted" style="font-size:11px">AIza…</span>
+                        <input type="password" name="google_api_key" id="googleKeyInput" class="form-control font-monospace"
+                               autocomplete="new-password"
+                               placeholder="<?= $gOk ? '••••••• (unchanged if blank)' : 'Paste your API key here' ?>">
+                        <button type="button" class="btn btn-outline-secondary"
+                                onclick="var f=document.getElementById('googleKeyInput');f.type=f.type==='text'?'password':'text'">
+                            <i class="fa fa-eye"></i>
+                        </button>
+                    </div>
+                    <div class="form-text">Leave blank to keep the current key. Clear it by pasting a single space and saving.</div>
+                </div>
+
+                <div class="mb-0">
+                    <label class="form-label">Gemini Model</label>
+                    <?php $gm = $settings['google_model'] ?? 'gemini-2.5-flash'; ?>
+                    <select name="google_model" class="form-select">
+                        <?php foreach ([
+                            'gemini-2.5-flash'      => 'Gemini 2.5 Flash — fast and cheap (recommended)',
+                            'gemini-2.5-pro'        => 'Gemini 2.5 Pro — stronger reasoning, slower',
+                            'gemini-2.0-flash'      => 'Gemini 2.0 Flash',
+                            'gemini-2.0-flash-lite' => 'Gemini 2.0 Flash Lite — cheapest',
+                            'gemini-1.5-flash'      => 'Gemini 1.5 Flash',
+                            'gemini-1.5-pro'        => 'Gemini 1.5 Pro',
+                        ] as $val => $label): ?>
+                            <option value="<?= $val ?>" <?= $gm === $val ? 'selected' : '' ?>><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="form-text">
+                        Flash handles Carl's work well: her answers are grounded in figures the system
+                        looks up, not open reasoning, so the stronger model buys little here.
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header d-flex align-items-center gap-2">
                 <i class="fa fa-wand-magic-sparkles" style="background:linear-gradient(135deg,#a855f7,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent"></i>

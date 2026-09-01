@@ -283,8 +283,8 @@ $hasAgent  = is_file(__DIR__ . '/modules/carl/_agent.php');
 </table>
 <p class="m" style="margin:12px 0 0">
     Without a key Carl still answers from your own data, but only in her fixed phrasings.
-    <a href="<?= BASE_URL ?>/modules/carl/test.php" style="color:#c084fc">Run the connection test</a>
-    to see exactly what the API says.
+    If she is answering plainly when you expect more, the reason is recorded and shown
+    to admins at the top of her panel.
 </p>
 </div>
 

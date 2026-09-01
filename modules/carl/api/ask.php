@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         'history'  => $history,
         'greeting' => $greeting,
         'pending'  => carlPendingGet($db, $uid) !== null,
-        'llm'      => carlLlmAvailable(),
+        'llm'      => carlAiAvailable(),
         // Only to those who can do something about it. A salesperson seeing
         // "the account is out of credit" learns nothing they can act on.
         'notice'   => (isSuperAdmin() || authRole() === 'admin')
@@ -137,33 +137,42 @@ if ($pending) {
     exit;
 }
 
-// ── Step 2: let Carl actually converse ───────────────────────────────────────
-// Claude answers with the tools in _agent.php doing the looking-up, so the
-// prose is hers but every figure in it came out of the database. When no key
-// is configured, or the call fails, we fall through to the offline matcher —
-// Carl still works without the API, she is simply more literal.
+// ── Step 2: decide who answers ───────────────────────────────────────────────
+//
+// Every message used to go to the API first, including "hello" and "how many
+// cars do we have" — questions the offline matcher answers correctly on its own,
+// and which no model needs to be paid for. At Opus prices that is most of the
+// bill spent on the questions that needed it least, and it is a large part of
+// how the credit balance ran down.
+//
+// So the matcher goes first now. When it recognises the question with
+// confidence, Carl answers from the database for nothing. The API is kept for
+// what it is genuinely better at: phrasing the matcher does not cover, and
+// follow-ups that only make sense against what was just said.
+$skill   = carlMatchSkill($msg);
 $history = carlRecentHistory($db, $uid, 8);
-$res = carlConverse($db, $me, $msg, $history);
-if ($res !== null) {
-    carlRemember($db, $uid, 'carl', $res['say'], $res['skill'] ?? null, $res['html'] ?? '');
-    echo json_encode([
-        'ok'    => true,
-        'say'   => carlSay($res['say']),
-        'html'  => $res['html'] ?? '',
-        'skill' => $res['skill'] ?? null,
-        'done'  => $res['done'] ?? true,
-        'go'    => $res['go'] ?? null,
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
+
+if (carlNeedsModel($msg, $skill, $history)) {
+    // Claude answers, with the tools in _agent.php doing the looking-up, so the
+    // prose is hers but every figure in it came out of the database. If no key is
+    // configured, or the call fails, we fall through — Carl still works without
+    // the API, she is simply more literal.
+    $res = carlConverse($db, $me, $msg, $history);
+    if ($res !== null) {
+        carlRemember($db, $uid, 'carl', $res['say'], $res['skill'] ?? null, $res['html'] ?? '');
+        echo json_encode([
+            'ok'    => true,
+            'say'   => carlSay($res['say']),
+            'html'  => $res['html'] ?? '',
+            'skill' => $res['skill'] ?? null,
+            'done'  => $res['done'] ?? true,
+            'go'    => $res['go'] ?? null,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 }
 
-// ── Step 3: offline pattern-matcher — the fallback ───────────────────────────
-$skill = carlMatchSkill($msg);
-
-// Reaching here means the API is unavailable or the call failed, so asking
-// Claude to classify would fail for the same reason. Carl answers offline.
-
-// ── Step 4: run the matched skill ────────────────────────────────────────────
+// ── Step 3: answer from the database ─────────────────────────────────────────
 if ($skill !== null) {
     // A skill matched — run the deterministic, DB-backed handler.
     // No rephrasing step: the skill answers are already well-written and

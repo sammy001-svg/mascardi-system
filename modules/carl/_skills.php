@@ -18,6 +18,7 @@ if (!function_exists('carlRun')) {
 
 require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/_llm.php';
+require_once __DIR__ . '/_ai.php';
 require_once __DIR__ . '/_tasks.php';
 
 /** Dispatches to a handler, refusing anything this user may not see. */
@@ -93,7 +94,7 @@ function carlSkillUnknown(array $user, ?PDO $db = null, string $utterance = '', 
         return carlSkillChitchat($db ?: getDB(), $user, $utterance);
     }
 
-    if ($db !== null && $utterance !== '' && carlLlmAvailable()) {
+    if ($db !== null && $utterance !== '' && carlLegacyFreeform()) {
         $figures = carlFigures($db);
         $res     = carlLlmFreeform($utterance, $figures, $user, $history);
         if (!empty($res['say'])) return $res;
@@ -116,7 +117,7 @@ function carlSkillChitchat(PDO $db, array $user, string $u): array
     $t         = strtolower(trim($u));
 
     // If LLM is available, let Claude generate a warm, natural response.
-    if (carlLlmAvailable()) {
+    if (carlLegacyFreeform()) {
         $figures = carlFigures($db);
         $res     = carlLlmFreeform($u, $figures, $user);
         if (!empty($res['say'])) return $res;
@@ -1194,7 +1195,7 @@ function carlGreetingFor(PDO $db, array $user): ?array
 
     // Try the LLM first — it produces a varied, warm greeting each day.
     $say = '';
-    if (carlLlmAvailable()) {
+    if (carlLegacyFreeform()) {
         $say = carlLlmGreeting($name, $partOfDay, $bits);
     }
 

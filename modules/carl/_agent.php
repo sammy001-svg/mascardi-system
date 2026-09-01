@@ -20,7 +20,7 @@
  * nobody meant to create.
  */
 
-if (!function_exists('carlLlmAvailable')) return;
+require_once __DIR__ . '/_ai.php';
 
 // The lead detail helpers are loaded lazily inside carlSkillLeads(); the tools
 // below reach for them directly, so they have to be here before any call.
@@ -59,8 +59,20 @@ function carlTools(array $user): array
                     'filter' => [
                         'type' => 'string',
                         'enum' => ['all', 'overdue', 'unassigned', 'nofollow', 'new', 'reserved', 'today', 'week', 'month'],
-                        'description' => 'overdue = past their follow-up date. nofollow = no follow-up set. '
-                                       . 'unassigned = nobody owns it.',
+                        // Spelled out in the words people actually use. Asked "which leads
+                        // have gone quiet", the model reached for nofollow — a rare
+                        // bookkeeping gap — when overdue was plainly meant.
+                        'description' =>
+                            'overdue: past their follow-up date. These are the ones people mean by '
+                          . '"gone quiet", "gone cold", "neglected", "slipping", "need chasing" '
+                          . 'or "should have been called by now". This is almost always the right '
+                          . 'filter when asked which leads need attention. '
+                          . 'nofollow: no follow-up date was ever set — a bookkeeping gap, not a '
+                          . 'neglected customer. Rare; only use it if asked specifically about '
+                          . 'missing or unset follow-up dates. '
+                          . 'unassigned: nobody owns the lead. '
+                          . 'new: recently created. reserved: has paid a deposit. '
+                          . 'today/week/month: created in that period. all: everything open.',
                     ],
                     'limit' => ['type' => 'integer', 'description' => 'How many to return, 1 to 25. Default 8.'],
                 ],
@@ -98,6 +110,55 @@ function carlTools(array $user): array
                     'search' => ['type' => 'string', 'description' => 'Optional make, model or registration to filter by.'],
                     'limit'  => ['type' => 'integer', 'description' => 'How many, 1 to 25. Default 10.'],
                 ],
+            ],
+        ];
+    }
+
+    if (canAccess('jobs')) {
+        $t[] = [
+            'name' => 'workshop_jobs',
+            'description' => 'Job cards in the workshop — which vehicle, which mechanic, priority, '
+                           . 'how long it has been open, and what the work is. Use for anything '
+                           . 'about the workshop, repairs, mechanics, or what is holding a car up.',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'filter' => [
+                        'type' => 'string',
+                        'enum' => ['open', 'unassigned', 'stalled', 'urgent', 'completed', 'all'],
+                        'description' => 'open = not finished. unassigned = no mechanic on it. '
+                                       . 'stalled = open more than 7 days. urgent = high priority.',
+                    ],
+                    'limit' => ['type' => 'integer', 'description' => 'How many, 1 to 25. Default 10.'],
+                ],
+                'required' => ['filter'],
+            ],
+        ];
+        $t[] = [
+            'name' => 'mechanic_workload',
+            'description' => 'How many open job cards each mechanic is carrying, so you can say who '
+                           . 'is busy, who is free, and whether work is fairly spread.',
+            'input_schema' => ['type' => 'object', 'properties' => (object)[]],
+        ];
+    }
+
+    if (canAccess('parts_requests')) {
+        $t[] = [
+            'name' => 'parts_requests',
+            'description' => 'Parts and quote requests raised off assessments or job cards, with who '
+                           . 'raised them and whether they are still waiting for approval. Use when '
+                           . 'asked what is holding up a repair, or what needs approving.',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'filter' => [
+                        'type' => 'string',
+                        'enum' => ['pending', 'approved', 'all'],
+                        'description' => 'pending = still waiting on someone.',
+                    ],
+                    'limit' => ['type' => 'integer', 'description' => 'How many, 1 to 25. Default 10.'],
+                ],
+                'required' => ['filter'],
             ],
         ];
     }
@@ -290,6 +351,142 @@ function carlToolRun(PDO $db, array $user, string $name, array $in): array
             return ['text' => implode("\n", $lines), 'html' => '', 'handoff' => null];
         }
 
+        case 'workshop_jobs': {
+            if (!canAccess('jobs')) return ['text' => 'Not permitted for this account.'] + $none;
+            $limit  = max(1, min(25, (int)($in['limit'] ?? 10)));
+            $filter = (string)($in['filter'] ?? 'open');
+            // Dates are compared in SQL: PHP runs UTC here and MySQL runs EAT, so
+            // "open more than seven days" worked out differently on each side.
+            $where = match ($filter) {
+                'unassigned' => "j.status NOT IN ('completed','cancelled') AND (j.mechanic_id IS NULL OR j.mechanic_id = 0)",
+                'stalled'    => "j.status NOT IN ('completed','cancelled') AND j.created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)",
+                'urgent'     => "j.status NOT IN ('completed','cancelled') AND j.priority IN ('high','urgent')",
+                'completed'  => "j.status = 'completed'",
+                'all'        => "1=1",
+                default      => "j.status NOT IN ('completed','cancelled')",
+            };
+            try {
+                $rows = $db->query(
+                    "SELECT j.job_number, j.status, j.priority, j.description, j.created_at,
+                            DATEDIFF(NOW(), j.created_at) AS days_open,
+                            m.name AS mechanic,
+                            c.make, c.model, c.year, c.registration_number
+                       FROM workshop_jobs j
+                  LEFT JOIN mechanics m ON m.id = j.mechanic_id
+                  LEFT JOIN cars c      ON c.id = j.car_id
+                      WHERE $where
+                   ORDER BY j.created_at ASC
+                      LIMIT $limit"
+                )->fetchAll(PDO::FETCH_ASSOC);
+                $total = (int)$db->query(
+                    "SELECT COUNT(*) FROM workshop_jobs j WHERE $where"
+                )->fetchColumn();
+            } catch (\Throwable $e) {
+                error_log('carlToolRun workshop_jobs: ' . $e->getMessage());
+                return ['text' => 'The workshop could not be read.', 'html' => '', 'handoff' => null];
+            }
+            if (!$rows) {
+                return ['text' => 'No job cards match that. Total in this category: 0.',
+                        'html' => '', 'handoff' => null];
+            }
+            $lines = ['Total in this category: ' . $total . '. Showing ' . count($rows) . ':'];
+            $cards = '';
+            foreach ($rows as $r) {
+                $car = trim(($r['year'] ?? '') . ' ' . ($r['make'] ?? '') . ' ' . ($r['model'] ?? ''));
+                $lines[] = '- ' . $r['job_number']
+                    . ' | ' . ($car !== '' ? $car : 'no vehicle')
+                    . ' | ' . ($r['registration_number'] ?: 'no plate')
+                    . ' | ' . ($r['mechanic'] ?: 'no mechanic assigned')
+                    . ' | ' . ($r['status'] ?: 'open')
+                    . ' | ' . (int)$r['days_open'] . ' days open'
+                    . ' | ' . (trim((string)$r['description']) !== ''
+                                ? substr($r['description'], 0, 60) : 'no description');
+                $cards .= '<a class="carl-rec" href="' . BASE_URL . '/modules/jobs/view.php?id=0">'
+                        . '<b>' . e($r['job_number']) . '</b>'
+                        . '<span>' . e($car !== '' ? $car : 'no vehicle') . '</span>'
+                        . '<em>' . e(($r['mechanic'] ?: 'unassigned') . ' · '
+                                  . (int)$r['days_open'] . ' days open') . '</em></a>';
+            }
+            return ['text' => implode("\n", $lines),
+                    'html' => '<div class="carl-recs">' . $cards . '</div>', 'handoff' => null];
+        }
+
+        case 'mechanic_workload': {
+            if (!canAccess('jobs')) return ['text' => 'Not permitted for this account.'] + $none;
+            try {
+                $rows = $db->query(
+                    "SELECT m.name, m.specialization,
+                            SUM(CASE WHEN j.status NOT IN ('completed','cancelled')
+                                     THEN 1 ELSE 0 END) AS open_jobs
+                       FROM mechanics m
+                  LEFT JOIN workshop_jobs j ON j.mechanic_id = m.id
+                      WHERE m.status = 'active'
+                   GROUP BY m.id, m.name, m.specialization
+                   ORDER BY open_jobs DESC, m.name"
+                )->fetchAll(PDO::FETCH_ASSOC);
+            } catch (\Throwable $e) {
+                error_log('carlToolRun mechanic_workload: ' . $e->getMessage());
+                return ['text' => 'The mechanic list could not be read.', 'html' => '', 'handoff' => null];
+            }
+            if (!$rows) return ['text' => 'No active mechanics on file.', 'html' => '', 'handoff' => null];
+
+            $lines = [];
+            foreach ($rows as $r) {
+                $lines[] = '- ' . $r['name']
+                    . ' | ' . ((int)$r['open_jobs']) . ' open job cards'
+                    . ' | ' . ($r['specialization'] ?: 'general');
+            }
+            $unassigned = (int)$db->query(
+                "SELECT COUNT(*) FROM workshop_jobs
+                  WHERE status NOT IN ('completed','cancelled')
+                    AND (mechanic_id IS NULL OR mechanic_id = 0)"
+            )->fetchColumn();
+            if ($unassigned > 0) {
+                $lines[] = '- Nobody assigned: ' . $unassigned . ' open job cards have no mechanic.';
+            }
+            return ['text' => implode("\n", $lines), 'html' => '', 'handoff' => null];
+        }
+
+        case 'parts_requests': {
+            if (!canAccess('parts_requests')) return ['text' => 'Not permitted for this account.'] + $none;
+            $limit  = max(1, min(25, (int)($in['limit'] ?? 10)));
+            $filter = (string)($in['filter'] ?? 'pending');
+            $where  = match ($filter) {
+                'approved' => "pr.status = 'approved'",
+                'all'      => "1=1",
+                default    => "pr.status NOT IN ('approved','rejected','cancelled','completed')",
+            };
+            try {
+                $rows = $db->query(
+                    "SELECT pr.request_number, pr.status, pr.created_at, pr.notes,
+                            DATEDIFF(NOW(), pr.created_at) AS days_waiting,
+                            pr.client_name, pr.car_make, pr.car_model, pr.car_registration,
+                            m.name AS mechanic
+                       FROM parts_requests pr
+                  LEFT JOIN mechanics m ON m.id = pr.mechanic_id
+                      WHERE $where
+                   ORDER BY pr.created_at ASC
+                      LIMIT $limit"
+                )->fetchAll(PDO::FETCH_ASSOC);
+                $total = (int)$db->query("SELECT COUNT(*) FROM parts_requests pr WHERE $where")->fetchColumn();
+            } catch (\Throwable $e) {
+                error_log('carlToolRun parts_requests: ' . $e->getMessage());
+                return ['text' => 'The parts requests could not be read.', 'html' => '', 'handoff' => null];
+            }
+            if (!$rows) return ['text' => 'No parts requests match that. Total: 0.', 'html' => '', 'handoff' => null];
+
+            $lines = ['Total in this category: ' . $total . '. Showing ' . count($rows) . ':'];
+            foreach ($rows as $r) {
+                $lines[] = '- ' . $r['request_number']
+                    . ' | ' . ($r['client_name'] ?: 'no client')
+                    . ' | ' . trim(($r['car_make'] ?? '') . ' ' . ($r['car_model'] ?? ''))
+                    . ' | ' . ($r['mechanic'] ?: 'no mechanic')
+                    . ' | ' . ($r['status'] ?: 'pending')
+                    . ' | waiting ' . (int)$r['days_waiting'] . ' days';
+            }
+            return ['text' => implode("\n", $lines), 'html' => '', 'handoff' => null];
+        }
+
         case 'start_task': {
             $task = (string)($in['task'] ?? '');
             $ok   = ['add_lead', 'reserve', 'document', 'followup_lead', 'note_lead', 'priority_lead'];
@@ -314,7 +511,7 @@ function carlToolRun(PDO $db, array $user, string $name, array $in): array
  */
 function carlConverse(PDO $db, array $user, string $msg, array $history = []): ?array
 {
-    if (!carlLlmAvailable()) return null;
+    if (!carlAiAvailable()) return null;
 
     $tools = carlTools($user);
     $now   = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
@@ -341,46 +538,39 @@ function carlConverse(PDO $db, array $user, string $msg, array $history = []): ?
         . "- If you truly cannot help, say what you can do instead — briefly, in a sentence.";
 
     // Recent turns, so follow-up questions such as "and last month?" make sense.
-    $msgs = [];
-    foreach (array_slice($history, -8) as $h) {
-        $role = ($h['role'] ?? '') === 'user' ? 'user' : 'assistant';
-        $text = trim((string)($h['message'] ?? $h['text'] ?? ''));
-        if ($text !== '') $msgs[] = ['role' => $role, 'content' => $text];
-    }
-    $msgs[] = ['role' => 'user', 'content' => $msg];
-    $msgs   = carlLlmDedupeRoles($msgs);
+    // Built by the provider layer, because Anthropic and Google disagree about
+    // both the role names and the shape of a message.
+    $msgs = carlAiSeed($history, $msg);
 
     $html    = '';
     $handoff = null;
 
     // Four rounds is ample: look something up, maybe look up one more thing, answer.
-    for ($round = 0; $round < 4; $round++) {
-        $resp = carlLlmRequest($system, $msgs, 900, $tools);
-        if (!$resp) return null;                       // fall back to the offline matcher
+    $round = null;
+    for ($i = 0; $i < 4; $i++) {
+        $round = carlAiRound($system, $msgs, $tools, 900);
+        if ($round === null) return null;          // fall back to the offline matcher
 
-        $blocks = $resp['content'] ?? [];
-        $calls  = array_values(array_filter($blocks, fn($b) => ($b['type'] ?? '') === 'tool_use'));
-
-        if (!$calls) {
-            $say = carlLlmText($resp);
+        if (!$round['calls']) {
+            $say = $round['text'];
             if ($say === '') return null;
             return ['skill' => 'chat', 'done' => true, 'say' => $say, 'html' => $html];
         }
 
         // Run every tool it asked for, and hand the results straight back.
-        $msgs[]  = ['role' => 'assistant', 'content' => $blocks];
+        carlAiAppendModelTurn($msgs, $round);
         $results = [];
-        foreach ($calls as $c) {
+        foreach ($round['calls'] as $c) {
             $out = carlToolRun($db, $user, (string)$c['name'], (array)($c['input'] ?? []));
             if ($out['html'] !== '') $html .= $out['html'];
             if (!empty($out['handoff'])) $handoff = $out['handoff'];
             $results[] = [
-                'type'        => 'tool_result',
-                'tool_use_id' => $c['id'],
-                'content'     => $out['text'] !== '' ? $out['text'] : 'No data.',
+                'id'   => $c['id'],
+                'name' => $c['name'],
+                'text' => $out['text'] !== '' ? $out['text'] : 'No data.',
             ];
         }
-        $msgs[] = ['role' => 'user', 'content' => $results];
+        carlAiAppendToolResults($msgs, $results);
 
         // A task takes over the conversation — let the guided flow ask its first
         // question rather than having the model improvise one.
@@ -392,6 +582,6 @@ function carlConverse(PDO $db, array $user, string $msg, array $history = []): ?
     }
 
     // Ran out of rounds — answer with whatever it has rather than saying nothing.
-    $say = carlLlmText($resp ?? null);
+    $say = $round['text'] ?? '';
     return $say !== '' ? ['skill' => 'chat', 'done' => true, 'say' => $say, 'html' => $html] : null;
 }

@@ -494,4 +494,61 @@ function carlFigures(PDO $db): array
     return array_merge($now, ['prev' => $prev]);
 }
 
+
+/**
+ * Is this a message the model should handle, or can the database answer it?
+ *
+ * Every API call costs money, and the matcher answers the forty phrasings people
+ * actually use — greetings, stock, pipeline, revenue, visitors, tasks — correctly
+ * and instantly. Paying Opus to say "there are five vehicles available" is money
+ * spent on the questions that needed it least.
+ *
+ * The model earns its keep in two places, and only these:
+ *
+ *   1. Nothing matched. This is the case that used to produce "I did not catch
+ *      that", and it is exactly where a conversation is worth paying for.
+ *   2. The message only makes sense against the previous turn — "and last
+ *      month?", "what about theirs?", "why?". The matcher reads each message
+ *      alone, so it cannot follow those, and answering them from a keyword would
+ *      be worse than not answering.
+ */
+function carlNeedsModel(string $msg, ?string $skill, array $history = []): bool
+{
+    // Nothing recognised — this is what the model is for.
+    if ($skill === null) return true;
+
+    $t = strtolower(trim($msg));
+
+    // A reply that leans on what was just said. Only meaningful when there IS a
+    // previous turn; the same words opening a conversation are just a question.
+    if ($history) {
+        if (preg_match('/^(and|so|then|but|what about|how about|why|why not|really|are you sure)\b/', $t)) {
+            return true;
+        }
+        // Pronouns with no noun of their own: "show me theirs", "is it ready".
+        if (preg_match('/\b(them|those|theirs|that one|the same|it)\b/', $t)
+            && str_word_count($t) <= 8) {
+            return true;
+        }
+    }
+
+    // Asking for judgement rather than a figure. "Is it worth chasing the ones
+    // that went quiet" matches the pipeline skill, but a count of cold leads is
+    // not an answer to it — the question is what to DO, and that is reasoning,
+    // which is the one thing a lookup table cannot fake.
+    if (preg_match('/\b(should i|should we|worth|do you think|what do you reckon|reckon|'
+                 . 'recommend|advise|advice on|your view|opinion|better to|rather than|'
+                 . 'compare|versus|vs\.?|instead of|how do i|what would you)\b/', $t)) {
+        return true;
+    }
+
+    // Long, discursive questions carry more than the matched keyword — "how many
+    // leads went cold and who was meant to be calling them" is not answered by
+    // the pipeline report alone.
+    if (str_word_count($t) >= 12) return true;
+
+    // Everything else the matcher recognised, it can answer for nothing.
+    return false;
+}
+
 } // function_exists('carlMigrate')
