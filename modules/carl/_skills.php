@@ -645,6 +645,12 @@ function carlFindLead(PDO $db, string $hint): ?array
         $like = '%' . $hint . '%';
         $st->execute([$like, $like, $like]);
         $row = $st->fetch(PDO::FETCH_ASSOC);
+        // Whoever we just found becomes the subject, so the next request can say
+        // "him" instead of naming them again.
+        if ($row && function_exists('carlContextSet')) {
+            $uid = (int)(authUser()['id'] ?? 0);
+            if ($uid) carlContextSet($db, $uid, 'lead', (int)$row['id'], (string)$row['name']);
+        }
         return $row ?: null;
     } catch (\Throwable $_) { return null; }
 }
@@ -777,7 +783,19 @@ function carlContinuePriorityLead(PDO $db, array $user, array $pending, string $
     $awaiting = $pending['awaiting'];
 
     if ($awaiting === 'lead_name') {
-        $lead = carlFindLead($db, $reply);
+        // The subject already under discussion, when the reply refers back to it —
+        // otherwise "yes" is searched for as though somebody were called that.
+        $lead = null;
+        if (function_exists('carlMeansTheSame') && carlMeansTheSame($reply)) {
+            $ctx = carlContextGet($db, $uid, 'lead');
+            if ($ctx) {
+                $cq = $db->prepare("SELECT id, name, phone, stage, assigned_to, follow_up_date
+                                      FROM crm_leads WHERE id = ?");
+                $cq->execute([$ctx['id']]);
+                $lead = $cq->fetch(PDO::FETCH_ASSOC) ?: null;
+            }
+        }
+        if (!$lead) $lead = carlFindLead($db, $reply);
         if (!$lead) {
             return ['skill' => 'priority_lead', 'done' => false,
                     'say'   => 'I could not find a lead matching "' . $reply . '". Please give me their name or phone number, or say "cancel".',
@@ -849,7 +867,19 @@ function carlContinueFollowupLead(PDO $db, array $user, array $pending, string $
     $awaiting = $pending['awaiting'];
 
     if ($awaiting === 'lead_name') {
-        $lead = carlFindLead($db, $reply);
+        // The subject already under discussion, when the reply refers back to it —
+        // otherwise "yes" is searched for as though somebody were called that.
+        $lead = null;
+        if (function_exists('carlMeansTheSame') && carlMeansTheSame($reply)) {
+            $ctx = carlContextGet($db, $uid, 'lead');
+            if ($ctx) {
+                $cq = $db->prepare("SELECT id, name, phone, stage, assigned_to, follow_up_date
+                                      FROM crm_leads WHERE id = ?");
+                $cq->execute([$ctx['id']]);
+                $lead = $cq->fetch(PDO::FETCH_ASSOC) ?: null;
+            }
+        }
+        if (!$lead) $lead = carlFindLead($db, $reply);
         if (!$lead) {
             return ['skill' => 'followup_lead', 'done' => false,
                     'say'   => 'I could not find a lead matching "' . $reply . '". Please give me their name or phone number, or say "cancel".',
@@ -917,7 +947,19 @@ function carlContinueNoteLead(PDO $db, array $user, array $pending, string $repl
     $awaiting = $pending['awaiting'];
 
     if ($awaiting === 'lead_name') {
-        $lead = carlFindLead($db, $reply);
+        // The subject already under discussion, when the reply refers back to it —
+        // otherwise "yes" is searched for as though somebody were called that.
+        $lead = null;
+        if (function_exists('carlMeansTheSame') && carlMeansTheSame($reply)) {
+            $ctx = carlContextGet($db, $uid, 'lead');
+            if ($ctx) {
+                $cq = $db->prepare("SELECT id, name, phone, stage, assigned_to, follow_up_date
+                                      FROM crm_leads WHERE id = ?");
+                $cq->execute([$ctx['id']]);
+                $lead = $cq->fetch(PDO::FETCH_ASSOC) ?: null;
+            }
+        }
+        if (!$lead) $lead = carlFindLead($db, $reply);
         if (!$lead) {
             return ['skill' => 'note_lead', 'done' => false,
                     'say'   => 'I could not find a lead matching "' . $reply . '". Please give me their name or phone number, or say "cancel".',

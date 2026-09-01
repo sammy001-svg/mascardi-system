@@ -72,10 +72,14 @@ function carlParseMoney(string $s): ?float
 
 function carlSkillReserve(PDO $db, array $user, string $u): array
 {
+    $who = carlContextGet($db, (int)$user['id'], 'lead');
     carlPendingSet($db, (int)$user['id'], 'reserve', [], 'lead_name');
     return ['skill' => 'reserve', 'done' => false,
-            'say'   => 'I can start that. Which customer is the reservation for? '
-                     . 'Give me their name or their phone number.',
+            'say'   => $who
+                ? 'I can start that. Is the reservation for ' . $who['label']
+                  . '? Say yes, or give me another name.'
+                : 'I can start that. Which customer is the reservation for? '
+                  . 'Give me their name or their phone number.',
             'html'  => '<p class="carl-note">Say "cancel" at any point to stop.</p>'];
 }
 
@@ -90,7 +94,19 @@ function carlContinueReserve(PDO $db, array $user, array $pending, string $r): a
 
     // 1 — who is it for
     if ($step === 'lead_name') {
-        $lead = carlFindLead($db, $r);
+        // "yes", "him", "the same" — take the subject we offered rather than
+        // searching for a customer literally called "yes".
+        $lead = null;
+        if (carlMeansTheSame($r)) {
+            $ctx = carlContextGet($db, $uid, 'lead');
+            if ($ctx) {
+                $q = $db->prepare("SELECT id, name, phone, stage, assigned_to, follow_up_date
+                                      FROM crm_leads WHERE id = ?");
+                $q->execute([$ctx['id']]);
+                $lead = $q->fetch(PDO::FETCH_ASSOC) ?: null;
+            }
+        }
+        if (!$lead) $lead = carlFindLead($db, $r);
         if (!$lead) {
             return $ask('I could not find a lead by that name. Try the surname on its own, '
                       . 'or the phone number.');
@@ -578,9 +594,14 @@ function carlCreateCar(PDO $db, array $user, array $got): array
 
 function carlSkillAddDeposit(PDO $db, array $user, string $u): array
 {
+    // If we were just looking at somebody, assume it is them and let a bare
+    // "yes" carry it. Naming them again is the step people find tiresome.
+    $who = carlContextGet($db, (int)$user['id'], 'lead');
     carlPendingSet($db, (int)$user['id'], 'add_deposit', [], 'lead_name');
     return ['skill' => 'add_deposit', 'done' => false,
-            'say'   => 'Certainly. Which customer has paid? Give me their name or phone number.',
+            'say'   => $who
+                ? 'Certainly. Is this for ' . $who['label'] . '? Say yes, or give me another name.'
+                : 'Certainly. Which customer has paid? Give me their name or phone number.',
             'html'  => '<p class="carl-note">Say "cancel" at any point to stop.</p>'];
 }
 
@@ -594,7 +615,19 @@ function carlContinueAddDeposit(PDO $db, array $user, array $pending, string $r)
     };
 
     if ($step === 'lead_name') {
-        $lead = carlFindLead($db, $r);
+        // "yes", "him", "the same" — take the subject we offered rather than
+        // searching for a customer literally called "yes".
+        $lead = null;
+        if (carlMeansTheSame($r)) {
+            $ctx = carlContextGet($db, $uid, 'lead');
+            if ($ctx) {
+                $q = $db->prepare("SELECT id, name, phone, stage, assigned_to, follow_up_date
+                                      FROM crm_leads WHERE id = ?");
+                $q->execute([$ctx['id']]);
+                $lead = $q->fetch(PDO::FETCH_ASSOC) ?: null;
+            }
+        }
+        if (!$lead) $lead = carlFindLead($db, $r);
         if (!$lead) {
             return $ask('I could not find that customer. Try the surname on its own, '
                       . 'or the phone number.');

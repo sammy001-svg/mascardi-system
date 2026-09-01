@@ -122,7 +122,21 @@ if (mb_strlen($msg) > 500) $msg = mb_substr($msg, 0, 500);
 carlRemember($db, $uid, 'user', $msg);
 
 // ── Step 1: continue a multi-step task already in progress ────────────────────
+//
+// Unless the person has plainly moved on. A half-finished task used to swallow
+// every later message as though it were an answer, so asking for something else
+// mid-way was met with "I did not catch an amount there" over and over, with no
+// way out but the word "cancel" — which nobody thinks to say.
 $pending = carlPendingGet($db, $uid);
+if ($pending) {
+    $switch = carlMatchSkill($msg);
+    if ($switch !== null
+        && $switch !== ($pending['skill'] ?? '')
+        && (in_array($switch, carlDoingSkills(), true) || $switch === 'no_delete')) {
+        carlPendingClear($db, $uid);
+        $pending = null;
+    }
+}
 if ($pending) {
     $res = carlContinue($db, $me, $pending, $msg);
     carlRemember($db, $uid, 'carl', $res['say'], $res['skill'] ?? null, $res['html'] ?? '');

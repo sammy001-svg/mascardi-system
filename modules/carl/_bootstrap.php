@@ -33,7 +33,8 @@
 
 if (!function_exists('carlMigrate')) {
 
-if (!defined('CARL_SCHEMA_VERSION')) define('CARL_SCHEMA_VERSION', '1');
+// Bumped to 2 so carl_context is created on installs that already ran version 1.
+if (!defined('CARL_SCHEMA_VERSION')) define('CARL_SCHEMA_VERSION', '2');
 
 /** Her name, in one place, in case the company ever renames her. */
 if (!defined('CARL_NAME')) define('CARL_NAME', 'Carl');
@@ -68,6 +69,16 @@ function carlMigrate(PDO $db, bool $force = false): void
 
         // A task in progress — Carl asking for the parts she still needs before
         // she can act. Kept server-side so a refresh does not lose half a lead.
+        // The record under discussion, so a task does not restart from "which one?"
+        "CREATE TABLE IF NOT EXISTS carl_context (
+            user_id INT NOT NULL,
+            kind VARCHAR(20) NOT NULL,
+            record_id INT NOT NULL,
+            label VARCHAR(150) NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, kind)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         "CREATE TABLE IF NOT EXISTS carl_pending (
             user_id INT NOT NULL PRIMARY KEY,
             skill VARCHAR(40) NOT NULL,
@@ -708,6 +719,77 @@ function carlRefuseDeletion(string $what = 'that'): array
                  . 'instead, if that would do.',
         'html'  => '',
     ];
+}
+
+// ── What we were just talking about ──────────────────────────────────────────
+//
+// Carl held no idea WHICH record was under discussion. Look up John Mwangi, then
+// ask to add a note, and she opened with "which lead?" — the customer already on
+// screen. Every task restarted from nothing, so a two-step job took four, and
+// "set his follow-up to Friday" could not work at all.
+//
+// One row per person, holding the last thing of each kind they touched. Kept
+// deliberately small: what it was, which record, and when. Anything older than
+// the window below is ignored rather than deleted, so yesterday's customer never
+// resurfaces as today's assumption.
+
+/** How long a subject stays current. Long enough to finish a task, short
+ *  enough that walking away and coming back starts clean. */
+if (!defined('CARL_CONTEXT_MINUTES')) define('CARL_CONTEXT_MINUTES', 20);
+
+/** Note what Carl is now dealing with. Silent on failure — never break a reply. */
+function carlContextSet(PDO $db, int $userId, string $kind, int $id, string $label): void
+{
+    if ($userId <= 0 || $id <= 0 || $label === '') return;
+    try {
+        $db->prepare(
+            "INSERT INTO carl_context (user_id, kind, record_id, label, updated_at)
+             VALUES (?,?,?,?, NOW())
+             ON DUPLICATE KEY UPDATE record_id = VALUES(record_id),
+                                     label     = VALUES(label),
+                                     updated_at = NOW()"
+        )->execute([$userId, $kind, $id, mb_substr($label, 0, 150)]);
+    } catch (\Throwable $e) { /* context is a convenience, never a requirement */ }
+}
+
+/**
+ * The last thing of this kind, if it is still current.
+ *
+ * Returns null once it is stale, which is the point: an assumption that is
+ * quietly wrong is worse than asking.
+ */
+function carlContextGet(PDO $db, int $userId, string $kind): ?array
+{
+    if ($userId <= 0) return null;
+    try {
+        // Compared in SQL — PHP runs UTC here and MySQL runs EAT, so working the
+        // age out in PHP gets it wrong by three hours.
+        $st = $db->prepare(
+            "SELECT record_id, label FROM carl_context
+              WHERE user_id = ? AND kind = ?
+                AND updated_at > DATE_SUB(NOW(), INTERVAL ? MINUTE)"
+        );
+        $st->execute([$userId, $kind, CARL_CONTEXT_MINUTES]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        return $r ? ['id' => (int)$r['record_id'], 'label' => (string)$r['label']] : null;
+    } catch (\Throwable $e) { return null; }
+}
+
+/**
+ * Is the user referring to whatever we were just discussing?
+ *
+ * "him", "her", "them", "that one", "the same customer" — and also a bare reply
+ * of "yes" when Carl has just offered a subject.
+ */
+function carlMeansTheSame(string $text): bool
+{
+    $t = strtolower(trim($text));
+    if ($t === '') return false;
+    return (bool)preg_match(
+        '/^(yes|yeah|yep|correct|that one|the same|same one|same|him|her|them|it)\b/', $t
+    ) || (bool)preg_match(
+        '/\b(him|her|them|that customer|the same customer|that client|that lead|that car|that vehicle)\b/', $t
+    );
 }
 
 } // function_exists('carlMigrate')
