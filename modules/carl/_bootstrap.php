@@ -274,7 +274,9 @@ function carlSkills(): array
             'patterns' => ['additional deposit', 'another deposit', 'extra deposit',
                            'add a deposit', 'add deposit', 'top up the deposit',
                            'topped up', 'further deposit', 'part payment',
-                           'record a payment', 'paid more', 'more deposit'],
+                           'record a payment', 'paid more', 'more deposit',
+                           'record a deposit', 'record deposit', 'deposit for',
+                           'deposit from', 'has paid', 'have paid', 'received a payment'],
         ],
         'add_lead' => [
             'label'    => 'Add a lead',
@@ -364,6 +366,28 @@ function carlIsStopWord(string $w): bool
     return in_array($w, $stop, true);
 }
 
+/**
+ * Skills that change something, as opposed to reporting on it.
+ *
+ * Used to settle ties. "Add a car to the inventory" matches add_car on 'add a
+ * car' and the stock report on 'inventory' — both nine letters, both scoring
+ * 10.9 — and the report won purely because it is registered earlier. Being told
+ * how many vehicles we hold is not an answer to being asked to add one.
+ */
+function carlDoingSkills(): array
+{
+    return ['add_lead', 'add_car', 'add_deposit', 'reserve', 'document',
+            'followup_lead', 'note_lead', 'priority_lead', 'call_lead'];
+}
+
+/** Is the user telling Carl to do something, rather than asking about it? */
+function carlIsImperative(string $t): bool
+{
+    return (bool)preg_match(
+        '/\b(add|create|register|record|print|generate|make|put|book|log|set|raise|capture|enter|assist)\b/',
+        $t
+    );
+}
 function carlMatchSkill(string $text): ?string
 {
     $t = ' ' . strtolower(trim(preg_replace('/\s+/u', ' ', $text))) . ' ';
@@ -391,6 +415,7 @@ function carlMatchSkill(string $text): ?string
     // be recognisably about something, not phrased the way the table happens to
     // spell it.
     $words = array_values(array_filter(explode(' ', trim($t)), fn($w) => $w !== ''));
+    $doing = carlIsImperative($t);
     $best = null; $bestScore = 0.0;
 
     foreach (carlSkills() as $key => $s) {
@@ -429,7 +454,16 @@ function carlMatchSkill(string $text): ?string
             }
             if ($hit) $score = max($score, ($hit / count($pw)) * 6);
         }
-        if ($score > $bestScore) { $bestScore = $score; $best = $key; }
+        // A tie goes to the skill that DOES the thing, when the sentence is an
+        // instruction. Otherwise the winner is settled by registration order,
+        // which is arbitrary and has picked the wrong one three times now.
+        if ($score > $bestScore) {
+            $bestScore = $score; $best = $key;
+        } elseif ($score > 0 && abs($score - $bestScore) < 0.001
+                  && $doing && in_array($key, carlDoingSkills(), true)
+                  && !in_array($best, carlDoingSkills(), true)) {
+            $best = $key;
+        }
     }
 
     // Below this the "match" is one incidental word and a guess would be worse
