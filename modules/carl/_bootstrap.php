@@ -34,7 +34,7 @@
 if (!function_exists('carlMigrate')) {
 
 // Bumped to 2 so carl_context is created on installs that already ran version 1.
-if (!defined('CARL_SCHEMA_VERSION')) define('CARL_SCHEMA_VERSION', '2');
+if (!defined('CARL_SCHEMA_VERSION')) define('CARL_SCHEMA_VERSION', '3');
 
 /** Her name, in one place, in case the company ever renames her. */
 if (!defined('CARL_NAME')) define('CARL_NAME', 'Carl');
@@ -70,6 +70,9 @@ function carlMigrate(PDO $db, bool $force = false): void
         // A task in progress — Carl asking for the parts she still needs before
         // she can act. Kept server-side so a refresh does not lose half a lead.
         // The record under discussion, so a task does not restart from "which one?"
+        // One digest a day, per person — the column records which day was claimed.
+        "ALTER TABLE carl_greetings ADD COLUMN digest_on DATE NULL",
+
         "CREATE TABLE IF NOT EXISTS carl_context (
             user_id INT NOT NULL,
             kind VARCHAR(20) NOT NULL,
