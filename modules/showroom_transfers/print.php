@@ -129,12 +129,20 @@ body { font-family:'Segoe UI',Arial,sans-serif; font-size:13px; color:#1a1a1a; b
                 <div class="val"><?= $t['departure_mileage'] ? number_format($t['departure_mileage']) : '___________________' ?></div>
             </div>
             <div class="field">
+                <label>Fuel at Departure</label>
+                <div class="val"><?= $t['departure_fuel'] ? e($t['departure_fuel']) : '___________________' ?></div>
+            </div>
+            <div class="field">
                 <label>Arrival Date / Time</label>
                 <div class="val"><?= $t['arrival_at'] ? fmtDate($t['arrival_at'], 'd M Y, H:i') : '___________________' ?></div>
             </div>
             <div class="field">
                 <label>Arrival Mileage (km)</label>
                 <div class="val"><?= $t['arrival_mileage'] ? number_format($t['arrival_mileage']) : '___________________' ?></div>
+            </div>
+            <div class="field">
+                <label>Fuel on Arrival</label>
+                <div class="val"><?= $t['arrival_fuel'] ? e($t['arrival_fuel']) : '___________________' ?></div>
             </div>
         </div>
         <div class="field">

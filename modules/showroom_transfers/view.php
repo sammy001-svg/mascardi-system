@@ -31,6 +31,15 @@ $drivers   = $db->query("SELECT id, name FROM drivers WHERE status='active' ORDE
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && canWrite('showroom_transfers')) {
     $action = $_POST['action'] ?? '';
 
+    // Approving, despatching and signing for a vehicle are a custody change, and
+    // are not open to whoever raised the transfer. Checked here rather than only
+    // hiding the buttons: a hidden button is not a permission.
+    if (in_array($action, ['approve', 'depart', 'arrive'], true) && !canApproveTransfer()) {
+        setFlash('error', 'Approving and receiving a transfer is limited to a super admin, '
+                         . 'the general manager or a supervisor.');
+        redirect(BASE_URL . '/modules/showroom_transfers/view.php?id=' . $id);
+    }
+
     if ($action === 'approve') {
         $driverId = (int)($_POST['driver_id'] ?? 0) ?: null;
         $db->prepare("UPDATE showroom_transfers SET status='approved', approved_by=?, driver_id=COALESCE(?,driver_id), updated_at=NOW() WHERE id=?")
@@ -50,8 +59,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && canWrite('showroom_transfers')) {
     if ($action === 'depart') {
         $mileage   = (int)($_POST['departure_mileage'] ?? 0) ?: null;
         $condition = trim($_POST['departure_condition'] ?? '');
-        $db->prepare("UPDATE showroom_transfers SET status='in_transit', departure_at=NOW(), departure_mileage=?, departure_condition=?, updated_at=NOW() WHERE id=?")
-           ->execute([$mileage, $condition ?: null, $id]);
+        $fuel = trim($_POST['departure_fuel'] ?? '');
+        $db->prepare("UPDATE showroom_transfers SET status='in_transit', departure_at=NOW(),
+                          departure_mileage=?, departure_fuel=?, departure_condition=?, updated_at=NOW()
+                       WHERE id=?")
+           ->execute([$mileage, $fuel ?: null, $condition ?: null, $id]);
         // Update car status to in_transit
         $db->prepare("UPDATE cars SET status='in_transit', updated_at=NOW() WHERE id=?")
            ->execute([$t['car_id']]);
@@ -65,8 +77,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && canWrite('showroom_transfers')) {
         $condition = trim($_POST['arrival_condition'] ?? '');
         $db->beginTransaction();
         try {
-            $db->prepare("UPDATE showroom_transfers SET status='arrived', arrival_at=NOW(), arrival_mileage=?, arrival_condition=?, updated_at=NOW() WHERE id=?")
-               ->execute([$mileage, $condition ?: null, $id]);
+            $arrFuel = trim($_POST['arrival_fuel'] ?? '');
+            $db->prepare("UPDATE showroom_transfers SET status='arrived', arrival_at=NOW(),
+                              arrival_mileage=?, arrival_fuel=?, arrival_condition=?, updated_at=NOW()
+                           WHERE id=?")
+               ->execute([$mileage, $arrFuel ?: null, $condition ?: null, $id]);
             // Auto-update car location and status
             $db->prepare("UPDATE cars SET location_id=?, status='arrived', updated_at=NOW() WHERE id=?")
                ->execute([$t['to_location_id'], $t['car_id']]);
@@ -204,7 +219,7 @@ include __DIR__ . '/../../includes/header.php';
             <?php if ($t['departure_mileage']): ?>
             <div class="col-md-3">
                 <div class="text-muted small">Departure Mileage</div>
-                <div class="fw-semibold"><?= number_format($t['departure_mileage']) ?> km</div>
+                <div class="fw-semibold"><?= number_format($t['departure_mileage']) ?> km<?= $t['departure_fuel'] ? ' · fuel ' . e($t['departure_fuel']) : '' ?></div>
             </div>
             <?php endif; ?>
             <?php if ($t['arrival_at']): ?>
@@ -216,7 +231,7 @@ include __DIR__ . '/../../includes/header.php';
             <?php if ($t['arrival_mileage']): ?>
             <div class="col-md-3">
                 <div class="text-muted small">Arrival Mileage</div>
-                <div class="fw-semibold"><?= number_format($t['arrival_mileage']) ?> km</div>
+                <div class="fw-semibold"><?= number_format($t['arrival_mileage']) ?> km<?= $t['arrival_fuel'] ? ' · fuel ' . e($t['arrival_fuel']) : '' ?></div>
             </div>
             <?php endif; ?>
         </div>
@@ -243,8 +258,24 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 <?php endif; ?>
 
-<?php if (canWrite('showroom_transfers')): ?>
+<?php if (!canApproveTransfer() && canWrite('showroom_transfers')
+         && in_array($t['status'], ['pending','approved','in_transit'], true)): ?>
+<div class="alert alert-info d-flex align-items-start gap-2">
+    <i class="fa fa-circle-info mt-1"></i>
+    <div>
+        <strong>Waiting on a manager.</strong>
+        Approving a transfer, sending it on its way and signing for it at the other end
+        are handled by a super admin, the general manager or a supervisor. You can raise
+        transfers and follow this one here.
+    </div>
+</div>
+<?php endif; ?>
 
+<?php if (canApproveTransfer()): ?>
+
+<!-- Approving, despatching and receiving move custody of a vehicle, so they are
+     shown only to the people who may do them. The handler checks the same thing:
+     a hidden form is a courtesy, not a permission. -->
 <!-- ── APPROVE action (pending) ─────────────────────────────────── -->
 <?php if ($t['status'] === 'pending'): ?>
 <div class="card mb-3" style="border-top:3px solid #2563eb">
@@ -288,6 +319,15 @@ include __DIR__ . '/../../includes/header.php';
                 <label class="form-label">Departure Mileage <span class="text-muted small">(km)</span></label>
                 <input type="number" name="departure_mileage" class="form-control" placeholder="e.g. 45000" min="0">
             </div>
+            <div class="col-md-3">
+                <label class="form-label">Fuel at Departure</label>
+                <select name="departure_fuel" class="form-select">
+                    <option value="">— not recorded —</option>
+                    <?php foreach (transferFuelLevels() as $fl): ?>
+                        <option value="<?= e($fl) ?>"><?= e($fl) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="col-md-5">
                 <label class="form-label">Condition at Departure</label>
                 <input type="text" name="departure_condition" class="form-control" placeholder="e.g. Clean, no damage">
@@ -312,6 +352,15 @@ include __DIR__ . '/../../includes/header.php';
             <div class="col-md-4">
                 <label class="form-label">Arrival Mileage <span class="text-muted small">(km)</span></label>
                 <input type="number" name="arrival_mileage" class="form-control" placeholder="e.g. 45085" min="0">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Fuel on Arrival</label>
+                <select name="arrival_fuel" class="form-select">
+                    <option value="">— not recorded —</option>
+                    <?php foreach (transferFuelLevels() as $fl): ?>
+                        <option value="<?= e($fl) ?>"><?= e($fl) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div class="col-md-5">
                 <label class="form-label">Condition on Arrival</label>

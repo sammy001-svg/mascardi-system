@@ -57,6 +57,25 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
            data-label="All Cars">
             <i class="fa fa-car"></i><span>All Cars</span>
         </a>
+        <?php if (canAccess('showroom_transfers')): ?>
+        <a href="<?= BASE_URL ?>/modules/showroom_transfers/index.php"
+           class="nav-item <?= isActive('/modules/showroom_transfers/') ?>"
+           data-label="Showroom Transfers"
+           style="position:relative">
+            <i class="fa fa-right-left"></i><span>Transfers</span>
+            <?php
+            try {
+                $__stCount = (int)getDB()->query(
+                    "SELECT COUNT(*) FROM showroom_transfers WHERE status='pending'"
+                )->fetchColumn();
+                if ($__stCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__stCount > 99 ? '99+' : $__stCount ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+        <?php endif; ?>
+
 
         <a href="<?= BASE_URL ?>/modules/reservations/index.php"
            class="nav-item <?= isActive('/modules/reservations/') ?>"

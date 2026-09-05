@@ -353,6 +353,7 @@ function canAccess(string $module): bool {
             'quick_assessments','lpo','inventory','suppliers','car_documents','car_costs',
             'inspections','attendance','payroll','hr','chat','reports','clients','service_bookings',
             'crm','payments','invoices','quotations','sales','installments','expenses','imports','trade_in','meetings',
+            'showroom_transfers',
         ],
 
         // ── Finance roles ─────────────────────────────────────────────────────
@@ -391,12 +392,15 @@ function canAccess(string $module): bool {
             // sell consignment vehicles through leads, so they need to see the
             // deal terms — owner, commission, agreement dates — but the deal
             // itself stays owned by sales/management.
-            'clients','crm','chat','cars','trade_in','meetings',
+            // showroom_transfers: CR agents raise a transfer when a customer wants a
+            // vehicle moved to another showroom. Approving and receiving it is not
+            // theirs — that is gated separately in the module itself.
+            'clients','crm','chat','cars','trade_in','meetings','showroom_transfers',
         ],
 
         // ── Supervisor role ────────────────────────────────────────────────────
         'supervisor'        => [
-            'cars','service_bookings','quick_assessments','quotations','invoices','reports','crm','payments','clients','chat','trade_in','meetings',
+            'cars','service_bookings','quick_assessments','quotations','invoices','reports','crm','payments','clients','chat','trade_in','meetings','showroom_transfers',
         ],
         'receptionist'      => [
             'clients','service_bookings','quick_assessments','cars','chat','showroom',
@@ -467,15 +471,17 @@ function canWrite(string $module): bool {
         return true;
     }
     $map = [
-        'general_manager'   => ['quotations','invoices','sales','imports','trade_in','meetings','callcenter'],
-        'supervisor'        => ['quick_assessments','meetings'], // read-only elsewhere; can log assessments at their own location
+        'general_manager'   => ['quotations','invoices','sales','imports','trade_in','meetings','callcenter','showroom_transfers'],
+        // showroom_transfers: a supervisor approves and receives them, which needs
+        // write rights on the module even though everything else here is read-only.
+        'supervisor'        => ['quick_assessments','meetings','showroom_transfers'],
         'finance_manager'   => ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo','imports','trade_in','meetings'],
         'accountant'        => ['payments','invoices','quotations','expenses','sales','installments','trade_in','meetings'],
         'cashier'           => ['payments','installments'],
         'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team','imports','trade_in','meetings','callcenter'],
         'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','dispatch','team','trade_in','meetings'],
         'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team','trade_in','meetings'],
-        'customer_relations' => ['clients','crm','cars','meetings','callcenter'],
+        'customer_relations' => ['clients','crm','cars','meetings','callcenter','showroom_transfers'],
         'receptionist'      => ['clients','service_bookings','quick_assessments','team','meetings'],
         'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','dispatch','team','imports','meetings'],
         'mechanic'          => ['assessments','parts_requests','team'],
@@ -487,6 +493,20 @@ function canWrite(string $module): bool {
     ];
     $role = authRole();
     return in_array($module, $map[$role] ?? []);
+}
+
+/**
+ * Who may approve a stock transfer, send it on its way, or sign for it at the
+ * other end.
+ *
+ * Deliberately narrower than canWrite('showroom_transfers'). Customer relations
+ * raise a transfer because they are the ones the customer asks, but a vehicle
+ * leaving one showroom and arriving at another is a custody change: the person
+ * who asks for it must not also be the person who says it happened.
+ */
+function canApproveTransfer(): bool
+{
+    return isSuperAdmin() || hasRole(['admin', 'general_manager', 'supervisor']);
 }
 
 // Gate for write/edit operations per module (non-destructive writes).

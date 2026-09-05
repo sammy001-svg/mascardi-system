@@ -513,3 +513,15 @@ function carAvailableStatus(PDO $db): string
     }
     return $cached = $allowed[0];
 }
+
+/**
+ * Fuel levels offered when a vehicle is despatched and received.
+ *
+ * A fixed list rather than a free-text box: "half", "1/2", "50%" and "Half tank"
+ * all mean the same thing, none of them compare, and a dispute about what was
+ * handed over cannot be settled from a record that spells it four ways.
+ */
+function transferFuelLevels(): array
+{
+    return ['Empty', '1/4', '1/2', '3/4', 'Full'];
+}

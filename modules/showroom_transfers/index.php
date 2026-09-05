@@ -33,6 +33,12 @@ foreach ([
         FOREIGN KEY (from_location_id) REFERENCES locations(id) ON DELETE RESTRICT,
         FOREIGN KEY (to_location_id) REFERENCES locations(id) ON DELETE RESTRICT
     )",
+
+    // Fuel at each end. Recorded alongside mileage because a vehicle handed over
+    // with a full tank and signed for with a quarter is a dispute nobody can settle
+    // afterwards, and the receipt is the only record either side keeps.
+    "ALTER TABLE showroom_transfers ADD COLUMN departure_fuel VARCHAR(20) NULL AFTER departure_mileage",
+    "ALTER TABLE showroom_transfers ADD COLUMN arrival_fuel   VARCHAR(20) NULL AFTER arrival_mileage",
 ] as $_mig) {
     try { $db->exec($_mig); } catch (\Throwable $_e) {}
 }
