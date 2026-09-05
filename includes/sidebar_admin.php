@@ -120,6 +120,26 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
            data-label="Delivered Cars">
             <i class="fa fa-truck"></i><span>Delivered Cars</span>
         </a>
+        <a href="<?= BASE_URL ?>/modules/import_orders/index.php"
+           class="nav-item <?= isActive('/modules/import_orders/') ?>"
+           data-label="Import Orders"
+           style="position:relative">
+            <i class="fa fa-ship"></i><span>Import Orders</span>
+            <?php
+            try {
+                $__ioLate = (int)getDB()->query(
+                    "SELECT COUNT(*) FROM crm_leads
+                      WHERE stage = 'import_order'
+                        AND expected_arrival_date IS NOT NULL
+                        AND expected_arrival_date < CURDATE()"
+                )->fetchColumn();
+                if ($__ioLate > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#dc2626;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__ioLate > 99 ? '99+' : $__ioLate ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+
 
         <a href="<?= BASE_URL ?>/modules/trade_in/index.php"
            class="nav-item <?= isActive('/modules/trade_in/') ?>"
