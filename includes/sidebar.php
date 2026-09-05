@@ -91,53 +91,9 @@ if (authRole() === 'supervisor') {
            data-label="Delivered Cars">
             <i class="fa fa-truck"></i><span>Delivered Cars</span>
         </a>
-        <a href="<?= BASE_URL ?>/modules/import_orders/index.php"
-           class="nav-item <?= isActive('/modules/import_orders/') ?>"
-           data-label="Import Orders"
-           style="position:relative">
-            <i class="fa fa-ship"></i><span>Import Orders</span>
-            <?php
-            try {
-                $__ioLate = (int)getDB()->query(
-                    "SELECT COUNT(*) FROM crm_leads
-                      WHERE stage = 'import_order'
-                        AND expected_arrival_date IS NOT NULL
-                        AND expected_arrival_date < CURDATE()"
-                )->fetchColumn();
-                if ($__ioLate > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#dc2626;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
-                <?= $__ioLate > 99 ? '99+' : $__ioLate ?>
-            </span>
-            <?php endif; } catch (\Throwable $e) {} ?>
-        </a>
 
         <?php endif; ?>
 
-        <?php if (canAccess('imports')): ?>
-        <div class="nav-section">Import Pipeline</div>
-
-        <a href="<?= BASE_URL ?>/modules/imports/index.php"
-           class="nav-item <?= isActive('/modules/imports/') ?>"
-           data-label="Import Pipeline"
-           style="position:relative">
-            <i class="fa fa-ship"></i><span>Pipeline</span>
-            <?php
-            try {
-                $__impBadge = (int)getDB()->query("SELECT COUNT(*) FROM car_imports WHERE stage NOT IN ('completed')")->fetchColumn();
-                if ($__impBadge > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
-                <?= $__impBadge > 99 ? '99+' : $__impBadge ?>
-            </span>
-            <?php endif; } catch (\Throwable $e) {} ?>
-        </a>
-
-        <a href="<?= BASE_URL ?>/modules/imports/index.php?view=shipments"
-           class="nav-item <?= (isActive('/modules/imports/shipment')) ? 'active' : '' ?>"
-           data-label="Shipments">
-            <i class="fa fa-boxes-stacked"></i><span>Shipments</span>
-        </a>
-
-        <?php endif; ?>
 
         <?php if (canAccess('trade_in')): ?>
         <a href="<?= BASE_URL ?>/modules/trade_in/index.php"
@@ -179,6 +135,56 @@ if (authRole() === 'supervisor') {
             <i class="fa fa-folder-open"></i><span>Car Documents</span>
         </a>
         <?php endif; ?>
+        <?php endif; ?>
+
+        <!-- ══ IMPORTS ═══════════════════════════════════════════ -->
+        <?php if (canAccess('imports')): ?>
+        <div class="nav-section">Imports</div>
+
+        <?php if (canAccess('crm')): ?>
+        <a href="<?= BASE_URL ?>/modules/import_orders/index.php"
+           class="nav-item <?= isActive('/modules/import_orders/') ?>"
+           data-label="Import Orders"
+           style="position:relative">
+            <i class="fa fa-ship"></i><span>Import Orders</span>
+            <?php
+            try {
+                $__ioLate = (int)getDB()->query(
+                    "SELECT COUNT(*) FROM crm_leads
+                      WHERE stage = 'import_order'
+                        AND expected_arrival_date IS NOT NULL
+                        AND expected_arrival_date < CURDATE()"
+                )->fetchColumn();
+                if ($__ioLate > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#dc2626;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__ioLate > 99 ? '99+' : $__ioLate ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+        <?php endif; ?>
+
+
+        <a href="<?= BASE_URL ?>/modules/imports/index.php"
+           class="nav-item <?= isActive('/modules/imports/') ?>"
+           data-label="Import Pipeline"
+           style="position:relative">
+            <i class="fa fa-ship"></i><span>Pipeline</span>
+            <?php
+            try {
+                $__impBadge = (int)getDB()->query("SELECT COUNT(*) FROM car_imports WHERE stage NOT IN ('completed')")->fetchColumn();
+                if ($__impBadge > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__impBadge > 99 ? '99+' : $__impBadge ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+
+        <a href="<?= BASE_URL ?>/modules/imports/index.php?view=shipments"
+           class="nav-item <?= (isActive('/modules/imports/shipment')) ? 'active' : '' ?>"
+           data-label="Shipments">
+            <i class="fa fa-boxes-stacked"></i><span>Shipments</span>
+        </a>
+
         <?php endif; ?>
 
         <!-- ══ DISPATCH & TEAM ════════════════════════════════════ -->
@@ -457,30 +463,6 @@ if (authRole() === 'supervisor') {
         <!-- ══ WHATSAPP ═══════════════════════════════════════════ -->
         <?php // Customer messaging — was ungated, so it appeared for every role
               // including HR, mechanics and drivers who have no customer contact. ?>
-        <?php if (canAccess('crm') || canAccess('clients') || canAccess('cars')): ?>
-        <div class="nav-section">WhatsApp</div>
-        <a href="<?= BASE_URL ?>/modules/whatsapp/index.php"
-           class="nav-item <?= isActive('/modules/whatsapp/') ?>"
-           data-label="WhatsApp Inbox"
-           style="position:relative">
-            <i class="fab fa-whatsapp" style="color:#25d366"></i><span>Inbox</span>
-            <?php
-            try {
-                $__waUnread = (int)getDB()->query("SELECT COALESCE(SUM(unread_count),0) FROM wa_conversations")->fetchColumn();
-                if ($__waUnread > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#25d366;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
-                <?= $__waUnread > 99 ? '99+' : $__waUnread ?>
-            </span>
-            <?php endif; } catch (\Throwable $_) {} ?>
-        </a>
-        <?php if (hasRole(['admin','general_manager'])): ?>
-        <a href="<?= BASE_URL ?>/modules/whatsapp/admin.php"
-           class="nav-item <?= isActive('/modules/whatsapp/admin') ?>"
-           data-label="WA Setup">
-            <i class="fa fa-qrcode"></i><span>WA Setup</span>
-        </a>
-        <?php endif; ?>
-        <?php endif; ?>
 
         <!-- ══ FINANCE ════════════════════════════════════════════ -->
         <?php if (canAccess('sales') || canAccess('payments') || canAccess('quotations') || canAccess('invoices')
@@ -597,8 +579,8 @@ if (authRole() === 'supervisor') {
               // plain register they already had. ?>
         <a href="<?= BASE_URL ?>/modules/attendance/index.php"
            class="nav-item <?= isActive('/modules/attendance/index') ?>"
-           data-label="Attendance">
-            <i class="fa fa-calendar-days"></i><span>Attendance</span>
+           data-label="Workshop Attendance">
+            <i class="fa fa-calendar-days"></i><span>Workshop Attendance</span>
         </a>
         <?php endif; ?>
 
@@ -741,6 +723,14 @@ if (authRole() === 'supervisor') {
         <!-- ══ ADMIN ══════════════════════════════════════════════ -->
         <?php if (hasRole('admin')): ?>
         <div class="nav-section">Administration</div>
+
+        <?php if (hasRole(['admin','general_manager'])): ?>
+        <a href="<?= BASE_URL ?>/modules/whatsapp/admin.php"
+           class="nav-item <?= isActive('/modules/whatsapp/admin') ?>"
+           data-label="WA Setup">
+            <i class="fa fa-qrcode"></i><span>WA Setup</span>
+        </a>
+        <?php endif; ?>
         <a href="<?= BASE_URL ?>/modules/data_tools/import.php"
            class="nav-item <?= isActive('/modules/data_tools/') ?>"
            data-label="Data Tools">

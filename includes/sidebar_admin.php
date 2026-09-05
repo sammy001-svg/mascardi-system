@@ -50,7 +50,7 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
         </a>
 
         <!-- ══ MANAGEMENT ════════════════════════════════════════════════ -->
-        <div class="nav-section">Management</div>
+        <div class="nav-section">Fleet</div>
 
         <a href="<?= BASE_URL ?>/modules/cars/index.php"
            class="nav-item <?= isActive('/modules/cars/') ?>"
@@ -91,28 +91,7 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
             </span>
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
-        <a href="<?= BASE_URL ?>/modules/imports/index.php"
-           class="nav-item <?= isActive('/modules/imports/') ?>"
-           data-label="Import Orders"
-           style="position:relative">
-            <i class="fa fa-ship"></i><span>Import Orders</span>
-            <?php
-            try {
-                $__impBadge = (int)getDB()->query(
-                    "SELECT COUNT(*) FROM car_imports WHERE stage NOT IN ('completed')"
-                )->fetchColumn();
-                if ($__impBadge > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
-                <?= $__impBadge > 99 ? '99+' : $__impBadge ?>
-            </span>
-            <?php endif; } catch (\Throwable $e) {} ?>
-        </a>
 
-        <a href="<?= BASE_URL ?>/modules/imports/index.php?view=shipments"
-           class="nav-item <?= isActive('/modules/imports/shipment') ?>"
-           data-label="Shipments">
-            <i class="fa fa-boxes-stacked"></i><span>Shipments</span>
-        </a>
 
 
         <a href="<?= BASE_URL ?>/modules/delivered_cars/index.php"
@@ -120,6 +99,25 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
            data-label="Delivered Cars">
             <i class="fa fa-truck"></i><span>Delivered Cars</span>
         </a>
+
+
+        <a href="<?= BASE_URL ?>/modules/trade_in/index.php"
+           class="nav-item <?= isActive('/modules/trade_in/') ?>"
+           data-label="Trade-In &amp; Sale on Behalf"
+           style="position:relative">
+            <i class="fa fa-handshake"></i><span>Trade-In &amp; Sale on Behalf</span>
+            <?php
+            try {
+                $__consignCount = (int)getDB()->query("SELECT COUNT(*) FROM consignments WHERE status='active'")->fetchColumn();
+                if ($__consignCount > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#0ea5e9;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__consignCount > 99 ? '99+' : $__consignCount ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+
+        <div class="nav-section">Imports</div>
+
         <a href="<?= BASE_URL ?>/modules/import_orders/index.php"
            class="nav-item <?= isActive('/modules/import_orders/') ?>"
            data-label="Import Orders"
@@ -140,21 +138,31 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
 
-
-        <a href="<?= BASE_URL ?>/modules/trade_in/index.php"
-           class="nav-item <?= isActive('/modules/trade_in/') ?>"
-           data-label="Trade-In &amp; Sale on Behalf"
+        <a href="<?= BASE_URL ?>/modules/imports/index.php"
+           class="nav-item <?= isActive('/modules/imports/') ?>"
+           data-label="Import Pipeline"
            style="position:relative">
-            <i class="fa fa-handshake"></i><span>Trade-In &amp; Sale on Behalf</span>
+            <i class="fa fa-ship"></i><span>Import Pipeline</span>
             <?php
             try {
-                $__consignCount = (int)getDB()->query("SELECT COUNT(*) FROM consignments WHERE status='active'")->fetchColumn();
-                if ($__consignCount > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#0ea5e9;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
-                <?= $__consignCount > 99 ? '99+' : $__consignCount ?>
+                $__impBadge = (int)getDB()->query(
+                    "SELECT COUNT(*) FROM car_imports WHERE stage NOT IN ('completed')"
+                )->fetchColumn();
+                if ($__impBadge > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__impBadge > 99 ? '99+' : $__impBadge ?>
             </span>
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
+
+        <a href="<?= BASE_URL ?>/modules/imports/index.php?view=shipments"
+           class="nav-item <?= isActive('/modules/imports/shipment') ?>"
+           data-label="Shipments">
+            <i class="fa fa-boxes-stacked"></i><span>Shipments</span>
+        </a>
+
+
+        <div class="nav-section">Sales &amp; Finance</div>
 
         <a href="<?= BASE_URL ?>/modules/crm/index.php"
            class="nav-item <?= isActive('/modules/crm/') ?>"

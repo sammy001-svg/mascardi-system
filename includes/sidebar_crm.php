@@ -190,34 +190,25 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
             </span>
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
-        <a href="<?= BASE_URL ?>/modules/imports/index.php"
-           class="nav-item <?= isActive('/modules/imports/') ?>"
-           data-label="Import Orders"
-           style="position:relative">
-            <i class="fa fa-ship"></i><span>Import Orders</span>
-            <?php
-            try {
-                $__impBadge = (int)getDB()->query(
-                    "SELECT COUNT(*) FROM car_imports WHERE stage NOT IN ('completed')"
-                )->fetchColumn();
-                if ($__impBadge > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
-                <?= $__impBadge > 99 ? '99+' : $__impBadge ?>
-            </span>
-            <?php endif; } catch (\Throwable $e) {} ?>
-        </a>
 
-        <a href="<?= BASE_URL ?>/modules/imports/index.php?view=shipments"
-           class="nav-item <?= isActive('/modules/imports/shipment') ?>"
-           data-label="Shipments">
-            <i class="fa fa-boxes-stacked"></i><span>Shipments</span>
-        </a>
 
         <a href="<?= BASE_URL ?>/modules/delivered_cars/index.php"
            class="nav-item <?= str_contains($__uri, '/modules/delivered_cars/') ? 'active' : '' ?>"
            data-label="Delivered Cars">
             <i class="fa fa-truck"></i><span>Delivered Cars</span>
         </a>
+
+        <?php // Read-only: CR agents sell consignment stock through leads, so they
+              // need the owner and commission terms visible. ?>
+        <?php if (canAccess('trade_in')): ?>
+        <a href="<?= BASE_URL ?>/modules/trade_in/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/trade_in/') ? 'active' : '' ?>"
+           data-label="Trade-In / On Behalf">
+            <i class="fa fa-handshake"></i><span>Trade-In / On Behalf</span>
+        </a>
+
+        <div class="nav-section">Imports</div>
+
         <a href="<?= BASE_URL ?>/modules/import_orders/index.php"
            class="nav-item <?= isActive('/modules/import_orders/') ?>"
            data-label="Import Orders"
@@ -238,13 +229,27 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
             <?php endif; } catch (\Throwable $e) {} ?>
         </a>
 
-        <?php // Read-only: CR agents sell consignment stock through leads, so they
-              // need the owner and commission terms visible. ?>
-        <?php if (canAccess('trade_in')): ?>
-        <a href="<?= BASE_URL ?>/modules/trade_in/index.php"
-           class="nav-item <?= str_contains($__uri, '/modules/trade_in/') ? 'active' : '' ?>"
-           data-label="Trade-In / On Behalf">
-            <i class="fa fa-handshake"></i><span>Trade-In / On Behalf</span>
+        <a href="<?= BASE_URL ?>/modules/imports/index.php"
+           class="nav-item <?= isActive('/modules/imports/') ?>"
+           data-label="Import Pipeline"
+           style="position:relative">
+            <i class="fa fa-ship"></i><span>Import Pipeline</span>
+            <?php
+            try {
+                $__impBadge = (int)getDB()->query(
+                    "SELECT COUNT(*) FROM car_imports WHERE stage NOT IN ('completed')"
+                )->fetchColumn();
+                if ($__impBadge > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#2563eb;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__impBadge > 99 ? '99+' : $__impBadge ?>
+            </span>
+            <?php endif; } catch (\Throwable $e) {} ?>
+        </a>
+
+        <a href="<?= BASE_URL ?>/modules/imports/index.php?view=shipments"
+           class="nav-item <?= isActive('/modules/imports/shipment') ?>"
+           data-label="Shipments">
+            <i class="fa fa-boxes-stacked"></i><span>Shipments</span>
         </a>
         <?php endif; ?>
 
