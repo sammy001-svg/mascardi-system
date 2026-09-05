@@ -268,12 +268,44 @@ function carlSkills(): array
         'no_delete' => [
             'label'    => 'Removing records',
             'module'   => null,
+            // Every pattern here carries a second word on purpose. A pattern whose
+            // only real word is "cancel" would fire on a bare "cancel", and that is
+            // the word people use to back out of a half-finished task — Carl would
+            // answer the escape hatch with a refusal to delete.
             'patterns' => ['delete', 'remove the', 'remove this', 'remove that',
                            'erase', 'wipe', 'get rid of', 'clear out', 'purge',
-                           'drop the', 'take it off the system', 'take off the system'],
+                           'drop the', 'take it off the system', 'take off the system',
+                           'cancel the booking', 'cancel booking', 'cancel the order',
+                           'cancel the reservation', 'cancel the job', 'cancel the invoice',
+                           'remove the booking', 'scrap the booking', 'call off the booking'],
         ],
         // Ahead of the stock report: "add a car to inventory" scored on 'inventory'
         // and answered with how many we hold, which is not what was asked.
+        // Ahead of the diary below it. "Book a service for Alice" is an
+        // instruction, and answering it with a list of this week's bookings is
+        // the same mistake "add a car" made against the stock report.
+        'book_service' => [
+            'label'    => 'Take a service booking',
+            'module'   => 'service_bookings',
+            'patterns' => ['book a service', 'book service', 'book a car in', 'book the car in',
+                           'book him in', 'book her in', 'book them in', 'book it in',
+                           'make a booking', 'new booking', 'create a booking', 'take a booking',
+                           'new service booking', 'schedule a service', 'arrange a service',
+                           'book in for service', 'book a job'],
+        ],
+        'confirm_booking' => [
+            'label'    => 'Confirm a booking',
+            'module'   => 'service_bookings',
+            'patterns' => ['confirm the booking', 'confirm booking', 'confirm a booking',
+                           'confirm the service', 'approve the booking'],
+        ],
+        'bookings' => [
+            'label'    => 'Service diary',
+            'module'   => 'service_bookings',
+            'patterns' => ['service diary', 'the diary', 'service booking', 'service bookings',
+                           'bookings', 'booked in', 'appointments', 'who is coming in',
+                           'what is booked', 'coming in today', 'booking list'],
+        ],
         'add_car' => [
             'label'    => 'Add a vehicle to inventory',
             'module'   => 'cars',
@@ -302,10 +334,15 @@ function carlSkills(): array
         'priority_lead' => [
             'label'    => 'Change lead priority (hot / lukewarm / cold)',
             'module'   => 'crm',
+            // The naming forms are here as whole phrases because "mark that lead as
+            // hot" used to lose to the single word "lead" and come back as a pipeline
+            // report — an instruction answered with a list.
             'patterns' => ['mark as hot', 'mark hot', 'mark as lukewarm', 'mark lukewarm',
                            'mark as cold', 'mark cold', 'lead is hot', 'lead is cold',
                            'set priority', 'change priority', 'flag as hot', 'flag lead',
-                           'hot lead', 'cold lead', 'move to hot', 'move to cold'],
+                           'hot lead', 'cold lead', 'move to hot', 'move to cold',
+                           'mark that lead', 'mark the lead', 'mark this lead',
+                           'mark them as', 'mark him as', 'mark her as'],
         ],
         'followup_lead' => [
             'label'    => 'Set a follow-up date on a lead',
@@ -391,7 +428,8 @@ function carlIsStopWord(string $w): bool
 function carlDoingSkills(): array
 {
     return ['add_lead', 'add_car', 'add_deposit', 'reserve', 'document',
-            'followup_lead', 'note_lead', 'priority_lead', 'call_lead'];
+            'followup_lead', 'note_lead', 'priority_lead', 'call_lead',
+            'book_service', 'confirm_booking'];
 }
 
 /** Is the user telling Carl to do something, rather than asking about it? */
@@ -418,6 +456,22 @@ function carlMatchSkill(string $text): ?string
         if (str_starts_with($lead, $v) && isset(carlSkillsFor()['navigate'])) return 'navigate';
     }
 
+    // A destructive verb settles the answer on its own, whatever else the
+    // sentence is about. Scoring could not be trusted with this: "remove the
+    // service booking" scored higher on the exact phrase "service booking" than
+    // on "remove the", so Carl offered to TAKE a booking when she was being asked
+    // to get rid of one. Of the two possible readings of a destructive verb, only
+    // refusing is safe, so it is decided here rather than left to a tally.
+    //
+    // The second half needs a record named within a few words, which is what
+    // keeps the bare "cancel" — the word people use to back out of a half-finished
+    // task — from being answered with a refusal to delete.
+    if (preg_match('/\b(delete|erase|wipe|purge|scrap|shred)(s|d|ed|ing)?\b/', $t)
+        || preg_match('/\b(remove|cancel|call off|get rid of|clear out|take off)\b[^.]{0,30}?\b'
+                    . '(booking|lead|client|customer|car|vehicle|invoice|quotation|receipt|job|'
+                    . 'record|reservation|payment|user|order|entry)s?\b/', $t)) {
+        return 'no_delete';
+    }
     // Matched against EVERY skill, not only the permitted ones. A question about
     // something this account cannot see should be answered "that is not open to
     // your account" — which carlRun() does — rather than falling through to
@@ -712,11 +766,11 @@ function carlGuardedExec(PDO $db, string $sql, array $params = []): bool
  * Plainly, once, without lecturing — and pointing at who can, so the person is
  * not left stuck.
  */
-function carlRefuseDeletion(string $what = 'that'): array
+function carlRefuseDeletion(string $what = 'that', string $verb = 'delete'): array
 {
     return [
         'skill' => 'refused', 'done' => true,
-        'say'   => 'I am not able to delete ' . $what . '. Removing records is deliberately '
+        'say'   => 'I am not able to ' . $verb . ' ' . $what . '. Removing records is deliberately '
                  . 'outside what I can do — it needs a person on the record\'s own page, where '
                  . 'the permissions and the confirmation live. I can correct, update or add '
                  . 'instead, if that would do.',

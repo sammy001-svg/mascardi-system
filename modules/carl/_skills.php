@@ -20,6 +20,7 @@ require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/_llm.php';
 require_once __DIR__ . '/_ai.php';
 require_once __DIR__ . '/_tasks.php';
+require_once __DIR__ . '/_bookings.php';
 
 /** Dispatches to a handler, refusing anything this user may not see. */
 function carlRun(PDO $db, array $user, string $skill, string $utterance): array
@@ -153,7 +154,10 @@ function carlSkillNoDelete(PDO $db, array $user, string $u): array
                  . 'booking|job|user|record|reservation|payment)s?\b/i', $u, $m)) {
         $what = 'the ' . strtolower($m[1]);
     }
-    return carlRefuseDeletion($what);
+    // "Cancel the booking" is a request to cancel, not to delete, and answering it
+    // with the wrong verb makes the refusal sound like it missed the question.
+    $verb = preg_match('/\bcancel|call off|scrap\b/i', $u) ? 'cancel' : 'delete';
+    return carlRefuseDeletion($what, $verb);
 }
 
 function carlSkillHelp(PDO $db, array $user, string $u): array
@@ -524,6 +528,8 @@ function carlSkillNavigate(PDO $db, array $user, string $u): array
         'pipeline'    => ['crm', '/modules/crm/index.php',            'the sales pipeline'],
         'reservation' => ['crm', '/modules/reservations/index.php',   'reservations'],
         'visitor'     => ['visitors', '/modules/visitors/index.php',  'the visitors book'],
+        'booking'     => ['service_bookings', '/modules/service_bookings/index.php', 'the service diary'],
+        'diary'       => ['service_bookings', '/modules/service_bookings/index.php', 'the service diary'],
         'car'         => ['cars', '/modules/cars/index.php',          'the vehicle list'],
         'vehicle'     => ['cars', '/modules/cars/index.php',          'the vehicle list'],
         'stock'       => ['cars', '/modules/cars/index.php',          'the vehicle list'],
@@ -1101,6 +1107,8 @@ function carlContinue(PDO $db, array $user, array $pending, string $reply): arra
     if ($skill === 'document')      return carlContinueDocument($db, $user, $pending, $r);
     if ($skill === 'add_deposit')   return carlContinueAddDeposit($db, $user, $pending, $r);
     if ($skill === 'add_car')       return carlContinueAddCar($db, $user, $pending, $r);
+    if ($skill === 'book_service')  return carlContinueBookService($db, $user, $pending, $r);
+    if ($skill === 'confirm_booking') return carlContinueConfirmBooking($db, $user, $pending, $r);
     if ($skill !== 'add_lead') { carlPendingClear($db, $uid); return carlSkillUnknown($user); }
 
     $got = $pending['collected'];

@@ -129,10 +129,20 @@ carlRemember($db, $uid, 'user', $msg);
 // way out but the word "cancel" — which nobody thinks to say.
 $pending = carlPendingGet($db, $uid);
 if ($pending) {
+    // Carl has just asked a direct question, so the reply is an ANSWER unless it
+    // plainly reads as a new instruction. Matching on the subject alone was not
+    // enough: answering "which vehicle?" with "Nissan Note" scored on note_lead
+    // and tore up the booking half way through, because the model happens to be
+    // spelled like the word. An instruction has a verb in it — that is what
+    // separates "add a note" from the name of a car.
+    //
+    // Anything about deleting still interrupts whatever is in flight, verb or
+    // not. Being told "no" about a deletion matters more than finishing a form.
     $switch = carlMatchSkill($msg);
     if ($switch !== null
         && $switch !== ($pending['skill'] ?? '')
-        && (in_array($switch, carlDoingSkills(), true) || $switch === 'no_delete')) {
+        && ($switch === 'no_delete'
+            || (carlIsImperative($msg) && in_array($switch, carlDoingSkills(), true)))) {
         carlPendingClear($db, $uid);
         $pending = null;
     }

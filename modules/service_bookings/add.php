@@ -131,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             logActivity('create', 'service_bookings', $newId, "Created booking {$bNum} for {$d['client_name']}");
             notifyRoles(['admin','workshop_manager','sales_officer'], 'booking',
                 "New Booking: {$bNum}",
-                "{$d['client_name']} — {$d['service_type']}",
+                "{$d['client_name']} — {$serviceStr}",
                 BASE_URL . '/modules/service_bookings/view.php?id=' . $newId
             );
             // Confirmation email to client
