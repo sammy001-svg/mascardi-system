@@ -19,8 +19,23 @@ $cars      = $db->query("
 $preCarId = (int)($_GET['car_id'] ?? 0);
 $preType  = $_GET['type'] ?? 'transfer';
 
+// Who will have to approve this once it is raised. Named on the form so the
+// person filling it in knows it is a request, not the move itself — and knows
+// who to chase if nothing happens.
+$approvers = [];
+try {
+    $approvers = getDB()->query(
+        "SELECT name FROM users
+          WHERE status = 'active'
+            AND role IN ('super_admin','admin','general_manager','supervisor')
+       ORDER BY FIELD(role,'general_manager','supervisor','admin','super_admin'), name
+          LIMIT 6"
+    )->fetchAll(PDO::FETCH_COLUMN);
+} catch (\Throwable $e) { $approvers = []; }
+
 $errors = [];
 $d = [
+    'departure_fuel'   => '',
     'car_id'          => $preCarId ?: '',
     'driver_id'       => '',
     'from_location_id'=> '',
@@ -38,6 +53,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['transfer_type']    = $_POST['transfer_type'] ?? 'transfer';
     $d['requested_date']   = $_POST['requested_date'] ?? date('Y-m-d');
     $d['notes']            = trim($_POST['notes'] ?? '');
+    // The level when the order is raised. It is the starting point for the
+    // despatch check, and the only figure available if the vehicle moves before
+    // anyone fills the departure form in.
+    $d['departure_fuel']   = trim($_POST['departure_fuel'] ?? '');
 
     if (!$d['car_id'])           $errors[] = 'Select a vehicle.';
     if (!$d['from_location_id']) $errors[] = 'Select the origin location.';
@@ -50,15 +69,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("
                 INSERT INTO showroom_transfers
                     (transfer_number, car_id, driver_id, from_location_id, to_location_id,
-                     transfer_type, requested_date, notes, raised_by)
-                VALUES (?,?,?,?,?, ?,?,?,?)
+                     transfer_type, requested_date, notes, raised_by, departure_fuel)
+                VALUES (?,?,?,?,?, ?,?,?,?,?)
             ")->execute([
                 $num, $d['car_id'], $d['driver_id'], $d['from_location_id'], $d['to_location_id'],
                 $d['transfer_type'], $d['requested_date'], $d['notes'] ?: null, $user['name'],
+                $d['departure_fuel'] ?: null,
             ]);
             $newId = (int)$db->lastInsertId();
             logActivity('create', 'showroom_transfers', $newId, "Raised transfer order {$num}");
-            setFlash('success', "Transfer order {$num} raised successfully.");
+            setFlash('success', "Transfer order {$num} raised. It is waiting for a super "
+                                . "admin, the general manager or a supervisor to approve it before the "
+                                . "vehicle moves.");
             redirect(BASE_URL . '/modules/showroom_transfers/view.php?id=' . $newId);
         } catch (\Throwable $e) {
             $errors[] = 'Save failed: ' . $e->getMessage();
@@ -178,6 +200,21 @@ include __DIR__ . '/../../includes/header.php';
                     </option>
                     <?php endforeach; ?>
                 </select>
+
+                <div class="mt-3">
+                    <label class="form-label fw-semibold small">
+                        Fuel Level Now
+                        <span class="text-muted fw-normal">(checked again at departure)</span>
+                    </label>
+                    <select name="departure_fuel" class="form-select">
+                        <option value="">— not recorded —</option>
+                        <?php foreach (transferFuelLevels() as $fl): ?>
+                            <option value="<?= e($fl) ?>" <?= $d['departure_fuel'] === $fl ? 'selected' : '' ?>>
+                                <?= e($fl) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
         </div>
     </div>
@@ -188,6 +225,26 @@ include __DIR__ . '/../../includes/header.php';
             <div class="card-body">
                 <label class="form-label fw-semibold">Notes</label>
                 <textarea name="notes" class="form-control" rows="3" placeholder="Any special instructions…"><?= e($d['notes']) ?></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- What happens after this is submitted. Raising a transfer is a request:
+         the vehicle does not move until somebody with the authority approves it,
+         and the form should not let anyone believe otherwise. -->
+    <div class="col-12">
+        <div class="alert alert-info d-flex align-items-start gap-2 mb-0">
+            <i class="fa fa-circle-info mt-1"></i>
+            <div>
+                <strong>This is a request, not the move itself.</strong>
+                Once raised it waits for approval by a super admin, the general manager
+                or a supervisor. They then confirm departure and receipt, recording the
+                mileage and fuel at each end.
+                <?php if ($approvers): ?>
+                    <div class="small text-muted mt-1">
+                        Who can approve it: <?= e(implode(', ', $approvers)) ?>.
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
