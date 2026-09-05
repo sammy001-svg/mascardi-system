@@ -134,7 +134,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         . '). Open ' . BASE_URL . '/modules/cars/view.php?id=' . $existing['id']
                         . ' — if you tried to delete it, it likely still has invoices, quotations, or jobs linked to it.';
                 } else {
-                    $errors[] = 'Chassis number already exists.';
+                    // A 23000 is any integrity violation, not only a duplicate key.
+                    // Saying "chassis already exists" when nothing shares the chassis
+                    // sends someone hunting for a clash that is not there — the real
+                    // cause is usually a location or client that has since been removed.
+                    $m = $e->getMessage();
+                    if (stripos($m, 'foreign key') !== false) {
+                        $field = '';
+                        if (stripos($m, 'location') !== false) $field = ' The location on this vehicle no longer exists — pick one.';
+                        elseif (stripos($m, 'client') !== false) $field = ' The client on this vehicle no longer exists — pick one, or clear it.';
+                        $errors[] = 'This vehicle refers to a record that has since been removed.' . $field;
+                    } else {
+                        $errors[] = 'The save was refused by the database: ' . $m;
+                    }
                 }
             } else {
                 $errors[] = 'Database error: ' . $e->getMessage();

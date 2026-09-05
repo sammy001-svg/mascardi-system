@@ -471,7 +471,12 @@ function canWrite(string $module): bool {
         return true;
     }
     $map = [
-        'general_manager'   => ['quotations','invoices','sales','imports','trade_in','meetings','callcenter','showroom_transfers'],
+        // cars: the general manager could see the inventory but not correct anything
+        // in it — a price, a mileage, a description — which meant every small fix
+        // went through a super admin. Editing is write access; DELETING stays with
+        // canEditDelete(), which is admin only, so nothing can be removed here.
+        'general_manager'   => ['quotations','invoices','sales','imports','trade_in','meetings','callcenter',
+                                'showroom_transfers','cars'],
         // showroom_transfers: a supervisor approves and receives them, which needs
         // write rights on the module even though everything else here is read-only.
         'supervisor'        => ['quick_assessments','meetings','showroom_transfers'],
