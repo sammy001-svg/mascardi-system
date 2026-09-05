@@ -70,11 +70,20 @@ function importPlacementsEnsure(PDO $db): bool
                 notes TEXT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                car_id INT NULL,
+                arrived_at DATETIME NULL,
                 INDEX idx_ip_lead (lead_id),
                 INDEX idx_ip_status (status),
                 INDEX idx_ip_approval (approval_status)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
+        // Added after the table shipped, so an install already carrying it is
+        // brought forward rather than left without the arrival handover.
+        foreach ([
+            "ALTER TABLE import_placements ADD COLUMN car_id INT NULL",
+            "ALTER TABLE import_placements ADD COLUMN arrived_at DATETIME NULL",
+        ] as $alter) { try { $db->exec($alter); } catch (\Throwable $_) {} }
+
         return $done = true;
     } catch (\Throwable $e) {
         error_log('importPlacementsEnsure: ' . $e->getMessage());

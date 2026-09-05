@@ -109,11 +109,114 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect($back);
     }
 
+    // ── The vehicle has landed ───────────────────────────────────────────────
+    //
+    // Arrival is not a status change, it is a handover. Until now the vehicle
+    // existed only as a line of free text; from here it is a real car with a
+    // chassis, and the customer who paid the deposit has a reservation on it.
+    //
+    // So this asks for the details that make a car record possible, creates it,
+    // pins it to the lead, and moves the lead to 'reserved' — at which point the
+    // delivery protocol the rest of the system already knows how to run takes
+    // over. Doing it any other way leaves an import order that never ends.
+    if ($action === 'arrive') {
+        $pid     = (int)($_POST['placement_id'] ?? 0);
+        $chassis = strtoupper(preg_replace('/\s+/', '', trim($_POST['chassis_number'] ?? '')));
+        $make    = trim($_POST['make'] ?? '');
+        $model   = trim($_POST['model'] ?? '');
+        $year    = (int)($_POST['year'] ?? 0);
+        $reg     = strtoupper(trim($_POST['registration_number'] ?? ''));
+
+        $st = $db->prepare("SELECT * FROM import_placements WHERE id = ?");
+        $st->execute([$pid]);
+        $pl = $st->fetch(PDO::FETCH_ASSOC);
+
+        $errors = [];
+        if (!$pl)                       $errors[] = 'That import could not be found.';
+        elseif ($pl['approval_status'] !== 'approved')
+                                        $errors[] = 'That import has not been approved.';
+        elseif (!empty($pl['car_id']))  $errors[] = 'That vehicle has already been booked in.';
+        if (strlen($chassis) < 5)       $errors[] = 'A chassis number is needed to book the vehicle in.';
+        if ($make === '')               $errors[] = 'Make is required.';
+        if ($model === '')              $errors[] = 'Model is required.';
+        if ($year < 1950 || $year > (int)date('Y') + 2) $errors[] = 'Give the year as four digits.';
+
+        if (!$errors) {
+            // Named up front rather than letting the unique key throw.
+            $c = $db->prepare("SELECT id, make, model FROM cars WHERE chassis_number = ?");
+            $c->execute([$chassis]);
+            if ($clash = $c->fetch(PDO::FETCH_ASSOC)) {
+                $errors[] = 'That chassis is already on the system — '
+                          . trim($clash['make'] . ' ' . $clash['model']) . '.';
+            }
+        }
+
+        if ($errors) {
+            setFlash('error', implode(' ', $errors));
+            redirect($back);
+        }
+
+        try {
+            $db->beginTransaction();
+
+            // The customer has paid a deposit, so the vehicle arrives reserved
+            // rather than as free stock — it is not available to sell to anyone else.
+            $db->prepare("
+                INSERT INTO cars (chassis_number, registration_number, make, model, year,
+                                  car_type, status, show_on_website, notes, created_at)
+                VALUES (?,?,?,?,?, 'inventory', 'reserved', 0, ?, NOW())
+            ")->execute([
+                $chassis, $reg ?: null, $make, $model, $year,
+                'Imported for ' . ($pl['vehicle_details'] ? mb_substr($pl['vehicle_details'], 0, 120) : 'a customer order')
+                . ($pl['supplier'] ? ' via ' . $pl['supplier'] : '')
+                . '. Booked in by ' . $me['name'] . ' on ' . date('j M Y') . '.',
+            ]);
+            $carId = (int)$db->lastInsertId();
+
+            $db->prepare("UPDATE import_placements
+                             SET status='arrived_nairobi', car_id=?, arrived_at=NOW(), updated_at=NOW()
+                           WHERE id=?")->execute([$carId, $pid]);
+
+            // The lead joins the ordinary sale flow from here.
+            $db->prepare("UPDATE crm_leads
+                             SET stage='reserved', pinned_car_id=COALESCE(pinned_car_id, ?), updated_at=NOW()
+                           WHERE id=?")->execute([$carId, (int)$pl['lead_id']]);
+
+            $db->commit();
+
+            require_once __DIR__ . '/../../includes/notifications.php';
+            notifyRoles(['customer_relations', 'sales_manager', 'admin', 'super_admin'], 'sale',
+                'Imported vehicle has arrived',
+                trim($year . ' ' . $make . ' ' . $model) . ' (' . $chassis . ') has been booked in '
+                . 'and reserved against the customer order.',
+                BASE_URL . '/modules/crm/view_lead.php?id=' . (int)$pl['lead_id']);
+
+            logActivity('update', 'import_placements', $pid,
+                'Arrived in Nairobi. Booked in as car #' . $carId . ' and reserved against the order.');
+            logActivity('create', 'cars', $carId,
+                'Created on arrival of an imported vehicle by ' . $me['name'] . '.');
+
+            setFlash('success', trim($year . ' ' . $make . ' ' . $model) . ' is booked in and reserved '
+                              . 'for the customer. The delivery protocol can now run on their lead.');
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            error_log('import arrive: ' . $e->getMessage());
+            setFlash('error', 'The vehicle could not be booked in. Nothing was saved.');
+        }
+        redirect($back);
+    }
+
     if ($action === 'status') {
         $pid    = (int)($_POST['placement_id'] ?? 0);
         $status = $_POST['status'] ?? '';
         if (!array_key_exists($status, importPlacementStages())) {
             setFlash('error', 'Unknown status.');
+            redirect($back);
+        }
+        if ($status === 'arrived_nairobi') {
+            // Booking the vehicle in creates a car record, so it cannot be done by
+            // selecting a status — the chassis and the rest have to be given.
+            setFlash('error', 'Use Record arrival to book the vehicle in.');
             redirect($back);
         }
         try {
@@ -330,13 +433,27 @@ include __DIR__ . '/../../includes/header.php';
                         <input type="hidden" name="action" value="status">
                         <input type="hidden" name="placement_id" value="<?= (int)$r['id'] ?>">
                         <select name="status" class="form-select form-select-sm">
-                            <?php foreach ($stages as $k => $v): ?>
+                            <?php foreach ($stages as $k => $v):
+                                // Arrival is not a status to pick — it needs the vehicle's
+                                // real details, so it has a button of its own below.
+                                if ($k === 'arrived_nairobi') continue; ?>
                                 <option value="<?= $k ?>" <?= $r['status'] === $k ? 'selected' : '' ?>>
                                     <?= e($v[0]) ?></option>
                             <?php endforeach; ?>
                         </select>
                         <button class="btn btn-sm btn-outline-primary">Update</button>
                     </form>
+                    <?php if (empty($r['car_id'])): ?>
+                        <button class="btn btn-sm btn-success w-100 mt-2" data-bs-toggle="modal"
+                                data-bs-target="#arriveModal<?= (int)$r['id'] ?>">
+                            <i class="fa fa-flag-checkered me-1"></i>Record arrival</button>
+                    <?php else: ?>
+                        <div class="alert alert-success py-2 px-3 mt-2 mb-0" style="font-size:12px">
+                            <i class="fa fa-check me-1"></i>Booked in and reserved for the customer.
+                            <a href="<?= BASE_URL ?>/modules/cars/view.php?id=<?= (int)$r['car_id'] ?>"
+                               class="d-block mt-1">Open the vehicle</a>
+                        </div>
+                    <?php endif; ?>
                     <div class="small text-muted mt-2">
                         Approved by <?= e($r['approved_by']) ?>
                         <?= $r['approved_at'] ? ' on ' . fmtDate($r['approved_at']) : '' ?>
@@ -353,6 +470,60 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </div>
     </div>
+
+    <?php if ($r['approval_status'] === 'approved' && empty($r['car_id'])): ?>
+    <div class="modal fade" id="arriveModal<?= (int)$r['id'] ?>" tabindex="-1">
+      <div class="modal-dialog"><div class="modal-content">
+        <form method="post">
+          <?= csrfField() ?>
+          <input type="hidden" name="action" value="arrive">
+          <input type="hidden" name="placement_id" value="<?= (int)$r['id'] ?>">
+          <div class="modal-header">
+            <h6 class="modal-title"><i class="fa fa-flag-checkered me-2"></i>Book the vehicle in</h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-info py-2 small">
+              <i class="fa fa-circle-info me-1"></i>
+              This creates the vehicle record and reserves it for
+              <strong><?= e($r['client_name'] ?: $r['lead_name']) ?></strong>, who has already paid a
+              deposit. Their order then follows the ordinary delivery protocol.
+            </div>
+            <p class="small text-muted">Ordered as: <?= e($r['vehicle_details']) ?></p>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">Make <span class="text-danger">*</span></label>
+                <input type="text" name="make" class="form-control" required placeholder="e.g. Toyota">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">Model <span class="text-danger">*</span></label>
+                <input type="text" name="model" class="form-control" required placeholder="e.g. Land Cruiser 300">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Year <span class="text-danger">*</span></label>
+                <input type="number" name="year" class="form-control" required
+                       min="1950" max="<?= (int)date('Y') + 2 ?>" placeholder="<?= (int)date('Y') ?>">
+              </div>
+              <div class="col-md-8">
+                <label class="form-label small fw-semibold">Chassis number <span class="text-danger">*</span></label>
+                <input type="text" name="chassis_number" class="form-control text-uppercase" required
+                       placeholder="As on the import papers">
+              </div>
+              <div class="col-12">
+                <label class="form-label small fw-semibold">Registration</label>
+                <input type="text" name="registration_number" class="form-control text-uppercase"
+                       placeholder="Leave blank if not yet plated">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-success"><i class="fa fa-check me-1"></i>Book in and reserve</button>
+          </div>
+        </form>
+      </div></div>
+    </div>
+    <?php endif; ?>
 
     <?php if ($r['approval_status'] === 'pending' && $canApprove): ?>
     <div class="modal fade" id="rejectModal<?= (int)$r['id'] ?>" tabindex="-1">
