@@ -154,6 +154,24 @@ include __DIR__ . '/../../includes/header.php';
 .io-vehicle{ font-size:12.5px; color:var(--text-2,#64748b); max-width:340px; }
 </style>
 
+<div class="d-flex justify-content-end mb-3">
+    <a href="imports.php" class="btn btn-primary btn-sm">
+        <i class="fa fa-ship me-1"></i>Imports
+        <?php
+        // The count of placements still waiting on somebody, so the button says
+        // whether it is worth opening rather than just sitting there.
+        try {
+            $__ipPending = (int)$db->query(
+                "SELECT COUNT(*) FROM import_placements WHERE approval_status = 'pending'"
+            )->fetchColumn();
+            if ($__ipPending > 0) {
+                echo ' <span class="badge bg-warning text-dark ms-1">' . $__ipPending . ' to approve</span>';
+            }
+        } catch (\Throwable $e) { /* table not created until the page is opened */ }
+        ?>
+    </a>
+</div>
+
 <div class="io-banner">
     <div class="io-banner-title"><i class="fa fa-ship me-2"></i>Import Orders</div>
     <div class="io-banner-sub">
