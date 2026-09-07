@@ -408,10 +408,12 @@ function canAccess(string $module): bool {
         ],
 
         // ── Workshop / Operational roles ───────────────────────────────────────
+        // service_bookings is here because the workshop is who the booking is FOR.
+        // They were being notified of every new booking and then refused the page.
         'workshop_manager'  => [
             'cars','mechanics','drivers','assessments','jobs','parts_requests','issues',
             'quick_assessments','lpo','inventory','suppliers','car_documents','car_costs',
-            'inspections','attendance','payroll','chat','reports',
+            'inspections','attendance','payroll','chat','reports','service_bookings',
             'showroom_transfers','key_handovers','dispatch','team','imports','meetings',
         ],
         'mechanic'          => [
@@ -488,7 +490,7 @@ function canWrite(string $module): bool {
         'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team','trade_in','meetings'],
         'customer_relations' => ['clients','crm','cars','meetings','callcenter','showroom_transfers'],
         'receptionist'      => ['clients','service_bookings','quick_assessments','team','meetings'],
-        'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','dispatch','team','imports','meetings'],
+        'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','dispatch','team','imports','meetings','service_bookings'],
         'mechanic'          => ['assessments','parts_requests','team'],
         'driver'            => ['team'],
         'inventory_manager' => ['inventory','suppliers','lpo','parts_requests','meetings'],

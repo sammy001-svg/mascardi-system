@@ -44,6 +44,14 @@ if ($role === 'hr_manager') {
     exit;
 }
 
+// The workshop manager runs a floor, not a company. They were landing on the
+// super admin's dashboard — total fleet, revenue month to date, cars sold — none
+// of which tells them what to do next.
+if ($role === 'workshop_manager') {
+    header('Location: ' . BASE_URL . '/modules/jobs/dashboard.php');
+    exit;
+}
+
 // Supervisors get their location-scoped portal
 if ($role === 'supervisor') {
     header('Location: ' . BASE_URL . '/modules/supervisor/dashboard.php');

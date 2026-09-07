@@ -310,9 +310,18 @@ if (authRole() === 'supervisor') {
         <?php if (canAccess('jobs') || canAccess('lpo') || canAccess('parts_requests') || canAccess('issues')): ?>
         <div class="nav-section">Workshop</div>
 
+        <?php // authRole(), not hasRole() — see modules/jobs/dashboard.php. ?>
+        <?php if (canAccess('jobs') && authRole() !== 'mechanic'): ?>
+        <a href="<?= BASE_URL ?>/modules/jobs/dashboard.php"
+           class="nav-item <?= isActive('/modules/jobs/dashboard.php') ?>"
+           data-label="Workshop Floor">
+            <i class="fa fa-gauge-high"></i><span>Workshop Floor</span>
+        </a>
+        <?php endif; ?>
+
         <?php if (canAccess('jobs')): ?>
         <a href="<?= BASE_URL ?>/modules/jobs/index.php"
-           class="nav-item <?= isActive('/modules/jobs/') ?>"
+           class="nav-item <?= isActive('/modules/jobs/index.php') ?>"
            data-label="Job Cards">
             <i class="fa fa-toolbox"></i><span>Job Cards</span>
         </a>

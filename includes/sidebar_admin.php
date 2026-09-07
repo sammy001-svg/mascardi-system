@@ -42,6 +42,14 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
             <span>Workshop Dashboard</span>
         </a>
 
+        <?php $__isFloor = str_contains($__uri, '/modules/jobs/dashboard.php'); ?>
+        <a href="<?= BASE_URL ?>/modules/jobs/dashboard.php"
+           class="nav-item <?= $__isFloor ? 'active' : '' ?>"
+           data-label="Workshop Floor">
+            <i class="fa fa-gauge-high" style="<?= $__isFloor ? '' : 'color:#0891b2' ?>"></i>
+            <span>Workshop Floor</span>
+        </a>
+
         <a href="<?= BASE_URL ?>/modules/admin/sales_dashboard.php"
            class="nav-item <?= $__isSales ? 'active' : '' ?>"
            data-label="Sales Dashboard">
