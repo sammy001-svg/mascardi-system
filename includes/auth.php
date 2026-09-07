@@ -408,13 +408,20 @@ function canAccess(string $module): bool {
         ],
 
         // ── Workshop / Operational roles ───────────────────────────────────────
-        // service_bookings is here because the workshop is who the booking is FOR.
-        // They were being notified of every new booking and then refused the page.
+        // The workshop, and nothing but. This list used to reach into imports,
+        // dispatch, showroom transfers, key handovers, payroll and the call centre —
+        // a menu of thirty-odd items, most of which belonged to somebody else's job.
+        //
+        // What stayed had to earn it. service_bookings is the work arriving.
+        // cars and car_documents are the vehicle being worked on. attendance and team
+        // are who is in today, which is what allocating a job depends on. suppliers
+        // went: the workshop raises an LPO, procurement decides who it goes to, and
+        // lpo does not gate on supplier access so nothing breaks by dropping it.
         'workshop_manager'  => [
-            'cars','mechanics','drivers','assessments','jobs','parts_requests','issues',
-            'quick_assessments','lpo','inventory','suppliers','car_documents','car_costs',
-            'inspections','attendance','payroll','chat','reports','service_bookings',
-            'showroom_transfers','key_handovers','dispatch','team','imports','meetings',
+            'jobs','mechanics','parts_requests','issues','lpo','inventory',
+            'assessments','quick_assessments','inspections',
+            'cars','car_documents','service_bookings',
+            'attendance','team','reports','chat','meetings',
         ],
         'mechanic'          => [
             'jobs','assessments','parts_requests','issues','car_documents','inspections','chat','team',
@@ -490,7 +497,7 @@ function canWrite(string $module): bool {
         'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team','trade_in','meetings'],
         'customer_relations' => ['clients','crm','cars','meetings','callcenter','showroom_transfers'],
         'receptionist'      => ['clients','service_bookings','quick_assessments','team','meetings'],
-        'workshop_manager'  => ['cars','jobs','assessments','mechanics','drivers','parts_requests','issues','quick_assessments','lpo','inventory','suppliers','car_documents','car_costs','inspections','attendance','payroll','dispatch','team','imports','meetings','service_bookings'],
+        'workshop_manager'  => ['jobs','mechanics','parts_requests','issues','lpo','inventory','assessments','quick_assessments','inspections','cars','car_documents','service_bookings','attendance','team','meetings'],
         'mechanic'          => ['assessments','parts_requests','team'],
         'driver'            => ['team'],
         'inventory_manager' => ['inventory','suppliers','lpo','parts_requests','meetings'],

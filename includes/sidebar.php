@@ -20,6 +20,12 @@ if (authRole() === 'customer_relations') {
     return;
 }
 
+// The workshop manager gets the workshop, and only the workshop
+if (authRole() === 'workshop_manager') {
+    include __DIR__ . '/sidebar_workshop.php';
+    return;
+}
+
 // Supervisors get their own location-scoped sidebar
 if (authRole() === 'supervisor') {
     include __DIR__ . '/sidebar_supervisor.php';

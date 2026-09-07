@@ -73,6 +73,19 @@ $k = [
                                 AND status IN ('pending','confirmed')"),
 ];
 
+// The parts store and the fault log stop jobs as surely as a missing mechanic,
+// so they are counted here rather than being a page someone remembers to open.
+// Each is guarded on its own: car_issues and attendance_records are not on every
+// install, and a board that dies because one table is missing is no board.
+$k['low_stock']   = $num("SELECT COUNT(*) FROM inventory WHERE quantity <= reorder_level");
+$k['out_stock']   = $num("SELECT COUNT(*) FROM inventory WHERE quantity <= 0");
+$k['open_issues'] = $num("SELECT COUNT(*) FROM car_issues WHERE status NOT IN ('closed','resolved')");
+$k['critical']    = $num("SELECT COUNT(*) FROM car_issues
+                            WHERE status NOT IN ('closed','resolved') AND severity = 'critical'");
+$k['in_today']    = $num("SELECT COUNT(*) FROM attendance_records
+                            WHERE attendance_date = CURDATE() AND staff_type = 'mechanic'
+                              AND status IN ('present','late','half_day')");
+
 // How many mechanics are actually holding work, so "6 on duty" can say how many
 // of them are free — which is the number you need when a car arrives.
 $k['mechanics_busy'] = $num("SELECT COUNT(DISTINCT j.mechanic_id) FROM workshop_jobs j
@@ -138,6 +151,29 @@ $parts = $all("
      LIMIT 8
 ");
 
+// ── Parts that will stop a job ───────────────────────────────────────────────
+$stock = $all("
+    SELECT id, part_number, part_name, quantity, reorder_level, unit
+      FROM inventory
+     WHERE quantity <= reorder_level
+  ORDER BY (quantity <= 0) DESC, (quantity / NULLIF(reorder_level,0)), part_name
+     LIMIT 8
+");
+
+// ── Faults raised against vehicles, worst first ─────────────────────────────
+$issues = $all("
+    SELECT ci.id, ci.issue_number, ci.title, ci.severity, ci.status, ci.reported_at,
+           c.make, c.model, c.registration_number,
+           m.name AS mechanic_name,
+           DATEDIFF(CURDATE(), DATE(ci.reported_at)) AS age_days
+      FROM car_issues ci
+ LEFT JOIN cars      c ON c.id = ci.car_id
+ LEFT JOIN mechanics m ON m.id = ci.assigned_to
+     WHERE ci.status NOT IN ('closed','resolved')
+  ORDER BY FIELD(ci.severity,'critical','high','medium','low'), ci.reported_at
+     LIMIT 8
+");
+
 // ── What actually needs a person, said in one line each ─────────────────────
 $alerts = [];
 if ($k['overdue'])
@@ -156,6 +192,15 @@ if ($k['booking_late'])
                  . ($k['booking_late'] === 1 ? 'vehicle' : 'vehicles')
                  . ' never came in — worth a call',
                  BASE_URL . '/modules/service_bookings/index.php'];
+
+if ($k['out_stock'])
+    $alerts[] = ['fa-boxes-stacked', $k['out_stock'] . ' parts '
+                 . ($k['out_stock'] === 1 ? 'line has' : 'lines have') . ' run out completely',
+                 BASE_URL . '/modules/inventory/index.php'];
+if ($k['critical'])
+    $alerts[] = ['fa-triangle-exclamation', $k['critical'] . ' critical '
+                 . ($k['critical'] === 1 ? 'fault is' : 'faults are') . ' still open',
+                 BASE_URL . '/modules/issues/index.php'];
 
 $statusLabel = [
     'pending'       => 'Not started',
@@ -289,10 +334,12 @@ include __DIR__ . '/../../includes/header.php';
         ['Past the date',  $k['overdue'],       'promised and not delivered',                     $k['overdue'] ? 'bad' : ''],
         ['Waiting on parts', $k['waiting_parts'], $k['on_hold'] . ' more on hold',                $k['waiting_parts'] ? 'warn' : ''],
         ['Due in today',   $k['due_today'],     $k['booking_late'] . ' already missed',           $k['due_today'] ? 'good' : ''],
+        ['Parts running low', $k['low_stock'],  $k['out_stock'] . ' of them at zero',        $k['out_stock'] ? 'bad' : ($k['low_stock'] ? 'warn' : '')],
+        ['Faults open',       $k['open_issues'], $k['critical'] . ' critical',               $k['critical'] ? 'bad' : ''],
         ['Finished this week', $k['done_week'], $k['mechanics_free'] . ' of ' . $k['mechanics'] . ' mechanics free', 'good'],
     ];
     foreach ($tiles as [$label, $value, $sub, $tone]): ?>
-    <div class="col-6 col-lg-2">
+    <div class="col-6 col-lg-3">
         <div class="wb-kpi <?= $tone ?>">
             <div class="v"><?= (int)$value ?></div>
             <div class="k"><?= e($label) ?></div>
@@ -434,7 +481,12 @@ include __DIR__ . '/../../includes/header.php';
 
         <div class="wb-card">
             <header>
-                <h2><i class="fa fa-helmet-safety" style="color:#0891b2"></i>The crew</h2>
+                <h2><i class="fa fa-helmet-safety" style="color:#0891b2"></i>The crew<?php
+                    // Only shown when somebody has actually marked the register today;
+                    // "0 in" on a morning nobody has filled it in would be a lie.
+                    if ($k['in_today'] > 0): ?>
+                    <span class="wb-pill done"><?= (int)$k['in_today'] ?> in today</span>
+                <?php endif; ?></h2>
                 <a href="<?= BASE_URL ?>/modules/mechanics/index.php">Mechanics</a>
             </header>
             <?php if (!$crew): ?>
@@ -463,6 +515,71 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <?php endforeach; ?>
             </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="wb-card">
+            <header>
+                <h2><i class="fa fa-boxes-stacked" style="color:#d97706"></i>Parts running low</h2>
+                <a href="<?= BASE_URL ?>/modules/inventory/index.php">Parts stock</a>
+            </header>
+            <?php if (!$stock): ?>
+                <div class="wb-empty">Every part is above its reorder level.</div>
+            <?php else: ?>
+            <table class="wb-table">
+                <tbody>
+                <?php foreach ($stock as $it): $q = (int)$it['quantity']; ?>
+                <tr>
+                    <td>
+                        <?= e($it['part_name']) ?>
+                        <div class="wb-sub"><?= e($it['part_number'] ?: 'no part number') ?></div>
+                    </td>
+                    <td style="text-align:right;width:110px">
+                        <span class="wb-pill <?= $q <= 0 ? 'late' : 'soon' ?>">
+                            <?= $q <= 0 ? 'Out of stock'
+                                : $q . ' ' . e($it['unit'] ?: 'left') ?></span>
+                        <div class="wb-sub">reorder at <?= (int)$it['reorder_level'] ?></div>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php endif; ?>
+        </div>
+
+        <div class="wb-card">
+            <header>
+                <h2><i class="fa fa-triangle-exclamation" style="color:#dc2626"></i>Faults raised</h2>
+                <a href="<?= BASE_URL ?>/modules/issues/index.php">All issues</a>
+            </header>
+            <?php if (!$issues): ?>
+                <div class="wb-empty">No faults are open against any vehicle.</div>
+            <?php else: ?>
+            <table class="wb-table">
+                <tbody>
+                <?php foreach ($issues as $is):
+                    $car = trim(($is['make'] ?? '') . ' ' . ($is['model'] ?? ''));
+                    $sev = in_array($is['severity'], ['critical','high','medium','low'], true)
+                         ? $is['severity'] : 'medium';
+                ?>
+                <tr>
+                    <td>
+                        <a href="<?= BASE_URL ?>/modules/issues/index.php"><?= e($is['title']) ?></a>
+                        <div class="wb-sub">
+                            <?= e($car !== '' ? $car : 'no vehicle') ?><?=
+                                !empty($is['registration_number']) ? ' · ' . e($is['registration_number']) : '' ?><?=
+                                !empty($is['mechanic_name']) ? ' · ' . e($is['mechanic_name']) : ' · unassigned' ?>
+                        </div>
+                    </td>
+                    <td style="text-align:right;width:96px">
+                        <span class="wb-pill <?= in_array($sev, ['critical','high'], true) ? 'late' : 'ok' ?>">
+                            <?= ucfirst($sev) ?></span>
+                        <div class="wb-sub"><?= (int)$is['age_days'] ?>d old</div>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
             <?php endif; ?>
         </div>
 
