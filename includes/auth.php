@@ -421,6 +421,10 @@ function canAccess(string $module): bool {
             'jobs','mechanics','parts_requests','issues','lpo','inventory',
             'assessments','quick_assessments','inspections',
             'cars','car_documents','service_bookings',
+            // The workshop bills its own work: quote the repair, invoice the
+            // finished job, and know whose car it is. Deleting any of the three is
+            // still admin-only — that guard lives in each module's delete.php.
+            'clients','quotations','invoices',
             'attendance','team','reports','chat','meetings',
         ],
         'mechanic'          => [
@@ -497,7 +501,7 @@ function canWrite(string $module): bool {
         'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team','trade_in','meetings'],
         'customer_relations' => ['clients','crm','cars','meetings','callcenter','showroom_transfers'],
         'receptionist'      => ['clients','service_bookings','quick_assessments','team','meetings'],
-        'workshop_manager'  => ['jobs','mechanics','parts_requests','issues','lpo','inventory','assessments','quick_assessments','inspections','cars','car_documents','service_bookings','attendance','team','meetings'],
+        'workshop_manager'  => ['jobs','mechanics','parts_requests','issues','lpo','inventory','assessments','quick_assessments','inspections','cars','car_documents','service_bookings','clients','quotations','invoices','attendance','team','meetings'],
         'mechanic'          => ['assessments','parts_requests','team'],
         'driver'            => ['team'],
         'inventory_manager' => ['inventory','suppliers','lpo','parts_requests','meetings'],

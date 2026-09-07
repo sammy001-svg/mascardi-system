@@ -82,6 +82,15 @@ $k['out_stock']   = $num("SELECT COUNT(*) FROM inventory WHERE quantity <= 0");
 $k['open_issues'] = $num("SELECT COUNT(*) FROM car_issues WHERE status NOT IN ('closed','resolved')");
 $k['critical']    = $num("SELECT COUNT(*) FROM car_issues
                             WHERE status NOT IN ('closed','resolved') AND severity = 'critical'");
+// Work that was done and never charged for. Scoped to the last 90 days on
+// purpose: a job finished two years ago and never invoiced is history, not a
+// task, and putting it in the same list would bury the ones still collectable.
+$k['unbilled'] = $num("SELECT COUNT(*) FROM workshop_jobs j
+                         WHERE j.status = 'completed'
+                           AND j.updated_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+                           AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.job_id = j.id)");
+$k['unpaid']   = $num("SELECT COUNT(*) FROM invoices WHERE status IN ('unpaid','partial')");
+
 $k['in_today']    = $num("SELECT COUNT(*) FROM attendance_records
                             WHERE attendance_date = CURDATE() AND staff_type = 'mechanic'
                               AND status IN ('present','late','half_day')");
@@ -174,6 +183,22 @@ $issues = $all("
      LIMIT 8
 ");
 
+// ── Finished work with no invoice against it ────────────────────────────────
+$unbilled = $all("
+    SELECT j.id, j.job_number, j.updated_at,
+           c.make, c.model, c.registration_number,
+           m.name AS mechanic_name,
+           DATEDIFF(CURDATE(), DATE(j.updated_at)) AS since_days
+      FROM workshop_jobs j
+ LEFT JOIN cars      c ON c.id = j.car_id
+ LEFT JOIN mechanics m ON m.id = j.mechanic_id
+     WHERE j.status = 'completed'
+       AND j.updated_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+       AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.job_id = j.id)
+  ORDER BY j.updated_at
+     LIMIT 8
+");
+
 // ── What actually needs a person, said in one line each ─────────────────────
 $alerts = [];
 if ($k['overdue'])
@@ -201,6 +226,11 @@ if ($k['critical'])
     $alerts[] = ['fa-triangle-exclamation', $k['critical'] . ' critical '
                  . ($k['critical'] === 1 ? 'fault is' : 'faults are') . ' still open',
                  BASE_URL . '/modules/issues/index.php'];
+
+if ($k['unbilled'])
+    $alerts[] = ['fa-file-invoice-dollar', $k['unbilled'] . ' finished '
+                 . ($k['unbilled'] === 1 ? 'job has' : 'jobs have') . ' not been invoiced',
+                 BASE_URL . '/modules/jobs/index.php?status=completed'];
 
 $statusLabel = [
     'pending'       => 'Not started',
@@ -515,6 +545,41 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <?php endforeach; ?>
             </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="wb-card">
+            <header>
+                <h2><i class="fa fa-file-invoice-dollar" style="color:#16a34a"></i>Finished, not billed</h2>
+                <a href="<?= BASE_URL ?>/modules/invoices/index.php">Invoices<?=
+                    $k['unpaid'] ? ' (' . (int)$k['unpaid'] . ' unpaid)' : '' ?></a>
+            </header>
+            <?php if (!$unbilled): ?>
+                <div class="wb-empty">Every job finished in the last 90 days has an invoice.</div>
+            <?php else: ?>
+            <table class="wb-table">
+                <tbody>
+                <?php foreach ($unbilled as $ub):
+                    $car = trim(($ub['make'] ?? '') . ' ' . ($ub['model'] ?? ''));
+                    $age = (int)$ub['since_days'];
+                ?>
+                <tr>
+                    <td>
+                        <a href="<?= BASE_URL ?>/modules/jobs/view.php?id=<?= (int)$ub['id'] ?>">
+                            <?= e($ub['job_number']) ?></a>
+                        <div class="wb-sub">
+                            <?= e($car !== '' ? $car : 'no vehicle') ?><?=
+                                !empty($ub['registration_number']) ? ' · ' . e($ub['registration_number']) : '' ?>
+                        </div>
+                    </td>
+                    <td style="text-align:right;width:96px">
+                        <span class="wb-pill <?= $age >= 7 ? 'late' : 'soon' ?>">
+                            <?= $age <= 0 ? 'Today' : $age . 'd ago' ?></span>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
             <?php endif; ?>
         </div>
 

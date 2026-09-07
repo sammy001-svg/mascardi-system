@@ -31,6 +31,8 @@ $__todayIn   = $__badge("SELECT COUNT(*) FROM service_bookings
                             AND status IN ('pending','confirmed','in_progress')");
 $__quotes    = $__badge("SELECT COUNT(*) FROM parts_requests WHERE status = 'pending'");
 $__lowStock  = $__badge("SELECT COUNT(*) FROM inventory WHERE quantity <= reorder_level");
+$__unpaid    = $__badge("SELECT COUNT(*) FROM invoices WHERE status IN ('unpaid','partial')");
+$__openQuote = $__badge("SELECT COUNT(*) FROM quotations WHERE status IN ('draft','sent')");
 ?>
 <div class="app-sidebar" id="sidebar">
 
@@ -168,6 +170,43 @@ $__lowStock  = $__badge("SELECT COUNT(*) FROM inventory WHERE quantity <= reorde
            class="nav-item <?= $__is('/modules/lpo/') ?>"
            data-label="Purchase Orders">
             <i class="fa fa-file-import"></i><span>Purchase Orders</span>
+        </a>
+        <?php endif; ?>
+
+        <!-- ══ CUSTOMERS & BILLING ═══════════════════════════════ -->
+        <?php // "Quotations" here is the customer's quote for the repair. The
+              // "Quote Requests" above it under Parts are the internal ones raised
+              // against a job. Different things, near-identical names — the section
+              // headings are what keeps them apart. ?>
+        <div class="nav-section">Customers &amp; Billing</div>
+
+        <?php if (canAccess('clients')): ?>
+        <a href="<?= BASE_URL ?>/modules/clients/index.php"
+           class="nav-item <?= $__is('/modules/clients/') ?>"
+           data-label="Clients">
+            <i class="fa fa-users"></i><span>Clients</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (canAccess('quotations')): ?>
+        <a href="<?= BASE_URL ?>/modules/quotations/index.php"
+           class="nav-item <?= $__is('/modules/quotations/') ?>"
+           data-label="Quotations" style="position:relative">
+            <i class="fa fa-file-signature"></i><span>Quotations</span>
+            <?php if ($__openQuote > 0): ?>
+            <span class="nav-count"><?= $__openQuote > 99 ? '99+' : $__openQuote ?></span>
+            <?php endif; ?>
+        </a>
+        <?php endif; ?>
+
+        <?php if (canAccess('invoices')): ?>
+        <a href="<?= BASE_URL ?>/modules/invoices/index.php"
+           class="nav-item <?= $__is('/modules/invoices/') ?>"
+           data-label="Invoices" style="position:relative">
+            <i class="fa fa-file-invoice-dollar"></i><span>Invoices</span>
+            <?php if ($__unpaid > 0): ?>
+            <span class="nav-count nav-count-warn"><?= $__unpaid > 99 ? '99+' : $__unpaid ?></span>
+            <?php endif; ?>
         </a>
         <?php endif; ?>
 
