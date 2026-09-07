@@ -71,7 +71,10 @@ $buyerIdNo   = trim($lead['id_number'] ?? '') ?: trim($client['id_number'] ?? ''
 $buyerKraPin = trim($client['kra_pin']   ?? '');
 
 // Amounts
-$deposit     = (float)($lead['deposit_amount']    ?? 0);
+// The sum of every deposit paid, not just the one written on the lead when
+// the car was first reserved — see modules/crm/_deposits.php.
+require_once __DIR__ . '/_deposits.php';
+$deposit     = leadDepositTotal($db, $lead);
 $agreedPrice = (float)($lead['agreed_sale_price'] ?? 0);
 if (!$agreedPrice && $car) {
     $offer   = (float)($car['offer_price']  ?? 0);

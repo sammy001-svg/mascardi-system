@@ -62,8 +62,15 @@ $buyerName   = trim($client['name']      ?? $lead['name']  ?? '');
 $buyerIdNo   = trim($lead['id_number'] ?? '') ?: trim($client['id_number'] ?? '');
 $buyerKraPin = trim($client['kra_pin']   ?? '');
 
-// Amounts
-$deposit     = (float)($lead['deposit_amount']    ?? 0);
+// Amounts.
+//
+// The deposit is the sum of what has been paid, not the figure written on the
+// lead when the car was first reserved. A customer who topped up was being
+// handed a receipt for less than they had paid, and a balance that was too
+// high by exactly the amount of the top-up.
+require_once __DIR__ . '/_deposits.php';
+$dep         = leadDepositSummary($db, $lead);
+$deposit     = $dep['total'];
 $agreedPrice = (float)($lead['agreed_sale_price'] ?? 0);
 if (!$agreedPrice && $car) {
     $offer   = (float)($car['offer_price']  ?? 0);
@@ -71,7 +78,7 @@ if (!$agreedPrice && $car) {
     $agreedPrice = $offer > 0 ? $offer : $asking;
 }
 $balance    = max(0, $agreedPrice - $deposit);
-$depDate    = $lead['deposit_date'] ?? date('Y-m-d');
+$depDate    = $dep['date'];
 $dueDateRaw = $lead['due_date'] ?? '';
 $dueDate    = $dueDateRaw ? (new DateTime($dueDateRaw))->format('d/m/Y') : '';
 
@@ -267,8 +274,31 @@ include __DIR__ . '/../../includes/header.php';
             <th>Total Agreed Price</th>
             <td><?= $agreedPrice > 0 ? 'KES ' . number_format($agreedPrice, 0) . '/-' : '—' ?></td>
         </tr>
+        <?php if ($dep['rows']): ?>
+        <?php // More than one payment, so the receipt shows each of them. A single
+              // total against a customer who paid three times invites the argument
+              // that they paid something else. ?>
         <tr>
-            <th>Deposit Paid</th>
+            <th>Initial Deposit</th>
+            <td>KES <?= number_format($dep['initial'], 0) ?>/-
+                <span style="font-size:11px;color:var(--ink-2)">
+                    — <?= !empty($lead['deposit_date'])
+                        ? (new DateTime($lead['deposit_date']))->format('d M Y') : e($today) ?>
+                </span></td>
+        </tr>
+        <?php foreach ($dep['rows'] as $xd): ?>
+        <tr>
+            <th>Additional Deposit</th>
+            <td>KES <?= number_format((float)$xd['amount'], 0) ?>/-
+                <span style="font-size:11px;color:var(--ink-2)">
+                    — <?= (new DateTime($xd['deposit_date']))->format('d M Y') ?><?=
+                       !empty($xd['notes']) ? ' · ' . e($xd['notes']) : '' ?>
+                </span></td>
+        </tr>
+        <?php endforeach; ?>
+        <?php endif; ?>
+        <tr>
+            <th><?= $dep['rows'] ? 'Total Paid to Date' : 'Deposit Paid' ?></th>
             <td style="color:#15803d;font-weight:700">KES <?= number_format($deposit, 0) ?>/-</td>
         </tr>
         <tr>

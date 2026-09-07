@@ -24,16 +24,10 @@ try { $db->exec("ALTER TABLE crm_leads ADD COLUMN po_box VARCHAR(100) NULL DEFAU
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN id_card_front VARCHAR(255) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN id_card_back VARCHAR(255) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN reservation_status VARCHAR(20) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
-try { $db->exec("CREATE TABLE IF NOT EXISTS crm_lead_deposits (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    lead_id INT NOT NULL,
-    amount DECIMAL(15,2) NOT NULL,
-    deposit_date DATE NOT NULL,
-    notes VARCHAR(255) NULL,
-    created_by INT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    KEY idx_lead (lead_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $_) {}
+// The deposits table is created by leadDepositsEnsure() in _deposits.php now.
+// Two CREATE statements for one table is how the columns drift apart.
+require_once __DIR__ . '/_deposits.php';
+leadDepositsEnsure($db);
 try { $db->exec("CREATE TABLE IF NOT EXISTS crm_delivery_protocol (
     id INT AUTO_INCREMENT PRIMARY KEY,
     lead_id INT NOT NULL UNIQUE,
@@ -103,15 +97,14 @@ if ($isCrmAgent && (int)$lead['assigned_to'] !== $uid) {
 $pageTitle = $lead['name'];
 
 // ── Additional deposits + delivery protocol state ─────────────────────────────
-$extraDeposits = [];
-try {
-    $st = $db->prepare("SELECT d.*, u.name AS user_name FROM crm_lead_deposits d LEFT JOIN users u ON u.id = d.created_by WHERE d.lead_id = ? ORDER BY d.deposit_date ASC, d.id ASC");
-    $st->execute([$id]);
-    $extraDeposits = $st->fetchAll();
-} catch (\Throwable $_) {}
-$extraDepositTotal = 0.0;
-foreach ($extraDeposits as $xd) $extraDepositTotal += (float)$xd['amount'];
-$totalDeposit = (float)($lead['deposit_amount'] ?? 0) + $extraDepositTotal;
+// One definition of what has been paid, shared with every document that has to
+// state it — see modules/crm/_deposits.php. This page had the sum right and the
+// receipts did not, which is the argument for it living in one place.
+require_once __DIR__ . '/_deposits.php';
+$depSummary        = leadDepositSummary($db, $lead);
+$extraDeposits     = $depSummary['rows'];
+$extraDepositTotal = $depSummary['extra'];
+$totalDeposit      = $depSummary['total'];
 
 $dp = null;
 try {

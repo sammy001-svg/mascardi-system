@@ -146,6 +146,15 @@ function reservationCancel(PDO $db, int $leadId, string $reason, string $reasonC
         $label .= ' (' . $lead['registration_number'] . ')';
     }
 
+    // Before the transaction, deliberately. leadDepositsEnsure() runs CREATE and
+    // ALTER, and DDL implicitly commits in MySQL — inside the transaction it ended
+    // it early, so the commit below threw "no active transaction" while the writes
+    // had in fact already landed. Reported as a failure, half-applied in truth.
+    // It memoises, so the call inside stays a no-op.
+    require_once __DIR__ . '/../crm/_deposits.php';
+    leadDepositsEnsure($db);
+    $depTotal = leadDepositTotal($db, $lead);
+
     try {
         $db->beginTransaction();
 
@@ -163,6 +172,11 @@ function reservationCancel(PDO $db, int $leadId, string $reason, string $reasonC
         }
 
         // Snapshot before the reset below wipes the figures off the lead.
+        //
+        // The TOTAL, not the figure on the lead. This row is the record of what
+        // the customer is owed back, and it was recording only their first payment
+        // — a buyer who topped up twice would have been refunded the deposit they
+        // paid in month one and nothing since.
         $db->prepare("INSERT INTO reservation_cancellations
                 (lead_id, car_id, client_id, assigned_to, reason_code, reason,
                  deposit_amount, agreed_sale_price, vehicle_label, cancelled_by)
@@ -171,7 +185,7 @@ function reservationCancel(PDO $db, int $leadId, string $reason, string $reasonC
                $leadId, $carId ?: null, (int)($lead['client_id'] ?? 0) ?: null,
                (int)($lead['assigned_to'] ?? 0) ?: null,
                $reasonCode, $reason,
-               $lead['deposit_amount'] !== null ? (float)$lead['deposit_amount'] : null,
+               $depTotal > 0 ? $depTotal : null,
                $lead['agreed_sale_price'] !== null ? (float)$lead['agreed_sale_price'] : null,
                $label ?: null, $byUserId,
            ]);
@@ -187,6 +201,10 @@ function reservationCancel(PDO $db, int $leadId, string $reason, string $reasonC
             }
         } catch (\Throwable $_) {}
         $db->prepare("UPDATE crm_leads SET {$sets} WHERE id = ?")->execute([$leadId]);
+
+        // The lead's own deposit columns are cleared above; the top-ups have to go
+        // with them or they count towards the next reservation on this lead.
+        leadVoidExtraDeposits($db, $leadId, 'Reservation cancelled: ' . $reasonCode);
 
         $db->commit();
     } catch (\Throwable $e) {
@@ -204,7 +222,7 @@ function reservationCancel(PDO $db, int $leadId, string $reason, string $reasonC
             'agent_email'  => (string)($lead['agent_email'] ?? ''),
             'customer'     => (string)($lead['name'] ?? ''),
             'vehicle'      => $label,
-            'deposit'      => $lead['deposit_amount'] !== null ? (float)$lead['deposit_amount'] : null,
+            'deposit'      => $depTotal > 0 ? $depTotal : null,
             'reason'       => $reason,
             'reason_label' => reservationCancelReasons()[$reasonCode] ?? 'Other',
         ],

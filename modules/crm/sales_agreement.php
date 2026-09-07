@@ -72,7 +72,10 @@ if (!$agreedPrice && $car) {
     $askingPrice = (float)($car['asking_price'] ?? 0);
     $agreedPrice = $offerPrice > 0 ? $offerPrice : $askingPrice;
 }
-$deposit = (float)($lead['deposit_amount'] ?? 0);
+// The sum of every deposit paid, not just the one written on the lead when
+// the car was first reserved — see modules/crm/_deposits.php.
+require_once __DIR__ . '/_deposits.php';
+$deposit = leadDepositTotal($db, $lead);
 $depDate = $lead['deposit_date'] ?? date('Y-m-d');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
