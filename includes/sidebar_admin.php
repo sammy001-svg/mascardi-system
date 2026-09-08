@@ -103,10 +103,17 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
 
 
         <a href="<?= BASE_URL ?>/modules/delivered_cars/index.php"
-           class="nav-item <?= isActive('/modules/delivered_cars/') ?>"
+           class="nav-item <?= isActive('/modules/delivered_cars/index.php') ?>"
            data-label="Delivered Cars">
             <i class="fa fa-truck"></i><span>Delivered Cars</span>
         </a>
+
+        <a href="<?= BASE_URL ?>/modules/delivered_cars/report.php"
+           class="nav-item <?= isActive('/modules/delivered_cars/report.php') ?>"
+           data-label="Monthly Report">
+            <i class="fa fa-table-list"></i><span>Monthly Report</span>
+        </a>
+
 
 
         <a href="<?= BASE_URL ?>/modules/trade_in/index.php"

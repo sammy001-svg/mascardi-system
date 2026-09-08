@@ -283,7 +283,15 @@ include __DIR__ . '/../../includes/header.php';
 
 <!-- ── Dashboard banner ─────────────────────────────────────────────────────── -->
 <div class="dlv-banner">
-    <div class="dlv-banner-title"><i class="fa fa-truck me-2"></i>Delivered Cars</div>
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+        <div class="dlv-banner-title"><i class="fa fa-truck me-2"></i>Delivered Cars</div>
+        <?php // The same deliveries as a month-by-month sheet, for the sales meeting. ?>
+        <a href="<?= BASE_URL ?>/modules/delivered_cars/report.php"
+           class="btn btn-sm" style="background:rgba(255,255,255,.18);color:#fff;
+                  border:1px solid rgba(255,255,255,.35);border-radius:8px;font-size:13px">
+            <i class="fa fa-table-list me-1"></i>Monthly report
+        </a>
+    </div>
     <div class="dlv-banner-sub">
         <?php if ($isCrmAgent): ?>
         Vehicles you have successfully delivered to buyers

@@ -193,10 +193,17 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
 
 
         <a href="<?= BASE_URL ?>/modules/delivered_cars/index.php"
-           class="nav-item <?= str_contains($__uri, '/modules/delivered_cars/') ? 'active' : '' ?>"
+           class="nav-item <?= str_contains($__uri, '/modules/delivered_cars/index.php') ? 'active' : '' ?>"
            data-label="Delivered Cars">
             <i class="fa fa-truck"></i><span>Delivered Cars</span>
         </a>
+
+        <a href="<?= BASE_URL ?>/modules/delivered_cars/report.php"
+           class="nav-item <?= str_contains($__uri, '/modules/delivered_cars/report.php') ? 'active' : '' ?>"
+           data-label="Monthly Report">
+            <i class="fa fa-table-list"></i><span>Monthly Report</span>
+        </a>
+
 
         <?php // Read-only: CR agents sell consignment stock through leads, so they
               // need the owner and commission terms visible. ?>
