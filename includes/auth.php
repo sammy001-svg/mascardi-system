@@ -395,12 +395,7 @@ function canAccess(string $module): bool {
             // showroom_transfers: CR agents raise a transfer when a customer wants a
             // vehicle moved to another showroom. Approving and receiving it is not
             // theirs — that is gated separately in the module itself.
-            // service_bookings: a CR agent is the person the customer rings, and
-            // booking the car in is the same conversation as selling it. They had
-            // the client but not the booking, so the call ended with "someone will
-            // call you back".
             'clients','crm','chat','cars','trade_in','meetings','showroom_transfers',
-            'service_bookings',
         ],
 
         // ── Supervisor role ────────────────────────────────────────────────────
@@ -504,7 +499,7 @@ function canWrite(string $module): bool {
         'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team','imports','trade_in','meetings','callcenter'],
         'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','dispatch','team','trade_in','meetings'],
         'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team','trade_in','meetings'],
-        'customer_relations' => ['clients','crm','cars','meetings','callcenter','showroom_transfers','service_bookings'],
+        'customer_relations' => ['clients','crm','cars','meetings','callcenter','showroom_transfers'],
         'receptionist'      => ['clients','service_bookings','quick_assessments','team','meetings'],
         'workshop_manager'  => ['jobs','mechanics','parts_requests','issues','lpo','inventory','assessments','quick_assessments','inspections','cars','car_documents','service_bookings','clients','quotations','invoices','attendance','team','meetings'],
         'mechanic'          => ['assessments','parts_requests','team'],
