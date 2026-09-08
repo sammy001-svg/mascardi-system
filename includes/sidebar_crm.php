@@ -46,6 +46,14 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
             <i class="fa fa-users"></i><span>Clients</span>
         </a>
 
+        <?php if (canAccess('service_bookings')): ?>
+        <a href="<?= BASE_URL ?>/modules/service_bookings/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/service_bookings/') ? 'active' : '' ?>"
+           data-label="Service Bookings">
+            <i class="fa fa-calendar-check"></i><span>Service Bookings</span>
+        </a>
+        <?php endif; ?>
+
         <a href="<?= BASE_URL ?>/modules/crm/leads.php"
            class="nav-item <?= (str_contains($__uri,'/modules/crm/leads') || str_contains($__uri,'/modules/crm/view_lead') || str_contains($__uri,'/modules/crm/add_lead')) ? 'active' : '' ?>"
            data-label="My Leads"
