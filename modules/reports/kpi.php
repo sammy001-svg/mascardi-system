@@ -63,37 +63,65 @@ try {
     $s->execute([$month,$year]); $actuals['revenue'] = (float)$s->fetchColumn();
 } catch (\Throwable $_) {}
 try {
-    $s = $db->prepare("SELECT COUNT(*) FROM car_sales WHERE MONTH(created_at)=? AND YEAR(created_at)=?");
+    $s = $db->prepare("SELECT COUNT(*) FROM car_sales WHERE status='active' AND MONTH(sale_date)=? AND YEAR(sale_date)=?");
     $s->execute([$month,$year]); $actuals['cars_sold'] = (int)$s->fetchColumn();
 } catch (\Throwable $_) {}
 try {
-    $s = $db->prepare("SELECT COUNT(*) FROM leads WHERE MONTH(created_at)=? AND YEAR(created_at)=?");
+    $s = $db->prepare("SELECT COUNT(*) FROM crm_leads WHERE MONTH(created_at)=? AND YEAR(created_at)=?");
     $s->execute([$month,$year]); $actuals['new_leads'] = (int)$s->fetchColumn();
 } catch (\Throwable $_) {}
 try {
-    $s = $db->prepare("SELECT COUNT(*) FROM jobs WHERE status='completed' AND MONTH(updated_at)=? AND YEAR(updated_at)=?");
+    $s = $db->prepare("SELECT COUNT(*) FROM workshop_jobs WHERE status='completed' AND MONTH(updated_at)=? AND YEAR(updated_at)=?");
     $s->execute([$month,$year]); $actuals['jobs_closed'] = (int)$s->fetchColumn();
 } catch (\Throwable $_) {}
 
-// Trend: last 6 months of actuals
+// Trend & Historical Grid: last 6 months
+$historyRows = [];
 $trendLabels = $trendRevenue = $trendCarsSold = $trendLeads = [];
 for ($i = 5; $i >= 0; $i--) {
     $ts2 = strtotime("-$i months", mktime(0,0,0,$month,1,$year));
     $m2  = (int)date('n', $ts2);
     $y2  = (int)date('Y', $ts2);
+    $lbl = date('M Y', mktime(0,0,0,$m2,1,$y2));
     $trendLabels[] = date('M y', mktime(0,0,0,$m2,1,$y2));
+
+    $revAct = $carAct = $leadAct = $jobAct = 0;
     try {
         $s = $db->prepare("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='paid' AND MONTH(created_at)=? AND YEAR(created_at)=?");
-        $s->execute([$m2,$y2]); $trendRevenue[] = (float)$s->fetchColumn();
-    } catch (\Throwable $_) { $trendRevenue[] = 0; }
+        $s->execute([$m2,$y2]); $revAct = (float)$s->fetchColumn();
+    } catch (\Throwable $_) {}
     try {
-        $s = $db->prepare("SELECT COUNT(*) FROM car_sales WHERE MONTH(created_at)=? AND YEAR(created_at)=?");
-        $s->execute([$m2,$y2]); $trendCarsSold[] = (int)$s->fetchColumn();
-    } catch (\Throwable $_) { $trendCarsSold[] = 0; }
+        $s = $db->prepare("SELECT COUNT(*) FROM car_sales WHERE status='active' AND MONTH(sale_date)=? AND YEAR(sale_date)=?");
+        $s->execute([$m2,$y2]); $carAct = (int)$s->fetchColumn();
+    } catch (\Throwable $_) {}
     try {
-        $s = $db->prepare("SELECT COUNT(*) FROM leads WHERE MONTH(created_at)=? AND YEAR(created_at)=?");
-        $s->execute([$m2,$y2]); $trendLeads[] = (int)$s->fetchColumn();
-    } catch (\Throwable $_) { $trendLeads[] = 0; }
+        $s = $db->prepare("SELECT COUNT(*) FROM crm_leads WHERE MONTH(created_at)=? AND YEAR(created_at)=?");
+        $s->execute([$m2,$y2]); $leadAct = (int)$s->fetchColumn();
+    } catch (\Throwable $_) {}
+    try {
+        $s = $db->prepare("SELECT COUNT(*) FROM workshop_jobs WHERE status='completed' AND MONTH(updated_at)=? AND YEAR(updated_at)=?");
+        $s->execute([$m2,$y2]); $jobAct = (int)$s->fetchColumn();
+    } catch (\Throwable $_) {}
+
+    $trendRevenue[]  = $revAct;
+    $trendCarsSold[] = $carAct;
+    $trendLeads[]    = $leadAct;
+
+    // Fetch target for historical month
+    $histTargets = ['revenue' => 0, 'cars_sold' => 0, 'new_leads' => 0, 'jobs_closed' => 0];
+    try {
+        $tsT = $db->prepare("SELECT metric_key, target_value FROM kpi_targets WHERE target_month=? AND target_year=?");
+        $tsT->execute([$m2, $y2]);
+        foreach ($tsT->fetchAll() as $rT) { $histTargets[$rT['metric_key']] = (float)$rT['target_value']; }
+    } catch (\Throwable $_) {}
+
+    $historyRows[] = [
+        'month'      => $lbl,
+        'revAct'     => $revAct,  'revTgt' => $histTargets['revenue'],
+        'carAct'     => $carAct,  'carTgt' => $histTargets['cars_sold'],
+        'leadAct'    => $leadAct, 'leadTgt' => $histTargets['new_leads'],
+        'jobAct'     => $jobAct,  'jobTgt' => $histTargets['jobs_closed'],
+    ];
 }
 
 // Revenue target line for chart (same target repeated across 6 months for the selected month only)
@@ -420,6 +448,60 @@ foreach ($kpis as $key => $_) {
     </div>
     <div class="card-body">
         <canvas id="kpiTrendChart" height="110"></canvas>
+    </div>
+</div>
+
+<!-- ── 6-Month Historical Performance Grid ────────────────────────────────── -->
+<div class="card border-0 shadow-sm mb-4" style="border-radius:12px">
+    <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="fw-bold mb-0"><i class="fa fa-history me-2 text-primary"></i>6-Month Historical Target vs Actual Grid</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:13px">
+            <thead style="background:#f8fafc;font-size:11px;text-transform:uppercase;color:#64748b">
+                <tr>
+                    <th class="ps-4 py-3">Month</th>
+                    <th class="py-3 text-end">Revenue (Act / Tgt)</th>
+                    <th class="py-3 text-end">Rev Hit %</th>
+                    <th class="py-3 text-center">Cars Sold</th>
+                    <th class="py-3 text-center">Leads</th>
+                    <th class="py-3 text-center pe-4">Jobs Closed</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach (array_reverse($historyRows) as $hRow):
+                    $rPct = $hRow['revTgt'] > 0 ? round($hRow['revAct'] / $hRow['revTgt'] * 100, 1) : null;
+                    $rBadge = $rPct === null ? 'secondary' : ($rPct >= 100 ? 'success' : ($rPct >= 70 ? 'warning' : 'danger'));
+                ?>
+                <tr>
+                    <td class="ps-4 py-3 fw-bold"><?= e($hRow['month']) ?></td>
+                    <td class="py-3 text-end">
+                        <span class="fw-semibold text-success"><?= money($hRow['revAct']) ?></span>
+                        <span class="text-muted small"> / <?= $hRow['revTgt'] > 0 ? money($hRow['revTgt']) : '—' ?></span>
+                    </td>
+                    <td class="py-3 text-end">
+                        <?php if ($rPct !== null): ?>
+                        <span class="badge bg-<?= $rBadge ?>"><?= $rPct ?>%</span>
+                        <?php else: ?>
+                        <span class="text-muted">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="py-3 text-center">
+                        <span class="fw-semibold"><?= $hRow['carAct'] ?></span>
+                        <span class="text-muted small">/ <?= $hRow['carTgt'] ?: '—' ?></span>
+                    </td>
+                    <td class="py-3 text-center">
+                        <span class="fw-semibold"><?= $hRow['leadAct'] ?></span>
+                        <span class="text-muted small">/ <?= $hRow['leadTgt'] ?: '—' ?></span>
+                    </td>
+                    <td class="py-3 text-center pe-4">
+                        <span class="fw-semibold"><?= $hRow['jobAct'] ?></span>
+                        <span class="text-muted small">/ <?= $hRow['jobTgt'] ?: '—' ?></span>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
     </div>
 </div>
 

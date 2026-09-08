@@ -20,6 +20,10 @@ switch ($period) {
         $dateFrom = date('Y-m-01', strtotime('-2 months'));
         $dateTo   = date('Y-m-d');
         break;
+    case 'last_6_months':
+        $dateFrom = date('Y-m-01', strtotime('-5 months'));
+        $dateTo   = date('Y-m-d');
+        break;
     case 'this_year':
         $dateFrom = date('Y-01-01');
         $dateTo   = date('Y-12-31');

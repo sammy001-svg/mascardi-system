@@ -18,6 +18,11 @@ switch ($period) {
         $dateTo   = date('Y-m-d');
         $label    = 'Last 3 Months';
         break;
+    case 'last_6_months':
+        $dateFrom = date('Y-m-01', strtotime('-5 months'));
+        $dateTo   = date('Y-m-d');
+        $label    = 'Last 6 Months';
+        break;
     case 'this_year':
         $dateFrom = date('Y-01-01');
         $dateTo   = date('Y-12-31');
@@ -115,6 +120,46 @@ try {
 } catch (\Throwable $e) {
     $vehicles = [];
 }
+
+// ── Margin Band & Make Profitability Calculations ────────────────────────────
+$marginBands = [
+    'high'    => ['label' => 'High Margin (≥20%)',  'count' => 0, 'profit' => 0, 'cls' => 'success', 'bg' => '#dcfce7', 'color' => '#16a34a'],
+    'healthy' => ['label' => 'Healthy (10–19.9%)',   'count' => 0, 'profit' => 0, 'cls' => 'primary', 'bg' => '#dbeafe', 'color' => '#2563eb'],
+    'low'     => ['label' => 'Low Margin (0–9.9%)',  'count' => 0, 'profit' => 0, 'cls' => 'warning', 'bg' => '#fef3c7', 'color' => '#d97706'],
+    'loss'    => ['label' => 'Loss-Making (<0%)',    'count' => 0, 'profit' => 0, 'cls' => 'danger',  'bg' => '#fee2e2', 'color' => '#dc2626'],
+];
+$lossVehicles = [];
+$makeStatsMap = [];
+
+foreach ($vehicles as $v) {
+    $m = (float)$v['margin_pct'];
+    $p = (float)$v['gross_profit'];
+    if ($p < 0) {
+        $marginBands['loss']['count']++;
+        $marginBands['loss']['profit'] += $p;
+        $lossVehicles[] = $v;
+    } elseif ($m >= 20) {
+        $marginBands['high']['count']++;
+        $marginBands['high']['profit'] += $p;
+    } elseif ($m >= 10) {
+        $marginBands['healthy']['count']++;
+        $marginBands['healthy']['profit'] += $p;
+    } else {
+        $marginBands['low']['count']++;
+        $marginBands['low']['profit'] += $p;
+    }
+
+    $mk = trim($v['make']) ?: 'Other';
+    if (!isset($makeStatsMap[$mk])) {
+        $makeStatsMap[$mk] = ['make' => $mk, 'count' => 0, 'revenue' => 0, 'cogs' => 0, 'profit' => 0];
+    }
+    $makeStatsMap[$mk]['count']++;
+    $makeStatsMap[$mk]['revenue'] += (float)$v['sale_price'];
+    $makeStatsMap[$mk]['cogs']    += (float)$v['cogs'];
+    $makeStatsMap[$mk]['profit']  += $p;
+}
+$makeStats = array_values($makeStatsMap);
+usort($makeStats, fn($a, $b) => $b['profit'] <=> $a['profit']);
 
 $avgDaysToSell = $daysToSell ? round(array_sum($daysToSell) / count($daysToSell)) : 0;
 
@@ -261,6 +306,107 @@ include __DIR__ . '/_nav.php';
     </div>
 
 </div>
+
+<!-- ── Margin Band Distribution Cards ───────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <?php foreach ($marginBands as $bandKey => $band):
+        $pct = $kpi['count'] > 0 ? round($band['count'] / $kpi['count'] * 100) : 0;
+    ?>
+    <div class="col-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100" style="border-radius:12px">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="badge bg-<?= $band['cls'] ?>"><?= $band['label'] ?></span>
+                    <span class="fw-bold" style="font-size:14px;color:<?= $band['color'] ?>"><?= $pct ?>%</span>
+                </div>
+                <div class="fw-bold fs-4 mb-1"><?= $band['count'] ?> <span class="text-muted fs-6 font-normal">cars</span></div>
+                <div class="text-muted small">Total Profit: <strong class="<?= $band['profit'] >= 0 ? 'text-success' : 'text-danger' ?>"><?= money($band['profit']) ?></strong></div>
+                <div class="progress mt-2" style="height:4px">
+                    <div class="progress-bar bg-<?= $band['cls'] ?>" style="width:<?= $pct ?>%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+
+<?php if (!empty($lossVehicles)): ?>
+<!-- ── Loss-Making Vehicles Alert Table ────────────────────────────────────── -->
+<div class="card border-0 shadow-sm mb-4" style="border-radius:12px;border-left:4px solid #dc2626 !important">
+    <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+        <h6 class="fw-bold text-danger mb-0"><i class="fa fa-triangle-exclamation me-2"></i>Loss-Making Sales Alert (<?= count($lossVehicles) ?>)</h6>
+        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Audit Required</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:13px">
+            <thead style="background:#fef2f2;font-size:11px;text-transform:uppercase;color:#991b1b">
+                <tr>
+                    <th class="ps-4">Vehicle</th>
+                    <th>Sale #</th>
+                    <th>Sale Date</th>
+                    <th>Sold By</th>
+                    <th class="text-end">COGS</th>
+                    <th class="text-end">Sale Price</th>
+                    <th class="text-end pe-4">Loss Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($lossVehicles as $lv): ?>
+                <tr>
+                    <td class="ps-4 fw-semibold"><?= e($lv['make'].' '.$lv['model'].' '.$lv['year']) ?> <span class="text-muted small"><code><?= e($lv['chassis_number']) ?></code></span></td>
+                    <td><a href="<?= BASE_URL ?>/modules/sales/view.php?id=<?= $lv['sale_id'] ?>" class="text-decoration-none"><?= e($lv['sale_number']) ?></a></td>
+                    <td class="small text-muted"><?= fmtDate($lv['sale_date']) ?></td>
+                    <td class="small text-muted"><?= e($lv['sold_by'] ?? '—') ?></td>
+                    <td class="text-end small"><?= money($lv['cogs']) ?></td>
+                    <td class="text-end small"><?= money($lv['sale_price']) ?></td>
+                    <td class="text-end pe-4 fw-bold text-danger"><?= money($lv['gross_profit']) ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- ── Make Profitability Ranking Table ──────────────────────────────────────── -->
+<?php if (!empty($makeStats)): ?>
+<div class="card border-0 shadow-sm mb-4" style="border-radius:12px">
+    <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="fw-bold mb-0"><i class="fa fa-trophy me-2 text-primary"></i>Brand / Make Profitability Ranking</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:13px">
+            <thead style="background:#f8fafc;font-size:11px;text-transform:uppercase;color:#64748b">
+                <tr>
+                    <th class="ps-4">#</th>
+                    <th>Make / Brand</th>
+                    <th class="text-center">Units Sold</th>
+                    <th class="text-end">Total Revenue</th>
+                    <th class="text-end">Total COGS</th>
+                    <th class="text-end">Gross Profit</th>
+                    <th class="text-end pe-4">Avg Margin</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($makeStats as $idx => $ms):
+                    $mMargin = $ms['revenue'] > 0 ? round($ms['profit'] / $ms['revenue'] * 100, 1) : 0;
+                    $mBadge = $mMargin >= 15 ? 'success' : ($mMargin >= 5 ? 'warning' : 'danger');
+                ?>
+                <tr>
+                    <td class="ps-4 text-muted fw-semibold"><?= $idx + 1 ?></td>
+                    <td class="fw-bold text-primary"><?= e($ms['make']) ?></td>
+                    <td class="text-center"><span class="badge bg-light text-dark border"><?= $ms['count'] ?></span></td>
+                    <td class="text-end"><?= money($ms['revenue']) ?></td>
+                    <td class="text-end text-muted small"><?= money($ms['cogs']) ?></td>
+                    <td class="text-end fw-bold <?= $ms['profit'] >= 0 ? 'text-success' : 'text-danger' ?>"><?= money($ms['profit']) ?></td>
+                    <td class="text-end pe-4"><span class="badge bg-<?= $mBadge ?>"><?= $mMargin ?>%</span></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- ── Vehicle P&L Table ──────────────────────────────────────────────────── -->
 <div class="card border-0 shadow-sm mb-4" style="border-radius:12px">

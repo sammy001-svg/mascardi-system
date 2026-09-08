@@ -18,6 +18,11 @@ switch ($period) {
         $dateTo   = date('Y-m-d');
         $label    = 'Last 3 Months';
         break;
+    case 'last_6_months':
+        $dateFrom = date('Y-m-01', strtotime('-5 months'));
+        $dateTo   = date('Y-m-d');
+        $label    = 'Last 6 Months';
+        break;
     case 'this_year':
         $dateFrom = date('Y-01-01');
         $dateTo   = date('Y-12-31');

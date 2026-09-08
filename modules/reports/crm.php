@@ -18,6 +18,11 @@ switch ($period) {
         $dateTo   = date('Y-m-d');
         $label    = 'Last 3 Months';
         break;
+    case 'last_6_months':
+        $dateFrom = date('Y-m-01', strtotime('-5 months'));
+        $dateTo   = date('Y-m-d');
+        $label    = 'Last 6 Months';
+        break;
     case 'this_year':
         $dateFrom = date('Y-01-01');
         $dateTo   = date('Y-12-31');
@@ -133,8 +138,19 @@ try {
     ")->fetchAll();
     foreach ($mt as $r) $monthlyTrend[$r['label']] = $r;
 
+    // High-priority active leads (hot leads needing action)
+    $hl = $db->prepare("
+        SELECT l.*, u.name AS assigned_name, DATEDIFF(NOW(), l.created_at) AS days_open
+        FROM crm_leads l
+        LEFT JOIN users u ON u.id = l.assigned_to
+        WHERE l.stage NOT IN ('closed_won','closed_lost') AND DATE(l.created_at) BETWEEN ? AND ?
+        ORDER BY l.budget DESC, l.id DESC LIMIT 6
+    ");
+    $hl->execute([$dateFrom, $dateTo]); $hotLeads = $hl->fetchAll();
+
 } catch (\Throwable $e) {
     // tables may not exist yet — silently degrade
+    $hotLeads = [];
 }
 
 include __DIR__ . '/../../includes/header.php';
@@ -310,6 +326,50 @@ include __DIR__ . '/_nav.php';
     </div>
 
 </div>
+
+<!-- ── High Priority Active Leads (Hot Pipeline) ────────────────────────── -->
+<?php if (!empty($hotLeads)): ?>
+<div class="card border-0 shadow-sm mb-4" style="border-radius:12px;border-left:4px solid #7c3aed !important">
+    <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+        <h6 class="fw-bold mb-0 text-purple"><i class="fa fa-fire me-2 text-warning"></i>High-Value Active Pipeline Leads</h6>
+        <span class="badge bg-purple-subtle text-purple border border-purple-subtle">Top Action Items</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:13px">
+            <thead style="background:#f8fafc;font-size:11px;text-transform:uppercase;color:#64748b">
+                <tr>
+                    <th class="ps-4">Lead Name</th>
+                    <th>Phone / Email</th>
+                    <th>Stage</th>
+                    <th class="text-end">Budget</th>
+                    <th>Assigned Agent</th>
+                    <th class="text-center">Days Open</th>
+                    <th class="text-end pe-4">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($hotLeads as $hlItem):
+                    $stg = $stageConfig[$hlItem['stage']] ?? [$hlItem['stage'], '#64748b'];
+                ?>
+                <tr>
+                    <td class="ps-4 fw-semibold"><?= e($hlItem['name']) ?></td>
+                    <td class="small text-muted"><?= e($hlItem['phone'] ?: ($hlItem['email'] ?: '—')) ?></td>
+                    <td>
+                        <span class="badge" style="background:<?= $stg[1] ?>"><?= $stg[0] ?></span>
+                    </td>
+                    <td class="text-end fw-bold text-success"><?= money((float)$hlItem['budget']) ?></td>
+                    <td class="small text-muted"><?= e($hlItem['assigned_name'] ?? 'Unassigned') ?></td>
+                    <td class="text-center"><span class="badge bg-light text-dark border"><?= $hlItem['days_open'] ?>d</span></td>
+                    <td class="text-end pe-4">
+                        <a href="<?= BASE_URL ?>/modules/crm/view.php?id=<?= $hlItem['id'] ?>" class="btn btn-xs btn-outline-primary">View Lead</a>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- ── Sales Rep Performance Table ───────────────────────────────────────── -->
 <?php

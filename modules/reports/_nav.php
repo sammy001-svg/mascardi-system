@@ -20,21 +20,27 @@ function reportUrl(string $page, string $qs): string {
         <h5 class="mb-1"><i class="fa fa-chart-bar me-2 text-primary"></i>Reports &amp; Analytics</h5>
         <div class="text-muted small">Period: <strong><?= e($label ?? '') ?></strong></div>
     </div>
-    <form class="d-flex align-items-center gap-2 flex-wrap" method="GET">
-        <select name="period" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
-            <option value="this_month"    <?= ($period??'')==='this_month'    ?'selected':'' ?>>This Month</option>
-            <option value="last_month"    <?= ($period??'')==='last_month'    ?'selected':'' ?>>Last Month</option>
-            <option value="last_3_months" <?= ($period??'')==='last_3_months' ?'selected':'' ?>>Last 3 Months</option>
-            <option value="this_year"     <?= ($period??'')==='this_year'     ?'selected':'' ?>>This Year</option>
-            <option value="custom"        <?= ($period??'')==='custom'        ?'selected':'' ?>>Custom Range</option>
-        </select>
-        <?php if (($period??'') === 'custom'): ?>
-        <input type="date" name="date_from" class="form-control form-control-sm" value="<?= e($dateFrom??'') ?>">
-        <span class="text-muted small">to</span>
-        <input type="date" name="date_to"   class="form-control form-control-sm" value="<?= e($dateTo??'') ?>">
-        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
-        <?php endif; ?>
-    </form>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <form class="d-flex align-items-center gap-2 flex-wrap" method="GET">
+            <select name="period" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+                <option value="this_month"    <?= ($period??'')==='this_month'    ?'selected':'' ?>>This Month</option>
+                <option value="last_month"    <?= ($period??'')==='last_month'    ?'selected':'' ?>>Last Month</option>
+                <option value="last_3_months" <?= ($period??'')==='last_3_months' ?'selected':'' ?>>Last 3 Months</option>
+                <option value="last_6_months" <?= ($period??'')==='last_6_months' ?'selected':'' ?>>Last 6 Months</option>
+                <option value="this_year"     <?= ($period??'')==='this_year'     ?'selected':'' ?>>This Year</option>
+                <option value="custom"        <?= ($period??'')==='custom'        ?'selected':'' ?>>Custom Range</option>
+            </select>
+            <?php if (($period??'') === 'custom'): ?>
+            <input type="date" name="date_from" class="form-control form-control-sm" value="<?= e($dateFrom??'') ?>">
+            <span class="text-muted small">to</span>
+            <input type="date" name="date_to"   class="form-control form-control-sm" value="<?= e($dateTo??'') ?>">
+            <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+            <?php endif; ?>
+        </form>
+        <button type="button" onclick="window.print()" class="btn btn-sm btn-outline-secondary" title="Print this report page">
+            <i class="fa fa-print me-1"></i>Print / PDF
+        </button>
+    </div>
 </div>
 
 <!-- ── Tab nav ────────────────────────────────────────────────────────── -->
