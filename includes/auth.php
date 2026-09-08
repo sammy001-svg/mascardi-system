@@ -288,14 +288,32 @@ function _repairBlankRoles(): void {
  * blank. The session is written at login, so repairing the row alone would
  * leave the person staring at the same empty menu until they signed out.
  */
+/**
+ * Keep the signed-in session on the role the database says the person holds.
+ *
+ * This used to return the moment the session had any role at all — it only
+ * repaired a blank one. So when a manager changed somebody to Sales Person, the
+ * admin screen showed the new rights and the person kept the old ones until they
+ * happened to log out. Every permission in this file is keyed on the role in the
+ * session, so a stale role is a stale set of rights, and the report is always the
+ * same: "we gave them access and they still cannot get in".
+ *
+ * The database is the authority on what someone is. One primary-key lookup per
+ * request, and only when it actually differs, which is almost never.
+ *
+ * A blank value in the database is left alone deliberately: _repairBlankRoles()
+ * above owns that case, and wiping a working session on the strength of a column
+ * that a careless migration just emptied would lock everyone out at once.
+ */
 function _refreshSessionRole(): void {
     if (empty($_SESSION['auth_user']['id'])) return;
-    if (!empty($_SESSION['auth_user']['role'])) return;   // nothing wrong with it
     try {
         $st = getDB()->prepare("SELECT role FROM users WHERE id = ?");
         $st->execute([(int)$_SESSION['auth_user']['id']]);
         $role = (string)$st->fetchColumn();
-        if ($role !== '') $_SESSION['auth_user']['role'] = $role;
+        if ($role === '') return;
+        if (($_SESSION['auth_user']['role'] ?? '') === $role) return;
+        $_SESSION['auth_user']['role'] = $role;
     } catch (\Throwable $_) {}
 }
 
