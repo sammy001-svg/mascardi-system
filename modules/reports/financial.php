@@ -149,6 +149,29 @@ try {
     $profitList = $profitList->fetchAll();
 } catch (\Throwable $e) { $profitList = []; }
 
+// ── Month-over-Month trend (last 12 months combined) ─────────────────────────
+$momData = [];
+try {
+    $momRevRes = $db->query("
+        SELECT DATE_FORMAT(created_at,'%b %Y') AS label,
+               DATE_FORMAT(created_at,'%Y-%m') AS mkey,
+               COALESCE(SUM(CASE WHEN status='paid' THEN total END),0) AS collected,
+               COALESCE(SUM(total),0) AS invoiced
+        FROM invoices WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+        GROUP BY mkey, label ORDER BY mkey ASC
+    ")->fetchAll();
+    $momExpRes  = $db->query("SELECT DATE_FORMAT(expense_date,'%Y-%m') AS mkey, COALESCE(SUM(amount),0) AS expenses FROM expenses WHERE expense_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY mkey")->fetchAll();
+    $momExpByKey = []; foreach ($momExpRes as $__r) $momExpByKey[$__r['mkey']] = (float)$__r['expenses'];
+    $__prev = null;
+    foreach ($momRevRes as $__r) {
+        $__exp  = $momExpByKey[$__r['mkey']] ?? 0;
+        $__mgn  = $__r['invoiced'] > 0 ? round($__r['collected'] / $__r['invoiced'] * 100, 1) : 0;
+        $__grow = $__prev && $__prev['collected'] > 0 ? round(($__r['collected'] - $__prev['collected']) / $__prev['collected'] * 100, 1) : null;
+        $momData[] = ['label'=>$__r['label'],'collected'=>(float)$__r['collected'],'invoiced'=>(float)$__r['invoiced'],'expenses'=>$__exp,'margin'=>$__mgn,'growth'=>$__grow];
+        $__prev = $__r;
+    }
+} catch (\Throwable $e) { $momData = []; }
+
 // ── Chart JSON ────────────────────────────────────────────────────────────────
 $chartRevLabels    = json_encode(array_column($monthlyRev, 'label'));
 $chartCollected    = json_encode(array_map(fn($r) => round($r['collected'], 2), $monthlyRev));
@@ -157,6 +180,20 @@ $chartExpLabels    = json_encode(array_column($monthlyExp, 'label'));
 $chartExpAmounts   = json_encode(array_map(fn($r) => round($r['total'], 2), $monthlyExp));
 $netProfit         = ($pl['gross_profit'] ?? 0) - $expTotal;
 $netProfitYoy      = ($plYoy['gross_profit'] ?? 0) - $expTotalYoy;
+
+// Waterfall chart data [start, end] for floating bars
+$__wfRev   = round((float)($pl['revenue'] ?? 0), 2);
+$__wfCogs  = round((float)($pl['cogs'] ?? 0), 2);
+$__wfGross = round((float)($pl['gross_profit'] ?? 0), 2);
+$__wfOpex  = round((float)$expTotal, 2);
+$__wfNet   = round($__wfGross - $__wfOpex, 2);
+$wfData = json_encode([
+    ['label'=>'Revenue',      'start'=>0,         'end'=>$__wfRev,   'color'=>'rgba(37,99,235,.8)',   'border'=>'#2563eb'],
+    ['label'=>'COGS',         'start'=>$__wfGross,'end'=>$__wfRev,   'color'=>'rgba(239,68,68,.8)',   'border'=>'#dc2626'],
+    ['label'=>'Gross Profit', 'start'=>0,         'end'=>$__wfGross, 'color'=>'rgba(22,163,74,.8)',   'border'=>'#16a34a'],
+    ['label'=>'Opex',         'start'=>$__wfNet,  'end'=>$__wfGross, 'color'=>'rgba(249,115,22,.8)',  'border'=>'#f97316'],
+    ['label'=>'Net Profit',   'start'=>0,         'end'=>$__wfNet,   'color'=>$__wfNet >= 0 ? 'rgba(22,163,74,.9)' : 'rgba(239,68,68,.9)', 'border'=>$__wfNet >= 0 ? '#16a34a' : '#dc2626'],
+]);
 
 $extraJs = <<<JS
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -183,6 +220,46 @@ $extraJs = <<<JS
         options:{ responsive:true, plugins:{ legend:{ display:false } },
             scales:{ y:{ beginAtZero:true, ticks:{ callback:v=>'KES '+v.toLocaleString() } } } }
     });
+
+    // Waterfall P&L chart
+    var wfEl = document.getElementById('waterfallChart');
+    if (wfEl) {
+        var wfRaw = {$wfData};
+        new Chart(wfEl, {
+            type: 'bar',
+            data: {
+                labels: wfRaw.map(d => d.label),
+                datasets: [{
+                    data: wfRaw.map(d => [d.start, d.end]),
+                    backgroundColor: wfRaw.map(d => d.color),
+                    borderColor: wfRaw.map(d => d.border),
+                    borderWidth: 1.5,
+                    borderRadius: 5,
+                    borderSkipped: false,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                var d = wfRaw[ctx.dataIndex];
+                                return ctx.label + ': KES ' + Math.abs(d.end - d.start).toLocaleString('en-KE', {minimumFractionDigits:2});
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: { callback: v => v>=1e6?'KES '+(v/1e6).toFixed(1)+'M': v>=1e3?'KES '+(v/1e3).toFixed(0)+'K':'KES '+v }
+                    }
+                }
+            }
+        });
+    }
 }());
 </script>
 JS;
@@ -325,6 +402,90 @@ include __DIR__ . '/_nav.php';
             <a href="<?= BASE_URL ?>/modules/car_costs/index.php">Add import costs →</a>
         </div>
         <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($haspl && $pl && ($__wfRev > 0 || $__wfGross != 0)): ?>
+<!-- ── Waterfall P&L Chart ──────────────────────────────────────────────────── -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold"><i class="fa fa-chart-waterfall me-2 text-primary"></i>P&amp;L Waterfall — <?= e($label) ?></div>
+            <div class="card-body" style="position:relative;min-height:260px">
+                <canvas id="waterfallChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold"><i class="fa fa-table-list me-2 text-secondary"></i>P&amp;L Composition</div>
+            <div class="card-body">
+                <?php
+                $__wfRows = [
+                    ['Revenue (Sales)',       $__wfRev,   'primary',   null,               'Total vehicle sale price'],
+                    ['Cost of Goods (COGS)',  $__wfCogs,  'danger',    null,               'Import, clearing, workshop'],
+                    ['Gross Profit',         $__wfGross, $__wfGross >= 0 ? 'success' : 'danger', $__wfRev > 0 ? round($__wfGross/$__wfRev*100,1).'% margin' : null, 'After deducting COGS'],
+                    ['Operating Expenses',   $__wfOpex,  'warning',   null,               'All recorded expenses'],
+                    ['Net Profit',           $__wfNet,   $__wfNet >= 0 ? 'success' : 'danger', null, 'Gross profit minus Opex'],
+                ];
+                foreach ($__wfRows as [$__l, $__v, $__c, $__sub, $__desc]):
+                ?>
+                <div class="d-flex align-items-center gap-3 py-2 border-bottom" style="font-size:13px">
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold"><?= $__l ?></div>
+                        <div class="text-muted" style="font-size:11px"><?= $__desc ?></div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold text-<?= $__c ?>"><?= money($__v) ?></div>
+                        <?php if ($__sub): ?><div class="text-muted" style="font-size:11px"><?= $__sub ?></div><?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($momData)): ?>
+<!-- ── Month-over-Month Trend Table ─────────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold"><i class="fa fa-calendar-days me-2 text-info"></i>Month-over-Month Trend — Last 12 Months</div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" style="font-size:12.5px">
+            <thead style="background:#f8fafc;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#64748b">
+                <tr>
+                    <th class="ps-3 py-2">Month</th>
+                    <th class="py-2 text-end">Collected</th>
+                    <th class="py-2 text-end">Invoiced</th>
+                    <th class="py-2 text-end">Expenses</th>
+                    <th class="py-2 text-end">Net</th>
+                    <th class="py-2 text-end">Collection %</th>
+                    <th class="py-2 text-end pe-3">MoM Growth</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($momData as $__row):
+                $__net    = $__row['collected'] - $__row['expenses'];
+                $__grow   = $__row['growth'];
+                $__gcls   = $__grow === null ? '' : ($__grow >= 0 ? 'text-success' : 'text-danger');
+                $__garrow = $__grow === null ? '—' : ($__grow >= 0 ? '↑' : '↓') . abs($__grow) . '%';
+            ?>
+            <tr>
+                <td class="ps-3 fw-medium"><?= e($__row['label']) ?></td>
+                <td class="text-end"><?= money($__row['collected']) ?></td>
+                <td class="text-end text-muted"><?= money($__row['invoiced']) ?></td>
+                <td class="text-end text-danger"><?= money($__row['expenses']) ?></td>
+                <td class="text-end fw-semibold <?= $__net >= 0 ? 'text-success' : 'text-danger' ?>"><?= money($__net) ?></td>
+                <td class="text-end">
+                    <span class="badge <?= $__row['margin'] >= 80 ? 'bg-success' : ($__row['margin'] >= 60 ? 'bg-warning text-dark' : 'bg-danger') ?>"><?= $__row['margin'] ?>%</span>
+                </td>
+                <td class="text-end pe-3 fw-semibold <?= $__gcls ?>"><?= $__garrow ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
     </div>
 </div>
 <?php endif; ?>

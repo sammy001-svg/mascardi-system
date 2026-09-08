@@ -190,6 +190,72 @@ $inventoryTurnover = $db->query("
     LIMIT 8
 ")->fetchAll();
 
+// ── Prior period comparison (for trend indicators) ────────────────────────────
+$_ppDays = max(1, (int)((strtotime($dateTo) - strtotime($dateFrom)) / 86400));
+$_ppFrom = date('Y-m-d', strtotime($dateFrom . " -{$_ppDays} days"));
+$_ppTo   = date('Y-m-d', strtotime($dateTo   . " -{$_ppDays} days"));
+try {
+    $ppRevStmt = $db->prepare("SELECT COALESCE(SUM(CASE WHEN status='paid' THEN total END),0) AS paid FROM invoices WHERE DATE(created_at) BETWEEN ? AND ?");
+    $ppRevStmt->execute([$_ppFrom, $_ppTo]); $ppRevPaid = (float)$ppRevStmt->fetchColumn();
+} catch (\Throwable $e) { $ppRevPaid = 0; }
+try {
+    $ppJobStmt = $db->prepare("SELECT COUNT(*) FROM workshop_jobs WHERE DATE(created_at) BETWEEN ? AND ?");
+    $ppJobStmt->execute([$_ppFrom, $_ppTo]); $ppJobs = (int)$ppJobStmt->fetchColumn();
+} catch (\Throwable $e) { $ppJobs = 0; }
+try {
+    $ppCarStmt = $db->prepare("SELECT COUNT(*) FROM cars WHERE DATE(created_at) BETWEEN ? AND ?");
+    $ppCarStmt->execute([$_ppFrom, $_ppTo]); $ppCars = (int)$ppCarStmt->fetchColumn();
+} catch (\Throwable $e) { $ppCars = 0; }
+
+// ── Gross Profit + Sales velocity ─────────────────────────────────────────────
+$gpSummary = ['sales_count'=>0,'revenue'=>0,'cogs'=>0,'gross_profit'=>0,'avg_days_to_sell'=>0];
+try {
+    $gpSt = $db->prepare("
+        SELECT COUNT(cs.id) AS sales_count,
+               COALESCE(SUM(cs.sale_price),0) AS revenue,
+               COALESCE(SUM(cc.purchase_price+cc.freight+cc.marine_insurance+cc.port_charges
+                   +cc.duty_tax+cc.clearing_fees+cc.transport_to_yard
+                   +cc.workshop_costs+cc.other_costs),0) AS cogs,
+               COALESCE(SUM(cs.sale_price-(cc.purchase_price+cc.freight+cc.marine_insurance+cc.port_charges
+                   +cc.duty_tax+cc.clearing_fees+cc.transport_to_yard
+                   +cc.workshop_costs+cc.other_costs)),0) AS gross_profit,
+               COALESCE(ROUND(AVG(CASE WHEN DATEDIFF(cs.sale_date,c.created_at)>=0
+                   THEN DATEDIFF(cs.sale_date,c.created_at) END),0),0) AS avg_days_to_sell
+        FROM car_sales cs JOIN cars c ON c.id=cs.car_id JOIN car_costs cc ON cc.car_id=cs.car_id
+        WHERE cs.status='active' AND DATE(cs.sale_date) BETWEEN ? AND ?
+    ");
+    $gpSt->execute([$dateFrom, $dateTo]);
+    $gpSummary = $gpSt->fetch() ?: $gpSummary;
+} catch (\Throwable $e) {}
+
+// ── Active CRM Leads ──────────────────────────────────────────────────────────
+$activeLeadsCount = 0;
+try { $activeLeadsCount = (int)$db->query("SELECT COUNT(*) FROM crm_leads WHERE stage NOT IN ('closed_won','closed_lost')")->fetchColumn(); } catch (\Throwable $e) {}
+
+// ── Top 3 Sales Reps ──────────────────────────────────────────────────────────
+$topReps = [];
+try {
+    $trSt = $db->prepare("SELECT u.name, COUNT(cs.id) AS cars_sold, COALESCE(SUM(cs.sale_price),0) AS revenue FROM car_sales cs JOIN users u ON u.id=cs.sold_by WHERE cs.status='active' AND DATE(cs.sale_date) BETWEEN ? AND ? GROUP BY u.id, u.name ORDER BY revenue DESC LIMIT 3");
+    $trSt->execute([$dateFrom, $dateTo]); $topReps = $trSt->fetchAll();
+} catch (\Throwable $e) {}
+
+// ── Collection Rate ────────────────────────────────────────────────────────────
+$_totalBilledPeriod = (float)($revSummary['paid']) + (float)($revSummary['unpaid_amount']);
+$collectionRate     = $_totalBilledPeriod > 0 ? round((float)$revSummary['paid'] / $_totalBilledPeriod * 100, 1) : 0;
+
+// ── Expense data aligned to revenue chart months ──────────────────────────────
+$_monthlyExpAligned = array_fill(0, count($monthlyRevenue), 0);
+try {
+    $_expRes = $db->query("SELECT DATE_FORMAT(expense_date,'%Y-%m') AS mkey, COALESCE(SUM(amount),0) AS total FROM expenses WHERE expense_date >= DATE_SUB(NOW(), INTERVAL 6 MONTH) GROUP BY mkey")->fetchAll();
+    $_expByKey = []; foreach ($_expRes as $_er) $_expByKey[$_er['mkey']] = (float)$_er['total'];
+    $_monthlyExpAligned = array_map(fn($r) => round($_expByKey[$r['month_key']] ?? 0, 2), $monthlyRevenue);
+} catch (\Throwable $e) {}
+
+// ── Workshop completion rate ──────────────────────────────────────────────────
+$_wkpTotal = 0; $_wkpCompleted = 0;
+foreach ($jobsByStatus as $_jsr) { $_wkpTotal += (int)$_jsr['cnt']; if ($_jsr['status'] === 'completed') $_wkpCompleted = (int)$_jsr['cnt']; }
+$completionRate = $_wkpTotal > 0 ? round($_wkpCompleted / $_wkpTotal * 100, 1) : 0;
+
 // ── Chart JSON ────────────────────────────────────────────────────────────────
 $revenueLabels  = json_encode(array_column($monthlyRevenue, 'month_label'));
 $revenueAmounts = json_encode(array_map(fn($r) => round($r['revenue'], 2), $monthlyRevenue));
@@ -199,6 +265,7 @@ $makeLabels     = json_encode(array_column($carsByMake, 'make'));
 $makeCounts     = json_encode(array_column($carsByMake, 'cnt'));
 
 $agingData    = json_encode([(float)($agingBuckets['bucket_30']??0),(float)($agingBuckets['bucket_60']??0),(float)($agingBuckets['bucket_90']??0),(float)($agingBuckets['bucket_over90']??0)]);
+$expLineData  = json_encode($_monthlyExpAligned);
 
 $extraJs = <<<SCRIPT
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -210,27 +277,46 @@ $extraJs = <<<SCRIPT
         'Arrived':'#0284c7','In Assessment':'#7c3aed','Delivered':'#0f172a','Pending':'#64748b'
     };
 
-    // Revenue Bar Chart
+    // Revenue vs Expenses Combo Chart
     var revenueEl = document.getElementById('revenueChart');
     if (revenueEl) {
         new Chart(revenueEl, {
             type: 'bar',
             data: {
                 labels: {$revenueLabels},
-                datasets: [{
-                    label: 'Revenue (KES)',
-                    data: {$revenueAmounts},
-                    backgroundColor: 'rgba(37,99,235,.75)',
-                    borderColor: '#2563eb',
-                    borderWidth: 1,
-                    borderRadius: 6
-                }]
+                datasets: [
+                    {
+                        label: 'Revenue (KES)',
+                        data: {$revenueAmounts},
+                        backgroundColor: 'rgba(37,99,235,.75)',
+                        borderColor: '#2563eb',
+                        borderWidth: 1,
+                        borderRadius: 5,
+                        order: 2
+                    },
+                    {
+                        label: 'Expenses (KES)',
+                        data: {$expLineData},
+                        type: 'line',
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239,68,68,.1)',
+                        borderWidth: 2.5,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#ef4444',
+                        tension: 0.3,
+                        fill: false,
+                        order: 1
+                    }
+                ]
             },
             options: {
                 responsive: true,
-                plugins: { legend: { display: false } },
+                plugins: {
+                    legend: { position: 'top', labels: { font: { size: 11 }, padding: 12, boxWidth: 12 } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
                 scales: {
-                    y: { beginAtZero: true, ticks: { callback: function(v){ return 'KES '+v.toLocaleString(); } } }
+                    y: { beginAtZero: true, ticks: { callback: function(v){ return v>=1e6?'KES '+(v/1e6).toFixed(1)+'M':v>=1e3?'KES '+(v/1e3).toFixed(0)+'K':'KES '+v; } } }
                 }
             }
         });
@@ -290,15 +376,20 @@ include __DIR__ . '/_nav.php';
 ?>
 <?php // nav already renders the period filter and tab bar ?>
 
-<!-- ── KPI Cards ────────────────────────────────────────────────────────────── -->
-<div class="row g-3 mb-4">
+<!-- ── KPI Cards Row 1 ──────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-3">
     <div class="col-sm-6 col-xl-3">
         <div class="stat-card" style="border-left:4px solid #16a34a">
             <div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="fa fa-money-bill-wave"></i></div>
             <div class="stat-info">
                 <div class="stat-label">Revenue Collected</div>
                 <div class="stat-value stat-value-sm"><?= money((float)$revSummary['paid']) ?></div>
-                <div class="text-muted" style="font-size:11px"><?= $revSummary['paid_count'] ?> paid invoices</div>
+                <div class="d-flex align-items-center gap-2 mt-1" style="font-size:11px">
+                    <span class="text-muted"><?= $revSummary['paid_count'] ?> invoices</span>
+                    <?php if ($ppRevPaid > 0): $__tp1 = round(((float)$revSummary['paid'] - $ppRevPaid) / $ppRevPaid * 100, 1); ?>
+                    <span class="badge <?= $__tp1 >= 0 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle' ?>" style="font-size:10px"><?= $__tp1 >= 0 ? '↑' : '↓' ?><?= abs($__tp1) ?>% vs prev</span>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     </div>
@@ -308,7 +399,7 @@ include __DIR__ . '/_nav.php';
             <div class="stat-info">
                 <div class="stat-label">Outstanding Balance</div>
                 <div class="stat-value stat-value-sm"><?= money((float)$revSummary['unpaid_amount']) ?></div>
-                <div class="text-muted" style="font-size:11px"><?= $revSummary['unpaid'] ?> unpaid invoices</div>
+                <div class="text-muted" style="font-size:11px"><?= $revSummary['unpaid'] ?> unpaid · <?= $revSummary['partial'] ?> partial</div>
             </div>
         </div>
     </div>
@@ -318,7 +409,12 @@ include __DIR__ . '/_nav.php';
             <div class="stat-info">
                 <div class="stat-label">Cars Added</div>
                 <div class="stat-value"><?= $periodCars ?></div>
-                <div class="text-muted" style="font-size:11px"><?= $totalCars ?> total in fleet</div>
+                <div class="d-flex align-items-center gap-2 mt-1" style="font-size:11px">
+                    <span class="text-muted"><?= $totalCars ?> total fleet</span>
+                    <?php if ($ppCars > 0): $__tp2 = round(($periodCars - $ppCars) / $ppCars * 100, 1); ?>
+                    <span class="badge <?= $__tp2 >= 0 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle' ?>" style="font-size:10px"><?= $__tp2 >= 0 ? '↑' : '↓' ?><?= abs($__tp2) ?>%</span>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     </div>
@@ -328,7 +424,70 @@ include __DIR__ . '/_nav.php';
             <div class="stat-info">
                 <div class="stat-label">Jobs Created</div>
                 <div class="stat-value"><?= $periodJobs ?></div>
-                <div class="text-muted" style="font-size:11px"><?= $lowStockCount ?> low stock alerts</div>
+                <div class="d-flex align-items-center gap-2 mt-1" style="font-size:11px">
+                    <span class="text-muted"><?= $lowStockCount ?> low stock alerts</span>
+                    <?php if ($ppJobs > 0): $__tp3 = round(($periodJobs - $ppJobs) / $ppJobs * 100, 1); ?>
+                    <span class="badge <?= $__tp3 >= 0 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle' ?>" style="font-size:10px"><?= $__tp3 >= 0 ? '↑' : '↓' ?><?= abs($__tp3) ?>%</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- ── KPI Cards Row 2 — Deeper Metrics ──────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="border-left:4px solid #0891b2">
+            <div class="stat-icon" style="background:#e0f2fe;color:#0891b2"><i class="fa fa-scale-balanced"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Gross Profit (Sales)</div>
+                <?php if ($gpSummary['sales_count'] > 0): $__gp = (float)$gpSummary['gross_profit']; $__gm = $gpSummary['revenue'] > 0 ? round($__gp/(float)$gpSummary['revenue']*100,1) : 0; ?>
+                <div class="stat-value stat-value-sm <?= $__gp >= 0 ? 'text-success' : 'text-danger' ?>"><?= money($__gp) ?></div>
+                <div class="text-muted" style="font-size:11px"><?= $gpSummary['sales_count'] ?> vehicles · <?= $__gm ?>% margin</div>
+                <?php else: ?>
+                <div class="stat-value text-muted" style="font-size:18px">—</div>
+                <div class="text-muted" style="font-size:11px">No sales with cost data</div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="border-left:4px solid #f59e0b">
+            <div class="stat-icon" style="background:#fef3c7;color:#d97706"><i class="fa fa-user-clock"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Active CRM Leads</div>
+                <div class="stat-value"><?= number_format($activeLeadsCount) ?></div>
+                <div class="text-muted" style="font-size:11px">Leads in pipeline</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="border-left:4px solid #10b981">
+            <div class="stat-icon" style="background:#d1fae5;color:#059669"><i class="fa fa-gauge-high"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Avg Days to Sell</div>
+                <?php if ((float)$gpSummary['avg_days_to_sell'] > 0): ?>
+                <div class="stat-value"><?= number_format((float)$gpSummary['avg_days_to_sell']) ?></div>
+                <div class="text-muted" style="font-size:11px">days from intake to sale</div>
+                <?php else: ?>
+                <div class="stat-value text-muted" style="font-size:18px">—</div>
+                <div class="text-muted" style="font-size:11px">No sales data</div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="border-left:4px solid #6366f1">
+            <div class="stat-icon" style="background:#ede9fe;color:#6366f1"><i class="fa fa-percent"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Collection Rate</div>
+                <div class="stat-value"><?= $collectionRate ?>%</div>
+                <div class="mt-1">
+                    <div class="progress" style="height:5px;border-radius:3px">
+                        <div class="progress-bar <?= $collectionRate >= 80 ? 'bg-success' : ($collectionRate >= 60 ? 'bg-warning' : 'bg-danger') ?>" style="width:<?= min(100,$collectionRate) ?>%;transition:width .8s ease"></div>
+                    </div>
+                </div>
+                <div class="text-muted mt-1" style="font-size:11px"><?= money($_totalBilledPeriod) ?> total billed</div>
             </div>
         </div>
     </div>
@@ -1017,6 +1176,94 @@ try {
 
 </div>
 <?php endif; ?>
+
+<!-- ── Business Intelligence ────────────────────────────────────────────────── -->
+<div class="row g-4 mb-4">
+    <!-- Top Sales Reps -->
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fa fa-trophy me-2 text-warning"></i>Top Sales Reps — <?= e($label) ?></span>
+                <a href="<?= BASE_URL ?>/modules/reports/sales_performance.php?period=<?= urlencode($period) ?>" class="btn btn-xs btn-outline-secondary">Full Report</a>
+            </div>
+            <div class="card-body p-0">
+                <?php if (empty($topReps)): ?>
+                <div class="empty-state"><i class="fa fa-user-slash fa-2x text-muted mb-2"></i><p class="text-muted mb-0">No sales recorded in this period</p></div>
+                <?php else: ?>
+                <?php $__medals = ['🥇','🥈','🥉']; foreach ($topReps as $__i => $__rep): ?>
+                <div class="d-flex align-items-center gap-3 px-3 py-3 <?= $__i < count($topReps)-1 ? 'border-bottom' : '' ?>">
+                    <span style="font-size:22px"><?= $__medals[$__i] ?? ($__i+1) ?></span>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold" style="font-size:13px"><?= e($__rep['name']) ?></div>
+                        <div class="text-muted" style="font-size:11px"><?= $__rep['cars_sold'] ?> car<?= $__rep['cars_sold'] != 1 ? 's' : '' ?></div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold text-success" style="font-size:13px"><?= money((float)$__rep['revenue']) ?></div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Workshop Completion Rate -->
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header"><i class="fa fa-circle-check me-2 text-success"></i>Workshop Summary</div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <div class="fw-bold" style="font-size:3rem;color:<?= $completionRate >= 80 ? '#16a34a' : ($completionRate >= 60 ? '#d97706' : '#dc2626') ?>"><?= $completionRate ?>%</div>
+                    <div class="text-muted small">Job Completion Rate</div>
+                </div>
+                <div class="progress mb-3" style="height:10px;border-radius:5px">
+                    <div class="progress-bar <?= $completionRate >= 80 ? 'bg-success' : ($completionRate >= 60 ? 'bg-warning' : 'bg-danger') ?>" style="width:<?= $completionRate ?>%;transition:width .8s"></div>
+                </div>
+                <div class="row g-2 text-center" style="font-size:12px">
+                    <?php foreach ($jobsByStatus as $__js):
+                        $__jCol = match($__js['status']) { 'completed'=>'success','in_progress'=>'primary','pending'=>'warning','cancelled'=>'danger', default=>'secondary' };
+                    ?>
+                    <div class="col-6">
+                        <div class="p-2 rounded-2 border">
+                            <div class="fw-bold text-<?= $__jCol ?>" style="font-size:18px"><?= $__js['cnt'] ?></div>
+                            <div class="text-muted"><?= ucwords(str_replace('_',' ',$__js['status'])) ?></div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Health -->
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header"><i class="fa fa-boxes-stacked me-2 text-primary"></i>Inventory Health</div>
+            <div class="card-body">
+                <div class="row g-3 text-center mb-3">
+                    <div class="col-6">
+                        <div class="fw-bold text-primary" style="font-size:2rem"><?= number_format((int)$invSummary['total_parts']) ?></div>
+                        <div class="text-muted small">Part Types</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="fw-bold <?= $lowStockCount > 0 ? 'text-danger' : 'text-success' ?>" style="font-size:2rem"><?= $lowStockCount ?></div>
+                        <div class="text-muted small">Low Stock</div>
+                    </div>
+                </div>
+                <div class="border-top pt-3 text-center">
+                    <div class="text-muted small mb-1">Estimated Stock Value</div>
+                    <div class="fw-bold text-success" style="font-size:1.4rem"><?= money((float)($invSummary['stock_value'] ?? 0)) ?></div>
+                </div>
+                <?php if ($lowStockCount > 0): ?>
+                <div class="alert alert-warning py-2 px-3 mt-3 mb-0 small">
+                    <i class="fa fa-triangle-exclamation me-1"></i><?= $lowStockCount ?> item<?= $lowStockCount > 1 ? 's' : '' ?> need restocking.
+                    <a href="<?= BASE_URL ?>/modules/inventory/index.php?filter=low_stock" class="ms-1">View →</a>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Stock Rotation Quick Link -->
 <div class="card mt-4">

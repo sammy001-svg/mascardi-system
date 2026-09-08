@@ -121,11 +121,65 @@ try {
     $partsUsage = $partsUsage->fetchAll();
 } catch (\Throwable $e) { $partsUsage = []; }
 
-// ── Charts ────────────────────────────────────────────────────────────────────
+// ── Overdue jobs detail ─────────────────────────────────────────────────────────────
+$overdueJobs = [];
+try {
+    $ovStmt = $db->query("
+        SELECT j.id, j.end_date, j.priority, j.status,
+               DATEDIFF(CURDATE(), j.end_date) AS days_overdue,
+               m.name AS mechanic_name,
+               c.make, c.model, c.year, c.registration_number,
+               COALESCE(j.description, 'Workshop Job') AS description
+        FROM workshop_jobs j
+        LEFT JOIN mechanics m ON m.id = j.mechanic_id
+        LEFT JOIN cars c ON c.id = j.car_id
+        WHERE j.status NOT IN ('completed','cancelled')
+          AND j.end_date IS NOT NULL
+          AND j.end_date < CURDATE()
+        ORDER BY days_overdue DESC
+        LIMIT 15
+    ");
+    $overdueJobs = $ovStmt->fetchAll();
+} catch (\Throwable $e) { $overdueJobs = []; }
+
+// ── Monthly job trend (last 6 months) ────────────────────────────────────────────
+$monthlyJobTrend = [];
+try {
+    $mjStmt = $db->query("
+        SELECT DATE_FORMAT(created_at,'%b %Y') AS label,
+               DATE_FORMAT(created_at,'%Y-%m') AS mkey,
+               COUNT(*) AS total,
+               SUM(status='completed') AS completed,
+               SUM(status NOT IN ('completed','cancelled') AND end_date < CURDATE() AND end_date IS NOT NULL) AS overdue
+        FROM workshop_jobs
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        GROUP BY mkey, label ORDER BY mkey ASC
+    ");
+    $monthlyJobTrend = $mjStmt->fetchAll();
+} catch (\Throwable $e) { $monthlyJobTrend = []; }
+
+// ── Mechanic efficiency scores ────────────────────────────────────────────────────
+// Score = (on_time_pct * 0.5) + (completion_rate * 0.3) + (speed_factor * 0.2)
+// Speed factor: 100 if avg_days <= 3, scales down to 0 at 30 days
+foreach ($mechanics as &$__mech) {
+    $__onTime  = (float)($__mech['on_time_pct'] ?? 0);
+    $__compRate = $__mech['total_jobs'] > 0 ? round((float)$__mech['completed'] / $__mech['total_jobs'] * 100, 1) : 0;
+    $__avgDays  = (float)($__mech['avg_days'] ?? 15);
+    $__speedFactor = max(0, round((1 - ($__avgDays / 30)) * 100, 1));
+    $__mech['efficiency_score'] = round($__onTime * 0.5 + $__compRate * 0.3 + $__speedFactor * 0.2, 1);
+    $__mech['completion_rate']  = $__compRate;
+}
+unset($__mech);
+
+// ── Charts ────────────────────────────────────────────────────────────────────────
 $dowLabels  = json_encode(array_column($byDow, 'dow'));
 $dowCounts  = json_encode(array_column($byDow, 'cnt'));
 $priLabels  = json_encode(array_map(fn($r) => ucfirst($r['priority']), $byPriority));
 $priCounts  = json_encode(array_column($byPriority, 'cnt'));
+$trendLabels   = json_encode(array_column($monthlyJobTrend, 'label'));
+$trendTotal    = json_encode(array_column($monthlyJobTrend, 'total'));
+$trendComplete = json_encode(array_column($monthlyJobTrend, 'completed'));
+$trendOverdue  = json_encode(array_column($monthlyJobTrend, 'overdue'));
 
 $extraJs = <<<JS
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -142,6 +196,24 @@ $extraJs = <<<JS
         type:'doughnut',
         data:{ labels:{$priLabels}, datasets:[{ data:{$priCounts}, backgroundColor:['#dc2626','#f97316','#2563eb','#64748b'], borderWidth:2, borderColor:'#fff' }] },
         options:{ cutout:'55%', plugins:{ legend:{ position:'bottom', labels:{ font:{size:11}, padding:8, boxWidth:10 } } } }
+    });
+    // Monthly Job Trend chart
+    var trendEl = document.getElementById('jobTrendChart');
+    if (trendEl) new Chart(trendEl, {
+        type: 'bar',
+        data: {
+            labels: {$trendLabels},
+            datasets: [
+                { label: 'Total', data: {$trendTotal}, backgroundColor: 'rgba(37,99,235,.5)', borderRadius: 4, order: 2 },
+                { label: 'Completed', data: {$trendComplete}, backgroundColor: 'rgba(22,163,74,.7)', borderRadius: 4, order: 3 },
+                { label: 'Overdue', data: {$trendOverdue}, type: 'line', borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.1)', borderWidth: 2, pointRadius: 4, tension: 0.3, fill: false, order: 1 }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'top', labels: { font: { size: 11 }, padding: 10, boxWidth: 12 } }, tooltip: { mode: 'index', intersect: false } },
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
     });
 }());
 </script>
@@ -200,6 +272,7 @@ include __DIR__ . '/_nav.php';
                             <th class="text-center">Avg Days</th>
                             <th class="text-center">On-Time</th>
                             <th class="text-center">Urgent</th>
+                            <th class="text-center">Score</th>
                         </tr></thead>
                         <tbody>
                         <?php if (!$mechanics): ?>
@@ -207,6 +280,7 @@ include __DIR__ . '/_nav.php';
                         <?php endif; ?>
                         <?php foreach ($mechanics as $i => $m):
                             $onTimeCls = $m['on_time_pct'] >= 80 ? 'success' : ($m['on_time_pct'] >= 60 ? 'warning text-dark' : 'danger');
+                            $__scoreCls = $m['efficiency_score'] >= 70 ? 'success' : ($m['efficiency_score'] >= 50 ? 'warning text-dark' : 'danger');
                         ?>
                         <tr>
                             <td class="ps-3 text-muted"><?= $i+1 ?></td>
@@ -229,6 +303,9 @@ include __DIR__ . '/_nav.php';
                                 <?php if ($m['urgent_jobs'] > 0): ?>
                                 <span class="badge bg-danger"><?= $m['urgent_jobs'] ?></span>
                                 <?php else: ?><span class="text-muted">—</span><?php endif; ?>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-<?= $__scoreCls ?>" title="Weighted: on-time 50%, completion 30%, speed 20%"><?= $m['efficiency_score'] ?></span>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -305,5 +382,90 @@ include __DIR__ . '/_nav.php';
         </div>
     </div>
 </div>
+
+<!-- ── Monthly Job Trend Chart ────────────────────────────────────────────────── -->
+<?php if (!empty($monthlyJobTrend)): ?>
+<div class="card mb-4">
+    <div class="card-header fw-semibold"><i class="fa fa-chart-bar me-2 text-primary"></i>Monthly Job Volume — Last 6 Months</div>
+    <div class="card-body"><canvas id="jobTrendChart" height="70"></canvas></div>
+</div>
+<?php endif; ?>
+
+<!-- ── Overdue Jobs ─────────────────────────────────────────────────────────────────── -->
+<?php if (!empty($overdueJobs)): ?>
+<div class="card mb-4 border-danger-subtle">
+    <div class="card-header fw-semibold text-danger bg-danger-subtle">
+        <i class="fa fa-triangle-exclamation me-2"></i>Overdue Jobs (<?= count($overdueJobs) ?>)
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:13px">
+            <thead style="background:#fff5f5;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#64748b">
+                <tr>
+                    <th class="ps-3 py-2">Vehicle</th>
+                    <th class="py-2">Mechanic</th>
+                    <th class="py-2">Description</th>
+                    <th class="py-2 text-center">Priority</th>
+                    <th class="py-2 text-center">Due Date</th>
+                    <th class="py-2 text-end pe-3">Days Overdue</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($overdueJobs as $__oj):
+                $__priCls = match($__oj['priority'] ?? 'normal') { 'urgent'=>'danger','high'=>'warning text-dark','low'=>'secondary', default=>'primary' };
+            ?>
+            <tr>
+                <td class="ps-3 fw-medium">
+                    <?php if ($__oj['make'] || $__oj['model']): ?>
+                    <?= e($__oj['year'].' '.$__oj['make'].' '.$__oj['model']) ?>
+                    <?php if ($__oj['registration_number']): ?><br><span class="badge bg-dark" style="font-size:10px"><?= e($__oj['registration_number']) ?></span><?php endif; ?>
+                    <?php else: ?>Job #<?= $__oj['id'] ?><?php endif; ?>
+                </td>
+                <td class="text-muted"><?= e($__oj['mechanic_name'] ?? '—') ?></td>
+                <td class="text-muted small" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?= e($__oj['description']) ?></td>
+                <td class="text-center"><span class="badge bg-<?= $__priCls ?>"><?= ucfirst($__oj['priority'] ?? 'normal') ?></span></td>
+                <td class="text-center text-muted small"><?= fmtDate($__oj['end_date']) ?></td>
+                <td class="text-end pe-3 fw-bold text-danger"><?= $__oj['days_overdue'] ?> day<?= $__oj['days_overdue'] != 1 ? 's' : '' ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- ── Mechanic Efficiency Scores ──────────────────────────────────────────────────── -->
+<?php if (!empty($mechanics)): ?>
+<div class="card mb-4">
+    <div class="card-header fw-semibold"><i class="fa fa-star me-2 text-warning"></i>Mechanic Efficiency Scores — <?= e($label) ?></div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">Score = On-Time Rate (50%) + Completion Rate (30%) + Speed Factor (20%). Higher is better.</p>
+        <div class="row g-3">
+        <?php foreach ($mechanics as $__mech):
+            $__esc = $__mech['efficiency_score'] >= 70 ? 'success' : ($__mech['efficiency_score'] >= 50 ? 'warning' : 'danger');
+        ?>
+        <div class="col-md-6 col-lg-4">
+            <div class="p-3 rounded-3 border" style="font-size:13px">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <div class="fw-semibold"><?= e($__mech['name']) ?></div>
+                        <div class="text-muted" style="font-size:11px"><?= e($__mech['specialization'] ?? 'General') ?></div>
+                    </div>
+                    <div class="text-<?= $__esc ?> fw-bold" style="font-size:1.6rem"><?= $__mech['efficiency_score'] ?></div>
+                </div>
+                <div class="progress mb-2" style="height:6px;border-radius:3px">
+                    <div class="progress-bar bg-<?= $__esc ?>" style="width:<?= min(100,$__mech['efficiency_score']) ?>%;transition:width .8s"></div>
+                </div>
+                <div class="row g-1 text-center" style="font-size:11px">
+                    <div class="col-4"><div class="text-muted">On-Time</div><div class="fw-semibold"><?= $__mech['on_time_pct'] ?? '—' ?>%</div></div>
+                    <div class="col-4"><div class="text-muted">Completion</div><div class="fw-semibold"><?= $__mech['completion_rate'] ?>%</div></div>
+                    <div class="col-4"><div class="text-muted">Avg Days</div><div class="fw-semibold"><?= $__mech['avg_days'] ?? '—' ?></div></div>
+                </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

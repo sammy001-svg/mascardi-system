@@ -144,11 +144,56 @@ $sbStats = $db->prepare("
 $sbStats->execute([$dateFrom, $dateTo]);
 $sb = $sbStats->fetch();
 
+// ── Top 5 sold models ──────────────────────────────────────────────────────────────
+try {
+    $topModels = $db->prepare("
+        SELECT c.make, c.model, COUNT(*) AS cnt,
+               COALESCE(SUM(cs.sale_price), 0) AS revenue,
+               COALESCE(AVG(cs.sale_price), 0) AS avg_price
+        FROM car_sales cs JOIN cars c ON c.id = cs.car_id
+        WHERE cs.status='active' AND DATE(cs.sale_date) BETWEEN ? AND ?
+        GROUP BY c.make, c.model ORDER BY cnt DESC, revenue DESC LIMIT 5
+    ");
+    $topModels->execute([$dateFrom, $dateTo]);
+    $topModels = $topModels->fetchAll();
+} catch (\Throwable $e) { $topModels = []; }
+
+// ── Deal size distribution (price bands) ─────────────────────────────────────────
+try {
+    $dealBands = $db->prepare("
+        SELECT
+            SUM(sale_price < 500000)  AS under_500k,
+            SUM(sale_price BETWEEN 500000 AND 999999) AS band_500k_1m,
+            SUM(sale_price BETWEEN 1000000 AND 1999999) AS band_1m_2m,
+            SUM(sale_price BETWEEN 2000000 AND 4999999) AS band_2m_5m,
+            SUM(sale_price >= 5000000) AS above_5m
+        FROM car_sales WHERE status='active' AND DATE(sale_date) BETWEEN ? AND ?
+    ");
+    $dealBands->execute([$dateFrom, $dateTo]);
+    $dealBands = $dealBands->fetch();
+} catch (\Throwable $e) { $dealBands = null; }
+
+// ── Daily sales trend in period ──────────────────────────────────────────────────
+try {
+    $dailySales = $db->prepare("
+        SELECT DATE(sale_date) AS day, COUNT(*) AS cnt, COALESCE(SUM(sale_price),0) AS revenue
+        FROM car_sales WHERE status='active' AND DATE(sale_date) BETWEEN ? AND ?
+        GROUP BY DATE(sale_date) ORDER BY day ASC
+    ");
+    $dailySales->execute([$dateFrom, $dateTo]);
+    $dailySales = $dailySales->fetchAll();
+} catch (\Throwable $e) { $dailySales = []; }
+
 // ── Chart data ────────────────────────────────────────────────────────────────
 $makeLabels  = json_encode(array_column($byMake, 'make'));
 $makeCounts  = json_encode(array_column($byMake, 'cnt'));
 $methodLabels = json_encode(array_map(fn($r) => ucwords(str_replace('_',' ',$r['payment_method'])), $byPayMethod));
 $methodRevs   = json_encode(array_map(fn($r) => round($r['revenue'], 2), $byPayMethod));
+$dealBandLabels = json_encode(['< 500K','500K–1M','1M–2M','2M–5M','5M+']);
+$dealBandCounts = json_encode($dealBands ? [(int)$dealBands['under_500k'],(int)$dealBands['band_500k_1m'],(int)$dealBands['band_1m_2m'],(int)$dealBands['band_2m_5m'],(int)$dealBands['above_5m']] : [0,0,0,0,0]);
+$dailyLabels  = json_encode(array_column($dailySales, 'day'));
+$dailyCounts  = json_encode(array_column($dailySales, 'cnt'));
+$dailyRevs    = json_encode(array_map(fn($r) => round($r['revenue'], 2), $dailySales));
 
 $extraJs = <<<JS
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -165,6 +210,33 @@ $extraJs = <<<JS
         type:'doughnut',
         data:{ labels:{$methodLabels}, datasets:[{ data:{$methodRevs}, backgroundColor:['#16a34a','#2563eb','#d97706','#7c3aed','#0891b2'], borderWidth:2, borderColor:'#fff' }] },
         options:{ cutout:'55%', plugins:{ legend:{ position:'bottom', labels:{font:{size:11},padding:8,boxWidth:10} } } }
+    });
+    // Deal size distribution
+    var dbEl = document.getElementById('dealBandChart');
+    if (dbEl) new Chart(dbEl, {
+        type: 'bar',
+        data: { labels: {$dealBandLabels}, datasets: [{ data: {$dealBandCounts}, backgroundColor: ['rgba(16,185,129,.75)','rgba(37,99,235,.75)','rgba(249,115,22,.75)','rgba(139,92,246,.75)','rgba(239,68,68,.75)'], borderRadius: 6, label: 'Vehicles' }] },
+        options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.y + ' vehicle' + (ctx.parsed.y !== 1 ? 's' : '') } } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+    // Daily sales trend
+    var dsEl = document.getElementById('dailySalesChart');
+    if (dsEl) new Chart(dsEl, {
+        type: 'bar',
+        data: {
+            labels: {$dailyLabels},
+            datasets: [
+                { label: 'Vehicles Sold', data: {$dailyCounts}, backgroundColor: 'rgba(22,163,74,.7)', borderRadius: 4, yAxisID: 'y' },
+                { label: 'Revenue (KES)', data: {$dailyRevs}, type: 'line', borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.1)', borderWidth: 2, pointRadius: 3, tension: 0.3, fill: false, yAxisID: 'y1' }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'top', labels: { font: { size: 11 }, padding: 10, boxWidth: 12 } }, tooltip: { mode: 'index', intersect: false } },
+            scales: {
+                y:  { beginAtZero: true, ticks: { stepSize: 1 }, title: { display: true, text: 'Vehicles' } },
+                y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v } }
+            }
+        }
     });
 }());
 </script>
@@ -412,5 +484,73 @@ include __DIR__ . '/_nav.php';
     </div>
     <?php endif; ?>
 </div>
+
+<?php if (!empty($dailySales)): ?>
+<!-- ── Daily Sales Trend ──────────────────────────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold"><i class="fa fa-chart-line me-2 text-success"></i>Daily Sales Trend — <?= e($label) ?></div>
+    <div class="card-body"><canvas id="dailySalesChart" height="80"></canvas></div>
+</div>
+<?php endif; ?>
+
+<?php if ($dealBands || !empty($topModels)): ?>
+<!-- ── Deal Size + Top Models ───────────────────────────────────────────────────────── -->
+<div class="row g-4 mb-4">
+    <?php if ($dealBands): ?>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold"><i class="fa fa-chart-bar me-2 text-primary"></i>Deal Size Distribution — <?= e($label) ?></div>
+            <div class="card-body">
+                <canvas id="dealBandChart" height="160"></canvas>
+                <div class="row g-2 mt-2 text-center" style="font-size:11px;color:#64748b">
+                    <?php
+                    $__bands = [['< 500K',$dealBands['under_500k'],'10b981'],['500K–1M',$dealBands['band_500k_1m'],'2563eb'],['1M–2M',$dealBands['band_1m_2m'],'f97316'],['2M–5M',$dealBands['band_2m_5m'],'8b5cf6'],['5M+',$dealBands['above_5m'],'ef4444']];
+                    foreach ($__bands as [$__bl, $__bv, $__bc]):
+                    ?>
+                    <div class="col">
+                        <div class="fw-bold" style="color:#<?= $__bc ?>;font-size:1.3rem"><?= (int)$__bv ?></div>
+                        <div><?= $__bl ?></div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    <?php if (!empty($topModels)): ?>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold"><i class="fa fa-star me-2 text-warning"></i>Top 5 Sold Models — <?= e($label) ?></div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0" style="font-size:13px">
+                    <thead style="background:#f8fafc;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#64748b">
+                        <tr>
+                            <th class="ps-3 py-2">#</th>
+                            <th class="py-2">Make &amp; Model</th>
+                            <th class="py-2 text-center">Sold</th>
+                            <th class="py-2 text-end">Total Revenue</th>
+                            <th class="py-2 text-end pe-3">Avg Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($topModels as $__i => $__tm): ?>
+                    <tr>
+                        <td class="ps-3 text-muted fw-semibold"><?= $__i + 1 ?></td>
+                        <td class="fw-semibold"><?= e($__tm['make'] . ' ' . $__tm['model']) ?></td>
+                        <td class="text-center">
+                            <span class="badge bg-primary"><?= $__tm['cnt'] ?></span>
+                        </td>
+                        <td class="text-end text-success fw-semibold"><?= money((float)$__tm['revenue']) ?></td>
+                        <td class="text-end pe-3 text-muted"><?= money((float)$__tm['avg_price']) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
