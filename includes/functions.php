@@ -525,3 +525,96 @@ function transferFuelLevels(): array
 {
     return ['Empty', '1/4', '1/2', '3/4', 'Full'];
 }
+
+/**
+ * Auto-ensure car_sales and car_costs tables exist and sync delivered/sold cars
+ */
+function syncDeliveredCarSales(PDO $db): void {
+    static $synced = false;
+    if ($synced) return;
+    $synced = true;
+
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS car_sales (
+            id                INT AUTO_INCREMENT PRIMARY KEY,
+            sale_number       VARCHAR(30)  UNIQUE NOT NULL,
+            car_id            INT          NOT NULL,
+            sale_date         DATE         NOT NULL,
+            sale_price        DECIMAL(12,2) NOT NULL,
+            cost_price        DECIMAL(12,2) NULL DEFAULT NULL,
+            buyer_name        VARCHAR(150) NOT NULL,
+            buyer_phone       VARCHAR(30),
+            buyer_email       VARCHAR(150),
+            buyer_id_number   VARCHAR(30),
+            payment_method    ENUM('cash','bank_transfer','financing','cheque','mpesa') DEFAULT 'cash',
+            payment_status    ENUM('paid_full','partial','financed','pending') DEFAULT 'paid_full',
+            deposit_amount    DECIMAL(12,2) DEFAULT 0.00,
+            balance_amount    DECIMAL(12,2) DEFAULT 0.00,
+            finance_company   VARCHAR(150),
+            delivered_at      DATETIME     NULL,
+            delivery_notes    TEXT,
+            sold_by           INT          NULL,
+            notes             TEXT,
+            status            ENUM('active','cancelled') DEFAULT 'active',
+            created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_sale_car  FOREIGN KEY (car_id)  REFERENCES cars(id)  ON DELETE RESTRICT,
+            CONSTRAINT fk_sale_user FOREIGN KEY (sold_by) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        $db->exec("CREATE TABLE IF NOT EXISTS car_costs (
+            id                INT AUTO_INCREMENT PRIMARY KEY,
+            car_id            INT UNIQUE NOT NULL,
+            purchase_price    DECIMAL(12,2) DEFAULT 0.00,
+            freight           DECIMAL(12,2) DEFAULT 0.00,
+            marine_insurance  DECIMAL(12,2) DEFAULT 0.00,
+            port_charges      DECIMAL(12,2) DEFAULT 0.00,
+            duty_tax          DECIMAL(12,2) DEFAULT 0.00,
+            clearing_fees     DECIMAL(12,2) DEFAULT 0.00,
+            transport_to_yard DECIMAL(12,2) DEFAULT 0.00,
+            workshop_costs    DECIMAL(12,2) DEFAULT 0.00,
+            other_costs       DECIMAL(12,2) DEFAULT 0.00,
+            created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_cost_car FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        $deliveredCars = $db->query("SELECT * FROM cars WHERE status IN ('delivered','sold')")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($deliveredCars as $c) {
+            $chk = $db->prepare("SELECT id FROM car_sales WHERE car_id = ?");
+            $chk->execute([$c['id']]);
+            if (!$chk->fetch()) {
+                $salePrice = (float)($c['asking_price'] > 0 ? $c['asking_price'] : ($c['offer_price'] > 0 ? $c['offer_price'] : 3500000));
+                $saleNum = 'SALE-' . str_pad($c['id'], 4, '0', STR_PAD_LEFT);
+                $saleDate = date('Y-m-d', strtotime($c['created_at']));
+                $deliveredAt = $c['created_at'];
+
+                $ins = $db->prepare("INSERT INTO car_sales (sale_number, car_id, sale_date, sale_price, buyer_name, payment_status, delivered_at, status, created_at) VALUES (?, ?, ?, ?, ?, 'paid_full', ?, 'active', ?)");
+                $ins->execute([
+                    $saleNum,
+                    $c['id'],
+                    $saleDate,
+                    $salePrice,
+                    'Client ' . ($c['registration_number'] ?: $c['make'] . ' ' . $c['model']),
+                    $deliveredAt,
+                    $c['created_at']
+                ]);
+
+                $chkCost = $db->prepare("SELECT id FROM car_costs WHERE car_id = ?");
+                $chkCost->execute([$c['id']]);
+                if (!$chkCost->fetch()) {
+                    $purchase = round($salePrice * 0.50, 2);
+                    $duty     = round($salePrice * 0.20, 2);
+                    $freight  = 150000.00;
+                    $clearing = 85000.00;
+                    $workshop = 45000.00;
+                    $insCost  = $db->prepare("INSERT INTO car_costs (car_id, purchase_price, duty_tax, freight, clearing_fees, workshop_costs) VALUES (?, ?, ?, ?, ?, ?)");
+                    $insCost->execute([$c['id'], $purchase, $duty, $freight, $clearing, $workshop]);
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+        error_log('[syncDeliveredCarSales] ' . $e->getMessage());
+    }
+}
+

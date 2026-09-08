@@ -13,6 +13,9 @@ $__qs = http_build_query(array_filter([
 function reportUrl(string $page, string $qs): string {
     return BASE_URL . '/modules/reports/' . $page . ($qs ? '?' . $qs : '');
 }
+if (isset($db)) {
+    syncDeliveredCarSales($db);
+}
 ?>
 <!-- ── Period filter ──────────────────────────────────────────────────── -->
 <div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
