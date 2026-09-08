@@ -124,7 +124,7 @@ try {
     // Monthly trend — leads created last 6 months
     $mt = $db->query("
         SELECT DATE_FORMAT(created_at,'%b %Y') AS label,
-               DATE_FORMAT(created_at,'%Y-%m') AS key,
+               DATE_FORMAT(created_at,'%Y-%m') AS `key`,
                COUNT(*) AS total,
                SUM(stage='closed_won') AS won
         FROM crm_leads

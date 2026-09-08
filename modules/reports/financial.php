@@ -58,7 +58,7 @@ $revStmt->execute([$yoyFrom,  $yoyTo]);   $revYoy = $revStmt->fetch();
 // ── Monthly revenue — last 12 months ──────────────────────────────────────────
 $monthlyRev = $db->query("
     SELECT DATE_FORMAT(created_at,'%b %Y') AS label,
-           DATE_FORMAT(created_at,'%Y-%m') AS key,
+           DATE_FORMAT(created_at,'%Y-%m') AS `key`,
            COALESCE(SUM(CASE WHEN status='paid' THEN total END),0) AS collected,
            COALESCE(SUM(total),0)                                    AS invoiced
     FROM invoices
@@ -109,7 +109,7 @@ try {
 try {
     $monthlyExp = $db->query("
         SELECT DATE_FORMAT(expense_date,'%b %Y') AS label,
-               DATE_FORMAT(expense_date,'%Y-%m') AS key,
+               DATE_FORMAT(expense_date,'%Y-%m') AS `key`,
                COALESCE(SUM(amount),0)           AS total
         FROM expenses
         WHERE expense_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
