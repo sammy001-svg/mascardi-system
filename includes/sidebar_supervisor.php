@@ -111,7 +111,24 @@ try {
             <i class="fa fa-magnifying-glass-chart"></i><span>Quick Assessments</span>
         </a>
 
-        <!-- ══ CUSTOMERS ════════════════════════════════════════════ -->
+        <?php if (canAccess('visitors')): ?>
+        <a href="<?= BASE_URL ?>/modules/visitors/index.php"
+           class="nav-item <?= str_contains($__uri, '/modules/visitors/') ? 'active' : '' ?>"
+           data-label="Visitor Book"
+           style="position:relative">
+            <i class="fa fa-book-open-reader"></i><span>Visitor Book</span>
+            <?php
+            try {
+                $__vbOnSite = (int)getDB()->query("SELECT COUNT(*) FROM visitors WHERE checked_out_at IS NULL AND DATE(created_at)=CURDATE()")->fetchColumn();
+                if ($__vbOnSite > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#16a34a;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+                <?= $__vbOnSite > 99 ? '99+' : $__vbOnSite ?>
+            </span>
+            <?php endif; } catch (\Throwable $_) {} ?>
+        </a>
+        <?php endif; ?>
+
+
         <?php if (canAccess('crm') || canAccess('clients')): ?>
         <div class="nav-section">Customers</div>
 

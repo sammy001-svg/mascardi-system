@@ -59,16 +59,33 @@ try {
     $stats['bookings_today'] = (int)$sbTodayStmt->fetchColumn();
 } catch (\Throwable $_) { $stats['pending_bookings'] = 0; $stats['bookings_today'] = 0; }
 
-// Quick assessments today — scope via car location only
+// Quick assessments today — scope via car location OR creator's location
 try {
     $qaStmt = $db->prepare("
         SELECT COUNT(*) FROM quick_assessments qa
         LEFT JOIN cars c ON c.id = qa.car_id
-        WHERE c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND qa.assessment_date=CURDATE()
+        LEFT JOIN users u ON u.id = qa.created_by
+        WHERE qa.assessment_date=CURDATE()
+          AND (
+            (qa.car_id IS NOT NULL AND c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?))
+            OR
+            (qa.car_id IS NULL AND (u.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) OR u.location_id IS NULL))
+          )
     ");
-    $qaStmt->execute([$locId, $locId]);
+    $qaStmt->execute([$locId, $locId, $locId, $locId]);
     $stats['qa_today'] = (int)$qaStmt->fetchColumn();
 } catch (\Throwable $_) { $stats['qa_today'] = 0; }
+
+// Visitors today at this location
+try {
+    $visStmt = $db->prepare("SELECT COUNT(*) FROM visitors WHERE location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND DATE(created_at)=CURDATE()");
+    $visStmt->execute([$locId, $locId]);
+    $stats['visitors_today'] = (int)$visStmt->fetchColumn();
+    $visOnSiteStmt = $db->prepare("SELECT COUNT(*) FROM visitors WHERE location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) AND checked_out_at IS NULL AND DATE(created_at)=CURDATE()");
+    $visOnSiteStmt->execute([$locId, $locId]);
+    $stats['visitors_on_site'] = (int)$visOnSiteStmt->fetchColumn();
+} catch (\Throwable $_) { $stats['visitors_today'] = 0; $stats['visitors_on_site'] = 0; }
+
 
 // Quotations — company-wide (supervisors see all quotations, not just their location)
 try {
@@ -296,6 +313,23 @@ include __DIR__ . '/../../includes/header.php';
         </a>
     </div>
     <div class="col-sm-6 col-xl-3">
+        <a href="<?= BASE_URL ?>/modules/visitors/index.php?range=today" class="stat-card stat-card-link" style="border-left:4px solid #16a34a">
+            <div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="fa fa-book-open-reader"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Visitors Today
+                    <?php if ($stats['visitors_on_site'] > 0): ?>
+                    <span class="badge bg-success ms-1" style="font-size:9px"><?= $stats['visitors_on_site'] ?> on site</span>
+                    <?php endif; ?>
+                </div>
+                <div class="stat-value"><?= $stats['visitors_today'] ?></div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Revenue MTD + Bookings Today -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
         <div class="stat-card" style="border-left:4px solid #059669">
             <div class="stat-icon" style="background:#ecfdf5;color:#059669"><i class="fa fa-money-bill-wave"></i></div>
             <div class="stat-info">
@@ -303,6 +337,15 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="stat-value stat-value-sm"><?= money($stats['revenue_month']) ?></div>
             </div>
         </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <a href="<?= BASE_URL ?>/modules/supervisor/service_bookings.php" class="stat-card stat-card-link" style="border-left:4px solid #0284c7">
+            <div class="stat-icon" style="background:#e0f2fe;color:#0284c7"><i class="fa fa-calendar-day"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Bookings Today</div>
+                <div class="stat-value"><?= $stats['bookings_today'] ?></div>
+            </div>
+        </a>
     </div>
 </div>
 

@@ -418,7 +418,7 @@ function canAccess(string $module): bool {
 
         // ── Supervisor role ────────────────────────────────────────────────────
         'supervisor'        => [
-            'cars','service_bookings','quick_assessments','quotations','invoices','reports','crm','payments','clients','chat','trade_in','meetings','showroom_transfers',
+            'cars','service_bookings','quick_assessments','quotations','invoices','reports','crm','payments','clients','chat','trade_in','meetings','showroom_transfers','visitors',
         ],
         'receptionist'      => [
             'clients','service_bookings','quick_assessments','cars','chat','showroom',
