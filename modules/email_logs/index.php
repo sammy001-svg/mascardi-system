@@ -31,8 +31,8 @@ if ($filter && !in_array($filter, ['sent', 'failed'])) $filter = '';
 $logs = [];
 try {
     $stmt = $filter
-        ? $db->prepare("SELECT * FROM email_logs WHERE status=? ORDER BY created_at DESC LIMIT 200")
-        : $db->prepare("SELECT * FROM email_logs ORDER BY created_at DESC LIMIT 200");
+        ? $db->prepare("SELECT id, to_email, to_name, subject, status, error_message, reference_type, reference_id, sent_by, created_at FROM email_logs WHERE status=? ORDER BY created_at DESC LIMIT 200")
+        : $db->prepare("SELECT id, to_email, to_name, subject, status, error_message, reference_type, reference_id, sent_by, created_at FROM email_logs ORDER BY created_at DESC LIMIT 200");
     $filter ? $stmt->execute([$filter]) : $stmt->execute([]);
     $logs = $stmt->fetchAll();
 } catch (\Throwable $e) {
@@ -118,9 +118,6 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if (!$logs): ?>
-                <tr><td colspan="8" class="text-center text-muted py-4">No email logs found.</td></tr>
-                <?php endif; ?>
             </tbody>
         </table>
     </div>
