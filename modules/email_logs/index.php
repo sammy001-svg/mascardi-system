@@ -12,19 +12,30 @@ $db = getDB();
 try {
     $db->exec("CREATE TABLE IF NOT EXISTS email_logs (
         id             INT AUTO_INCREMENT PRIMARY KEY,
-        to_email       VARCHAR(190) NOT NULL,
-        to_name        VARCHAR(150) NULL,
-        subject        VARCHAR(255) NULL,
+        to_email       VARCHAR(255) NOT NULL,
+        to_name        VARCHAR(255) NULL,
+        subject        VARCHAR(500) NULL,
         status         VARCHAR(20)  NOT NULL DEFAULT 'sent',
         error_message  TEXT NULL,
         reference_type VARCHAR(50)  NULL,
         reference_id   INT NULL,
-        sent_by        INT NULL,
+        sent_by        VARCHAR(100) NULL,
         created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_status  (status),
         INDEX idx_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Heal tables that were previously created with sent_by INT (the old bug).
+    // MODIFY COLUMN on a VARCHAR column is a no-op so this is safe to run every time.
+    $col = $db->query("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+                       WHERE TABLE_SCHEMA = DATABASE()
+                         AND TABLE_NAME   = 'email_logs'
+                         AND COLUMN_NAME  = 'sent_by'")->fetchColumn();
+    if ($col && strtolower($col) === 'int') {
+        $db->exec("ALTER TABLE email_logs MODIFY COLUMN sent_by VARCHAR(100) NULL");
+    }
 } catch (\Throwable $_) {}
+
 
 $filter = $_GET['status'] ?? '';
 if ($filter && !in_array($filter, ['sent', 'failed'])) $filter = '';
