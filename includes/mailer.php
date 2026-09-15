@@ -42,14 +42,18 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
 
         $read(); // 220 banner
 
-        $cmd("EHLO localhost");
+        // Use the actual server hostname — sending 'EHLO localhost' causes many
+        // mail servers (e.g. cPanel/Exim) to reject or defer the connection with
+        // a 451 because 'localhost' signals a misconfigured/untrusted sender.
+        $ehloHost = gethostname() ?: ($_SERVER['SERVER_NAME'] ?? 'mail.mailer');
+        $cmd("EHLO {$ehloHost}");
         $read();
 
         if ($enc === 'tls') {
             $cmd("STARTTLS");
             $read();
             stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-            $cmd("EHLO localhost");
+            $cmd("EHLO {$ehloHost}");
             $read();
         }
 
@@ -66,7 +70,10 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
         }
 
         $cmd("MAIL FROM: <{$from}>");
-        $read();
+        $mailFromResp = $read();
+        if (strpos($mailFromResp, '250') === false) {
+            throw new \RuntimeException('MAIL FROM rejected: ' . trim($mailFromResp));
+        }
         $cmd("RCPT TO: <{$toEmail}>");
         $rcpt = $read();
         if (strpos($rcpt, '250') === false) {
