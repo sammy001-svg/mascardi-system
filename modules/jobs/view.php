@@ -2,14 +2,31 @@
 require_once __DIR__ . '/../../includes/functions.php';
 $id = (int)($_GET['id']??0); if(!$id) redirect(BASE_URL.'/modules/jobs/index.php');
 $db = getDB();
-$stmt = $db->prepare("SELECT j.*, c.chassis_number, c.make, c.model, c.year, c.color, m.name AS mechanic_name, m.phone AS mechanic_phone FROM workshop_jobs j JOIN cars c ON c.id=j.car_id LEFT JOIN mechanics m ON m.id=j.mechanic_id WHERE j.id=?");
+$stmt = $db->prepare("SELECT j.*, c.chassis_number, c.make, c.model, c.year, c.color, c.status AS car_status, m.name AS mechanic_name, m.phone AS mechanic_phone FROM workshop_jobs j JOIN cars c ON c.id=j.car_id LEFT JOIN mechanics m ON m.id=j.mechanic_id WHERE j.id=?");
 $stmt->execute([$id]); $job = $stmt->fetch();
 if(!$job){setFlash('error','Job not found.');redirect(BASE_URL.'/modules/jobs/index.php');}
+
 
 $user = authUser();
 if ($user['role'] === 'mechanic' && $job['mechanic_id'] != $user['linked_id']) {
     setFlash('error', 'Access denied. This job is not assigned to you.');
     redirect(BASE_URL . '/modules/jobs/index.php');
+}
+
+// ── Check In to Workshop ─────────────────────────────────────────────────────
+// This is the authoritative action that physically moves the car into the
+// workshop. It sets the car status to 'in_workshop' and advances the job from
+// 'pending' to 'in_progress' so mechanics can start logging work.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check_in') {
+    canWrite('jobs') || die('Permission denied.');
+    $db->prepare("UPDATE cars SET status='in_workshop' WHERE id=?")->execute([$job['car_id']]);
+    // Auto-advance the job to in_progress only if it is still pending
+    if ($job['status'] === 'pending') {
+        $db->prepare("UPDATE workshop_jobs SET status='in_progress', start_date=COALESCE(start_date,CURDATE()) WHERE id=?")->execute([$id]);
+    }
+    logActivity('update', 'jobs', $id, "Car checked in to workshop for job {$job['job_number']}");
+    setFlash('success', $job['make'].' '.$job['model'].' checked in to workshop. Job is now In Progress.');
+    redirect(BASE_URL . '/modules/jobs/view.php?id=' . $id);
 }
 
 // Mark Complete quick-action
@@ -40,6 +57,18 @@ include __DIR__ . '/../../includes/header.php';
     <h5 class="mb-0">Job Card: <strong><?= e($job['job_number']) ?></strong></h5>
     <div class="d-flex gap-2">
         <?php if (canWrite('jobs')): ?>
+        <?php if ($job['car_status'] !== 'in_workshop' && !in_array($job['status'], ['completed','cancelled'])): ?>
+        <form method="POST" class="d-inline" onsubmit="return confirm('Confirm that <?= e(addslashes($job[\'make\'].' '.$job[\'model\'])) ?> has physically arrived in the workshop?')">
+            <input type="hidden" name="action" value="check_in">
+            <button type="submit" class="btn btn-sm btn-warning text-dark">
+                <i class="fa fa-screwdriver-wrench me-1"></i>Check In to Workshop
+            </button>
+        </form>
+        <?php elseif ($job['car_status'] === 'in_workshop'): ?>
+        <span class="btn btn-sm btn-warning text-dark pe-none">
+            <i class="fa fa-screwdriver-wrench me-1"></i>In Workshop
+        </span>
+        <?php endif; ?>
         <?php if (!in_array($job['status'], ['completed','cancelled'])): ?>
         <form method="POST" class="d-inline" onsubmit="return confirm('Mark this job as completed?')">
             <input type="hidden" name="action" value="mark_complete">
