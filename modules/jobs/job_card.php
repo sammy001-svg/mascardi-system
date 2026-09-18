@@ -9,20 +9,41 @@ if (!$id) redirect(BASE_URL . '/modules/jobs/index.php');
 $db = getDB();
 
 // ── Job + vehicle + mechanic ──────────────────────────────────────────────────
-$stmt = $db->prepare("
-    SELECT j.*,
-           c.make, c.model, c.year, c.color,
-           c.chassis_number, c.registration_number, c.engine_number,
-           m.name  AS mechanic_name,
-           m.phone AS mechanic_phone,
-           m.specialization AS mechanic_spec
-    FROM workshop_jobs j
-    JOIN cars c ON c.id = j.car_id
-    LEFT JOIN mechanics m ON m.id = j.mechanic_id
-    WHERE j.id = ?
-");
-$stmt->execute([$id]);
-$job = $stmt->fetch(PDO::FETCH_ASSOC);
+try {
+    $stmt = $db->prepare("
+        SELECT j.*,
+               c.make, c.model, c.year, c.color,
+               c.chassis_number, c.registration_number, c.engine_number,
+               m.name           AS mechanic_name,
+               m.phone          AS mechanic_phone,
+               m.specialization AS mechanic_spec
+        FROM workshop_jobs j
+        JOIN cars c ON c.id = j.car_id
+        LEFT JOIN mechanics m ON m.id = j.mechanic_id
+        WHERE j.id = ?
+    ");
+    $stmt->execute([$id]);
+    $job = $stmt->fetch(PDO::FETCH_ASSOC);
+} catch (\Throwable $e) {
+    // Fallback if specialization or engine_number column doesn't exist in this install
+    $stmt = $db->prepare("
+        SELECT j.*,
+               c.make, c.model, c.year, c.color,
+               c.chassis_number,
+               m.name  AS mechanic_name,
+               m.phone AS mechanic_phone,
+               NULL    AS mechanic_spec,
+               NULL    AS registration_number,
+               NULL    AS engine_number
+        FROM workshop_jobs j
+        JOIN cars c ON c.id = j.car_id
+        LEFT JOIN mechanics m ON m.id = j.mechanic_id
+        WHERE j.id = ?
+    ");
+    $stmt->execute([$id]);
+    $job = $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
 if (!$job) {
     setFlash('error', 'Job card not found.');
     redirect(BASE_URL . '/modules/jobs/index.php');
@@ -37,15 +58,14 @@ $issueItems  = [];
 if (!empty($job['assessment_id'])) {
     $ast = $db->prepare("
         SELECT ca.*,
-               c.mileage,
-               COALESCE(m.name, ca.driver_name) AS assessed_by
+               m.name AS assessed_by
         FROM car_assessments ca
-        JOIN cars c ON c.id = ca.car_id
         LEFT JOIN mechanics m ON m.id = ca.mechanic_id
         WHERE ca.id = ?
     ");
     $ast->execute([(int)$job['assessment_id']]);
     $assessment = $ast->fetch(PDO::FETCH_ASSOC);
+
 
     if ($assessment) {
         $ait = $db->prepare("
