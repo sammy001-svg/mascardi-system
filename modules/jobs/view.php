@@ -64,6 +64,9 @@ include __DIR__ . '/../../includes/header.php';
             <i class="fa fa-trash me-1"></i>Delete
         </a>
         <?php endif; ?>
+        <a href="job_card.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-outline-dark">
+            <i class="fa fa-print me-1"></i>Print Job Card
+        </a>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left me-1"></i>Back</a>
     </div>
 </div>

@@ -11,6 +11,67 @@ $preAssessId    = (int)($_GET['assessment_id'] ?? 0);
 
 $mechanics = $db->query("SELECT id, name FROM mechanics WHERE status='active' ORDER BY name")->fetchAll();
 
+// ── Auto-populate from assessment when launched from assessment view ──────────
+// If we arrive here with an assessment_id, pre-fill the form with data from
+// the assessment so the workshop manager does not have to transcribe what was
+// already documented in the checklist.
+$preAssessData    = null;
+$preDescription   = '';
+$preMechanicId    = 0;
+if ($preAssessId) {
+    try {
+        $astStmt = $db->prepare("
+            SELECT ca.*, m.id AS mech_id
+            FROM car_assessments ca
+            LEFT JOIN mechanics m ON m.id = ca.mechanic_id
+            WHERE ca.id = ?
+        ");
+        $astStmt->execute([$preAssessId]);
+        $preAssessData = $astStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($preAssessData) {
+            $preMechanicId = (int)($preAssessData['mech_id'] ?? 0);
+
+            // Build the description from all non-good assessment items
+            $issStmt = $db->prepare("
+                SELECT part_category, part_name, condition, notes
+                FROM assessment_items
+                WHERE assessment_id = ? AND condition != 'good'
+                ORDER BY part_category, part_name
+            ");
+            $issStmt->execute([$preAssessId]);
+            $issues = $issStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if ($issues) {
+                $condLabels = [
+                    'minor_damage'  => 'Minor Damage',
+                    'major_damage'  => 'Major Damage',
+                    'missing'       => 'Missing',
+                    'needs_service' => 'Needs Service',
+                ];
+                $lines = ['Issues identified during assessment:'];
+                $currentCat = '';
+                foreach ($issues as $iss) {
+                    if ($iss['part_category'] !== $currentCat) {
+                        $currentCat = $iss['part_category'];
+                        $lines[] = '';
+                        $lines[] = '[' . $currentCat . ']';
+                    }
+                    $condText = $condLabels[$iss['condition']] ?? ucfirst(str_replace('_', ' ', $iss['condition']));
+                    $line = '- ' . $iss['part_name'] . ' (' . $condText . ')';
+                    if (!empty($iss['notes'])) {
+                        $line .= ': ' . $iss['notes'];
+                    }
+                    $lines[] = $line;
+                }
+                $preDescription = implode("\n", $lines);
+            } elseif ($preAssessData['notes']) {
+                $preDescription = $preAssessData['notes'];
+            }
+        }
+    } catch (\Throwable $_) {}
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $carId    = (int)($_POST['car_id'] ?? 0);
     $mechId   = $_POST['mechanic_id'] ? (int)$_POST['mechanic_id'] : null;
@@ -69,7 +130,7 @@ include __DIR__ . '/../../includes/header.php';
                 <select name="mechanic_id" class="form-select select2">
                     <option value="">Select mechanic...</option>
                     <?php foreach ($mechanics as $m): ?>
-                    <option value="<?= $m['id'] ?>" <?= ($_POST['mechanic_id']??'')==$m['id']?'selected':'' ?>><?= e($m['name']) ?></option>
+                    <option value="<?= $m['id'] ?>" <?= ($_POST['mechanic_id'] ?? $preMechanicId) == $m['id'] ? 'selected' : '' ?>><?= e($m['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -100,7 +161,7 @@ include __DIR__ . '/../../includes/header.php';
             <?php if ($preAssessId): ?><input type="hidden" name="assessment_id" value="<?= $preAssessId ?>"><?php endif; ?>
             <div class="col-12">
                 <label class="form-label">Work Description</label>
-                <textarea name="description" class="form-control" rows="3" placeholder="Describe work to be done..."><?= e($_POST['description']??'') ?></textarea>
+                <textarea name="description" class="form-control" rows="4" placeholder="Describe work to be done..."><?= e($_POST['description'] ?? $preDescription) ?></textarea>
             </div>
             <div class="col-12">
                 <label class="form-label">Internal Notes</label>
