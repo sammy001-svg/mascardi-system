@@ -736,11 +736,18 @@ include __DIR__ . '/../../includes/header.php';
   </div>
 </div>
 
+<?php
+// Bootstrap JS is loaded in footer.php, which is included *after* this point.
+// A script block here runs before Bootstrap exists, so typeof bootstrap === 'undefined'
+// and the IIFE returns immediately without wiring up the click handler — the button
+// appears to do nothing. $extraJs is echoed by footer.php after Bootstrap loads, so
+// Bootstrap is guaranteed to be present when this code runs.
+$extraJs = <<<'JS'
 <script>
 (function () {
     'use strict';
     var modalEl = document.getElementById('cancelResModal');
-    if (!modalEl || typeof bootstrap === 'undefined') return;
+    if (!modalEl) return;
     var modal = new bootstrap.Modal(modalEl);
 
     document.addEventListener('click', function (e) {
@@ -750,11 +757,11 @@ include __DIR__ . '/../../includes/header.php';
         document.getElementById('crLeadId').value = btn.dataset.lead || '';
         var veh = (btn.dataset.vehicle || '').trim();
         document.getElementById('crSummary').textContent =
-            (btn.dataset.customer || 'This customer') + (veh ? ' — ' + veh : '');
+            (btn.dataset.customer || 'This customer') + (veh ? ' \u2014 ' + veh : '');
 
         var dep = (btn.dataset.deposit || '').trim();
         var depEl = document.getElementById('crDeposit');
-        depEl.textContent = dep ? ('Deposit held: KES ' + dep + ' — check whether a refund is due.') : '';
+        depEl.textContent = dep ? ('Deposit held: KES ' + dep + ' \u2014 check whether a refund is due.') : '';
         depEl.style.display = dep ? '' : 'none';
 
         var agent = (btn.dataset.agent || '').trim();
@@ -765,15 +772,17 @@ include __DIR__ . '/../../includes/header.php';
         modal.show();
     });
 
-    // A double submit would not cancel twice — the lead is no longer reserved by
-    // then — but it would show a confusing error, so the button locks.
+    // A double submit would not cancel twice \u2014 the lead is no longer reserved by
+    // then \u2014 but it would show a confusing error, so the button locks.
     document.getElementById('cancelResForm').addEventListener('submit', function () {
         var b = document.getElementById('crSubmit');
         b.disabled = true;
-        b.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Cancelling…';
+        b.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Cancelling\u2026';
     });
 }());
 </script>
+JS;
+?>
 <?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
