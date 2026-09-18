@@ -113,6 +113,15 @@ include __DIR__ . '/../../includes/header.php';
                     <dt class="col-5 text-muted">End Date</dt><dd class="col-7"><?= fmtDate($job['end_date']) ?></dd>
                     <dt class="col-5 text-muted">Mechanic</dt><dd class="col-7"><?= e($job['mechanic_name']??'—') ?></dd>
                     <?php if($job['mechanic_phone']): ?><dt class="col-5 text-muted">Mech. Phone</dt><dd class="col-7"><?= e($job['mechanic_phone']) ?></dd><?php endif; ?>
+                    <dt class="col-5 text-muted">Car Location</dt>
+                    <dd class="col-7">
+                        <?php if ($job['car_status'] === 'in_workshop'): ?>
+                        <span class="badge bg-warning text-dark"><i class="fa fa-screwdriver-wrench me-1"></i>In Workshop</span>
+                        <?php else: ?>
+                        <?= statusBadge($job['car_status'] ?? 'unknown') ?>
+                        <div class="mt-1" style="font-size:11px;color:#6b7280">Not yet checked in</div>
+                        <?php endif; ?>
+                    </dd>
                 </dl>
                 <?php if($job['description']): ?><hr><p class="small mb-0"><strong>Work Description:</strong><br><?= e($job['description']) ?></p><?php endif; ?>
                 <?php if($job['notes']): ?><hr><p class="small mb-0 text-muted"><?= e($job['notes']) ?></p><?php endif; ?>
