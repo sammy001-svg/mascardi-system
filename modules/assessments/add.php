@@ -65,12 +65,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ins->execute([$assessmentId, $cats[$idx] ?? '', $pname, $conds[$idx] ?? 'good', $pnotes[$idx] ?? '']);
             }
 
-            // Update car status based on assessment type
-            $newCarStatus = match ($type) {
-                'arrival' => 'arrived',
-                default   => 'in_assessment',
-            };
-            $db->prepare("UPDATE cars SET status=? WHERE id=?")->execute([$newCarStatus, $carId]);
+            // Only update the car status for arrival assessments — this confirms
+            // the vehicle has physically arrived on the lot. For all other types
+            // (pre_delivery, client_service, yard) the car is already somewhere and
+            // the assessment is just an inspection; leave the status unchanged so the
+            // car list shows the correct real-world location.
+            // Moving a car to 'in_workshop' requires an explicit Check-In action.
+            if ($type === 'arrival') {
+                $db->prepare("UPDATE cars SET status='arrived' WHERE id=?")->execute([$carId]);
+            }
 
             $db->commit();
             logActivity('create', 'assessments', $assessmentId, "New {$type} assessment for car #{$carId} — status: {$status}");

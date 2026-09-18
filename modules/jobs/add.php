@@ -91,7 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("INSERT INTO workshop_jobs (job_number,car_id,mechanic_id,assessment_id,start_date,end_date,status,priority,description,notes) VALUES (?,?,?,?,?,?,?,?,?,?)")
                ->execute([$jobNumber,$carId,$mechId,$assessId,$start,$end,$status,$priority,$desc,$notes]);
             $jobId = $db->lastInsertId();
-            $db->prepare("UPDATE cars SET status='in_workshop' WHERE id=?")->execute([$carId]);
+            // Do NOT automatically set the car to 'in_workshop' here.
+            // The car is only physically checked into the workshop via the
+            // explicit "Check In to Workshop" button on the job card view.
             logActivity('create', 'jobs', $jobId, "Created job card {$jobNumber}");
             setFlash('success',"Job card {$jobNumber} created.");
             redirect(BASE_URL.'/modules/jobs/view.php?id='.$jobId);
