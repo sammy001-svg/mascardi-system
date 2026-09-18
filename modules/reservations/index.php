@@ -45,7 +45,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cance
 
     // Header first, then the notification: the email goes over a blocking SMTP
     // socket, and an admin should not watch a spinner for it.
+    //
+    // session_write_close() before afterResponse(): afterResponse() flushes the
+    // HTTP connection (via fastcgi_finish_request or ob_end_flush), and on some
+    // SAPIs that racing close races the session write. The flash message set above
+    // lives in $_SESSION — if the session is not committed to disk before the
+    // connection drops, the redirect lands on a page that has no flash to show and
+    // the cancel appears to have done nothing.
     header('Location: ' . BASE_URL . '/modules/reservations/index.php');
+    session_write_close();
     $__n = $res['notify'];
     afterResponse(function () use ($db, $__n, $me) {
         reservationNotifyCancelled($db, $__n, (string)$me['name']);
