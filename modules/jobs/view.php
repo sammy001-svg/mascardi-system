@@ -58,7 +58,7 @@ include __DIR__ . '/../../includes/header.php';
     <div class="d-flex gap-2">
         <?php if (canWrite('jobs')): ?>
         <?php if ($job['car_status'] !== 'in_workshop' && !in_array($job['status'], ['completed','cancelled'])): ?>
-        <form method="POST" class="d-inline" onsubmit="return confirm('Confirm that <?= e(addslashes($job[\'make\'].' '.$job[\'model\'])) ?> has physically arrived in the workshop?')">
+        <form method="POST" class="d-inline" onsubmit="return confirm('Confirm that <?= e(addslashes($job['make'].' '.$job['model'])) ?> has physically arrived in the workshop?')">
             <input type="hidden" name="action" value="check_in">
             <button type="submit" class="btn btn-sm btn-warning text-dark">
                 <i class="fa fa-screwdriver-wrench me-1"></i>Check In to Workshop
