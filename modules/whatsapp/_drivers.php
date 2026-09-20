@@ -182,6 +182,20 @@ function waHttp(string $method, string $url, array $opts = []): array
     return ['ok' => true, 'code' => $code, 'data' => $data, 'error' => ''];
 }
 
+/**
+ * The provider's settings, fetched once per request.
+ *
+ * Both the status band and the receiving panel want this, and providers rate
+ * limit. Asking twice on one page load earned a 429 on the second call, which
+ * made the receiving panel report a problem that did not exist — the worst kind
+ * of diagnostic, because it sends somebody to fix something that was fine.
+ */
+function waGreenSettings(bool $fresh = false): array
+{
+    static $cache = null;
+    if ($cache !== null && !$fresh) return $cache;
+    return $cache = waHttp('GET', waGreenUrl('getSettings'));
+}
 /** The base of a Green API call. */
 function waGreenUrl(string $method): string
 {
@@ -227,7 +241,7 @@ function waDriverStatus(bool $wantQr = false): array
 
     if ($state === 'authorized') {
         $phone = '';
-        $s = waHttp('GET', waGreenUrl('getSettings'));
+        $s = waGreenSettings();
         if ($s['ok']) $phone = waChatPhone((string)($s['data']['wid'] ?? ''));
         return ['state' => 'connected', 'label' => 'Connected', 'qr' => null,
                 'phone' => $phone,
@@ -286,8 +300,11 @@ function waDriverWebhook(): array
                 'error' => 'Meta holds the callback against the app, so it cannot be read from here.'];
     }
 
-    $r = waHttp('GET', waGreenUrl('getSettings'));
-    if (!$r['ok']) return $none + ['error' => $r['error']];
+    $r = waGreenSettings();
+    // array_merge, not +. The + operator keeps the LEFT value where a key
+    // exists in both, so $none's empty error silently replaced the real one
+    // and the panel reported "the provider would not say" for every fault.
+    if (!$r['ok']) return array_merge($none, ['error' => $r['error']]);
 
     return [
         'known'     => true,
@@ -336,6 +353,8 @@ function waDriverLogout(): array
                                         . 'the number is verified with Meta, not scanned.'];
     }
     $r = waHttp('GET', waGreenUrl('logout'));
+    // The cached settings are now stale by definition.
+    if ($r['ok']) waGreenSettings(true);
     return ['ok' => $r['ok'], 'error' => $r['error']];
 }
 
