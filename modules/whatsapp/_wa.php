@@ -25,7 +25,7 @@ if (!function_exists('waMigrate')) {
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/_drivers.php';
 
-if (!defined('WA_SCHEMA_VERSION')) define('WA_SCHEMA_VERSION', '2');
+if (!defined('WA_SCHEMA_VERSION')) define('WA_SCHEMA_VERSION', '3');
 
 /**
  * The tables, created and brought forward in place.
@@ -120,6 +120,23 @@ function waMigrate(PDO $db, bool $force = false): void
         "ALTER TABLE wa_conversations ADD UNIQUE KEY uq_wa_chat (chat_id)",
         "ALTER TABLE wa_messages ADD KEY idx_wa_msg_conv (conversation_id, id)",
     ] as $sql) { try { $db->exec($sql); } catch (\Throwable $_) {} }
+
+    // Threads whose messages arrived without a summary line being written sort
+    // to the bottom of the list and show no preview, because both come from
+    // last_message_at. Repaired once, here, rather than papered over in every
+    // query that reads them afterwards.
+    try {
+        $db->exec("
+            UPDATE wa_conversations c
+               SET c.last_message_at = (SELECT MAX(m.sent_at) FROM wa_messages m
+                                         WHERE m.conversation_id = c.id),
+                   c.last_message = COALESCE(c.last_message, (
+                       SELECT LEFT(COALESCE(NULLIF(m2.body,''), CONCAT('Attachment: ', m2.type)), 240)
+                         FROM wa_messages m2 WHERE m2.conversation_id = c.id
+                     ORDER BY m2.sent_at DESC, m2.id DESC LIMIT 1))
+             WHERE c.last_message_at IS NULL
+               AND EXISTS (SELECT 1 FROM wa_messages m3 WHERE m3.conversation_id = c.id)");
+    } catch (\Throwable $e) { error_log('waMigrate backfill: ' . $e->getMessage()); }
 
     try {
         $db->prepare("INSERT INTO settings (setting_key, setting_value)
@@ -250,11 +267,18 @@ function waLinkToRecords(PDO $db, int $convId, string $phone): void
 function waConversations(PDO $db, array $f = []): array
 {
     // A thread nobody has said anything in is not a conversation, it is a
-    // contact. The previous module imported the whole phone book as threads,
-    // which buried the handful of real conversations under two hundred empty
-    // ones. They are hidden rather than deleted — the phone numbers are still
-    // worth having, and a thread reappears the moment anything is said in it.
-    $where = ['c.last_message_at IS NOT NULL']; $args = [];
+    // contact: the previous module imported the whole phone book, and those
+    // empties buried the real ones. They are hidden rather than deleted, and
+    // come back the moment anything is said.
+    //
+    // "Has anything been said" is asked of the MESSAGES, not of the summary
+    // column. Keying it on last_message_at hid a hundred and ninety-eight
+    // threads that were full of messages the old importer had never written a
+    // summary line for — which is to say it hid almost the entire history
+    // while claiming to hide empty contacts.
+    $where = ['(c.last_message_at IS NOT NULL
+                OR EXISTS (SELECT 1 FROM wa_messages m2 WHERE m2.conversation_id = c.id))'];
+    $args = [];
     if (!empty($f['include_empty'])) $where = ['1=1'];
     if (!empty($f['status']))   { $where[] = 'c.status = ?';      $args[] = $f['status']; }
     if (!empty($f['assigned'])) { $where[] = 'c.assigned_to = ?'; $args[] = (int)$f['assigned']; }

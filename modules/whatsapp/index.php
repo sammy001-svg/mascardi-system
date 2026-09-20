@@ -198,6 +198,20 @@ include __DIR__ . '/../../includes/header.php';
             <div class="wi-search">
                 <input type="search" id="waQ" placeholder="Search name, number or message">
             </div>
+            <?php if ($canSend): ?>
+            <div id="waNewBar" style="display:none;padding:11px;border-bottom:1px solid var(--border);
+                 background:var(--surface-alt)">
+                <div style="display:flex;gap:7px">
+                    <input type="tel" id="waNewPhone" placeholder="0712345678"
+                           style="flex:1;min-width:0;font-size:13px;border:1px solid var(--border);
+                                  border-radius:8px;padding:7px 10px;background:var(--surface);color:var(--text)">
+                    <button class="btn btn-sm btn-success" id="waNewGo">Start</button>
+                </div>
+                <div id="waNewErr" style="color:#b91c1c;font-size:11.5px;margin-top:6px"></div>
+                <div style="font-size:11px;color:var(--text-3);margin-top:4px">
+                    0712345678, or with the country code as 254712345678.</div>
+            </div>
+            <?php endif; ?>
             <div class="wi-tabs">
                 <span class="wi-tab on" data-f="open">Open</span>
                 <span class="wi-tab" data-f="unread">Unread</span>
@@ -541,22 +555,59 @@ include __DIR__ . '/../../includes/header.php';
         });
     });
 
+    // Starting a chat is its own thing, with its own endpoint. It used to go
+    // through send.php with an empty body, on the theory that the refusal would
+    // still carry the conversation id back — it does not, so the thread was
+    // created and the page then announced "There is nothing to send" instead of
+    // opening it.
     window.waNewChat = function () {
-        var p = prompt('Phone number (07…, or with the country code):');
-        if (!p) return;
+        var bar = document.getElementById('waNewBar');
+        if (!bar) return;
+        bar.style.display = bar.style.display === 'none' ? '' : 'none';
+        if (bar.style.display !== 'none') {
+            document.getElementById('waNewErr').textContent = '';
+            var f = document.getElementById('waNewPhone');
+            f.value = ''; f.focus();
+        }
+    };
+
+    function startChat() {
+        var input = document.getElementById('waNewPhone'),
+            err   = document.getElementById('waNewErr'),
+            btn   = document.getElementById('waNewGo'),
+            phone = (input.value || '').trim();
+        if (!phone) { err.textContent = 'Enter a phone number.'; return; }
+
+        btn.disabled = true;
+        err.textContent = '';
         var fd = new FormData();
-        fd.append('csrf_token', CSRF); fd.append('phone', p);
-        fd.append('kind', 'text'); fd.append('body', '');
-        // A thread has to exist before it can be opened, and send.php is what
-        // creates one — so an empty send is used purely to open it. It comes back
-        // with the conversation id even though the empty body is refused.
-        fetch(BASE + '/modules/whatsapp/api/send.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+        fd.append('csrf_token', CSRF);
+        fd.append('phone', phone);
+
+        fetch(BASE + '/modules/whatsapp/api/open.php',
+              { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (d) {
-                if (d && d.conversation_id) { load(function () { open(d.conversation_id); }); }
-                else alert((d && d.error) || 'That number could not be used.');
+                btn.disabled = false;
+                if (!d || !d.ok || !d.conversation_id) {
+                    err.textContent = (d && d.error) || 'That number could not be used.';
+                    return;
+                }
+                document.getElementById('waNewBar').style.display = 'none';
+                load(function () { open(d.conversation_id); });
+            })
+            .catch(function () {
+                btn.disabled = false;
+                err.textContent = 'That did not go through. Try again.';
             });
-    };
+    }
+
+    var goBtn = document.getElementById('waNewGo');
+    if (goBtn) goBtn.addEventListener('click', startChat);
+    var newPhone = document.getElementById('waNewPhone');
+    if (newPhone) newPhone.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); startChat(); }
+    });
 
     // ── filters and search ──
     Array.prototype.forEach.call(document.querySelectorAll('.wi-tab'), function (t) {
