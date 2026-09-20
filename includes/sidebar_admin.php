@@ -249,16 +249,18 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
             <i class="fa fa-phone"></i><span>Dialer</span>
         </a>
 
+        <?php if (canAccess('whatsapp')): ?>
         <a href="<?= BASE_URL ?>/modules/whatsapp/index.php"
            class="nav-item <?= isActive('/modules/whatsapp/') ?>"
-           data-label="WA Inbox" style="position:relative">
-            <i class="fab fa-whatsapp"></i><span>WA Inbox</span>
+           data-label="WhatsApp" style="position:relative">
+            <i class="fab fa-whatsapp"></i><span>WhatsApp</span>
             <span id="waNavBadge"
                   style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
                          background:#25d366;color:#fff;border-radius:50%;font-size:10px;
                          font-weight:700;min-width:18px;height:18px;line-height:18px;
                          text-align:center;padding:0 3px;display:none"></span>
         </a>
+        <?php endif; ?>
 
         <!-- ══ ADMINISTRATION ═════════════════════════════════════════════ -->
         <div class="nav-section">Administration</div>

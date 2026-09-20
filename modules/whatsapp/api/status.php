@@ -1,18 +1,46 @@
 <?php
-require_once __DIR__ . '/../../../includes/functions.php';
-header('Content-Type: application/json');
+/**
+ * Where the connection stands — and the QR code when one is being waited for.
+ *
+ * Polled from the connect page every few seconds while an admin is scanning,
+ * so it stays cheap and never throws: a failed poll should leave the last good
+ * state on screen rather than replacing it with an error.
+ */
 
-if (!isLoggedIn()) { echo json_encode(['connected' => false, 'unread' => 0]); exit; }
+require_once __DIR__ . '/../../../includes/functions.php';
+require_once __DIR__ . '/../_wa.php';
+requireLogin();
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+
+// The QR is the key to the company's WhatsApp account. Only an administrator
+// may ask for one, even though any permitted user may read the state.
+$wantQr = !empty($_GET['qr']) && waCanAdmin();
+
+if (!waCanUse() && !waCanAdmin()) {
+    http_response_code(403);
+    echo json_encode(['ok' => false, 'error' => 'forbidden']);
+    exit;
+}
 
 try {
-    $db     = getDB();
-    $config = $db->query("SELECT * FROM wa_config LIMIT 1")->fetch() ?: [];
-    $unread = (int)$db->query("SELECT COALESCE(SUM(unread_count),0) FROM wa_conversations")->fetchColumn();
-    echo json_encode([
-        'connected' => (bool)($config['is_connected'] ?? false),
-        'unread'    => $unread,
-        'phone'     => $config['phone_number'] ?? null,
-    ]);
+    $s = waConfigured()
+        ? waDriverStatus($wantQr)
+        : ['state' => 'unconfigured', 'label' => 'Not set up', 'qr' => null,
+           'phone' => '', 'detail' => 'No WhatsApp connection has been set up yet.'];
 } catch (\Throwable $e) {
-    echo json_encode(['connected' => false, 'unread' => 0]);
+    error_log('wa status: ' . $e->getMessage());
+    $s = ['state' => 'error', 'label' => 'Not connected', 'qr' => null,
+          'phone' => '', 'detail' => 'The connection could not be checked just now.'];
 }
+
+echo json_encode([
+    'ok'       => true,
+    'state'    => $s['state'],
+    'label'    => $s['label'],
+    'detail'   => $s['detail'],
+    'phone'    => $s['phone'],
+    'qr'       => $wantQr ? $s['qr'] : null,
+    'provider' => waProvider(),
+], JSON_UNESCAPED_UNICODE);

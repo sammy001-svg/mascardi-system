@@ -41,9 +41,6 @@ $credKeys = [
     'at_api_key'     => '',
     'at_username'    => '',
     'at_sender_id'   => '',
-    'twilio_sid'     => '',
-    'twilio_token'   => '',
-    'twilio_wa_from' => '',
 ];
 $ruleEvents = [
     'sale'         => 'Vehicle Sale Confirmed',
@@ -84,11 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     $updates = [
         'at_username'    => trim($_POST['at_username']    ?? ''),
         'at_sender_id'   => trim($_POST['at_sender_id']   ?? ''),
-        'twilio_sid'     => trim($_POST['twilio_sid']     ?? ''),
-        'twilio_wa_from' => trim($_POST['twilio_wa_from'] ?? ''),
     ];
     if (!empty($_POST['at_api_key']))    $updates['at_api_key']    = trim($_POST['at_api_key']);
-    if (!empty($_POST['twilio_token'])) $updates['twilio_token'] = trim($_POST['twilio_token']);
     foreach ($updates as $k => $v) { $uStmt->execute([$k, $v]); $settings[$k] = $v; }
     setFlash('success', 'API credentials saved.');
     redirect(BASE_URL . '/modules/settings/messaging.php?tab=credentials');
@@ -175,7 +169,7 @@ usort($combined, fn($a, $b) => strtotime($b['created_at']) - strtotime($a['creat
 $logs = array_slice($combined, $logOffset, $logPer);
 
 $smsOk   = !empty($settings['at_api_key']) && !empty($settings['at_username']);
-$waOk    = !empty($settings['twilio_sid']) && !empty($settings['twilio_token']) && !empty($settings['twilio_wa_from']);
+// Whether WhatsApp is usable is asked of the connection, inside the card below.
 $emailOk = !empty($settings['smtp_from_email']) && !empty($settings['smtp_host']);
 
 include __DIR__ . '/../../includes/header.php';
@@ -298,60 +292,51 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 
-    <!-- Twilio WhatsApp -->
+    <!-- WhatsApp: configured in its own module now -->
     <div class="col-lg-6">
         <div class="card h-100">
             <div class="card-header d-flex align-items-center gap-2">
                 <i class="fa fa-brands fa-whatsapp" style="color:#25d366"></i>
-                <span class="fw-semibold">Twilio — WhatsApp</span>
-                <span class="badge bg-<?= $waOk ? 'success' : 'secondary' ?> ms-auto" style="font-size:10px">
-                    <?= $waOk ? 'Configured' : 'Not Set' ?>
+                <span class="fw-semibold">WhatsApp</span>
+                <?php
+                // Asked of the live connection rather than of a saved credential:
+                // the old badge here said "Configured" for a Twilio account that
+                // had never sent a message.
+                require_once __DIR__ . '/../whatsapp/_wa.php';
+                $waLive = false; $waWhere = '';
+                try {
+                    if (waConfigured()) { $st = waDriverStatus(false);
+                        $waLive = $st['state'] === 'connected'; $waWhere = $st['label']; }
+                } catch (\Throwable $e) { $waWhere = 'Could not be checked'; }
+                ?>
+                <span class="badge bg-<?= $waLive ? 'success' : 'secondary' ?> ms-auto" style="font-size:10px">
+                    <?= $waLive ? 'Connected' : e($waWhere ?: 'Not set up') ?>
                 </span>
             </div>
             <div class="card-body">
-                <div class="alert alert-info py-2 small mb-3">
-                    <i class="fa fa-info-circle me-1"></i>
-                    Get credentials at <strong>twilio.com</strong> → Console.
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Account SID <span class="text-danger">*</span></label>
-                    <input type="text" name="twilio_sid" class="form-control font-monospace"
-                           placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                           value="<?= e($settings['twilio_sid'] ?? '') ?>">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Auth Token <span class="text-danger">*</span></label>
-                    <div class="input-group">
-                        <input type="password" name="twilio_token" id="twilioTokenInput" class="form-control font-monospace"
-                               placeholder="<?= $waOk ? '•••••••• (unchanged if blank)' : 'Your auth token' ?>"
-                               autocomplete="new-password">
-                        <button type="button" class="btn btn-outline-secondary"
-                                onclick="var f=document.getElementById('twilioTokenInput');f.type=f.type==='text'?'password':'text'">
-                            <i class="fa fa-eye"></i>
-                        </button>
-                    </div>
-                    <?php if ($waOk): ?>
-                    <div class="form-text text-success"><i class="fa fa-check-circle me-1"></i>Token saved.</div>
+                <p class="small text-muted">
+                    WhatsApp is set up in its own place now — one connection the whole team
+                    shares, with the conversations kept against each customer. An administrator
+                    links the company phone once by scanning a code, and everybody with
+                    WhatsApp rights can send from their own login after that.
+                </p>
+                <p class="small text-muted">
+                    The Twilio fields that used to be here collected credentials nothing read.
+                    They have been taken out rather than left to look meaningful.
+                </p>
+                <div class="d-flex gap-2 flex-wrap">
+                    <?php if (isSuperAdmin() || hasRole(['admin','general_manager'])): ?>
+                    <a href="<?= BASE_URL ?>/modules/whatsapp/connect.php" class="btn btn-sm btn-success">
+                        <i class="fa fa-qrcode me-1"></i>WhatsApp Setup</a>
                     <?php endif; ?>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">WhatsApp From Number <span class="text-danger">*</span></label>
-                    <input type="text" name="twilio_wa_from" class="form-control"
-                           placeholder="+14155238886"
-                           value="<?= e($settings['twilio_wa_from'] ?? '') ?>">
-                </div>
-                <div class="border rounded p-3 bg-light">
-                    <div class="fw-semibold small mb-2"><i class="fa fa-flask me-1"></i>Test WhatsApp</div>
-                    <div class="input-group input-group-sm">
-                        <input type="text" id="testWaPhone" class="form-control" placeholder="+254712345678">
-                        <button type="button" class="btn btn-outline-success" id="btnTestWa">Send Test</button>
-                    </div>
-                    <div id="testWaResult" class="mt-2 small"></div>
+                    <?php if (canAccess('whatsapp')): ?>
+                    <a href="<?= BASE_URL ?>/modules/whatsapp/index.php" class="btn btn-sm btn-outline-secondary">
+                        <i class="fa fa-inbox me-1"></i>Open the inbox</a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
-
     <!-- Email SMTP note -->
     <div class="col-12">
         <div class="card border-<?= $emailOk ? 'success' : 'warning' ?>">

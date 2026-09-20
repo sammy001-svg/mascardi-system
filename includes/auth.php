@@ -372,6 +372,7 @@ function canAccess(string $module): bool {
             'inspections','attendance','payroll','hr','chat','reports','clients','service_bookings',
             'crm','payments','invoices','quotations','sales','installments','expenses','imports','trade_in','meetings',
             'showroom_transfers',
+            'whatsapp',
         ],
 
         // ── Finance roles ─────────────────────────────────────────────────────
@@ -394,16 +395,19 @@ function canAccess(string $module): bool {
             'quick_assessments','sales','crm','installments','car_costs','car_documents',
             'inspections','chat','reports','expenses','assessments','showroom',
             'showroom_transfers','key_handovers','dispatch','team','imports','trade_in','meetings',
+            'whatsapp',
         ],
         'sales_officer'     => [
             'cars','clients','service_bookings','quotations','invoices','payments',
             'quick_assessments','sales','crm','installments','car_costs','car_documents',
             'inspections','chat','showroom','showroom_transfers','key_handovers','dispatch','team','imports','trade_in','meetings',
+            'whatsapp',
         ],
         'sales_person'      => [
             'cars','clients','service_bookings','quick_assessments','quotations','invoices',
             'payments','sales','crm','installments','car_documents','inspections','chat','showroom',
             'showroom_transfers','key_handovers','dispatch','team','trade_in','meetings',
+            'whatsapp',
         ],
         'customer_relations' => [
             // trade_in is read-only here (absent from canWrite below): CR agents
@@ -414,15 +418,18 @@ function canAccess(string $module): bool {
             // vehicle moved to another showroom. Approving and receiving it is not
             // theirs — that is gated separately in the module itself.
             'clients','crm','chat','cars','trade_in','meetings','showroom_transfers',
+            'whatsapp',
         ],
 
         // ── Supervisor role ────────────────────────────────────────────────────
         'supervisor'        => [
             'cars','service_bookings','quick_assessments','quotations','invoices','reports','crm','payments','clients','chat','trade_in','meetings','showroom_transfers','visitors',
+            'whatsapp',
         ],
         'receptionist'      => [
             'clients','service_bookings','quick_assessments','cars','chat','showroom',
             'showroom_transfers','key_handovers','dispatch','team','meetings',
+            'whatsapp',
         ],
 
         // ── Workshop / Operational roles ───────────────────────────────────────
@@ -444,6 +451,7 @@ function canAccess(string $module): bool {
             // still admin-only — that guard lives in each module's delete.php.
             'clients','quotations','invoices',
             'attendance','team','reports','chat','meetings',
+            'whatsapp',
         ],
         'mechanic'          => [
             'jobs','assessments','parts_requests','issues','car_documents','inspections','chat','team',
@@ -479,6 +487,7 @@ function canAccess(string $module): bool {
             'issues','chat','car_documents','crm','car_costs','installments','expenses',
             'inspections','attendance','payroll','hr','quick_assessments','sales',
             'showroom_transfers','key_handovers','dispatch','team','imports','meetings',
+            'whatsapp',
         ],
     ];
     return in_array($module, $map[$user['role']] ?? []);
@@ -507,25 +516,25 @@ function canWrite(string $module): bool {
         // went through a super admin. Editing is write access; DELETING stays with
         // canEditDelete(), which is admin only, so nothing can be removed here.
         'general_manager'   => ['quotations','invoices','sales','imports','trade_in','meetings','callcenter',
-                                'showroom_transfers','cars'],
+                                'showroom_transfers','cars','whatsapp'],
         // showroom_transfers: a supervisor approves and receives them, which needs
         // write rights on the module even though everything else here is read-only.
-        'supervisor'        => ['quick_assessments','meetings','showroom_transfers'],
+        'supervisor'        => ['quick_assessments','meetings','showroom_transfers','whatsapp'],
         'finance_manager'   => ['payments','invoices','quotations','expenses','sales','installments','payroll','lpo','imports','trade_in','meetings'],
         'accountant'        => ['payments','invoices','quotations','expenses','sales','installments','trade_in','meetings'],
         'cashier'           => ['payments','installments'],
-        'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team','imports','trade_in','meetings','callcenter'],
-        'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','dispatch','team','trade_in','meetings'],
-        'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team','trade_in','meetings'],
-        'customer_relations' => ['clients','crm','cars','meetings','callcenter','showroom_transfers'],
-        'receptionist'      => ['clients','service_bookings','quick_assessments','team','meetings'],
-        'workshop_manager'  => ['jobs','mechanics','parts_requests','issues','lpo','inventory','assessments','quick_assessments','inspections','cars','car_documents','service_bookings','clients','quotations','invoices','attendance','team','meetings'],
+        'sales_manager'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','expenses','dispatch','team','imports','trade_in','meetings','callcenter','whatsapp'],
+        'sales_officer'     => ['payments','quotations','invoices','clients','service_bookings','quick_assessments','sales','crm','installments','dispatch','team','trade_in','meetings','whatsapp'],
+        'sales_person'      => ['service_bookings','quick_assessments','clients','payments','sales','crm','installments','dispatch','team','trade_in','meetings','whatsapp'],
+        'customer_relations' => ['clients','crm','cars','meetings','callcenter','showroom_transfers','whatsapp'],
+        'receptionist'      => ['clients','service_bookings','quick_assessments','team','meetings','whatsapp'],
+        'workshop_manager'  => ['jobs','mechanics','parts_requests','issues','lpo','inventory','assessments','quick_assessments','inspections','cars','car_documents','service_bookings','clients','quotations','invoices','attendance','team','meetings','whatsapp'],
         'mechanic'          => ['assessments','parts_requests','team'],
         'driver'            => ['team'],
         'inventory_manager' => ['inventory','suppliers','lpo','parts_requests','meetings'],
         'procurement_officer' => ['lpo','suppliers','inventory','parts_requests','meetings'],
         'hr_manager'        => ['hr','attendance','payroll','team','meetings','callcenter'],
-        'manager'           => ['cars','jobs','assessments','mechanics','drivers','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings','car_documents','car_costs','installments','expenses','inspections','attendance','payroll','quick_assessments','sales','crm','imports','meetings','callcenter'],
+        'manager'           => ['cars','jobs','assessments','mechanics','drivers','inventory','parts_requests','intake','issues','lpo','quotations','invoices','clients','service_bookings','car_documents','car_costs','installments','expenses','inspections','attendance','payroll','quick_assessments','sales','crm','imports','meetings','callcenter','whatsapp'],
     ];
     $role = authRole();
     return in_array($module, $map[$role] ?? []);

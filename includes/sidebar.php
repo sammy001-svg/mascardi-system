@@ -713,12 +713,12 @@ if (authRole() === 'supervisor') {
            data-label="Dialer">
             <i class="fa fa-phone"></i><span>Dialer</span>
         </a>
-        <?php if (canAccess('crm') || canAccess('clients') || canAccess('cars')): ?>
+        <?php if (canAccess('whatsapp')): ?>
         <a href="<?= BASE_URL ?>/modules/whatsapp/index.php"
            class="nav-item <?= isActive('/modules/whatsapp/') ?>"
-           data-label="WA Inbox"
+           data-label="WhatsApp"
            style="position:relative">
-            <i class="fab fa-whatsapp"></i><span>WA Inbox</span>
+            <i class="fab fa-whatsapp"></i><span>WhatsApp</span>
             <span id="waNavBadge" style="display:none;position:absolute;top:6px;right:8px;
                   background:#00a884;color:#fff;border-radius:10px;font-size:10px;
                   font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
@@ -747,10 +747,10 @@ if (authRole() === 'supervisor') {
         <div class="nav-section">Administration</div>
 
         <?php if (hasRole(['admin','general_manager'])): ?>
-        <a href="<?= BASE_URL ?>/modules/whatsapp/admin.php"
-           class="nav-item <?= isActive('/modules/whatsapp/admin') ?>"
-           data-label="WA Setup">
-            <i class="fa fa-qrcode"></i><span>WA Setup</span>
+        <a href="<?= BASE_URL ?>/modules/whatsapp/connect.php"
+           class="nav-item <?= isActive('/modules/whatsapp/connect') ?>"
+           data-label="WhatsApp Setup">
+            <i class="fa fa-qrcode"></i><span>WhatsApp Setup</span>
         </a>
         <?php endif; ?>
         <a href="<?= BASE_URL ?>/modules/data_tools/import.php"

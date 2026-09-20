@@ -327,15 +327,17 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
         }());
         </script>
 
+        <?php if (canAccess('whatsapp')): ?>
         <a href="<?= BASE_URL ?>/modules/whatsapp/index.php"
            class="nav-item <?= str_contains($__uri, '/modules/whatsapp/') ? 'active' : '' ?>"
-           data-label="WA Inbox"
+           data-label="WhatsApp"
            style="position:relative">
-            <i class="fab fa-whatsapp"></i><span>WA Inbox</span>
+            <i class="fab fa-whatsapp"></i><span>WhatsApp</span>
             <span id="waNavBadgeCrm" style="display:none;position:absolute;top:6px;right:8px;
                   background:#00a884;color:#fff;border-radius:10px;font-size:10px;
                   font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
         </a>
+        <?php endif; ?>
         <script>
         (function(){
             var badge = document.getElementById('waNavBadgeCrm');
