@@ -85,6 +85,30 @@ function waProviderLabel(?string $p = null): string
 // ── Phone numbers ────────────────────────────────────────────────────────────
 
 /**
+ * The dialling code, with a sanity check the settings form cannot be trusted for.
+ *
+ * Somebody typed the company's whole WhatsApp number into the country-code box —
+ * an easy thing to do, and nothing pushed back. Every number then entered as
+ * 07… became the company number with a mobile stuck on the end, twenty-one
+ * digits long, and was refused with "that does not look like a usable phone
+ * number" — about the least helpful sentence available, since the number was
+ * perfectly fine and the fault was three screens away in a settings field.
+ *
+ * No country code is longer than four digits, so anything longer is not one.
+ */
+function waCountryCode(): string
+{
+    $raw = preg_replace('/\D+/', '', (string)getSetting('wa_country_code', '254')) ?? '';
+    if ($raw === '' || strlen($raw) > 4) {
+        if ($raw !== '') {
+            error_log('waCountryCode: "' . $raw . '" is not a dialling code — using 254. '
+                    . 'Check the country code on the WhatsApp setup page.');
+        }
+        return '254';
+    }
+    return $raw;
+}
+/**
  * A phone number as WhatsApp wants it: digits only, full country code, no plus.
  *
  * Kenyan numbers arrive written every way there is — 0712…, +254712…, 254712…,
@@ -97,7 +121,7 @@ function waNormalisePhone(string $raw): ?string
     $d = preg_replace('/\D+/', '', $raw) ?? '';
     if ($d === '') return null;
 
-    $cc = preg_replace('/\D+/', '', (string)getSetting('wa_country_code', '254')) ?: '254';
+    $cc = waCountryCode();
 
     // Order matters. "00" has to be tested before the single "0", or
     // 00254712345678 is read as a local number and comes out as
@@ -470,6 +494,97 @@ function waMimeOf(string $path): string
     };
 }
 
+// ── History ──────────────────────────────────────────────────────────────────
+
+/**
+ * The chats the linked phone already knows about.
+ *
+ * The yard did not start using WhatsApp the day this system was connected. Years
+ * of conversation sit on that phone, and a shared inbox that begins at zero is
+ * one nobody trusts — the first thing anyone does is check whether the thread
+ * they remember is in it.
+ *
+ * @return array<int,array{chat_id:string,name:string}>
+ */
+function waDriverChats(): array
+{
+    if (!waConfigured() || waProvider() === 'cloud') return [];
+
+    $r = waHttp('GET', waGreenUrl('getChats'), ['timeout' => 60]);
+    if (!$r['ok'] || !is_array($r['data'])) return [];
+
+    $out = [];
+    foreach ($r['data'] as $c) {
+        $id = (string)($c['id'] ?? '');
+        // People only, as everywhere else: groups are not client conversations.
+        if ($id === '' || !str_ends_with($id, '@c.us')) continue;
+        $out[] = ['chat_id' => $id, 'name' => trim((string)($c['name'] ?? ''))];
+    }
+    return $out;
+}
+
+/**
+ * One chat's past messages, in the same shape the webhook produces.
+ *
+ * The history endpoint does NOT return what the webhook returns — the fields sit
+ * at the top level instead of nested, and direction is a word rather than being
+ * implied. Normalising here means waRecordInbound() and everything downstream
+ * cannot tell the difference between a message that arrived live and one that
+ * was pulled in afterwards, which is the point.
+ *
+ * @return array<int,array>  oldest first
+ */
+function waDriverHistory(string $chatId, int $count = 100): array
+{
+    if (!waConfigured() || waProvider() === 'cloud') return [];
+
+    $r = waHttp('POST', waGreenUrl('getChatHistory'), [
+        'json'    => ['chatId' => $chatId, 'count' => max(1, min(1000, $count))],
+        'timeout' => 90,
+    ]);
+    if (!$r['ok'] || !is_array($r['data'])) return [];
+
+    $out = [];
+    foreach ($r['data'] as $m) {
+        if (!is_array($m)) continue;
+        $type = (string)($m['typeMessage'] ?? '');
+        $kind = 'text';
+        $body = '';
+        $file = null;
+
+        if ($type === 'textMessage' || $type === 'extendedTextMessage' || $type === 'quotedMessage') {
+            $body = (string)($m['textMessage'] ?? ($m['extendedTextMessage']['text'] ?? ''));
+        } elseif (in_array($type, ['imageMessage','documentMessage','videoMessage','audioMessage'], true)) {
+            $kind = match ($type) {
+                'imageMessage'    => 'image',
+                'documentMessage' => 'document',
+                'videoMessage'    => 'video',
+                default           => 'audio',
+            };
+            $body = (string)($m['caption'] ?? '');
+            $file = ['url' => (string)($m['downloadUrl'] ?? ''), 'name' => (string)($m['fileName'] ?? '')];
+        } else {
+            $kind = 'other';
+            $body = '[' . ($type ?: 'unsupported message') . ']';
+        }
+
+        $out[] = [
+            'chat_id'    => $chatId,
+            'phone'      => waChatPhone($chatId),
+            'name'       => trim((string)($m['senderName'] ?? '')),
+            'message_id' => (string)($m['idMessage'] ?? ''),
+            'direction'  => ((string)($m['type'] ?? 'incoming')) === 'outgoing' ? 'out' : 'in',
+            'type'       => $kind,
+            'body'       => $body,
+            'file'       => $file,
+            'at'         => (int)($m['timestamp'] ?? time()),
+        ];
+    }
+
+    // Oldest first, so a thread reads the way a conversation happened.
+    usort($out, fn($a, $b) => $a['at'] <=> $b['at']);
+    return $out;
+}
 // ── Receiving ────────────────────────────────────────────────────────────────
 
 /**

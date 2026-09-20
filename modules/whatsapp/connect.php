@@ -72,7 +72,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $vals['wa_cloud_token'] = trim($_POST['cloud_token']);
             }
         }
-        $vals['wa_country_code'] = preg_replace('/\D+/', '', $_POST['country_code'] ?? '254') ?: '254';
+        // A dialling code, not a phone number. Somebody put the company's whole
+        // WhatsApp number here once and every 07… number in the system stopped
+        // being usable, with the error pointing at the number rather than here.
+        $ccIn = preg_replace('/\D+/', '', $_POST['country_code'] ?? '') ?? '';
+        if ($ccIn === '' || strlen($ccIn) > 4) {
+            $ccBad = $ccIn;
+            $ccIn  = '254';
+        }
+        $vals['wa_country_code'] = $ccIn;
 
         try {
             $st = $db->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?,?)
@@ -82,7 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // somebody changed them, and who.
             logActivity('update', 'settings', 0,
                 'WhatsApp connection settings changed by ' . $me['name'] . ' (' . waProviderLabel($provider) . ')');
-            setFlash('success', 'Saved. Check the connection below.');
+            setFlash(empty($ccBad) ? 'success' : 'warning',
+                empty($ccBad)
+                    ? 'Saved. Check the connection below.'
+                    : 'Saved, but "' . e($ccBad) . '" is not a country code — that looks like a '
+                      . 'phone number. Kenya is 254, and it has been set to that. '
+                      . 'With the wrong value here, numbers typed as 07… cannot be used.');
         } catch (\Throwable $e) {
             error_log('wa connect save: ' . $e->getMessage());
             setFlash('error', 'Those settings could not be saved.');
@@ -433,10 +446,13 @@ include __DIR__ . '/../../includes/header.php';
 
             <div class="row g-3">
                 <div class="col-md-4 wc-field">
-                    <label>Country code</label>
+                    <label>Country dialling code</label>
                     <input type="text" name="country_code" class="form-control"
-                           value="<?= e(getSetting('wa_country_code', '254')) ?>">
-                    <div class="hint">Used to turn 07… numbers into full international ones.</div>
+                           value="<?= e(waCountryCode()) ?>" maxlength="4"
+                           inputmode="numeric" placeholder="254">
+                    <div class="hint">Just the country — <strong>254</strong> for Kenya.
+                        Not the company's phone number: this is what turns 0712… into
+                        254712… so a message can be addressed.</div>
                 </div>
             </div>
 
@@ -444,6 +460,64 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </form>
+
+<div class="wc-card" id="history">
+    <header>
+        <h2><i class="fa fa-clock-rotate-left" style="color:#7c3aed"></i>Existing conversations</h2>
+        <span style="font-size:11.5px;color:var(--text-3)">
+            <?php
+            $haveMsgs = 0; $haveConvs = 0;
+            try {
+                $haveMsgs  = (int)$db->query("SELECT COUNT(*) FROM wa_messages")->fetchColumn();
+                $haveConvs = (int)$db->query("SELECT COUNT(*) FROM wa_conversations
+                                               WHERE last_message_at IS NOT NULL")->fetchColumn();
+            } catch (\Throwable $_) {}
+            echo (int)$haveConvs . ' thread(s), ' . (int)$haveMsgs . ' message(s) in the inbox';
+            ?></span>
+    </header>
+    <div class="wc-body">
+        <p class="small" style="color:var(--text-2);margin-bottom:12px">
+            The yard did not start using WhatsApp the day this system was connected.
+            This pulls the conversations already on the linked phone into the inbox —
+            both sides of each thread, dated as they happened, and marked read, because
+            they have been. It can be run again at any time: nothing is ever added twice,
+            and it carries on where it left off.
+        </p>
+
+        <?php if (waProvider() === 'cloud'): ?>
+        <div class="alert alert-secondary py-2 small mb-0">
+            The official Meta API does not hand over past conversations — it only delivers
+            messages sent after the number was connected.
+        </div>
+        <?php elseif (!waConfigured()): ?>
+        <div class="alert alert-secondary py-2 small mb-0">Connect WhatsApp first.</div>
+        <?php else: ?>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <button class="btn btn-primary btn-sm" id="waImportBtn">
+                <i class="fa fa-download me-1"></i>Import existing conversations</button>
+            <label class="small" style="color:var(--text-2)">
+                messages per chat
+                <select id="waPerChat" class="form-select form-select-sm d-inline-block"
+                        style="width:auto;margin-left:4px">
+                    <option value="50">50</option>
+                    <option value="100" selected>100</option>
+                    <option value="300">300</option>
+                    <option value="1000">everything</option>
+                </select>
+            </label>
+        </div>
+        <div id="waImportBox" style="display:none;margin-top:14px">
+            <div style="height:7px;background:var(--surface-alt);border-radius:4px;overflow:hidden">
+                <div id="waImportBar" style="height:100%;width:0;background:#16a34a;
+                     border-radius:4px;transition:width .3s"></div>
+            </div>
+            <div id="waImportMsg" style="font-size:12.5px;color:var(--text-2);margin-top:7px"></div>
+            <div id="waImportLog" style="font-size:11.5px;color:var(--text-3);margin-top:5px;
+                 max-height:130px;overflow-y:auto"></div>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
 
 <div class="wc-card" id="replies">
     <header>
@@ -492,6 +566,8 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <script>
+var WA_BASE = '<?= BASE_URL ?>';
+var WA_CSRF = '<?= csrfToken() ?>';
 (function () {
     // Provider panes
     var g = document.getElementById('optGreen'), c = document.getElementById('optCloud');
@@ -568,6 +644,69 @@ include __DIR__ . '/../../includes/header.php';
             .finally(function () { if (!stop) setTimeout(tick, linkedOnArrival ? 60000 : 6000); });
     }
     tick();
+
+    // ── pulling in what is already on the phone ──
+    //
+    // Three chats a request. A shared host cuts off a long request without
+    // saying so, and a job that dies silently half way through is worse than
+    // one that never started, because nothing tells you which half is missing.
+    var impBtn = document.getElementById('waImportBtn');
+    if (impBtn) {
+        impBtn.addEventListener('click', function () {
+            var box = document.getElementById('waImportBox'),
+                bar = document.getElementById('waImportBar'),
+                msg = document.getElementById('waImportMsg'),
+                log = document.getElementById('waImportLog'),
+                per = document.getElementById('waPerChat').value;
+            box.style.display = '';
+            impBtn.disabled  = true;
+            impBtn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Importing…';
+            var brought = 0;
+
+            function fail(text) {
+                msg.innerHTML = '<span style="color:#b91c1c">' + text + '</span>';
+                impBtn.disabled  = false;
+                impBtn.innerHTML = '<i class="fa fa-rotate-right me-1"></i>Try again';
+            }
+
+            function step(offset) {
+                var fd = new FormData();
+                fd.append('csrf_token', WA_CSRF);
+                fd.append('offset', offset);
+                fd.append('per_chat', per);
+                fd.append('batch', 3);
+                fetch(WA_BASE + '/modules/whatsapp/api/import.php',
+                      { method: 'POST', body: fd, credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d || !d.ok) { fail((d && d.error) || 'The import stopped.'); return; }
+                        brought += d.messages || 0;
+                        bar.style.width = (d.total ? Math.round((d.next / d.total) * 100) : 100) + '%';
+                        msg.textContent = d.next + ' of ' + d.total + ' chats · ' + brought
+                                        + ' message' + (brought === 1 ? '' : 's') + ' brought in';
+                        (d.chats || []).forEach(function (c) {
+                            if (!c.messages) return;
+                            var line = document.createElement('div');
+                            line.textContent = c.name + ' — ' + c.messages;
+                            log.insertBefore(line, log.firstChild);
+                        });
+                        if (d.finished) {
+                            msg.innerHTML = '<span style="color:#15803d">Done. ' + brought
+                                          + ' message' + (brought === 1 ? '' : 's') + ' from '
+                                          + d.total + ' chats are now in the inbox.</span>';
+                            impBtn.disabled  = false;
+                            impBtn.innerHTML = '<i class="fa fa-rotate-right me-1"></i>Run again';
+                            return;
+                        }
+                        step(d.next);
+                    })
+                    .catch(function () {
+                        fail('The connection dropped. Run it again — it carries on where it left off.');
+                    });
+            }
+            step(0);
+        });
+    }
 }());
 </script>
 

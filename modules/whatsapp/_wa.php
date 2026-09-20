@@ -486,6 +486,95 @@ function waRecordInbound(PDO $db, array $m): int
     return $id;
 }
 
+// ── Bringing the past in ─────────────────────────────────────────────────────
+
+/**
+ * File one historical message.
+ *
+ * Separate from waRecordInbound() for one reason: history contains the yard's
+ * OWN messages too, and an outgoing message filed as incoming would show on the
+ * wrong side of the thread and count as unread — a hundred conversations all
+ * apparently shouting at you.
+ *
+ * Idempotent on the provider's message id, so an import can be run twice, or
+ * resumed after it times out, without doubling anything.
+ *
+ * @return bool  true when a row was written
+ */
+function waFileHistoric(PDO $db, int $convId, array $m): bool
+{
+    $mid = (string)($m['message_id'] ?? '');
+    if ($mid !== '') {
+        try {
+            $st = $db->prepare("SELECT id FROM wa_messages WHERE message_id = ? LIMIT 1");
+            $st->execute([$mid]);
+            if ($st->fetchColumn()) return false;
+        } catch (\Throwable $_) { return false; }
+    }
+
+    $out = ($m['direction'] ?? 'in') === 'out';
+    try {
+        $db->prepare("INSERT INTO wa_messages
+                (conversation_id, message_id, direction, type, body, media_url, file_name,
+                 status, provider, sent_at, is_read)
+              VALUES (?,?,?,?,?,?,?,?,?, FROM_UNIXTIME(?), 1)")
+           ->execute([
+               $convId, $mid ?: null, $out ? 'out' : 'in', (string)$m['type'],
+               (string)($m['body'] ?? ''), $m['file']['url'] ?? null, $m['file']['name'] ?? null,
+               // Imported, not live: it already happened, and nothing here is
+               // waiting on a delivery receipt.
+               $out ? 'sent' : 'received',
+               waProvider(), (int)($m['at'] ?? time()),
+           ]);
+        return true;
+    } catch (\Throwable $e) {
+        error_log('waFileHistoric: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Pull one chat's history in.
+ *
+ * Everything read here is already read: importing three years of conversation
+ * and marking it all unread would put a badge of four thousand on the menu and
+ * teach everyone to ignore it on the first morning.
+ *
+ * @return array{messages:int, conversation_id:int}
+ */
+function waImportChat(PDO $db, string $chatId, string $name = '', int $count = 100): array
+{
+    waMigrate($db);
+    $conv = waConversation($db, $chatId, $name, waChatPhone($chatId));
+    if (!$conv) return ['messages' => 0, 'conversation_id' => 0];
+    $convId = (int)$conv['id'];
+
+    $rows  = waDriverHistory($chatId, $count);
+    $added = 0;
+    foreach ($rows as $m) {
+        if (waFileHistoric($db, $convId, $m)) $added++;
+    }
+
+    if ($added > 0) {
+        // The summary line is rebuilt from what is actually in the thread rather
+        // than from the last row seen, so a partial or out-of-order import still
+        // leaves the list showing the genuinely newest message.
+        try {
+            $db->prepare("
+                UPDATE wa_conversations c
+                   SET c.last_message = COALESCE((
+                           SELECT LEFT(COALESCE(NULLIF(m.body,''), CONCAT('📎 ', m.type)), 240)
+                             FROM wa_messages m WHERE m.conversation_id = c.id
+                         ORDER BY m.sent_at DESC, m.id DESC LIMIT 1), c.last_message),
+                       c.last_message_at = COALESCE((
+                           SELECT m.sent_at FROM wa_messages m WHERE m.conversation_id = c.id
+                         ORDER BY m.sent_at DESC, m.id DESC LIMIT 1), c.last_message_at)
+                 WHERE c.id = ?")->execute([$convId]);
+        } catch (\Throwable $e) { error_log('waImportChat summary: ' . $e->getMessage()); }
+    }
+
+    return ['messages' => $added, 'conversation_id' => $convId];
+}
 // ── Quick replies ────────────────────────────────────────────────────────────
 
 function waTemplates(PDO $db): array
