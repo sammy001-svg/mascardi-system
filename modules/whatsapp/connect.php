@@ -518,6 +518,11 @@ include __DIR__ . '/../../includes/header.php';
     if (!box) return;
     var stop = false;
 
+    // What the page was rendered with. A page that ARRIVES connected has
+    // nothing to wait for and nothing to reveal; only a scan that happens
+    // while somebody is watching is worth reacting to.
+    var linkedOnArrival = <?= $status['state'] === 'connected' ? 'true' : 'false' ?>;
+
     function paint(s) {
         var band  = document.getElementById('waState');
         var label = document.getElementById('waStateLabel');
@@ -533,8 +538,13 @@ include __DIR__ . '/../../includes/header.php';
             box.innerHTML = '<div class="ph"><i class="fa fa-circle-check" style="font-size:30px;color:#16a34a"></i>'
                           + '<div style="margin-top:10px">Linked. The team can send.</div></div>';
             stop = true;
-            // Show the unlink button without making them hunt for it.
-            setTimeout(function () { location.reload(); }, 1200);
+            // Reload ONLY when the scan happened while this page was open, to
+            // bring in the unlink button. Reloading whenever the state reads
+            // 'connected' turned an already-linked page into an endless reload
+            // — the page visibly blinked, and each cycle spent another handful
+            // of provider calls, which is what was drawing the rate limit that
+            // made the receiving panel report a fault that did not exist.
+            if (!linkedOnArrival) setTimeout(function () { location.reload(); }, 1200);
             return;
         }
         if (s.qr) {
@@ -547,11 +557,15 @@ include __DIR__ . '/../../includes/header.php';
 
     function tick() {
         if (stop) return;
-        fetch('<?= BASE_URL ?>/modules/whatsapp/api/status.php?qr=1', { credentials: 'same-origin' })
+        fetch('<?= BASE_URL ?>/modules/whatsapp/api/status.php' + (linkedOnArrival ? '' : '?qr=1'),
+              { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (d) { if (d && d.ok) paint(d); })
             .catch(function () { /* a dropped poll is not worth a message */ })
-            .finally(function () { if (!stop) setTimeout(tick, 6000); });
+            // Six seconds while waiting for a scan, because the code rotates
+            // that fast. Once linked there is nothing to catch but a dropout,
+            // and every poll costs a provider call.
+            .finally(function () { if (!stop) setTimeout(tick, linkedOnArrival ? 60000 : 6000); });
     }
     tick();
 }());
