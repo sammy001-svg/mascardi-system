@@ -263,6 +263,71 @@ function waDriverStatus(bool $wantQr = false): array
             'detail' => 'WhatsApp reported an unexpected state: ' . ($state ?: 'none') . '.'];
 }
 
+/**
+ * What the provider has been told to call, and whether it matches us.
+ *
+ * "Connected but nothing arrives" is the commonest WhatsApp fault there is, and
+ * it looks identical to a working connection from every screen that only asks
+ * whether the phone is linked. The phone being linked is what lets us SEND.
+ * Receiving is a separate setting on the provider's side, pointing at a URL on
+ * this server, and nothing on this server can see it unless it asks.
+ *
+ * @return array{known:bool, url:string, token_set:bool, incoming:bool, error:string}
+ */
+function waDriverWebhook(): array
+{
+    $none = ['known' => false, 'url' => '', 'token_set' => false, 'incoming' => false, 'error' => ''];
+    if (!waConfigured()) return $none;
+
+    if (waProvider() === 'cloud') {
+        // Meta keeps the callback against the app, not the phone number, and it
+        // is not readable with a phone-number token. Nothing to compare.
+        return ['known' => false, 'url' => '', 'token_set' => false, 'incoming' => true,
+                'error' => 'Meta holds the callback against the app, so it cannot be read from here.'];
+    }
+
+    $r = waHttp('GET', waGreenUrl('getSettings'));
+    if (!$r['ok']) return $none + ['error' => $r['error']];
+
+    return [
+        'known'     => true,
+        'url'       => (string)($r['data']['webhookUrl'] ?? ''),
+        'token_set' => trim((string)($r['data']['webhookUrlToken'] ?? '')) !== '',
+        'incoming'  => in_array(strtolower((string)($r['data']['incomingWebhook'] ?? '')), ['yes', 'on'], true),
+        'error'     => '',
+    ];
+}
+
+/**
+ * Point the provider back at this system.
+ *
+ * The secret travels as the provider's own webhook token, which it sends as an
+ * Authorization header, rather than being glued onto the URL. Same protection,
+ * and the address stays something a person can read back over the phone.
+ */
+function waDriverSetWebhook(string $url, string $token): array
+{
+    if (!waConfigured()) return ['ok' => false, 'error' => 'WhatsApp is not connected.'];
+
+    if (waProvider() === 'cloud') {
+        return ['ok' => false, 'error' => 'The callback for the official API is set in the Meta '
+                                        . 'app dashboard, not from here.'];
+    }
+
+    $r = waHttp('POST', waGreenUrl('setSettings'), [
+        'json' => [
+            'webhookUrl'            => $url,
+            'webhookUrlToken'       => $token,
+            // Without these the provider accepts the URL and calls it for
+            // nothing, which looks configured and behaves exactly like broken.
+            'incomingWebhook'       => 'yes',
+            'outgoingMessageWebhook'=> 'yes',
+            'stateWebhook'          => 'yes',
+        ],
+        'timeout' => 30,
+    ]);
+    return ['ok' => $r['ok'], 'error' => $r['error']];
+}
 /** Drop the link so a different phone can be scanned. */
 function waDriverLogout(): array
 {

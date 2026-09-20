@@ -42,7 +42,11 @@ if ($hookSecret === '') {
            ->execute([$hookSecret]);
     } catch (\Throwable $e) { error_log('wa webhook secret: ' . $e->getMessage()); }
 }
-$webhookUrl = rtrim(BASE_URL, '/') . '/modules/whatsapp/api/receive.php?k=' . $hookSecret;
+// Two forms of the same thing. The plain one is what the provider is given,
+// with the secret travelling as its webhook token in an Authorization header;
+// the one carrying ?k= is kept for providers that cannot send a header.
+$plainHook  = rtrim(BASE_URL, '/') . '/modules/whatsapp/api/receive.php';
+$webhookUrl = $plainHook . '?k=' . $hookSecret;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
@@ -84,6 +88,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlash('error', 'Those settings could not be saved.');
         }
         redirect($back);
+    }
+
+    if ($action === 'fix_webhook') {
+        // The secret goes BOTH in the address and as the provider's webhook
+        // token. Apache on shared hosting commonly strips the Authorization
+        // header unless a rewrite rule puts it back, and betting the whole
+        // inbox on a header that may not survive the hop is not a bet worth
+        // taking — the query string always arrives.
+        $r = waDriverSetWebhook($webhookUrl, $hookSecret);
+        logActivity('update', 'settings', 0,
+            'WhatsApp receiving address repaired by ' . $me['name']
+            . ($r['ok'] ? '.' : ' — failed: ' . $r['error']));
+        setFlash($r['ok'] ? 'success' : 'error',
+            $r['ok'] ? 'Done. The provider now delivers messages to this system.'
+                     : ($r['error'] ?: 'The provider would not accept the address.'));
+        redirect($back . '#receiving');
     }
 
     if ($action === 'logout') {
@@ -130,6 +150,21 @@ $status    = waConfigured() ? waDriverStatus(false)
                             : ['state' => 'unconfigured', 'label' => 'Not set up', 'qr' => null,
                                'phone' => '', 'detail' => 'Enter the connection details below to begin.'];
 $templates = waTemplates($db);
+
+// Sending and receiving fail independently, and only one of them is visible
+// from the status band above. This is the other half.
+$hook = waConfigured() ? waDriverWebhook()
+                       : ['known' => false, 'url' => '', 'token_set' => false,
+                          'incoming' => false, 'error' => ''];
+$hookPointsHere = $hook['known'] && $hook['url'] !== ''
+    && str_starts_with(rtrim($hook['url'], '/'), rtrim($plainHook, '/'));
+$hookOk = $hookPointsHere && $hook['incoming'] && ($hook['token_set'] || str_contains($hook['url'], 'k='));
+
+$lastIn = null;
+try {
+    $lastIn = $db->query("SELECT sent_at FROM wa_messages WHERE direction='in'
+                            ORDER BY id DESC LIMIT 1")->fetchColumn() ?: null;
+} catch (\Throwable $_) {}
 
 $tone = match ($status['state']) {
     'connected' => 'ok',
@@ -265,6 +300,68 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<div class="wc-card" id="receiving">
+    <header>
+        <h2><i class="fa fa-inbox" style="color:#2563eb"></i>Receiving</h2>
+        <span style="font-size:11.5px;color:var(--text-3)">
+            <?= $lastIn ? 'Last message in ' . e(fmtDate($lastIn, 'd M Y, H:i')) : 'Nothing received yet' ?></span>
+    </header>
+    <div class="wc-body">
+        <?php // Being linked is what lets the yard SEND. Receiving is a separate
+              // setting on the provider's side, and a connection can look perfect
+              // while every incoming message is thrown away. ?>
+        <div class="wc-state <?= $hookOk ? 'ok' : 'bad' ?>" style="margin-bottom:14px">
+            <span class="dot"></span>
+            <div>
+                <b><?= $hookOk ? 'Messages are being delivered here'
+                               : 'Messages are NOT reaching this system' ?></b>
+                <span>
+                <?php if (!waConfigured()): ?>
+                    Set the connection up first.
+                <?php elseif (!$hook['known']): ?>
+                    <?= e($hook['error'] ?: 'The provider would not say where it is sending.') ?>
+                <?php elseif ($hook['url'] === ''): ?>
+                    The provider has no address at all, so replies go nowhere.
+                <?php elseif (!$hookPointsHere): ?>
+                    The provider is sending to <code><?= e($hook['url']) ?></code>, which is not this system.
+                <?php elseif (!$hook['incoming']): ?>
+                    The address is right, but incoming messages are switched off at the provider.
+                <?php elseif (!$hook['token_set']): ?>
+                    The address is right but carries no token, so this system refuses the calls.
+                <?php else: ?>
+                    The provider is pointed here and incoming messages are switched on.
+                <?php endif; ?>
+                </span>
+            </div>
+        </div>
+
+        <?php if (waConfigured() && !$hookOk && waProvider() === 'green'): ?>
+        <form method="post" class="d-flex gap-2 align-items-center flex-wrap">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="fix_webhook">
+            <button class="btn btn-primary btn-sm">
+                <i class="fa fa-wrench me-1"></i>Point the provider at this system</button>
+            <span style="font-size:12px;color:var(--text-2)">
+                Sets the address and the token at the provider, and switches incoming
+                messages on. Nothing on the phone changes and no re-scan is needed.</span>
+        </form>
+        <?php endif; ?>
+
+        <div style="margin-top:14px">
+            <label style="display:block;font-size:12.5px;font-weight:600;margin-bottom:5px">
+                The address to set by hand, if you prefer</label>
+            <div class="wc-hook">
+                <code id="waHook"><?= e($webhookUrl) ?></code>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="waCopyHook(this)">
+                    <i class="fa fa-copy me-1"></i>Copy</button>
+            </div>
+            <div class="hint" style="font-size:11.5px;color:var(--text-3);margin-top:4px">
+                The secret on the end is what proves a caller really is the provider —
+                without it anyone who found this address could invent a message from a customer.
+            </div>
+        </div>
+    </div>
+</div>
 <form method="post">
     <?= csrfField() ?>
     <input type="hidden" name="action" value="save">
@@ -335,21 +432,11 @@ include __DIR__ . '/../../includes/header.php';
             </div>
 
             <div class="row g-3">
-                <div class="col-md-3 wc-field">
+                <div class="col-md-4 wc-field">
                     <label>Country code</label>
                     <input type="text" name="country_code" class="form-control"
                            value="<?= e(getSetting('wa_country_code', '254')) ?>">
                     <div class="hint">Used to turn 07… numbers into full international ones.</div>
-                </div>
-                <div class="col-md-9 wc-field">
-                    <label>Webhook address</label>
-                    <div class="wc-hook">
-                        <code id="waHook"><?= e($webhookUrl) ?></code>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="waCopyHook(this)">
-                            <i class="fa fa-copy me-1"></i>Copy</button>
-                    </div>
-                    <div class="hint">Paste this into the provider so replies arrive here.
-                        Without it, messages will send but nothing will come back.</div>
                 </div>
             </div>
 

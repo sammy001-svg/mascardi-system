@@ -249,7 +249,13 @@ function waLinkToRecords(PDO $db, int $convId, string $phone): void
 /** The thread list, newest activity first. */
 function waConversations(PDO $db, array $f = []): array
 {
-    $where = ['1=1']; $args = [];
+    // A thread nobody has said anything in is not a conversation, it is a
+    // contact. The previous module imported the whole phone book as threads,
+    // which buried the handful of real conversations under two hundred empty
+    // ones. They are hidden rather than deleted — the phone numbers are still
+    // worth having, and a thread reappears the moment anything is said in it.
+    $where = ['c.last_message_at IS NOT NULL']; $args = [];
+    if (!empty($f['include_empty'])) $where = ['1=1'];
     if (!empty($f['status']))   { $where[] = 'c.status = ?';      $args[] = $f['status']; }
     if (!empty($f['assigned'])) { $where[] = 'c.assigned_to = ?'; $args[] = (int)$f['assigned']; }
     if (!empty($f['unread']))   { $where[] = 'c.unread_count > 0'; }
