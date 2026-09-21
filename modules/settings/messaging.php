@@ -80,6 +80,11 @@ foreach ($emailDefaults as $k => $v) {
 
 $activeTab = $_GET['tab'] ?? 'credentials';
 
+// The health check makes live calls to the provider, so it is its own page
+// rather than a panel that would run on every visit to this one. It sits in the
+// tab strip because that is where somebody looking for it will look.
+if ($activeTab === 'health') redirect(BASE_URL . '/modules/settings/notify_check.php');
+
 // ── POST: save credentials ────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_credentials') {
     $uStmt = $db->prepare("INSERT INTO settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
@@ -255,6 +260,7 @@ include __DIR__ . '/../../includes/header.php';
         'credentials' => ['fa-key',         'API Credentials'],
         'rules'       => ['fa-sliders',      'Alert Rules'],
         'notify'      => ['fa-paper-plane',  'Documents & Updates'],
+        'health'      => ['fa-stethoscope',   'Health Check'],
         'log'         => ['fa-list-check',   'Message Log'],
     ]; foreach ($tabs as $tid => [$icon, $lbl]): ?>
     <li class="nav-item">
