@@ -1,31 +1,31 @@
 <?php
 /**
- * Carl — the in-system assistant.
+ * Karl — the in-system assistant.
  *
- * Carl sits in the top navbar beside the notification bell. She answers
+ * Karl sits in the top navbar beside the notification bell. She answers
  * questions about the business, reports figures, offers advice on what needs
  * attention, and carries out a small set of real tasks.
  *
  * How she works
  * -------------
- * Every answer Carl gives comes from a SKILL: a named capability with patterns
+ * Every answer Karl gives comes from a SKILL: a named capability with patterns
  * that match an utterance, and a handler that reads the database and returns a
  * spoken line plus optional rich HTML.
  *
  * The important design decision is that the language layer never touches the
  * database. Skills are deterministic PHP running ordinary queries, so a figure
- * Carl reads out is the same figure the report shows, and a task she performs is
+ * Karl reads out is the same figure the report shows, and a task she performs is
  * one the code performed — not one a model decided to perform. When an Anthropic
  * API key is configured she additionally uses Claude to interpret free-form
  * questions and to phrase replies more naturally, but Claude only ever chooses
  * WHICH skill runs. It never executes anything and never invents a number.
  *
- * That also means Carl works with no API key at all, which is how she ships:
+ * That also means Karl works with no API key at all, which is how she ships:
  * everything below runs offline. See carlLlmAvailable().
  *
  * Permissions
  * -----------
- * Carl is not a way around access control. Every skill declares the module it
+ * Karl is not a way around access control. Every skill declares the module it
  * belongs to and is filtered through canAccess() for the asking user, so a
  * mechanic asking about margins is told she cannot help rather than being told
  * the margins.
@@ -37,7 +37,7 @@ if (!function_exists('carlMigrate')) {
 if (!defined('CARL_SCHEMA_VERSION')) define('CARL_SCHEMA_VERSION', '3');
 
 /** Her name, in one place, in case the company ever renames her. */
-if (!defined('CARL_NAME')) define('CARL_NAME', 'Carl');
+if (!defined('CARL_NAME')) define('CARL_NAME', 'Karl');
 
 function carlMigrate(PDO $db, bool $force = false): void
 {
@@ -54,7 +54,7 @@ function carlMigrate(PDO $db, bool $force = false): void
     }
 
     $tables = [
-        // The conversation, so Carl can be closed and reopened without losing
+        // The conversation, so Karl can be closed and reopened without losing
         // the thread, and so a multi-step task survives a page navigation.
         "CREATE TABLE IF NOT EXISTS carl_messages (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -67,7 +67,7 @@ function carlMigrate(PDO $db, bool $force = false): void
             KEY idx_carl_user (user_id, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
-        // A task in progress — Carl asking for the parts she still needs before
+        // A task in progress — Karl asking for the parts she still needs before
         // she can act. Kept server-side so a refresh does not lose half a lead.
         // The record under discussion, so a task does not restart from "which one?"
         // One digest a day, per person — the column records which day was claimed.
@@ -109,7 +109,7 @@ function carlMigrate(PDO $db, bool $force = false): void
 
 // ── Small helpers ────────────────────────────────────────────────────────────
 
-/** First name only — Carl addresses people the way a colleague would. */
+/** First name only — Karl addresses people the way a colleague would. */
 function carlFirstName(string $full): string
 {
     $p = preg_split('/\s+/', trim($full));
@@ -131,7 +131,7 @@ function carlMoney(float $n): string { return 'KES ' . number_format($n); }
 /**
  * "1 new lead" / "4 new leads".
  *
- * Carl reads her answers aloud, where a mismatched plural is far more obvious
+ * Karl reads her answers aloud, where a mismatched plural is far more obvious
  * than it is on screen.
  */
 function carlPlural(int $n, string $singular, ?string $plural = null): string
@@ -181,7 +181,7 @@ function carlSkills(): array
                            'goodbye', 'bye', 'see you', 'good night'],
         ],
         'help' => [
-            'label'    => 'What Carl can do',
+            'label'    => 'What Karl can do',
             'module'   => null,
             'patterns' => ['help', 'what can you do', 'what do you do', 'commands', 'options'],
         ],
@@ -270,7 +270,7 @@ function carlSkills(): array
             'module'   => null,
             // Every pattern here carries a second word on purpose. A pattern whose
             // only real word is "cancel" would fire on a bare "cancel", and that is
-            // the word people use to back out of a half-finished task — Carl would
+            // the word people use to back out of a half-finished task — Karl would
             // answer the escape hatch with a refusal to delete.
             'patterns' => ['delete', 'remove the', 'remove this', 'remove that',
                            'erase', 'wipe', 'get rid of', 'clear out', 'purge',
@@ -432,7 +432,7 @@ function carlDoingSkills(): array
             'book_service', 'confirm_booking'];
 }
 
-/** Is the user telling Carl to do something, rather than asking about it? */
+/** Is the user telling Karl to do something, rather than asking about it? */
 function carlIsImperative(string $t): bool
 {
     return (bool)preg_match(
@@ -459,7 +459,7 @@ function carlMatchSkill(string $text): ?string
     // A destructive verb settles the answer on its own, whatever else the
     // sentence is about. Scoring could not be trusted with this: "remove the
     // service booking" scored higher on the exact phrase "service booking" than
-    // on "remove the", so Carl offered to TAKE a booking when she was being asked
+    // on "remove the", so Karl offered to TAKE a booking when she was being asked
     // to get rid of one. Of the two possible readings of a destructive verb, only
     // refusing is safe, so it is decided here rather than left to a tally.
     //
@@ -477,7 +477,7 @@ function carlMatchSkill(string $text): ?string
     // your account" — which carlRun() does — rather than falling through to
     // "I did not catch that", which is both untrue and unhelpful.
     //
-    // Scored rather than exact-matched. Requiring the phrase verbatim made Carl
+    // Scored rather than exact-matched. Requiring the phrase verbatim made Karl
     // brittle in exactly the way people notice: "leads" worked, "any leads that
     // went cold?" did not. Scoring on word overlap means a question only has to
     // be recognisably about something, not phrased the way the table happens to
@@ -492,7 +492,7 @@ function carlMatchSkill(string $text): ?string
             // A whole phrase present verbatim is the strongest signal there is.
             // Anchored at BOTH ends, with only a genuine suffix allowed. Matching
             // on a word start alone meant the greeting "hi" fired inside
-            // "history", and Carl answered a question about the record with hello.
+            // "history", and Karl answered a question about the record with hello.
             if (preg_match('/\b' . preg_quote($p, '/') . '(s|es|ed|ing)?\b/', $t)) {
                 $score = max($score, 10 + strlen($p) / 10);
                 continue;
@@ -556,7 +556,7 @@ function carlSum(PDO $db, string $sql, array $args = []): float
 }
 
 /**
- * Everything Carl reports on, gathered once.
+ * Everything Karl reports on, gathered once.
  *
  * All date arithmetic is done in SQL. PHP here has no timezone configured and
  * runs in UTC while MySQL runs local time, so "today" computed in PHP would be
@@ -690,22 +690,22 @@ function carlNeedsModel(string $msg, ?string $skill, array $history = []): bool
     return false;
 }
 
-// ── Carl may never destroy anything ──────────────────────────────────────────
+// ── Karl may never destroy anything ──────────────────────────────────────────
 //
 // This is a standing rule, not a preference, so it is enforced here rather than
-// left to whoever adds the next task remembering it. Every write Carl makes goes
+// left to whoever adds the next task remembering it. Every write Karl makes goes
 // through carlGuardedExec(), which refuses anything destructive outright.
 //
-// The point is that Carl grows. Tasks get added by people who are thinking about
+// The point is that Karl grows. Tasks get added by people who are thinking about
 // the feature, not about the guarantee — and a guarantee that depends on nobody
 // forgetting is not a guarantee. A DELETE reaching this function is a bug, and
 // it is stopped and logged rather than executed.
 //
 // Note what this does NOT prevent, deliberately: a person doing the same thing
 // through the normal pages, where the module's own permissions and confirmations
-// apply. This constrains Carl, not the system.
+// apply. This constrains Karl, not the system.
 
-/** SQL Carl is never allowed to run, however it is spelled. */
+/** SQL Karl is never allowed to run, however it is spelled. */
 function carlForbiddenSql(string $sql): ?string
 {
     // Comments stripped first: a destructive verb hidden behind /* */ or --
@@ -733,7 +733,7 @@ function carlForbiddenSql(string $sql): ?string
 }
 
 /**
- * The only way Carl writes to the database.
+ * The only way Karl writes to the database.
  *
  * Returns true when the statement ran. A refusal is logged with the statement
  * that caused it, so an attempt shows up in the log rather than failing quietly.
@@ -742,10 +742,10 @@ function carlGuardedExec(PDO $db, string $sql, array $params = []): bool
 {
     $forbidden = carlForbiddenSql($sql);
     if ($forbidden !== null) {
-        error_log('[Carl] REFUSED — a task tried to ' . $forbidden . ': ' . trim($sql));
+        error_log('[Karl] REFUSED — a task tried to ' . $forbidden . ': ' . trim($sql));
         try {
             logActivity('blocked', 'carl', null,
-                'Carl was asked to ' . $forbidden . ' and refused. She is not permitted to '
+                'Karl was asked to ' . $forbidden . ' and refused. She is not permitted to '
                 . 'remove anything from the system.');
         } catch (\Throwable $e) { /* never let logging break the refusal */ }
         return false;
@@ -755,13 +755,13 @@ function carlGuardedExec(PDO $db, string $sql, array $params = []): bool
         $db->prepare($sql)->execute($params);
         return true;
     } catch (\Throwable $e) {
-        error_log('[Carl] write failed: ' . $e->getMessage());
+        error_log('[Karl] write failed: ' . $e->getMessage());
         return false;
     }
 }
 
 /**
- * What Carl says when asked to remove something.
+ * What Karl says when asked to remove something.
  *
  * Plainly, once, without lecturing — and pointing at who can, so the person is
  * not left stuck.
@@ -780,7 +780,7 @@ function carlRefuseDeletion(string $what = 'that', string $verb = 'delete'): arr
 
 // ── What we were just talking about ──────────────────────────────────────────
 //
-// Carl held no idea WHICH record was under discussion. Look up John Mwangi, then
+// Karl held no idea WHICH record was under discussion. Look up John Mwangi, then
 // ask to add a note, and she opened with "which lead?" — the customer already on
 // screen. Every task restarted from nothing, so a two-step job took four, and
 // "set his follow-up to Friday" could not work at all.
@@ -794,7 +794,7 @@ function carlRefuseDeletion(string $what = 'that', string $verb = 'delete'): arr
  *  enough that walking away and coming back starts clean. */
 if (!defined('CARL_CONTEXT_MINUTES')) define('CARL_CONTEXT_MINUTES', 20);
 
-/** Note what Carl is now dealing with. Silent on failure — never break a reply. */
+/** Note what Karl is now dealing with. Silent on failure — never break a reply. */
 function carlContextSet(PDO $db, int $userId, string $kind, int $id, string $label): void
 {
     if ($userId <= 0 || $id <= 0 || $label === '') return;
@@ -836,7 +836,7 @@ function carlContextGet(PDO $db, int $userId, string $kind): ?array
  * Is the user referring to whatever we were just discussing?
  *
  * "him", "her", "them", "that one", "the same customer" — and also a bare reply
- * of "yes" when Carl has just offered a subject.
+ * of "yes" when Karl has just offered a subject.
  */
 function carlMeansTheSame(string $text): bool
 {

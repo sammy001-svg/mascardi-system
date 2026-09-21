@@ -1,10 +1,10 @@
 <?php
 /**
- * Carl — connection test.
+ * Karl — connection test.
  *
  * Whichever service is configured, this makes one real call and shows exactly
  * what came back. The model layer swallows every failure into a silent fallback,
- * which is right for someone at the desk and useless for working out why Carl is
+ * which is right for someone at the desk and useless for working out why Karl is
  * answering plainly: a wrong key, a retired model id, an unfunded account and a
  * blocked outbound connection all look identical from her panel.
  *
@@ -87,7 +87,7 @@ function carlDiagnose(string $m, string $provider): string
     }
     if (str_contains($m, 'credit balance') || str_contains($m, 'purchase credits') || str_contains($m, 'billing')) {
         return 'Nothing is wrong with the key or the code — the account has no credit. '
-             . 'Top it up and Carl picks up on her next message.';
+             . 'Top it up and Karl picks up on her next message.';
     }
     if (str_contains($m, 'quota') || str_contains($m, 'rate limit') || str_contains($m, 'resource_exhausted')) {
         return 'The free quota for this minute or day is used up. It resets on its own; '
@@ -111,7 +111,7 @@ function tb(bool $ok, string $good = 'OK', string $bad = 'PROBLEM'): string {
 <html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Carl — connection test</title>
+<title>Karl — connection test</title>
 <style>
 body{font-family:"Segoe UI",system-ui,sans-serif;background:#0d1219;color:#e8eaed;margin:0;padding:26px}
 .w{max-width:860px;margin:0 auto}
@@ -133,19 +133,19 @@ code{background:#0b1119;padding:2px 6px;border-radius:4px;font-size:12px}
 a{color:#c084fc}
 </style></head><body><div class="w">
 
-<h1>Carl — connection test</h1>
+<h1>Karl — connection test</h1>
 <p class="sub">One real call to whichever service is configured, with whatever came back shown in full.</p>
 
 <div class="verdict <?= $spoke ? 'vok' : 'vno' ?>">
 <?php if ($key === ''): ?>
     No key is saved for <?= htmlspecialchars($provider === 'google' ? 'Google AI Studio' : 'Anthropic') ?>,
-    so Carl is answering offline. She still handles greetings, figures, the pipeline, the workshop,
+    so Karl is answering offline. She still handles greetings, figures, the pipeline, the workshop,
     visitors, revenue and every task from your own data — a key only adds free-form conversation.
 <?php elseif ($spoke): ?>
     Working. <?= htmlspecialchars($model) ?> replied in <?= (int)$live['ms'] ?>ms.
-    Carl will use it for anything the offline matcher cannot answer.
+    Karl will use it for anything the offline matcher cannot answer.
 <?php else: ?>
-    The call failed, so Carl is falling back to offline answers.
+    The call failed, so Karl is falling back to offline answers.
     <?= htmlspecialchars(carlDiagnose($errMsg, $provider)) ?>
 <?php endif; ?>
 </div>
@@ -153,7 +153,7 @@ a{color:#c084fc}
 <h2>Configuration</h2>
 <div class="box"><table>
     <tr><td>Service in use
-        <div class="m">Settings → Carl AI → which service should Carl use</div></td>
+        <div class="m">Settings → Karl AI → which service should Karl use</div></td>
         <td style="text-align:right" class="m"><?= htmlspecialchars($provider === 'google' ? 'Google AI Studio' : 'Anthropic') ?></td></tr>
     <tr><td>Model</td><td style="text-align:right" class="m"><?= htmlspecialchars($model) ?></td></tr>
     <tr><td>Google key saved</td><td style="text-align:right">
@@ -188,7 +188,7 @@ a{color:#c084fc}
 <h2>Worth knowing</h2>
 <div class="box">
     <p style="font-size:13.5px;line-height:1.7;color:#cbd5e1;margin:0">
-        Carl answers roughly nine questions in ten from your own database without calling any
+        Karl answers roughly nine questions in ten from your own database without calling any
         service at all — that is deliberate, so a key lasts. The service is used for phrasing
         her vocabulary does not cover, follow-up questions that only make sense in context,
         and questions asking for judgement rather than a figure.

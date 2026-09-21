@@ -56,11 +56,11 @@ $expected = [
         'database/seed_visitor_book.php', 'visitor_book'],
     'Deployment config'               => [
         '.cpanel.yml', 'DEPLOYPATH'],
-    'Carl — greeting fix'             => [
+    'Karl — greeting fix'             => [
         'modules/carl/_bootstrap.php', 'bestScore >= 3.5'],
-    'Carl — reservations & documents' => [
+    'Karl — reservations & documents' => [
         'modules/carl/_tasks.php', 'carlCreateReservation'],
-    'Carl — conversational layer'     => [
+    'Karl — conversational layer'     => [
         'modules/carl/_agent.php', 'carlConverse'],
     'Admin seed guarded'              => [
         'database/seed_admin.php', 'seedAdminConfirmPage'],
@@ -164,7 +164,7 @@ foreach ($expected as $label => [$path, $marker]) {
 <?php endif; ?>
 
 
-<h2>2. Does Carl actually understand a greeting?</h2>
+<h2>2. Does Karl actually understand a greeting?</h2>
 <?php
 // File markers prove which bytes are on disk. This proves what the running
 // server does with them, which is the question actually being asked — and it
@@ -207,19 +207,19 @@ if ($carlLoaded) {
                    . '<td style="text-align:right">' . badge($ok, 'OK', 'WRONG') . '</td></tr>';
     }
 } else {
-    $carlRows = '<tr><td colspan="3" class="m">Carl is not installed on this server — '
+    $carlRows = '<tr><td colspan="3" class="m">Karl is not installed on this server — '
               . 'modules/carl/_bootstrap.php is missing. The deploy has not run.</td></tr>';
     $carlFails = 1;
 }
 ?>
 <div class="verdict <?= $carlFails ? 'vno' : 'vok' ?>">
 <?php if (!$carlLoaded): ?>
-    Carl is not on this server at all.
+    Karl is not on this server at all.
 <?php elseif ($carlFails): ?>
     <?= $carlFails ?> of <?= count($probes) ?> failed — this server is running the OLD matcher.
     The files may be in place, but what is executing is out of date. Check OPcache below.
 <?php else: ?>
-    Carl understands greetings correctly on this server. If she still answers badly in the
+    Karl understands greetings correctly on this server. If she still answers badly in the
     browser, the problem is the API key or the browser cache, not the code.
 <?php endif; ?>
 </div>
@@ -263,7 +263,7 @@ $stale = $ocOn && (!$validate || $freq > 60);
 <?php endif; ?>
 </div>
 
-<h2>4. Carl's connection to Claude</h2>
+<h2>4. Karl's connection to Claude</h2>
 <?php
 $carlKey   = trim((string)getSetting('anthropic_api_key', ''));
 $carlModel = trim((string)getSetting('anthropic_model', ''));
@@ -282,7 +282,7 @@ $hasAgent  = is_file(__DIR__ . '/modules/carl/_agent.php');
         <td style="text-align:right"><?= badge($hasAgent) ?></td></tr>
 </table>
 <p class="m" style="margin:12px 0 0">
-    Without a key Carl still answers from your own data, but only in her fixed phrasings.
+    Without a key Karl still answers from your own data, but only in her fixed phrasings.
     If she is answering plainly when you expect more, the reason is recorded and shown
     to admins at the top of her panel.
 </p>

@@ -285,7 +285,7 @@ include __DIR__ . '/../../includes/header.php';
         'documents'    => ['fa-file-lines',         'Documents'],
         'email'        => ['fa-envelope',           'Email'],
         'integrations' => ['fa-mobile-screen-button','Integrations'],
-        'carl'         => ['fa-wand-magic-sparkles', 'Carl AI'],
+        'carl'         => ['fa-wand-magic-sparkles', 'Karl AI'],
         'seo'          => ['fa-magnifying-glass',   'SEO'],
         'permissions'  => ['fa-shield-halved',      'Permissions'],
         'system'       => ['fa-server',             'System'],
@@ -690,7 +690,7 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
         <div class="card mb-4">
             <div class="card-header d-flex align-items-center gap-2">
                 <i class="fa fa-wand-magic-sparkles" style="color:#4285f4"></i>
-                <span>Carl AI — Google AI Studio</span>
+                <span>Karl AI — Google AI Studio</span>
                 <?php
                 $gOk   = !empty($settings['google_api_key'] ?? '');
                 $using = ($settings['ai_provider'] ?? 'google') === 'google';
@@ -702,7 +702,7 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
             <div class="card-body">
                 <div class="alert alert-info py-2 small mb-4">
                     <i class="fa fa-info-circle me-1"></i>
-                    Carl works fully offline with no key at all — greetings, figures, the pipeline,
+                    Karl works fully offline with no key at all — greetings, figures, the pipeline,
                     the workshop and every task still answer from your own data. A key adds free-form
                     conversation for questions her vocabulary does not cover. Google AI Studio has a
                     free tier that is generous enough for a business this size. Get a key at
@@ -710,13 +710,13 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Which service should Carl use?</label>
+                    <label class="form-label">Which service should Karl use?</label>
                     <select name="ai_provider" class="form-select">
                         <option value="google" <?= $using ? 'selected' : '' ?>>Google AI Studio (Gemini)</option>
                         <option value="anthropic" <?= $using ? '' : 'selected' ?>>Anthropic (Claude)</option>
                     </select>
                     <div class="form-text">
-                        Whichever you choose, Carl falls back to answering from your own data if the
+                        Whichever you choose, Karl falls back to answering from your own data if the
                         service cannot be reached — she never stops working.
                     </div>
                 </div>
@@ -752,7 +752,7 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
                         <?php endforeach; ?>
                     </select>
                     <div class="form-text">
-                        Flash handles Carl's work well: her answers are grounded in figures the system
+                        Flash handles Karl's work well: her answers are grounded in figures the system
                         looks up, not open reasoning, so the stronger model buys little here.
                     </div>
                 </div>
@@ -762,7 +762,7 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
         <div class="card">
             <div class="card-header d-flex align-items-center gap-2">
                 <i class="fa fa-wand-magic-sparkles" style="background:linear-gradient(135deg,#a855f7,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent"></i>
-                <span>Carl AI — Anthropic / Claude</span>
+                <span>Karl AI — Anthropic / Claude</span>
                 <?php $carlOk = !empty($settings['anthropic_api_key'] ?? ''); ?>
                 <span class="badge bg-<?= $carlOk ? 'success' : 'secondary' ?> ms-auto">
                     <?= $carlOk ? 'Active' : 'Not Configured' ?>
@@ -771,7 +771,7 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
             <div class="card-body">
                 <div class="alert alert-info py-2 small mb-4">
                     <i class="fa fa-info-circle me-1"></i>
-                    Carl works fully offline with no key. Adding a Claude key enables natural-language
+                    Karl works fully offline with no key. Adding a Claude key enables natural-language
                     intent routing, conversational answers to any business question, and varied daily greetings.
                     Get a key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>.
                 </div>
@@ -813,11 +813,11 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
     </div>
     <div class="col-lg-5">
         <div class="card">
-            <div class="card-header"><i class="fa fa-circle-info me-2"></i>How Carl uses Claude</div>
+            <div class="card-header"><i class="fa fa-circle-info me-2"></i>How Karl uses Claude</div>
             <div class="list-group list-group-flush" style="font-size:12.5px">
                 <div class="list-group-item py-3">
                     <div class="fw-semibold mb-1"><i class="fa fa-route me-1 text-purple"></i>Intent routing</div>
-                    Carl uses Claude to understand natural questions she wouldn't otherwise match — like
+                    Karl uses Claude to understand natural questions she wouldn't otherwise match — like
                     <em>"anything slipping?"</em> or <em>"how's business looking?"</em>
                 </div>
                 <div class="list-group-item py-3">
@@ -827,20 +827,20 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
                 </div>
                 <div class="list-group-item py-3">
                     <div class="fw-semibold mb-1"><i class="fa fa-sun me-1 text-purple"></i>Personalised greetings</div>
-                    Each morning Carl's opening message is freshly written — varied, warm, and based on
+                    Each morning Karl's opening message is freshly written — varied, warm, and based on
                     the live state of your business.
                 </div>
                 <div class="list-group-item py-3">
                     <div class="fw-semibold mb-1"><i class="fa fa-shield-halved me-1 text-success"></i>Always safe</div>
-                    Claude only receives the figures Carl already has. It cannot browse, cannot write to
-                    the database, and cannot invent a number. If it is unavailable, Carl works offline as before.
+                    Claude only receives the figures Karl already has. It cannot browse, cannot write to
+                    the database, and cannot invent a number. If it is unavailable, Karl works offline as before.
                 </div>
             </div>
         </div>
     </div>
 </div>
 <div class="mt-4">
-    <button type="submit" class="btn btn-primary px-5"><i class="fa fa-check me-2"></i>Save Carl AI Settings</button>
+    <button type="submit" class="btn btn-primary px-5"><i class="fa fa-check me-2"></i>Save Karl AI Settings</button>
     <?php if ($carlOk): ?>
     <a href="#" class="btn btn-outline-secondary ms-2" id="clearCarlKey"
        onclick="document.getElementById('anthropicKeyInput').type='text';

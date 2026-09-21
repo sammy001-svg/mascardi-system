@@ -1,6 +1,6 @@
 <?php
 /**
- * Carl — detail behind the numbers.
+ * Karl — detail behind the numbers.
  *
  * A count on its own is rarely the answer. "Four leads are overdue" tells you
  * there is a problem; it does not tell you whose problem it is or what to do
@@ -68,7 +68,7 @@ function carlWantsCount(string $text): bool
  * A record list.
  *
  * Deliberately a table of real rows rather than prose: the eye reads six names
- * and dates far faster than Carl can say them, and speech gets the summary.
+ * and dates far faster than Karl can say them, and speech gets the summary.
  */
 function carlRecords(array $rows, array $cols, string $empty = 'Nothing to show.'): string
 {

@@ -1,14 +1,14 @@
 <?php
 /**
- * Carl — Claude API layer.
+ * Karl — Claude API layer.
  *
  * All communication with Anthropic lives here and nowhere else. The rest of
- * Carl's code calls these helpers; it does not know whether the answer came
+ * Karl's code calls these helpers; it does not know whether the answer came
  * from Claude or from the offline fallback.
  *
  * Safety contract
  * ---------------
- * Claude is given only what Carl explicitly passes — figures she has already
+ * Claude is given only what Karl explicitly passes — figures she has already
  * read from the database plus a list of skill names. It cannot browse, it
  * cannot invent a figure, and it never touches the database. Every call is
  * wrapped so that a network error, a bad key, or a rate-limit silently falls
@@ -48,7 +48,7 @@ function carlLlmModel(): string
         'claude-haiku-4-5',   // fastest, for high chat volume
         'claude-opus-4-8',
     ];
-    // Sonnet by default rather than Opus. Carl's answers are grounded in tool
+    // Sonnet by default rather than Opus. Karl's answers are grounded in tool
     // results rather than open reasoning, which is the case where the gap between
     // the two is smallest and the price difference largest. Set anthropic_model to
     // claude-opus-5 in Settings if you want the stronger model back.
@@ -106,14 +106,14 @@ function carlLlmRequest(string $system, array $msgs, int $maxTok = 512, array $t
         if ($raw === false) return null;
         $decoded = json_decode($raw, true);
         if (isset($decoded['error'])) {
-            error_log('[Carl LLM] API error: ' . json_encode($decoded['error']));
+            error_log('[Karl LLM] API error: ' . json_encode($decoded['error']));
             carlLlmNoteFailure((string)($decoded['error']['message'] ?? ''));
             return null;
         }
         if (is_array($decoded)) { carlLlmNoteFailure(null); return $decoded; }
         return null;
     } catch (\Throwable $e) {
-        error_log('[Carl LLM] Request failed: ' . $e->getMessage());
+        error_log('[Karl LLM] Request failed: ' . $e->getMessage());
         return null;
     }
 }
@@ -129,7 +129,7 @@ function carlLlmText(?array $resp): string
     return '';
 }
 
-// ── Carl's core identity — used by all prompts ────────────────────────────────
+// ── Karl's core identity — used by all prompts ────────────────────────────────
 
 /**
  * The shared system persona injected into every Claude call.
@@ -138,7 +138,7 @@ function carlLlmText(?array $resp): string
 function carlPersona(): string
 {
     return <<<PERSONA
-You are Carl, the AI assistant for Mascardi Luxury Cars — a premium car dealership in Nairobi, Kenya.
+You are Karl, the AI assistant for Mascardi Luxury Cars — a premium car dealership in Nairobi, Kenya.
 
 Your personality:
 - Warm but professional. You sound like a knowledgeable senior colleague, not a chatbot.
@@ -229,11 +229,11 @@ SYS;
 }
 
 /**
- * Handle any question that didn't match a skill — Carl answers from live
+ * Handle any question that didn't match a skill — Karl answers from live
  * business figures and recent conversation history.
  *
  * This is the main conversational function. It receives the user's message,
- * the live DB snapshot, and the last few turns of conversation so Carl can
+ * the live DB snapshot, and the last few turns of conversation so Karl can
  * answer follow-ups like "what about this week?" correctly.
  *
  * @param  string  $utterance   The user's question (must be passed explicitly — never read from $_POST)
@@ -265,7 +265,7 @@ LIVE BUSINESS DATA (as of right now):
 $snap
 
 RULES:
-1. If the user is greeting you (e.g. "hello", "hallo", "hi", "hey", "good morning", "how are you"), reply warmly and politely in character as Carl, address them by first name ($name), and ask how you can assist them with Mascardi Luxury Cars today.
+1. If the user is greeting you (e.g. "hello", "hallo", "hi", "hey", "good morning", "how are you"), reply warmly and politely in character as Karl, address them by first name ($name), and ask how you can assist them with Mascardi Luxury Cars today.
 2. If the user asks a business question, answer using ONLY the live business data above. Do NOT estimate or invent any figures.
 3. If the user asks a question that genuinely cannot be answered from this data, politely say so and suggest what you CAN help with (briefing, leads, stock, revenue, etc.).
 4. Plain prose only — no bullet points, no markdown formatting.
@@ -354,7 +354,7 @@ function carlLlmFigureSnapshot(array $f): string
 /**
  * Remember why the last call failed, so the fallback is not silent.
  *
- * Carl degrading quietly is right for the person at the desk — they get an
+ * Karl degrading quietly is right for the person at the desk — they get an
  * answer either way — but wrong for whoever runs the system, who otherwise has
  * no way to tell an expired key from an empty account from a firewall. Passing
  * null clears it, so a working call heals the warning by itself.

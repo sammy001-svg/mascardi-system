@@ -1,6 +1,6 @@
 <?php
 /**
- * Carl — the navbar button and her panel.
+ * Karl — the navbar button and her panel.
  *
  * Included from includes/header.php, immediately before the notification bell.
  *
@@ -18,7 +18,7 @@ if (!defined('CARL_WIDGET')) {
     if (authRole() === 'visitor_book') return;   // public kiosk: no assistant
 ?>
 <style>
-/* The shared .topbar-icon-btn is transparent with a grey icon, which left Carl
+/* The shared .topbar-icon-btn is transparent with a grey icon, which left Karl
    invisible against the navbar. She is the one control here that is not a
    utility icon, so she gets her own colour rather than borrowing the set. */
 .carl-btn{
@@ -46,7 +46,7 @@ if (!defined('CARL_WIDGET')) {
 /* On dark backgrounds the halo ring must match the bar, not stay white. */
 [data-theme="dark"] .carl-btn .carl-dot{ box-shadow:0 0 0 2px var(--surface,#0f172a); }
 
-/* Carl's own palette.
+/* Karl's own palette.
    Declared here with concrete values rather than leaning on the host theme, so
    the card is solid on every page whatever --surface happens to resolve to.
    A page that forgets to define the theme variables still gets an opaque card
@@ -270,7 +270,7 @@ a.carl-rec > em{ color:#7c3aed; }
 
     <div class="carl-foot">
         <div class="carl-input">
-            <button type="button" class="carl-mic" id="carlMic" title="Speak to Carl" style="display:none">
+            <button type="button" class="carl-mic" id="carlMic" title="Speak to Karl" style="display:none">
                 <i class="fa fa-microphone"></i>
             </button>
             <textarea id="carlText" rows="1" placeholder="Ask <?= e(CARL_NAME) ?> anything…"></textarea>
@@ -375,7 +375,7 @@ a.carl-rec > em{ color:#7c3aed; }
      * @param {string}   role      'carl' | 'user'
      * @param {string}   said      Plain-text content of the bubble.
      * @param {string}   html      Optional rich panel below the bubble.
-     * @param {boolean}  animate   If true (Carl messages only), reveal the text
+     * @param {boolean}  animate   If true (Karl messages only), reveal the text
      *                             character-by-character like it is being typed.
      * @param {Function} onDone    Called when the message is fully rendered.
      */
@@ -477,13 +477,13 @@ a.carl-rec > em{ color:#7c3aed; }
         body.appendChild(d); body.scrollTop = body.scrollHeight;
     }
 
-    // ── Talking to Carl ─────────────────────────────────────────────────────
+    // ── Talking to Karl ─────────────────────────────────────────────────────
     function send(preset) {
         var msg = (preset != null ? preset : text.value).trim();
         if (!msg || busy) return;
         busy = true;
 
-        // If Carl is still typing the last answer, print it in full before the
+        // If Karl is still typing the last answer, print it in full before the
         // new question goes up — a half-finished sentence stranded above a new
         // one reads like she was interrupted and lost her place.
         var last = body.querySelector('.carl-msg.from-carl:last-child');
@@ -508,11 +508,11 @@ a.carl-rec > em{ color:#7c3aed; }
             }
             // Speech starts WITH the typing, not after it. Waiting for the
             // sentence to finish printing and only then hearing it read out
-            // makes Carl feel slow and repeats what has just been read.
+            // makes Karl feel slow and repeats what has just been read.
             speak(j.say);
             add('carl', j.say, j.html, true, function () {
                 busy = false;
-                // Navigation is delayed so Carl finishes her sentence before the
+                // Navigation is delayed so Karl finishes her sentence before the
                 // page changes under the person reading it.
                 if (j.go) setTimeout(function () { window.location.href = j.go; }, speakOn ? 1400 : 400);
             });
@@ -523,7 +523,7 @@ a.carl-rec > em{ color:#7c3aed; }
         });
     }
 
-    // Suggestion chips and Carl's own action buttons.
+    // Suggestion chips and Karl's own action buttons.
     body.addEventListener('click', function (e) {
         var chip = e.target.closest ? e.target.closest('[data-ask]') : null;
         if (chip) { e.preventDefault(); send(chip.dataset.ask); }
@@ -579,7 +579,7 @@ a.carl-rec > em{ color:#7c3aed; }
                               + 'to see what I can do.', '', true, null);
                 }
                 // Shown to managers only, and only while something is actually wrong.
-                // Carl still answers; this explains why she is answering plainly.
+                // Karl still answers; this explains why she is answering plainly.
                 if (j.notice) {
                     var n = document.createElement('div');
                     n.className = 'carl-notice';

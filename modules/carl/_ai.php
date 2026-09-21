@@ -1,8 +1,8 @@
 <?php
 /**
- * Carl — which model answers, and how to talk to it.
+ * Karl — which model answers, and how to talk to it.
  *
- * Carl was written against Anthropic's Messages API, and the conversation loop
+ * Karl was written against Anthropic's Messages API, and the conversation loop
  * in _agent.php was shaped by it: content blocks, tool_use, tool_result. Google's
  * API says the same things in a different shape — parts, functionCall,
  * functionResponse, and "model" where Anthropic says "assistant".
@@ -14,7 +14,7 @@
  *
  * so _agent.php neither knows nor cares who answered. Switching provider is a
  * settings change, and the offline matcher still answers when neither is
- * configured — Carl has never depended on a model being reachable.
+ * configured — Karl has never depended on a model being reachable.
  *
  * Settings:
  *   ai_provider        'google' or 'anthropic'  (default: google when a Google
@@ -123,7 +123,7 @@ function carlGeminiSchema(array $schema): ?array
     return $out;
 }
 
-/** Carl's tool list in Google's functionDeclarations form. */
+/** Karl's tool list in Google's functionDeclarations form. */
 function carlGeminiTools(array $tools): array
 {
     $decls = [];
@@ -186,7 +186,7 @@ function carlGeminiRound(string $system, array $msgs, array $tools, int $maxTok 
         }
         $j = json_decode($raw, true);
         if (isset($j['error'])) {
-            error_log('[Carl Gemini] ' . json_encode($j['error']));
+            error_log('[Karl Gemini] ' . json_encode($j['error']));
             carlAiNoteFailure((string)($j['error']['message'] ?? 'Google returned an error.'));
             return null;
         }
@@ -194,7 +194,7 @@ function carlGeminiRound(string $system, array $msgs, array $tools, int $maxTok 
         carlAiNoteFailure(null);
         return carlGeminiNormalise($j);
     } catch (\Throwable $e) {
-        error_log('[Carl Gemini] ' . $e->getMessage());
+        error_log('[Karl Gemini] ' . $e->getMessage());
         carlAiNoteFailure($e->getMessage());
         return null;
     }
@@ -340,7 +340,7 @@ function carlAiAppendToolResults(array &$msgs, array $results): void
  * Remembers the last failure so the fallback is not silent.
  *
  * Shares the setting the Anthropic layer already uses, so whichever provider is
- * configured, the notice in Carl's panel says what actually went wrong.
+ * configured, the notice in Karl's panel says what actually went wrong.
  */
 function carlAiNoteFailure(?string $message): void
 {

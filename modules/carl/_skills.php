@@ -1,10 +1,10 @@
 <?php
 /**
- * Carl — skill handlers.
+ * Karl — skill handlers.
  *
  * One function per skill. Each returns:
  *
- *   say   what Carl speaks aloud — plain prose, no markup, no figures the eye
+ *   say   what Karl speaks aloud — plain prose, no markup, no figures the eye
  *         cannot follow. "Eleven vehicles available" reads well; a table does not.
  *   html  the same answer for the eye, where a table or a set of tiles carries
  *         far more than a sentence can.
@@ -55,7 +55,7 @@ function carlTiles(array $tiles): string
     return $h . '</div>';
 }
 
-/** A link Carl offers as the next step, rather than describing where to click. */
+/** A link Karl offers as the next step, rather than describing where to click. */
 function carlLink(string $href, string $label, string $icon = 'fa-arrow-right'): string
 {
     return '<a class="carl-act" href="' . e($href) . '"><i class="fa ' . e($icon) . '"></i>'
@@ -174,7 +174,7 @@ function carlSkillHelp(PDO $db, array $user, string $u): array
     $h .= '</div><p class="carl-note">Tap one, type a question, or press the microphone and just ask.</p>';
 
     // Spoken from the same filtered list as the chips. A fixed sentence here
-    // promised a mechanic reports on the pipeline and takings, which Carl would
+    // promised a mechanic reports on the pipeline and takings, which Karl would
     // then refuse — offering something and declining it is worse than not
     // offering it.
     $labels = array_values(array_map(fn($s) => strtolower($s['label']), $mine));
@@ -250,7 +250,7 @@ function carlJoin(array $items): string
  * The single thing most worth saying, chosen by cost of leaving it.
  *
  * Deliberately one item. A list of six concerns is a list nobody acts on, and
- * Carl speaking it aloud would take longer than reading the dashboard.
+ * Karl speaking it aloud would take longer than reading the dashboard.
  */
 function carlTopConcern(array $f): ?array
 {
@@ -521,7 +521,7 @@ function carlSkillAdvice(PDO $db, array $user, string $u): array
 
 function carlSkillNavigate(PDO $db, array $user, string $u): array
 {
-    // Deliberately a fixed table rather than a search: Carl sending someone to a
+    // Deliberately a fixed table rather than a search: Karl sending someone to a
     // page they cannot open would be worse than admitting she does not know it.
     $places = [
         'lead'        => ['crm', '/modules/crm/leads.php',            'the leads'],
@@ -633,7 +633,7 @@ function carlSkillTrends(PDO $db, array $user, string $u): array
 // ── Lead action skills ────────────────────────────────────────────────────────
 //
 // These write to the database. Every write goes through a two-step flow:
-// Carl reads back what she understood and waits for a yes. Nothing is saved
+// Karl reads back what she understood and waits for a yes. Nothing is saved
 // on the strength of a single spoken sentence that might have been misheared.
 
 /** Find a lead by a loose name or make — returns the best match row, or null. */
@@ -1029,12 +1029,12 @@ function carlContinueNoteLead(PDO $db, array $user, array $pending, string $repl
 
 // ── Adding a lead ────────────────────────────────────────────────────────────
 //
-// The only skill that writes. It is deliberately the most cautious thing Carl
+// The only skill that writes. It is deliberately the most cautious thing Karl
 // does: she collects the parts one at a time, reads the whole thing back, and
 // waits for a yes. Nothing reaches the database on the strength of one sentence
 // that might have been misheard by a microphone.
 
-/** What Carl still needs, in the order she asks for it. */
+/** What Karl still needs, in the order she asks for it. */
 function carlLeadFields(): array
 {
     return [
@@ -1084,7 +1084,7 @@ function carlSkillAddLead(PDO $db, array $user, string $u): array
  * Continues a task already under way.
  *
  * Called before intent matching, so a bare "0712345678" is understood as the
- * answer to the question Carl just asked rather than as a new request she cannot
+ * answer to the question Karl just asked rather than as a new request she cannot
  * parse.
  */
 function carlContinue(PDO $db, array $user, array $pending, string $reply): array
@@ -1182,7 +1182,7 @@ function carlCreateLead(PDO $db, array $user, array $got): array
     try {
         $db->prepare("INSERT INTO crm_leads (name, phone, source, stage, assigned_to,
                         notes, follow_up_date, created_at)
-                      VALUES (?,?, 'Carl', 'new', ?, ?, CURDATE(), NOW())")
+                      VALUES (?,?, 'Karl', 'new', ?, ?, CURDATE(), NOW())")
            ->execute([$got['name'], $got['phone'], $owner ?: null,
                       'Added by ' . CARL_NAME . ' for ' . $user['name'] . ' on ' . date('j M Y') . '.']);
         $leadId = (int)$db->lastInsertId();
@@ -1224,7 +1224,7 @@ function carlCreateLead(PDO $db, array $user, array $got): array
 // ── The morning greeting ─────────────────────────────────────────────────────
 
 /**
- * Whether Carl should introduce herself, and what she should say.
+ * Whether Karl should introduce herself, and what she should say.
  *
  * Once per person per day. She greets by first name, says what is waiting, and
  * offers to help — which is the whole point of her being there when someone

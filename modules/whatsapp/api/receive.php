@@ -19,6 +19,7 @@
 
 require_once __DIR__ . '/../../../includes/functions.php';
 require_once __DIR__ . '/../_wa.php';
+require_once __DIR__ . '/../_auto.php';
 
 // No session, no cookies, nothing to leak.
 header('Content-Type: application/json; charset=utf-8');
@@ -92,6 +93,21 @@ try {
         } else {
             notifyRoles(['customer_relations', 'sales_manager', 'sales_officer', 'admin'],
                 'chat', 'WhatsApp from ' . $who, mb_substr($body, 0, 140), $link);
+        }
+
+        // Should Karl say something? Almost always the answer is no, because
+        // during working hours a colleague gets first refusal and the grace
+        // period has only just started. Out of hours it answers at once:
+        // nobody is coming, and a customer who writes at ten at night is
+        // better served by "we have you, we open at eight" than by silence
+        // until morning. The in-hours case is picked up by cron_auto.php,
+        // because a grace period expiring is not an event anything sends.
+        try {
+            if (waAutoEnabled()) waAutoRespond($db, (int)$conv['id']);
+        } catch (\Throwable $e) {
+            // The customer's message is already filed and the team already
+            // told. A failure to add a courtesy reply must not undo either.
+            error_log('wa auto-reply: ' . $e->getMessage());
         }
     }
 } catch (\Throwable $e) {

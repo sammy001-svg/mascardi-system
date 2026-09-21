@@ -13,6 +13,7 @@
 
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/_wa.php';
+require_once __DIR__ . '/_auto.php';
 requireLogin();
 
 if (!waCanAdmin()) {
@@ -117,6 +118,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $r['ok'] ? 'Done. The provider now delivers messages to this system.'
                      : ($r['error'] ?: 'The provider would not accept the address.'));
         redirect($back . '#receiving');
+    }
+
+    if ($action === 'auto') {
+        $days = array_values(array_filter(array_map('intval', (array)($_POST['days'] ?? []))));
+        $hhmm = function (string $v, string $fallback): string {
+            return preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', trim($v)) ? trim($v) : $fallback;
+        };
+        $vals = [
+            // Off unless the box is ticked. A feature that talks to customers
+            // should never arrive switched on because a form was submitted.
+            'wa_auto_enabled'   => !empty($_POST['enabled']) ? '1' : '0',
+            'wa_auto_grace'     => (string)max(1, min(180, (int)($_POST['grace'] ?? 10))),
+            'wa_auto_max'       => (string)max(1, min(5,   (int)($_POST['max_run'] ?? 2))),
+            'wa_auto_cooldown'  => (string)max(5, min(720, (int)($_POST['cooldown'] ?? 30))),
+            'wa_auto_open'      => $hhmm($_POST['open'] ?? '', '08:00'),
+            'wa_auto_close'     => $hhmm($_POST['close'] ?? '', '18:00'),
+            'wa_auto_days'      => $days ? implode(',', $days) : '1,2,3,4,5,6',
+            'wa_auto_signature' => mb_substr(trim($_POST['signature'] ?? ''), 0, 160),
+        ];
+        try {
+            $st = $db->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?,?)
+                                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            foreach ($vals as $k => $v) $st->execute([$k, $v]);
+            logActivity('update', 'settings', 0,
+                'WhatsApp automatic replies ' . ($vals['wa_auto_enabled'] === '1' ? 'switched ON' : 'switched OFF')
+                . ' by ' . $me['name'] . '.');
+            setFlash('success', $vals['wa_auto_enabled'] === '1'
+                ? 'Saved. Karl will answer customers nobody has got to.'
+                : 'Saved. Karl will not reply to customers.');
+        } catch (\Throwable $e) {
+            error_log('wa auto save: ' . $e->getMessage());
+            setFlash('error', 'Those settings could not be saved.');
+        }
+        redirect($back . '#autoreply');
     }
 
     if ($action === 'logout') {
@@ -460,6 +495,113 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </form>
+
+<div class="wc-card" id="autoreply">
+    <header>
+        <h2><i class="fa fa-robot" style="color:#0891b2"></i>Karl answers when nobody can</h2>
+        <?php $ac = waAutoConfig(); ?>
+        <span style="font-size:11.5px;color:<?= $ac['enabled'] ? '#15803d' : 'var(--text-3)' ?>">
+            <?= $ac['enabled'] ? 'On' : 'Off' ?>
+            <?php if ($ac['enabled']): ?>
+                · <?= waWithinHours($db, $ac) ? 'the yard is open now' : 'the yard is closed now' ?>
+            <?php endif; ?>
+        </span>
+    </header>
+    <div class="wc-body">
+        <p class="small" style="color:var(--text-2);margin-bottom:14px">
+            A customer who writes at ten at night currently hears nothing until morning.
+            With this on, Karl acknowledges them, answers the few things that are safely
+            factual, and says a colleague will follow up — and signs the message so nobody
+            is misled about who they are talking to.
+        </p>
+        <div class="alert alert-warning py-2 small" style="margin-bottom:14px">
+            <strong>What Karl will never do:</strong> quote or negotiate a price, say whether a
+            particular vehicle is available, promise a date or a callback, accept an offer, or
+            invent anything about a car. If a customer asks any of that, he says a colleague
+            will confirm it. He also answers at most
+            <?= (int)$ac['max_run'] ?> time<?= $ac['max_run'] === 1 ? '' : 's' ?>
+            before a person joins in, and never once a colleague has replied.
+        </div>
+
+        <form method="post">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="auto">
+
+            <div class="wc-field">
+                <label style="display:flex;align-items:center;gap:9px;cursor:pointer">
+                    <input type="checkbox" name="enabled" value="1" <?= $ac['enabled'] ? 'checked' : '' ?>>
+                    <span>Let Karl reply to customers nobody has answered</span>
+                </label>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-3 wc-field">
+                    <label>Open at</label>
+                    <input type="time" name="open" class="form-control" value="<?= e($ac['open']) ?>">
+                </div>
+                <div class="col-md-3 wc-field">
+                    <label>Close at</label>
+                    <input type="time" name="close" class="form-control" value="<?= e($ac['close']) ?>">
+                    <div class="hint">Outside these hours Karl replies straight away.</div>
+                </div>
+                <div class="col-md-6 wc-field">
+                    <label>Open on</label>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:5px">
+                        <?php
+                        $set = array_map('intval', explode(',', $ac['days']));
+                        foreach ([1=>'Mon',2=>'Tue',3=>'Wed',4=>'Thu',5=>'Fri',6=>'Sat',7=>'Sun'] as $i => $lbl): ?>
+                        <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;cursor:pointer">
+                            <input type="checkbox" name="days[]" value="<?= $i ?>"
+                                   <?= in_array($i, $set, true) ? 'checked' : '' ?>><?= $lbl ?>
+                        </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4 wc-field">
+                    <label>Give the team this long first</label>
+                    <input type="number" name="grace" class="form-control" min="1" max="180"
+                           value="<?= (int)$ac['grace'] ?>">
+                    <div class="hint">Minutes, during opening hours. A real person always gets
+                        first refusal on a live customer.</div>
+                </div>
+                <div class="col-md-4 wc-field">
+                    <label>Replies before a person must join in</label>
+                    <input type="number" name="max_run" class="form-control" min="1" max="5"
+                           value="<?= (int)$ac['max_run'] ?>">
+                    <div class="hint">Then Karl goes quiet and waits for a colleague.</div>
+                </div>
+                <div class="col-md-4 wc-field">
+                    <label>Least gap between replies</label>
+                    <input type="number" name="cooldown" class="form-control" min="5" max="720"
+                           value="<?= (int)$ac['cooldown'] ?>">
+                    <div class="hint">Minutes, so a burst of messages gets one answer, not five.</div>
+                </div>
+            </div>
+
+            <div class="wc-field">
+                <label>How Karl signs off</label>
+                <input type="text" name="signature" class="form-control" maxlength="160"
+                       value="<?= e($ac['signature']) ?>"
+                       placeholder="— Karl, automated assistant. A colleague will follow up personally.">
+                <div class="hint">Left blank, that sentence is used. A customer is entitled to know
+                    they are not talking to a person.</div>
+            </div>
+
+            <button class="btn btn-primary"><i class="fa fa-floppy-disk me-1"></i>Save</button>
+        </form>
+
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);
+                    font-size:12px;color:var(--text-3)">
+            Out of hours Karl answers the moment a message arrives. During opening hours the
+            grace period has to expire with nobody having replied, and nothing tells the server
+            that a period of silence has ended — so that case needs a scheduled sweep:
+            <code style="font-size:11.5px">*/5 * * * * php <?= e(BASE_PATH) ?>/modules/whatsapp/cron_auto.php</code>
+        </div>
+    </div>
+</div>
 
 <div class="wc-card" id="history">
     <header>

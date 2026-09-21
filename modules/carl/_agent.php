@@ -1,10 +1,10 @@
 <?php
 /**
- * Carl — the conversational layer.
+ * Karl — the conversational layer.
  *
  * Before this, Claude was only ever used as a classifier: it read the question,
  * picked one of twenty skill keys, and a fixed PHP handler wrote the sentence.
- * That is why Carl could recite figures but could not hold a conversation — the
+ * That is why Karl could recite figures but could not hold a conversation — the
  * model never got to speak, so every reply was one of twenty pre-written shapes
  * and anything outside them came back as "I did not catch that".
  *
@@ -26,7 +26,7 @@ require_once __DIR__ . '/_ai.php';
 // below reach for them directly, so they have to be here before any call.
 require_once __DIR__ . '/_detail.php';
 
-// ── What Carl can look up ────────────────────────────────────────────────────
+// ── What Karl can look up ────────────────────────────────────────────────────
 
 /**
  * Tool definitions, filtered to what this account may actually see.

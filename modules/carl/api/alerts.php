@@ -1,10 +1,10 @@
 <?php
 /**
- * Carl — proactive alert endpoint.
+ * Karl — proactive alert endpoint.
  *
  * Called once on every page load by the widget (a lightweight background fetch,
  * not a visible request). Returns whether anything has changed since the user
- * last acknowledged Carl so the button can be badged.
+ * last acknowledged Karl so the button can be badged.
  *
  * Designed to be very fast — all queries are counts or single-row lookups, and
  * the result is cached in the session for 60 seconds so rapid page navigation
@@ -211,7 +211,7 @@ if (canAccess('parts_requests')) {
 //
 // Everything above is reactive: it badges the button and waits to be opened. The
 // people most likely to be sitting on something overdue are exactly the people
-// who never think to open Carl, so once a day the same findings go out as a
+// who never think to open Karl, so once a day the same findings go out as a
 // notification they will see anyway.
 //
 // This endpoint is polled on every page load, which makes it the one place that

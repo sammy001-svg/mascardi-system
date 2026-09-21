@@ -285,7 +285,7 @@ window.addEventListener('beforeinstallprompt', function(e) {
 
         <span class="topbar-date d-none d-lg-inline"><?= date('d M Y') ?></span>
 
-        <?php /* Carl — sits immediately before the bell. Loaded here rather than
+        <?php /* Karl — sits immediately before the bell. Loaded here rather than
                  in the footer so she is present in the navbar itself; the file
                  returns early for the public visitors-book account. */ ?>
         <?php

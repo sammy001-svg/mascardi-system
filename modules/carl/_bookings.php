@@ -1,17 +1,17 @@
 <?php
 /**
- * Carl — the service desk.
+ * Karl — the service desk.
  *
  * The booking desk is the busiest keyboard in the building and the one most
  * often used with a phone against the other ear, which is exactly the work a
- * spoken assistant should be taking. So Carl both reads the diary and takes a
+ * spoken assistant should be taking. So Karl both reads the diary and takes a
  * booking, and a booking she takes is indistinguishable from one typed on
  * modules/service_bookings/add.php — same numbering, same notifications, same
  * confirmation email, same audit line. This file mirrors that page on purpose.
  *
  * Confirming a booking is here too, because a desk that can only take bookings
  * and never move them along is half a desk. Cancelling is not: a booking is
- * cancelled by a person who has spoken to the customer, and Carl has not.
+ * cancelled by a person who has spoken to the customer, and Karl has not.
  */
 
 if (!function_exists('carlServiceTypes')) {

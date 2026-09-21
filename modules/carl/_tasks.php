@@ -1,9 +1,9 @@
 <?php
 /**
- * Carl — tasks that change records, and the reporting that surrounds them.
+ * Karl — tasks that change records, and the reporting that surrounds them.
  *
- * Kept apart from _skills.php because the rules here are not Carl's own. A
- * reservation made by talking to Carl must land exactly where a reservation made
+ * Kept apart from _skills.php because the rules here are not Karl's own. A
+ * reservation made by talking to Karl must land exactly where a reservation made
  * on the lead page lands: same approval routing, same notifications, same audit
  * line. The moment those drift, the spoken path becomes a way around the process
  * rather than another door into it — so this file deliberately mirrors
@@ -12,7 +12,7 @@
  * Deliveries are read-only here on purpose. The six-step protocol has approval
  * gates, converts the buyer into a client and settles consignment money as it
  * completes; that is not something to drive from a sentence that might have been
- * misheard. Carl reports where each deal has stalled and links to the record.
+ * misheard. Karl reports where each deal has stalled and links to the record.
  */
 
 // ── Finding things ───────────────────────────────────────────────────────────
@@ -754,7 +754,7 @@ function carlRecordDeposit(PDO $db, array $user, array $got): array
 /**
  * Every document the CRM can print, with the condition that makes it meaningful.
  *
- * Carl offers all of them but says which are ready, because a sales agreement
+ * Karl offers all of them but says which are ready, because a sales agreement
  * before a deposit, or a delivery note before handover, is a document nobody can
  * use — and finding that out after printing wastes the customer's time at the desk.
  */

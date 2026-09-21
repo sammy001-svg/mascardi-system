@@ -1,9 +1,9 @@
 <?php
 /**
- * Carl — the one endpoint the panel talks to.
+ * Karl — the one endpoint the panel talks to.
  *
  *   GET                 the conversation so far, plus the greeting if one is due
- *   POST {message}      an utterance; returns what Carl says, shows, and does
+ *   POST {message}      an utterance; returns what Karl says, shows, and does
  *
  * Intent resolution order
  * -----------------------
@@ -13,7 +13,7 @@
  * 3. If the key is configured and offline matcher found nothing, let Claude
  *    pick the skill. Handles natural phrasing the offline matcher misses.
  * 4. If still no skill match, send the whole question to carlLlmFreeform()
- *    with the live figures and recent history for context. Carl answers
+ *    with the live figures and recent history for context. Karl answers
  *    conversationally rather than refusing.
  * 5. Final static fallback (no API key, truly unrecognised question).
  *
@@ -22,7 +22,7 @@
  * carlLlmPhrase() — the "rephrase this skill answer" step — was removed.
  * It made a second API call on every single reply, doubling latency, and
  * often made structured skill answers worse by stripping numbers or
- * introducing a stilted rephrased tone. Carl's skill answers are already
+ * introducing a stilted rephrased tone. Karl's skill answers are already
  * well-written. Claude is reserved for what it is actually needed for:
  * intent routing and freeform conversation.
  */
@@ -129,7 +129,7 @@ carlRemember($db, $uid, 'user', $msg);
 // way out but the word "cancel" — which nobody thinks to say.
 $pending = carlPendingGet($db, $uid);
 if ($pending) {
-    // Carl has just asked a direct question, so the reply is an ANSWER unless it
+    // Karl has just asked a direct question, so the reply is an ANSWER unless it
     // plainly reads as a new instruction. Matching on the subject alone was not
     // enough: answering "which vehicle?" with "Nissan Note" scored on note_lead
     // and tore up the booking half way through, because the model happens to be
@@ -170,7 +170,7 @@ if ($pending) {
 // how the credit balance ran down.
 //
 // So the matcher goes first now. When it recognises the question with
-// confidence, Carl answers from the database for nothing. The API is kept for
+// confidence, Karl answers from the database for nothing. The API is kept for
 // what it is genuinely better at: phrasing the matcher does not cover, and
 // follow-ups that only make sense against what was just said.
 $skill   = carlMatchSkill($msg);
@@ -179,7 +179,7 @@ $history = carlRecentHistory($db, $uid, 8);
 if (carlNeedsModel($msg, $skill, $history)) {
     // Claude answers, with the tools in _agent.php doing the looking-up, so the
     // prose is hers but every figure in it came out of the database. If no key is
-    // configured, or the call fails, we fall through — Carl still works without
+    // configured, or the call fails, we fall through — Karl still works without
     // the API, she is simply more literal.
     $res = carlConverse($db, $me, $msg, $history);
     if ($res !== null) {
