@@ -158,6 +158,33 @@ if (waConfigured()) {
     }
 }
 
+// 2b. Has the provider stopped accepting messages from this account?
+//
+// Read from what has already been tried rather than by sending something, since
+// a probe costs one of the messages that may be the thing in short supply. This
+// is the fault worth finding first: it stops every message in the yard at once
+// — Karl, the customer notifications and anything typed by hand — while every
+// other check on this page still passes, because the phone really is linked and
+// the credentials really are right.
+try {
+    $st = $db->prepare("SELECT error, sent_at FROM wa_messages
+                         WHERE direction = 'out' AND status = 'failed'
+                           AND error LIKE '%stopped accepting messages on this account%'
+                           AND sent_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+                      ORDER BY id DESC LIMIT 1");
+    $st->execute();
+    $cut = $st->fetch(PDO::FETCH_ASSOC);
+    if ($cut) {
+        $add('The provider is still accepting messages', 'fail',
+            'It is not. A message failed on ' . e((string)$cut['sent_at']) . ' because the '
+            . 'account has been cut off — quota used up, subscription lapsed, or the instance '
+            . 'disabled. <strong>Nothing will send to anybody until that is sorted out</strong>, '
+            . 'which is why Karl goes quiet and notifications stop at the same time. Everything '
+            . 'else on this page can pass while this is true.',
+            'https://console.green-api.com/');
+    }
+} catch (\Throwable $e) {}
+
 // 3. Where customers' replies come back to
 try {
     $hook   = waConfigured() ? waDriverWebhook() : ['known' => false, 'url' => '', 'incoming' => false, 'error' => ''];

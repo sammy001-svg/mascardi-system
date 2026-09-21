@@ -235,6 +235,21 @@ function waHttp(string $method, string $url, array $opts = []): array
         return ['ok' => false, 'code' => $code, 'data' => $data,
                 'error' => 'WhatsApp is rate limiting us. Wait a moment and try again.'];
     }
+    // 466 is the bridge's own code for an account that has stopped being
+    // allowed to send: the plan's message quota is used up, or the subscription
+    // has lapsed, or the instance has been disabled. It is not about the
+    // recipient and nothing about the message will change it, which makes it
+    // the most misleading failure of the lot — everything simply stops, and
+    // every other explanation on offer points somewhere innocent.
+    if ($code === 466) {
+        $said = trim((string)($data['message'] ?? ''));
+        return ['ok' => false, 'code' => $code, 'data' => $data,
+                'error' => 'The WhatsApp provider has stopped accepting messages on this account '
+                         . '— the plan\'s quota is used up, the subscription has lapsed, or the '
+                         . 'instance has been disabled. Nothing will send, to anybody, until that '
+                         . 'is sorted out in the provider\'s console.'
+                         . ($said !== '' ? ' It said: ' . $said . '.' : '')];
+    }
     if ($code >= 400) {
         $msg = $data['message'] ?? ($data['error']['message'] ?? ('HTTP ' . $code));
         return ['ok' => false, 'code' => $code, 'data' => $data, 'error' => (string)$msg];
@@ -296,7 +311,18 @@ function waDriverCheckNumber(string $phone): array
     if (!$r['ok']) return array_merge($none, ['error' => $r['error']]);
     if (!array_key_exists('existsWhatsapp', $r['data'])) return $none;
 
-    return ['known' => true, 'exists' => (bool)$r['data']['existsWhatsapp'], 'error' => ''];
+    // An instance that is out of quota or disabled answers this call without
+    // being able to look anything up, and a false from it means "I could not
+    // check", not "this person has no WhatsApp". Treated as knowledge it turns
+    // a billing problem into an accusation about the customer's phone.
+    $exists = (bool)$r['data']['existsWhatsapp'];
+    if (!$exists) {
+        $state = waHttp('GET', waGreenUrl('getStateInstance'), ['timeout' => 15]);
+        $live  = $state['ok'] && strtolower((string)($state['data']['stateInstance'] ?? '')) === 'authorized';
+        if (!$live) return array_merge($none, ['error' => 'The provider could not check that number.']);
+    }
+
+    return ['known' => true, 'exists' => $exists, 'error' => ''];
 }
 
 /**
@@ -307,9 +333,23 @@ function waDriverCheckNumber(string $phone): array
  * it never mentions: the number does not have WhatsApp. So that is checked and
  * said plainly.
  */
-function waSendFailureReason(string $chatId, string $providerSaid): string
+function waSendFailureReason(string $chatId, string $providerSaid, int $code = 0): string
 {
     $said = trim($providerSaid);
+
+    // Some failures are about the account or the connection, not about who the
+    // message was addressed to, and for those the provider has already given
+    // the real answer. Asking "does this number have WhatsApp" on top of one of
+    // them, and leading with whatever comes back, buries the truth under a
+    // guess: an account out of quota was being reported as a bad number, which
+    // sent somebody to check a number that was perfectly fine while every
+    // message in the yard silently failed.
+    //
+    // 0 is a transport failure, 401/403 credentials, 429 rate limiting, 466 the
+    // account being cut off. None of them are the recipient's doing.
+    if (in_array($code, [0, 401, 403, 429, 466], true)) {
+        return $said !== '' ? $said : 'The provider would not say why.';
+    }
 
     try {
         $c = waDriverCheckNumber(waChatPhone($chatId));
@@ -513,10 +553,11 @@ function waDriverSendText(string $chatId, string $text): array
     if ($r['ok'] && $id === '') {
         return ['ok' => false, 'id' => '',
                 'error' => waSendFailureReason($chatId, 'the provider accepted the request but '
-                                                      . 'returned no message id')];
+                                                      . 'returned no message id', $r['code'])];
     }
     if (!$r['ok']) {
-        return ['ok' => false, 'id' => '', 'error' => waSendFailureReason($chatId, $r['error'])];
+        return ['ok' => false, 'id' => '',
+                'error' => waSendFailureReason($chatId, $r['error'], $r['code'])];
     }
     return ['ok' => true, 'error' => '', 'id' => $id];
 }
@@ -582,10 +623,11 @@ function waDriverSendFile(string $chatId, string $path, string $fileName, string
     if ($r['ok'] && $id === '') {
         return ['ok' => false, 'id' => '',
                 'error' => waSendFailureReason($chatId, 'the provider accepted the file but '
-                                                      . 'returned no message id')];
+                                                      . 'returned no message id', $r['code'])];
     }
     if (!$r['ok']) {
-        return ['ok' => false, 'id' => '', 'error' => waSendFailureReason($chatId, $r['error'])];
+        return ['ok' => false, 'id' => '',
+                'error' => waSendFailureReason($chatId, $r['error'], $r['code'])];
     }
     return ['ok' => true, 'error' => '', 'id' => $id];
 }
