@@ -122,6 +122,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'karl_
     }
 }
 
+// ── Sending again what was refused ──────────────────────────────────────────
+$retryResult = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'retry_failed') {
+    verifyCsrf();
+    try {
+        $r = waRetryFailed($db, 50);
+        if ($r['tried'] === 0) {
+            $retryResult = ['ok' => false, 'why' => $r['why'] !== '' ? $r['why']
+                : 'Nothing was waiting that can safely be sent again.'];
+        } else {
+            $retryResult = ['ok' => $r['sent'] > 0,
+                'why' => $r['sent'] . ' of ' . $r['tried'] . ' went through'
+                       . ($r['failed'] ? ', ' . $r['failed'] . ' failed again' : '')
+                       . '.' . ($r['why'] !== '' ? ' ' . $r['why'] : '')];
+        }
+    } catch (\Throwable $e) {
+        $retryResult = ['ok' => false, 'why' => 'It stopped with an error: ' . $e->getMessage()];
+    }
+}
+$retryWaiting = 0;
+try { $retryWaiting = waRetryableCount($db); } catch (\Throwable $e) {}
+
 // ── The checks ──────────────────────────────────────────────────────────────
 $checks = [];
 $add = function (string $name, string $state, string $detail, string $fix = '') use (&$checks) {
@@ -589,6 +611,32 @@ include __DIR__ . '/../../includes/header.php';
                     <?php endif; ?>
                 </span>
             </div>
+            <?php if ($retryResult): ?>
+            <div class="alert alert-<?= $retryResult['ok'] ? 'success' : 'warning' ?> py-2 small mb-0
+                        rounded-0 border-start-0 border-end-0">
+                <?= e($retryResult['why']) ?>
+            </div>
+            <?php endif; ?>
+            <?php if ($retryWaiting > 0): ?>
+            <div class="px-3 pt-3">
+                <div class="alert alert-warning py-2 small mb-2">
+                    <strong><?= $retryWaiting ?> message<?= $retryWaiting === 1 ? '' : 's' ?></strong>
+                    <?= $retryWaiting === 1 ? 'was' : 'were' ?> refused by the provider rather than
+                    delivered — booking confirmations, receipts, Karl's replies. Topping the account
+                    up does not send them; nothing is queued. Once it is working again, send them.
+                </div>
+                <form method="POST" class="mb-2">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="action" value="retry_failed">
+                    <button class="btn btn-sm btn-outline-primary">
+                        <i class="fa fa-rotate-right me-1"></i>Send them again
+                    </button>
+                    <span class="text-muted ms-2" style="font-size:11px">
+                        Only messages the provider refused outright, from the last seven days.
+                    </span>
+                </form>
+            </div>
+            <?php endif; ?>
             <div class="card-body py-2 px-0">
                 <?php if (!$recent): ?>
                     <p class="text-muted small px-3 my-2">

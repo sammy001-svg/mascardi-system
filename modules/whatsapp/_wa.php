@@ -608,6 +608,126 @@ function waImportChat(PDO $db, string $chatId, string $name = '', int $count = 1
     return ['messages' => $added, 'conversation_id' => $convId,
             'in' => $in, 'out' => $out, 'offered' => count($rows)];
 }
+// ── Sending again what the provider refused ──────────────────────────────────
+
+/**
+ * Is this failure one where nothing was delivered, and might be next time?
+ *
+ * Only refusals count. When the bridge says the account is out of quota or that
+ * it is rate limiting us, it is telling us it declined to act — the message
+ * certainly did not arrive, and sending it again once the account is well is
+ * safe. A timeout is a different thing entirely: the request may have reached
+ * the provider and been carried out, and retrying that would send a customer
+ * the same message twice. So those are left alone, and a person can resend by
+ * hand if they want to.
+ */
+function waRetryable(string $error): bool
+{
+    $e = strtolower($error);
+    return str_contains($e, 'stopped accepting messages on this account')
+        || str_contains($e, 'quota')
+        || str_contains($e, 'rate limiting');
+}
+
+/** How many refused messages are waiting to be tried again. */
+function waRetryableCount(PDO $db, int $days = 7): int
+{
+    try {
+        $n = 0;
+        $st = $db->prepare("SELECT error FROM wa_messages
+                             WHERE direction='out' AND status='failed'
+                               AND sent_at >= DATE_SUB(NOW(), INTERVAL ? DAY)");
+        $st->execute([max(1, $days)]);
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $e) if (waRetryable((string)$e)) $n++;
+        return $n;
+    } catch (\Throwable $e) { return 0; }
+}
+
+/**
+ * Send again what the provider refused.
+ *
+ * An account that has been cut off does not queue anything: every reservation
+ * notice, booking confirmation and reply Karl tried to make while it was down
+ * simply failed and stayed failed. Topping the account up does not bring them
+ * back, so a customer who booked a service on the Monday never hears anything
+ * at all — the one message that mattered is the one that was lost.
+ *
+ * The original row is settled again rather than a new one written, so the
+ * thread reads as it should afterwards: one message, which went late, instead
+ * of one that failed and a duplicate beside it.
+ *
+ * Old ones are left behind on purpose. A booking confirmation a week after the
+ * booking is worse than none, and nobody wants to explain it.
+ *
+ * @return array{tried:int, sent:int, failed:int, skipped:int, why:string}
+ */
+function waRetryFailed(PDO $db, int $limit = 25, int $days = 7): array
+{
+    waMigrate($db);
+    $out = ['tried' => 0, 'sent' => 0, 'failed' => 0, 'skipped' => 0, 'why' => ''];
+
+    if (!waConfigured()) { $out['why'] = 'WhatsApp is not connected.'; return $out; }
+
+    try {
+        $st = $db->prepare("
+            SELECT m.id, m.conversation_id, m.type, m.body, m.file_name, m.file_path, m.error,
+                   c.chat_id
+              FROM wa_messages m
+              JOIN wa_conversations c ON c.id = m.conversation_id
+             WHERE m.direction='out' AND m.status='failed'
+               AND m.sent_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+          ORDER BY m.id ASC
+             LIMIT ?");
+        $st->bindValue(1, max(1, $days), PDO::PARAM_INT);
+        $st->bindValue(2, max(1, min(200, $limit)) * 4, PDO::PARAM_INT);
+        $st->execute();
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    } catch (\Throwable $e) {
+        error_log('waRetryFailed: ' . $e->getMessage());
+        $out['why'] = 'The list of failed messages could not be read.';
+        return $out;
+    }
+
+    foreach ($rows as $m) {
+        if ($out['tried'] >= max(1, min(200, $limit))) break;
+        if (!waRetryable((string)$m['error'])) { $out['skipped']++; continue; }
+
+        $out['tried']++;
+        $chatId = (string)$m['chat_id'];
+
+        if ($m['type'] === 'text' || trim((string)$m['file_path']) === '') {
+            if (trim((string)$m['body']) === '') { $out['skipped']++; $out['tried']--; continue; }
+            $r = waDriverSendText($chatId, (string)$m['body']);
+        } else {
+            $path = BASE_PATH . '/' . ltrim((string)$m['file_path'], '/\\');
+            if (!is_readable($path)) { $out['skipped']++; $out['tried']--; continue; }
+            $r = waDriverSendFile($chatId, $path, (string)$m['file_name'], (string)$m['body']);
+        }
+
+        waSettleOutbound($db, (int)$m['id'], $r);
+        if ($r['ok']) {
+            $out['sent']++;
+            // It went late, and the thread should say when it actually went
+            // rather than when it first failed.
+            try {
+                $db->prepare("UPDATE wa_messages SET sent_at = NOW() WHERE id = ?")->execute([(int)$m['id']]);
+                waTouch($db, (int)$m['conversation_id'],
+                        (string)($m['body'] !== '' ? $m['body'] : ('📎 ' . $m['file_name'])));
+            } catch (\Throwable $e) {}
+        } else {
+            $out['failed']++;
+            // The account is still down. Stop rather than march through two
+            // hundred messages collecting the same refusal.
+            if (waRetryable((string)$r['error'])) {
+                $out['why'] = 'Stopped early — the provider is still refusing: ' . $r['error'];
+                break;
+            }
+        }
+    }
+
+    return $out;
+}
+
 // ── Quick replies ────────────────────────────────────────────────────────────
 
 function waTemplates(PDO $db): array
