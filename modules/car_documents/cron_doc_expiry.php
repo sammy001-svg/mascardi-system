@@ -8,6 +8,11 @@
  */
 define('RUNNING_CRON', true);
 require_once __DIR__ . '/../../includes/functions.php';
+// sendMail() lives in the mailer, which functions.php does not pull in. Without
+// this the send below raised "undefined function" — caught by the \Throwable
+// around it and printed as a per-recipient failure, so the alert simply never
+// went out and the cron looked like it had run.
+require_once __DIR__ . '/../../includes/mailer.php';
 
 $db = getDB();
 
