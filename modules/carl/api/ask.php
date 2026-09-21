@@ -103,7 +103,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         // Only to those who can do something about it. A salesperson seeing
         // "the account is out of credit" learns nothing they can act on.
         'notice'   => (isSuperAdmin() || authRole() === 'admin')
-                        ? carlLlmExplain(carlLlmLastError()) : '',
+                        ? (function_exists('carlAiNotice')
+                            ? carlAiNotice()
+                            : carlLlmExplain(carlLlmLastError()))
+                        : '',
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }

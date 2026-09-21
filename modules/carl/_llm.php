@@ -24,6 +24,8 @@
 
 if (!function_exists('carlLlmAvailable')) {
 
+require_once __DIR__ . '/_http.php';
+
 // ── Configuration ────────────────────────────────────────────────────────────
 
 /** True when a key is present and the LLM layer should be used. */
@@ -88,22 +90,15 @@ function carlLlmRequest(string $system, array $msgs, int $maxTok = 512, array $t
     if ($tools) $body['tools'] = $tools;
     $payload = json_encode($body);
 
-    $ctx = stream_context_create(['http' => [
-        'method'        => 'POST',
-        'header'        => implode("\r\n", [
+    try {
+        $r = carlHttpPost('https://api.anthropic.com/v1/messages', [
             'Content-Type: application/json',
             'x-api-key: ' . $key,
             'anthropic-version: 2023-06-01',
-            'Content-Length: ' . strlen($payload),
-        ]),
-        'content'        => $payload,
-        'timeout'        => 30,
-        'ignore_errors'  => true,
-    ]]);
+        ], $payload, 30);
 
-    try {
-        $raw = @file_get_contents('https://api.anthropic.com/v1/messages', false, $ctx);
-        if ($raw === false) return null;
+        if (!$r['ok']) { carlLlmNoteFailure($r['error']); return null; }
+        $raw = $r['body'];
         $decoded = json_decode($raw, true);
         if (isset($decoded['error'])) {
             error_log('[Karl LLM] API error: ' . json_encode($decoded['error']));
@@ -385,33 +380,78 @@ function carlLlmLastError(): string
     } catch (\Throwable $e) { return ''; }
 }
 
-/** Turns an API message into something worth showing a manager. */
+/**
+ * Turns an API message into something worth showing a manager.
+ *
+ * Every sentence here used to name Anthropic, and this function is used for
+ * whichever provider is configured. So a yard running on Gemini, whose key was
+ * fine and whose only problem was that the server could not make outbound
+ * requests, was told "I cannot reach the Anthropic API" — an account they do
+ * not have, at a company they are not a customer of. They went looking in
+ * entirely the wrong place, which is worse than no message at all.
+ *
+ * It now names the provider actually in use, and knows the shapes Google's
+ * errors come in as well as Anthropic's.
+ */
 function carlLlmExplain(string $raw): string
 {
     if (trim($raw) === '') return '';
-    // The API writes the same fault several ways — x-api-key, rate_limit,
-    // not_found_error — so flatten the separators before looking for words.
+
+    $google = function_exists('carlAiProvider') && carlAiProvider() === 'google';
+    $who    = $google ? 'Google' : 'Anthropic';
+    $where  = $google ? 'Google AI Studio' : 'Plans and Billing';
+
+    // The APIs write the same fault several ways — x-api-key, rate_limit,
+    // RESOURCE_EXHAUSTED, not_found_error — so flatten the separators first.
     $m = strtolower(str_replace(['_', '-'], ' ', $raw));
+
+    // Nothing to do with the provider: this server cannot make the call at all.
+    // Checked first, because it is the one fault that looks like every other
+    // one and is fixed somewhere else entirely.
+    if (str_contains($m, 'allow url fopen') || str_contains($m, 'no suitable wrapper')
+        || str_contains($m, 'neither the curl extension')) {
+        return 'This server cannot make outbound requests, so no AI provider can be '
+             . 'reached however good the key is. The host needs to enable the cURL '
+             . 'extension for PHP. Until then I answer from your own data only.';
+    }
+    if (str_contains($m, 'could not resolve host') || str_contains($m, 'connection timed out')
+        || str_contains($m, 'could not connect') || str_contains($m, 'ssl')) {
+        return 'This server could not reach ' . $who . ' over the network — usually a '
+             . 'firewall on the hosting account. Until it is opened I answer from your '
+             . 'own data only.';
+    }
+
     if (str_contains($m, 'credit balance') || str_contains($m, 'purchase credits')
-        || str_contains($m, 'billing') || str_contains($m, 'quota')) {
-        return 'The Anthropic account is out of credit, so I am answering from your own '
-             . 'data rather than in full. Add credits under Plans and Billing and I pick '
-             . 'up again straight away.';
+        || str_contains($m, 'billing') || str_contains($m, 'quota')
+        || str_contains($m, 'resource exhausted')) {
+        return 'The ' . $who . ' account is out of credit or over its quota, so I am '
+             . 'answering from your own data rather than in full. Top it up under '
+             . $where . ' and I pick up again straight away.';
     }
     if (str_contains($m, 'leaked')) {
         return 'My API key was published somewhere public and the provider disabled it. '
              . 'A new key is needed before I can do more than read your own data back.';
     }
-    if (str_contains($m, 'authentication') || str_contains($m, 'api key')) {
-        return 'My API key is being rejected, so I am answering from your own data only.';
+    if (str_contains($m, 'has not been used in project') || str_contains($m, 'is disabled')
+        || str_contains($m, 'permission denied')) {
+        return 'The Generative Language API is not switched on for this Google project, '
+             . 'so the key is refused. Enable it in Google Cloud for the project the key '
+             . 'belongs to.';
+    }
+    if (str_contains($m, 'authentication') || str_contains($m, 'api key')
+        || str_contains($m, 'unauthenticated') || str_contains($m, 'invalid argument')) {
+        return 'My ' . $who . ' API key is being rejected, so I am answering from your '
+             . 'own data only. Check it under AI settings.';
     }
     if (str_contains($m, 'rate limit')) {
         return 'The API is rate limiting us at the moment, so I am keeping to short answers.';
     }
     if (str_contains($m, 'model')) {
-        return 'The configured model was rejected, so I am answering from your own data only.';
+        return 'The configured model was rejected by ' . $who . ', so I am answering from '
+             . 'your own data only.';
     }
-    return 'I cannot reach the Anthropic API, so I am answering from your own data only.';
+    return 'I cannot reach the ' . $who . ' API, so I am answering from your own data only. '
+         . 'The exact reason was: ' . trim(explode('|', $raw)[0]);
 }
 
 } // function_exists('carlLlmAvailable')

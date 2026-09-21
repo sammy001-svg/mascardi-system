@@ -191,6 +191,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             $updates['google_model'] = trim($_POST['google_model']);
         }
 
+        // Forget why the last call failed.
+        //
+        // The stored reason is shown to admins as a banner and is only cleared by
+        // a call that works. Switching provider, or pasting a new key, means the
+        // old reason describes a setup that no longer exists — a yard that moved
+        // to Gemini kept being told the Anthropic API was unreachable, which is
+        // an account they do not have. Changing the settings is a statement that
+        // the previous failure is no longer the question.
+        $updates['carl_llm_last_error'] = '';
+
     } elseif ($activeTab === 'seo') {
         $updates = [
             'seo_default_title'       => trim($_POST['seo_default_title']       ?? ''),

@@ -25,6 +25,11 @@
 
 if (!function_exists('carlAiProvider')) {
 
+// One transport for both providers. See _http.php: these calls used
+// file_get_contents(), which needs allow_url_fopen, and a host with it off
+// could never reach a model however good the key was.
+require_once __DIR__ . '/_http.php';
+
 /** Which provider to use. An explicit setting wins; otherwise whoever has a key. */
 function carlAiProvider(): string
 {
@@ -164,26 +169,20 @@ function carlGeminiRound(string $system, array $msgs, array $tools, int $maxTok 
          . rawurlencode(carlGoogleModel()) . ':generateContent';
 
     $payload = json_encode($body, JSON_UNESCAPED_UNICODE);
-    $ctx = stream_context_create(['http' => [
-        'method'  => 'POST',
-        'header'  => implode("\r\n", [
+
+    try {
+        $r = carlHttpPost($url, [
             'Content-Type: application/json',
             // The key goes in a header, not the query string: a URL with a
             // credential in it ends up in access logs and proxy caches.
             'x-goog-api-key: ' . $key,
-            'Content-Length: ' . strlen($payload),
-        ]),
-        'content'       => $payload,
-        'timeout'       => 30,
-        'ignore_errors' => true,
-    ]]);
+        ], $payload, 30);
 
-    try {
-        $raw = @file_get_contents($url, false, $ctx);
-        if ($raw === false) {
-            carlAiNoteFailure('Could not reach the Google API at all.');
+        if (!$r['ok']) {
+            carlAiNoteFailure($r['error']);
             return null;
         }
+        $raw = $r['body'];
         $j = json_decode($raw, true);
         if (isset($j['error'])) {
             error_log('[Karl Gemini] ' . json_encode($j['error']));
@@ -342,6 +341,36 @@ function carlAiAppendToolResults(array &$msgs, array $results): void
  * Shares the setting the Anthropic layer already uses, so whichever provider is
  * configured, the notice in Karl's panel says what actually went wrong.
  */
+/**
+ * The one sentence to show somebody who can do something about it.
+ *
+ * Three different states get confused otherwise, and each needs a different
+ * action: no key at all, a key that is refused, and a server that cannot make
+ * the call. Reading only the stored failure conflated them — with no key
+ * configured nothing is ever attempted, so nothing ever clears the last
+ * failure, and a months-old message sat on screen describing a provider the
+ * yard had already moved away from.
+ */
+function carlAiNotice(): string
+{
+    $google = carlAiProvider() === 'google';
+    $who    = $google ? 'Google' : 'Anthropic';
+
+    if (!carlAiAvailable()) {
+        return 'No ' . $who . ' API key is saved, so I answer from your own data only. '
+             . 'Add one under Settings → AI Assistant.';
+    }
+
+    $cap = function_exists('carlHttpCapability') ? carlHttpCapability() : ['curl' => true, 'url_fopen' => true];
+    if (!$cap['curl'] && !$cap['url_fopen']) {
+        return 'This server cannot make outbound requests — no cURL extension and '
+             . 'allow_url_fopen is off — so no AI provider can be reached however good '
+             . 'the key is. Ask the host to enable cURL.';
+    }
+
+    return function_exists('carlLlmExplain') ? carlLlmExplain(carlLlmLastError()) : '';
+}
+
 function carlAiNoteFailure(?string $message): void
 {
     if (function_exists('carlLlmNoteFailure')) { carlLlmNoteFailure($message); return; }
