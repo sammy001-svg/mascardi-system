@@ -1,5 +1,9 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+// waLinkFor() lives here. The lead rows below call it, and without this the
+// whole page fataled the moment there was a single lead to draw — which is why
+// it looked fine on an empty list.
+require_once __DIR__ . '/crm_helpers.php';
 requireLogin();
 canAccess('crm') || redirect(BASE_URL . '/index.php');
 

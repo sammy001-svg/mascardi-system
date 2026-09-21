@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/crm_helpers.php';   // waLinkFor(), used on the task rows
 requireLogin();
 canAccess('crm') || redirect(BASE_URL . '/index.php');
 
