@@ -458,7 +458,7 @@ include __DIR__ . '/../../includes/header.php';
                             <?= e($lead['phone']) ?>
                         </a>
                         <?php if ($wNum): ?>
-                        <a href="https://wa.me/<?= $wNum ?>?text=<?= $wMsg ?>" target="_blank"
+                        <a href="<?= e(waLinkFor($wNum, $wMsg)) ?>" target="_blank"
                            class="btn btn-xs btn-success ms-1" title="WhatsApp" style="padding:2px 6px">
                             <i class="fab fa-whatsapp"></i>
                         </a>
@@ -614,7 +614,7 @@ include __DIR__ . '/../../includes/header.php';
                               if (str_starts_with($lead['phone'], '0')) $wNum = '254' . substr($wNum, 1);
                               $wMsg = rawurlencode("Hello {$lead['name']}! Following up on your" . ($lead['interested_in'] ? " interest in the {$lead['interested_in']}" : ' enquiry') . ". Are you still looking?");
                             ?>
-                            <a href="https://wa.me/<?= $wNum ?>?text=<?= $wMsg ?>" target="_blank"
+                            <a href="<?= e(waLinkFor($wNum, $wMsg)) ?>" target="_blank"
                                class="btn btn-xs btn-success" title="WhatsApp" style="padding:2px 6px">
                                 <i class="fab fa-whatsapp"></i>
                             </a>

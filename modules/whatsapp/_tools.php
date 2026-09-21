@@ -330,6 +330,21 @@ function waToolSendDocument(PDO $db, string $kind, int $id, array $ctx): array
     ];
 }
 
+/**
+ * The documents a customer may be handed a link to.
+ *
+ * The third field of a token is the owner, and what "owner" means depends on
+ * the kind: for an invoice or a quotation it is the client, because those are
+ * listed by client and an id could otherwise be swapped for a neighbour's.
+ * For a deposit receipt or a booking it is the record's own id, because those
+ * are reached only through a signed link in the first place and there is no
+ * listing to walk.
+ */
+function waDocKinds(): array
+{
+    return ['invoice', 'quotation', 'deposit', 'booking'];
+}
+
 /** A token nobody can forge or edit into another customer's paperwork. */
 function waSignDocToken(string $kind, int $id, int $clientId, int $days = 7): string
 {
@@ -351,7 +366,7 @@ function waVerifyDocToken(string $token): ?array
     $body = $kind . '.' . $id . '.' . $clientId . '.' . $exp;
     if (!hash_equals(waDocSig($body), $sig)) return null;
     if ((int)$exp < time()) return null;
-    if (!in_array($kind, ['invoice', 'quotation'], true)) return null;
+    if (!in_array($kind, waDocKinds(), true)) return null;
 
     return ['kind' => $kind, 'id' => (int)$id, 'client_id' => (int)$clientId];
 }

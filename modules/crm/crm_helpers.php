@@ -1,4 +1,7 @@
 <?php
+// Knows whether the company WhatsApp is connected, to decide where the
+// click-to-chat buttons should point.
+if (is_readable(__DIR__ . '/../whatsapp/_wa.php')) require_once __DIR__ . '/../whatsapp/_wa.php';
 if (!defined('BASE_URL')) exit;
 
 /**
@@ -148,6 +151,22 @@ function buildWhatsAppUrl(
     $message = "Hello {$leadName}! I'm {$agentName} from {$company}. "
              . "I'm following up on your interest{$inCar}. "
              . "When would be a good time to connect or visit our showroom?";
+
+    // Into the system's own inbox, not out to wa.me.
+    //
+    // A wa.me link opens WhatsApp on whichever device the agent is holding and
+    // sends from THEIR number. The customer then has two threads with the yard,
+    // the reply lands on a handset nobody else can see, and the CRM records that
+    // somebody clicked a button. Everything the rebuild was for is lost at the
+    // moment of contact.
+    //
+    // Where the company WhatsApp is connected, this opens the shared thread with
+    // the draft ready to send. Where it is not, wa.me is still better than
+    // nothing, so it falls back rather than breaking the button.
+    if (function_exists('waConfigured') && waConfigured()) {
+        return rtrim(BASE_URL, '/') . '/modules/whatsapp/index.php?'
+             . http_build_query(['phone' => $digits, 'draft' => $message]);
+    }
 
     return 'https://wa.me/' . $digits . '?text=' . rawurlencode($message);
 }
@@ -335,4 +354,27 @@ function crmSettleConsignmentOnDelivery(PDO $db, array $lead): string
         error_log('crmSettleConsignmentOnDelivery: ' . $e->getMessage());
         return '';
     }
+}
+
+/**
+ * Where a click-to-chat button should go.
+ *
+ * The pages had the wa.me address built inline in four places, each with its own
+ * spelling of the same idea, so changing where those buttons point meant finding
+ * all four. Now they ask.
+ *
+ * @param string $digits     the number, already normalised to plain digits
+ * @param string $message    the draft, ALREADY url-encoded by the caller when
+ *                           $encoded is true — which is how three of the four
+ *                           call sites had it
+ */
+function waLinkFor(string $digits, string $message, bool $encoded = true): string
+{
+    $text = $encoded ? rawurldecode($message) : $message;
+
+    if (function_exists('waConfigured') && waConfigured()) {
+        return rtrim(BASE_URL, '/') . '/modules/whatsapp/index.php?'
+             . http_build_query(['phone' => $digits, 'draft' => $text]);
+    }
+    return 'https://wa.me/' . $digits . '?text=' . rawurlencode($text);
 }

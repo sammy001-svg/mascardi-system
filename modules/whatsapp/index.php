@@ -32,6 +32,22 @@ waMigrate($db);
 $me = authUser();
 
 $openId    = (int)($_GET['id'] ?? 0);
+
+// Arriving from a lead: open the thread for that number, making it if there
+// is not one yet, and carry the agent's draft into the box. This is what a
+// click-to-chat button in the CRM now points at, so the conversation starts
+// on the company number and stays on the customer's record.
+$draft = trim((string)($_GET['draft'] ?? ''));
+// waCanSend() rather than $canSend: that variable is assigned three lines
+// below this block, so reading it here is reading null, and the whole
+// hand-off from the CRM silently did nothing.
+if ($openId === 0 && trim((string)($_GET['phone'] ?? '')) !== '' && waCanSend()) {
+    $chatId = waChatId((string)$_GET['phone']);
+    if ($chatId !== null) {
+        $c = waConversation($db, $chatId, trim((string)($_GET['name'] ?? '')), waChatPhone($chatId));
+        if ($c) $openId = (int)$c['id'];
+    }
+}
 $templates = waTemplates($db);
 $canSend   = waCanSend();
 $connected = false;
@@ -293,6 +309,7 @@ include __DIR__ . '/../../includes/header.php';
                                  JSON_UNESCAPED_UNICODE) ?>;
 
     var filter = 'open', q = '', cur = <?= $openId ?>, lastId = 0, busy = false, att = null;
+    var DRAFT = <?= json_encode($draft) ?>;
     var elConvs = document.getElementById('waConvs'),
         elMsgs  = document.getElementById('waMsgs'),
         elPane  = document.getElementById('waPane'),
@@ -623,7 +640,12 @@ include __DIR__ . '/../../includes/header.php';
     });
 
     // ── keeping up ──
-    load(function () { if (cur) open(cur); });
+    load(function () {
+        if (cur) open(cur);
+        // The draft is placed, never sent. An agent who followed a link from a
+        // lead still reads it and decides.
+        if (DRAFT && body) { body.value = DRAFT; autoGrow(); body.focus(); }
+    });
     setInterval(function () {
         if (!cur) { load(); return; }
         // Only what is new, so an open thread does not flicker every few seconds.

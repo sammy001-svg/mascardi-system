@@ -609,7 +609,7 @@ include __DIR__ . '/../../includes/header.php';
                 <td>
                     <?php if ($l['phone']): ?>
                     <div class="small"><i class="fa fa-phone me-1 text-muted"></i><?= e($l['phone']) ?></div>
-                    <a href="https://wa.me/<?= $waNum ?>?text=<?= $waMsg ?>" target="_blank"
+                    <a href="<?= e(waLinkFor($waNum, $waMsg)) ?>" target="_blank"
                        class="btn btn-xs btn-success mt-1" style="font-size:10px;padding:1px 6px"
                        title="WhatsApp <?= e($l['phone']) ?>">
                         <i class="fab fa-whatsapp"></i>

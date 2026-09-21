@@ -1141,7 +1141,7 @@ include __DIR__ . '/../../includes/header.php';
         $interested = $lead['interested_in'] ?? '';
         $waMsg = "Hello {$lead['name']}! I'm {$agentName} from {$company}." . ($interested ? " Following up on your interest in the {$interested}." : '') . " When would be a good time to connect or visit our showroom?";
         ?>
-        <a href="https://wa.me/<?= $waNum ?>?text=<?= rawurlencode($waMsg) ?>"
+        <a href="<?= e(waLinkFor($waNum, $waMsg, false)) ?>"
            target="_blank" class="btn btn-sm btn-outline-success" title="WhatsApp <?= e($lead['phone']) ?>">
             <i class="fab fa-whatsapp me-1"></i><i class="fa fa-phone"></i>
         </a>
@@ -3923,9 +3923,17 @@ $companyWa = getSetting('company_name', 'us');
     return text;
   }
 
+  var WA_INBOX = <?= (function_exists('waConfigured') && waConfigured())
+      ? json_encode(rtrim(BASE_URL, '/') . '/modules/whatsapp/index.php') : 'null' ?>;
+
   function updateBtn() {
     var msg = fillPlaceholders(box.value);
-    btn.href = 'https://wa.me/' + waNum + '?text=' + encodeURIComponent(msg);
+    // Into the system inbox when the company WhatsApp is connected, so the
+    // message goes out on the company number and stays on the customer's
+    // record — not out through whichever handset the agent is holding.
+    btn.href = WA_INBOX
+        ? WA_INBOX + '?phone=' + encodeURIComponent(waNum) + '&draft=' + encodeURIComponent(msg)
+        : 'https://wa.me/' + waNum + '?text=' + encodeURIComponent(msg);
     count.textContent = msg.length + ' chars';
   }
 

@@ -23,25 +23,69 @@ if ($claim === null) {
     $why = 'This link is not valid, or it has expired. Links last seven days — '
          . 'ask us to send a fresh one.';
 } else {
-    $db    = getDB();
-    $table = $claim['kind'] === 'invoice' ? 'invoices' : 'quotations';
-    $numCol = $claim['kind'] === 'invoice' ? 'invoice_number' : 'quotation_number';
+    $db = getDB();
 
+    // Ownership re-checked against the record, not taken from the token. A
+    // document reassigned to another client since the link was issued must stop
+    // opening, and the signature alone would not notice that.
+    $doc = null;
     try {
-        // Ownership re-checked against the record, not taken from the token. A
-        // document reassigned to another client since the link was issued must
-        // stop opening, and the signature alone would not notice that.
-        $st = $db->prepare("
-            SELECT d.*, d.{$numCol} AS doc_number,
-                   cl.name AS client_name, cl.phone AS client_phone,
-                   c.make, c.model, c.year, c.registration_number, c.chassis_number
-              FROM {$table} d
-         LEFT JOIN clients cl ON cl.id = d.client_id
-         LEFT JOIN cars    c  ON c.id  = d.car_id
-             WHERE d.id = ? AND d.client_id = ?
-             LIMIT 1");
-        $st->execute([$claim['id'], $claim['client_id']]);
-        $doc = $st->fetch(PDO::FETCH_ASSOC);
+        if ($claim['kind'] === 'invoice' || $claim['kind'] === 'quotation') {
+            $table  = $claim['kind'] === 'invoice' ? 'invoices' : 'quotations';
+            $numCol = $claim['kind'] === 'invoice' ? 'invoice_number' : 'quotation_number';
+            $st = $db->prepare("
+                SELECT d.*, d.{$numCol} AS doc_number,
+                       cl.name AS client_name,
+                       c.make, c.model, c.year, c.registration_number
+                  FROM {$table} d
+             LEFT JOIN clients cl ON cl.id = d.client_id
+             LEFT JOIN cars    c  ON c.id  = d.car_id
+                 WHERE d.id = ? AND d.client_id = ? LIMIT 1");
+            $st->execute([$claim['id'], $claim['client_id']]);
+            $doc = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+
+        } elseif ($claim['kind'] === 'deposit') {
+            // The deposit receipt belongs to a lead, and the total is the sum of
+            // everything paid — the figure on the lead alone is only the first
+            // instalment, which is exactly the bug the receipts had before.
+            require_once __DIR__ . '/../crm/_deposits.php';
+            $st = $db->prepare("
+                SELECT l.id, l.name AS client_name, l.deposit_amount, l.deposit_date,
+                       l.agreed_sale_price, l.due_date,
+                       c.make, c.model, c.year, c.registration_number
+                  FROM crm_leads l
+             LEFT JOIN cars c ON c.id = l.pinned_car_id
+                 WHERE l.id = ? LIMIT 1");
+            $st->execute([$claim['id']]);
+            $lead = $st->fetch(PDO::FETCH_ASSOC);
+            if ($lead) {
+                $sum = leadDepositSummary($db, $lead);
+                $doc = [
+                    'doc_number'  => 'Deposit receipt',
+                    'client_name' => $lead['client_name'],
+                    'date'        => $sum['date'],
+                    'make'        => $lead['make'], 'model' => $lead['model'],
+                    'year'        => $lead['year'],
+                    'registration_number' => $lead['registration_number'],
+                    'total'       => $sum['total'],
+                    'amount_paid' => $sum['total'],
+                    'agreed'      => (float)($lead['agreed_sale_price'] ?? 0),
+                    'due_date'    => $lead['due_date'],
+                    'rows'        => $sum['rows'],
+                    'initial'     => $sum['initial'],
+                ];
+            }
+
+        } elseif ($claim['kind'] === 'booking') {
+            $st = $db->prepare("
+                SELECT b.id, b.booking_number AS doc_number, b.client_name,
+                       b.booking_date AS date, b.preferred_date, b.preferred_time,
+                       b.service_type, b.status, b.car_make AS make, b.car_model AS model,
+                       b.car_registration AS registration_number
+                  FROM service_bookings b WHERE b.id = ? LIMIT 1");
+            $st->execute([$claim['id']]);
+            $doc = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
     } catch (\Throwable $e) {
         error_log('wa doc: ' . $e->getMessage());
         $doc = null;
@@ -99,8 +143,14 @@ tr:last-child td{border-bottom:0}
     <div class="sheet">
         <div class="head">
             <h1><?= e($company) ?></h1>
-            <p><?= $claim['kind'] === 'invoice' ? 'Invoice' : 'Quotation' ?>
-               <?= e($doc['doc_number']) ?></p>
+            <p><?= e(match ($claim['kind']) {
+                   'invoice'   => 'Invoice',
+                   'quotation' => 'Quotation',
+                   'deposit'   => 'Reservation & deposit receipt',
+                   'booking'   => 'Service booking',
+                   default     => 'Document',
+               }) ?>
+               <?= $claim['kind'] === 'deposit' ? '' : e($doc['doc_number']) ?></p>
         </div>
         <div class="body">
             <table>
@@ -122,7 +172,10 @@ tr:last-child td{border-bottom:0}
                 <?php if (isset($doc['tax_amount']) && (float)$doc['tax_amount'] > 0): ?>
                 <tr><th>VAT</th><td>KES <?= number_format((float)$doc['tax_amount']) ?></td></tr>
                 <?php endif; ?>
-                <tr><th>Total</th><td class="total">KES <?= number_format((float)$doc['total']) ?></td></tr>
+                <?php if ($claim['kind'] !== 'booking'): ?>
+                <tr><th><?= $claim['kind'] === 'deposit' ? 'Total paid' : 'Total' ?></th>
+                    <td class="total">KES <?= number_format((float)($doc['total'] ?? 0)) ?></td></tr>
+                <?php endif; ?>
                 <?php if ($claim['kind'] === 'invoice' && isset($doc['amount_paid'])): ?>
                 <tr><th>Paid</th><td>KES <?= number_format((float)$doc['amount_paid']) ?></td></tr>
                 <tr><th>Balance</th><td><strong>KES <?=
@@ -131,10 +184,40 @@ tr:last-child td{border-bottom:0}
                 <?php if ($claim['kind'] === 'quotation' && !empty($doc['valid_until'])): ?>
                 <tr><th>Valid until</th><td><?= e(fmtDate($doc['valid_until'], 'j F Y')) ?></td></tr>
                 <?php endif; ?>
+                <?php if ($claim['kind'] === 'deposit'): ?>
+                    <?php if (!empty($doc['rows'])): ?>
+                    <?php // Every payment, not just the first. A customer who topped up
+                          // twice should see all three lines and their own total. ?>
+                    <tr><th>Initial deposit</th><td>KES <?= number_format((float)$doc['initial']) ?></td></tr>
+                    <?php foreach ($doc['rows'] as $xd): ?>
+                    <tr><th>Further payment<br><span style="font-weight:400;font-size:12px"><?=
+                        e(fmtDate($xd['deposit_date'], 'j M Y')) ?></span></th>
+                        <td>KES <?= number_format((float)$xd['amount']) ?></td></tr>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                    <?php if (!empty($doc['agreed'])): ?>
+                    <tr><th>Agreed price</th><td>KES <?= number_format((float)$doc['agreed']) ?></td></tr>
+                    <tr><th>Balance</th><td><strong>KES <?=
+                        number_format(max(0, (float)$doc['agreed'] - (float)$doc['total'])) ?></strong></td></tr>
+                    <?php endif; ?>
+                    <?php if (!empty($doc['due_date'])): ?>
+                    <tr><th>Balance due by</th><td><?= e(fmtDate($doc['due_date'], 'j F Y')) ?></td></tr>
+                    <?php endif; ?>
+                <?php endif; ?>
+                <?php if ($claim['kind'] === 'booking'): ?>
+                <tr><th>Service</th><td><?= e($doc['service_type'] ?? '') ?></td></tr>
+                <?php if (!empty($doc['preferred_date'])): ?>
+                <tr><th>Booked for</th><td><?= e(fmtDate($doc['preferred_date'], 'D j F Y'))
+                    . (!empty($doc['preferred_time']) ? ' at ' . e($doc['preferred_time']) : '') ?></td></tr>
+                <?php endif; ?>
+                <tr><th>Status</th><td><?= e(ucfirst(str_replace('_',' ', $doc['status'] ?? ''))) ?></td></tr>
+                <?php endif; ?>
             </table>
 
             <div class="note">
-                This is a summary of your <?= $claim['kind'] ?> for your records. For the stamped
+                This is a summary of your <?= e(match ($claim['kind']) {
+                    'deposit' => 'reservation', 'booking' => 'booking',
+                    default   => $claim['kind'] }) ?> for your records. For the stamped
                 original, or anything that does not look right, reply on WhatsApp and a colleague
                 will help.
             </div>
