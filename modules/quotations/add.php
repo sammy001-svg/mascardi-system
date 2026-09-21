@@ -261,12 +261,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $iStmt->execute([$qId,$type,$invId,$desc,$qty,$price,$disc,$tot]);
             }
             $db->commit();
-            require_once __DIR__ . '/../../includes/notifications.php';
-            notifyRoles(['admin','sales_manager','general_manager'], 'info',
-                "New Quotation: {$qNum}",
-                $custName . ($total ? ' — ' . money((float)$total) : ''),
-                BASE_URL . '/modules/quotations/view.php?id=' . $qId
-            );
+            require_once __DIR__ . '/../../includes/dispatch.php';
+            dispatchToRoles(['admin','sales_manager','general_manager'], 'quotation', [
+                'title'   => "New Quotation: {$qNum}",
+                'message' => $custName . ($total ? ' — ' . money((float)$total) : ''),
+                'link'    => BASE_URL . '/modules/quotations/view.php?id=' . $qId,
+            ]);
+
+            // And the customer, who is the one actually waiting for it. The link
+            // opens without a login; it is signed and it expires.
+            $co   = getSetting('company_name', 'Mascardi');
+            $link = dispatchDocLink('quotation', (int)$qId, (int)$clientId);
+            dispatchToClient((string)$custPhone, 'quotation',
+                "Hello " . ($custName ?: 'there') . ",\n\n"
+                . "Your quotation *{$qNum}* from {$co} is ready — "
+                . "*" . money((float)$total) . "*"
+                . ($validUntil ? ", valid until " . date('j M Y', strtotime($validUntil)) : '') . "."
+                . "\n\nReply to this message if you have any questions."
+                . ($link !== '' ? "\n\nYou can open your quotation here:" : ''),
+                $link);
+
             setFlash('success',"Quotation {$qNum} created.");
             $afterSave = $_POST['_after_save'] ?? 'view';
             if ($afterSave === 'print') {

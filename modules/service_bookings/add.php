@@ -129,11 +129,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $newId = $db->lastInsertId();
             logActivity('create', 'service_bookings', $newId, "Created booking {$bNum} for {$d['client_name']}");
-            notifyRoles(['admin','workshop_manager','sales_officer'], 'booking',
-                "New Booking: {$bNum}",
-                "{$d['client_name']} — {$serviceStr}",
-                BASE_URL . '/modules/service_bookings/view.php?id=' . $newId
-            );
+            require_once __DIR__ . '/../../includes/dispatch.php';
+            dispatchToRoles(['admin','workshop_manager','sales_officer'], 'booking', [
+                'title'   => "New Booking: {$bNum}",
+                'message' => "{$d['client_name']} — {$serviceStr}",
+                'link'    => BASE_URL . '/modules/service_bookings/view.php?id=' . $newId,
+            ]);
+
+            // The customer gets the same confirmation on WhatsApp that they have
+            // been getting by email — except most customers give a phone number
+            // and no email, so for most of them this is the first time they have
+            // been told anything at all.
+            $co      = getSetting('company_name', 'Mascardi');
+            $vehicle = trim("{$d['car_make']} {$d['car_model']} {$d['car_registration']}");
+            $when    = $d['preferred_date']
+                     ? date('D j M Y', strtotime($d['preferred_date']))
+                       . ($d['preferred_time'] ? ' at ' . $d['preferred_time'] : '')
+                     : 'to be confirmed';
+            $link = dispatchDocLink('booking', (int)$newId, (int)($d['client_id'] ?: 0));
+            dispatchToClient((string)$d['client_phone'], 'booking',
+                "Hello " . ($d['client_name'] ?: 'there') . ",\n\n"
+                . "Your service booking *{$bNum}* with {$co} is confirmed.\n\n"
+                . "*Service:* {$serviceStr}\n"
+                . ($vehicle !== '' ? "*Vehicle:* {$vehicle}\n" : '')
+                . "*Date:* {$when}\n\n"
+                . "We will be in touch to confirm the appointment."
+                . ($link !== '' ? "\n\nYour booking details:" : ''),
+                $link);
             // Confirmation email to client
             if (getSetting('alert_email_booking', '1') === '1' && $d['client_email'] && filter_var($d['client_email'], FILTER_VALIDATE_EMAIL)) {
                 $company = getSetting('company_name', 'Mascardi System');

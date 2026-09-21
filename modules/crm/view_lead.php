@@ -399,11 +399,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($carForStatus) {
                 $db->prepare("UPDATE cars SET status='reserved', updated_at=NOW() WHERE id=?")->execute([$carForStatus]);
             }
-            notifyRoles(['admin','sales_manager','general_manager'], 'sale',
-                "Vehicle Reserved: {$lead['name']}",
-                "Deposit: " . money($depositAmt) . ($depositNotes ? " — {$depositNotes}" : ''),
-                BASE_URL . '/modules/crm/view_lead.php?id=' . $id
-            );
+            require_once __DIR__ . '/../../includes/dispatch.php';
+            dispatchToRoles(['admin','sales_manager','general_manager'], 'reservation', [
+                'title'   => "Vehicle Reserved: {$lead['name']}",
+                'message' => "Deposit: " . money($depositAmt) . ($depositNotes ? " — {$depositNotes}" : ''),
+                'link'    => BASE_URL . '/modules/crm/view_lead.php?id=' . $id,
+            ]);
+            dispatchReservationToClient($db, $lead, $id, $carForStatus, $depositAmt);
             logActivity('update', 'crm_leads', $id, "Reservation saved by Super Admin. Deposit: " . number_format($depositAmt, 2));
             setFlash('success', 'Reservation saved. Proforma Invoice and Sales Agreement are ready below.');
         } else {
@@ -448,11 +450,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           ON DUPLICATE KEY UPDATE s1_moved_at = COALESCE(s1_moved_at, NOW()), s1_approved_at = COALESCE(s1_approved_at, NOW())")->execute([$id]);
         } catch (\Throwable $_) {}
         require_once __DIR__ . '/../../includes/notifications.php';
-        notifyRoles(['sales_manager','sales_officer','customer_relations','supervisor'], 'sale',
-            "Reservation Approved: {$lead['name']}",
-            "Approved by {$me['name']}. The vehicle is now reserved.",
-            BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '&dp_open=1'
-        );
+        require_once __DIR__ . '/../../includes/dispatch.php';
+        dispatchToRoles(['sales_manager','sales_officer','customer_relations','supervisor'], 'reservation', [
+            'title'   => "Reservation Approved: {$lead['name']}",
+            'message' => "Approved by {$me['name']}. The vehicle is now reserved.",
+            'link'    => BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '&dp_open=1',
+        ]);
+        dispatchReservationToClient($db, $lead, $id, $pinnedCarId,
+                                    (float)($lead['deposit_amount'] ?? 0));
         logActivity('update', 'crm_leads', $id, "Reservation approved by Super Admin ({$me['name']}).");
         setFlash('success', 'Reservation approved. The vehicle is now reserved.');
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
@@ -466,12 +471,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("INSERT INTO crm_lead_deposits (lead_id, amount, deposit_date, notes, created_by) VALUES (?,?,?,?,?)")
                ->execute([$id, $amt, $date, $notes, $uid]);
             logActivity('update', 'crm_leads', $id, "Additional deposit recorded: " . number_format($amt, 2) . " on {$date}" . ($notes ? " — {$notes}" : ''));
-            require_once __DIR__ . '/../../includes/notifications.php';
-            notifyRoles(['super_admin','admin','sales_manager'], 'sale',
-                "Additional Deposit: {$lead['name']}",
-                money($amt) . " received on " . date('d M Y', strtotime($date)) . ($notes ? " — {$notes}" : ''),
-                BASE_URL . '/modules/crm/view_lead.php?id=' . $id
-            );
+            require_once __DIR__ . '/../../includes/dispatch.php';
+            dispatchToRoles(['super_admin','admin','sales_manager'], 'deposit', [
+                'title'   => "Additional Deposit: {$lead['name']}",
+                'message' => money($amt) . " received on " . date('d M Y', strtotime($date)) . ($notes ? " — {$notes}" : ''),
+                'link'    => BASE_URL . '/modules/crm/view_lead.php?id=' . $id,
+            ]);
+
+            // The receipt link shows every payment and the running total, which
+            // is the whole reason a customer wants one after a top-up.
+            $co   = getSetting('company_name', 'Mascardi');
+            $link = dispatchDocLink('deposit', (int)$id, (int)($lead['client_id'] ?? 0));
+            dispatchToClient((string)($lead['phone'] ?? ''), 'deposit',
+                "Hello " . (explode(' ', trim((string)$lead['name']))[0] ?: 'there') . ",\n\n"
+                . "We have received your payment of *" . money($amt) . "* on "
+                . date('j M Y', strtotime($date)) . ". Thank you."
+                . ($link !== '' ? "\n\nYour updated receipt, showing everything paid so far:" : ''),
+                $link);
             setFlash('success', 'Additional deposit recorded.');
         } else {
             setFlash('warning', 'Enter a deposit amount greater than zero.');
@@ -741,12 +757,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                ->execute([$id, 'note', 'Delivery note: ' . $deliveryNotes, $me['id']]);
         }
 
-        require_once __DIR__ . '/../../includes/notifications.php';
-        notifyRoles(['admin','sales_manager','general_manager'], 'sale',
-            "Vehicle Delivered: {$lead['name']}",
-            "Delivery confirmed on " . date('d M Y', strtotime($deliveryDate)),
-            BASE_URL . '/modules/crm/view_lead.php?id=' . $id
-        );
+        require_once __DIR__ . '/../../includes/dispatch.php';
+        dispatchToRoles(['admin','sales_manager','general_manager'], 'delivery', [
+            'title'   => "Vehicle Delivered: {$lead['name']}",
+            'message' => "Delivery confirmed on " . date('d M Y', strtotime($deliveryDate)),
+            'link'    => BASE_URL . '/modules/crm/view_lead.php?id=' . $id,
+        ]);
+
+        // No document link: a delivery note is signed on paper at handover and
+        // there is no customer-facing version of it to send.
+        $co  = getSetting('company_name', 'Mascardi');
+        $car = dispatchCarLabel($db, $pinnedCarId);
+        dispatchToClient((string)($lead['phone'] ?? ''), 'delivery',
+            "Hello " . (explode(' ', trim((string)$lead['name']))[0] ?: 'there') . ",\n\n"
+            . "Your " . ($car !== '' ? $car : 'vehicle') . " has been delivered. "
+            . "Thank you for choosing {$co}.\n\n"
+            . "If anything at all needs attention, reply to this message and we will help.");
         logActivity('update', 'crm_leads', $id, "Vehicle delivered on $deliveryDate.");
         setFlash('success', 'Delivery confirmed! Delivery Note is ready below.');
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);

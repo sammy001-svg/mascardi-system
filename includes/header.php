@@ -418,13 +418,20 @@ window.addEventListener('beforeinstallprompt', function(e) {
         booking:   '#2563eb', payment: '#16a34a', low_stock: '#d97706',
         issue:     '#dc2626', lpo:     '#0284c7', job:       '#9333ea',
         sale:      '#0f172a', info:    '#64748b',
-        alert:     '#dc2626', warning: '#d97706'
+        alert:     '#dc2626', warning: '#d97706',
+        reservation: '#7c3aed', deposit: '#16a34a', quotation: '#0891b2',
+        invoice:     '#6366f1', delivery: '#0f766e', lead:    '#2563eb',
+        workshop:    '#9333ea', chat:     '#25d366'
     };
     var typeIcons = {
         booking: 'fa-calendar-check', payment: 'fa-money-bill-wave',
         low_stock: 'fa-boxes-stacked', issue: 'fa-triangle-exclamation',
         lpo: 'fa-truck', job: 'fa-toolbox', sale: 'fa-tag', info: 'fa-info-circle',
-        alert: 'fa-bell', warning: 'fa-triangle-exclamation'
+        alert: 'fa-bell', warning: 'fa-triangle-exclamation',
+        reservation: 'fa-bookmark', deposit: 'fa-money-bill-wave',
+        quotation:   'fa-file-invoice', invoice: 'fa-file-invoice-dollar',
+        delivery:    'fa-truck-ramp-box', lead: 'fa-user-plus',
+        workshop:    'fa-toolbox', chat: 'fa-comments'
     };
 
     function setBadge(n) {

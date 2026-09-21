@@ -66,13 +66,45 @@ function dispatchEvents(): array
     ];
 }
 
-/** Whether a channel is switched on for an event. */
+/**
+ * The events where telling the customer is the whole point.
+ *
+ * A reservation, a payment, a quotation, an invoice, a booking and a delivery
+ * are all moments the customer is waiting to hear about, and each one produces
+ * a document they are entitled to. Silence at any of them is the yard looking
+ * careless at exactly the wrong moment.
+ */
+function dispatchClientEvents(): array
+{
+    return ['reservation', 'deposit', 'quotation', 'invoice', 'booking', 'delivery'];
+}
+
+/**
+ * Whether a channel is switched on for an event.
+ *
+ * Three different defaults, for three different risks:
+ *
+ *   inapp  is always on. It is the record, it costs nothing, and a bell nobody
+ *          looks at is still better than no trace of what happened.
+ *
+ *   client is on for the six events above. This was off, along with everything
+ *          else, and the result was a notification system that had been built,
+ *          wired and switched off at the last valve — reservations, quotations
+ *          and bookings all went out in silence and looked like a bug, because
+ *          from the yard's side it was one.
+ *
+ *   staff  email and WhatsApp stay off until somebody asks for them. A yard
+ *          that WhatsApps every salesperson about every event has taught them
+ *          to mute it by Wednesday, and a muted channel is worse than none:
+ *          it looks like it is working.
+ */
 function dispatchOn(string $event, string $channel): bool
 {
-    // Staff email for the events that already had a switch stays as the yard set
-    // it; everything new arrives off, because a notification system that turns
-    // itself on is one people learn to distrust.
-    $default = ($channel === 'inapp') ? '1' : '0';
+    $default = match ($channel) {
+        'inapp'  => '1',
+        'client' => in_array($event, dispatchClientEvents(), true) ? '1' : '0',
+        default  => '0',
+    };
     return getSetting('notify_' . $channel . '_' . $event, $default) === '1';
 }
 
@@ -198,7 +230,17 @@ function dispatchToClient(string $phone, string $event, string $text, string $li
  */
 function dispatchDocLink(string $kind, int $id, int $clientId, int $days = 14): string
 {
-    if ($clientId <= 0 || $id <= 0) return '';
+    if ($id <= 0) return '';
+
+    // An invoice or a quotation is opened by matching the client on the record,
+    // so a link without one cannot open and must not be sent — a customer given
+    // a link that says "we could not open that" is worse off than one given no
+    // link. A deposit receipt belongs to a lead and a booking to itself; neither
+    // is looked up by client, so both are fine for a walk-in with no client
+    // record, which is most of them.
+    $needsClient = in_array($kind, ['invoice', 'quotation'], true);
+    if ($needsClient && $clientId <= 0) return '';
+
     try {
         require_once __DIR__ . '/../modules/whatsapp/_tools.php';
         return rtrim(BASE_URL, '/') . '/modules/whatsapp/doc.php?t='
@@ -207,6 +249,55 @@ function dispatchDocLink(string $kind, int $id, int $clientId, int $days = 14): 
         error_log('dispatchDocLink: ' . $e->getMessage());
         return '';
     }
+}
+
+/** "2019 Toyota Prado KDA 123A", or '' — for saying which car we mean. */
+function dispatchCarLabel(PDO $db, int $carId): string
+{
+    if ($carId <= 0) return '';
+    try {
+        $st = $db->prepare("SELECT year, make, model, registration_number FROM cars WHERE id = ?");
+        $st->execute([$carId]);
+        $c = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$c) return '';
+        $label = trim(($c['year'] ? $c['year'] . ' ' : '') . $c['make'] . ' ' . $c['model']);
+        if (!empty($c['registration_number'])) $label .= ' ' . $c['registration_number'];
+        return trim(preg_replace('/\s+/', ' ', $label));
+    } catch (\Throwable $e) { return ''; }
+}
+
+/**
+ * Tell a customer their car is held.
+ *
+ * Shared because a reservation becomes real at two different points depending
+ * on who made it — immediately when a super admin saves it, and on approval
+ * when anybody else does — and the customer should hear the same thing either
+ * way. The ordinary user's own save is only a request for approval and
+ * deliberately says nothing at all: a customer told their car is reserved, by
+ * a reservation that is then declined, is a worse problem than a slow message.
+ */
+function dispatchReservationToClient(PDO $db, array $lead, int $leadId,
+                                     int $carId, float $depositAmt): void
+{
+    $phone = trim((string)($lead['phone'] ?? ''));
+    if ($phone === '') return;
+
+    $co    = getSetting('company_name', 'Mascardi');
+    $first = explode(' ', trim((string)($lead['name'] ?? '')))[0] ?: 'there';
+    $car   = dispatchCarLabel($db, $carId);
+    $link  = dispatchDocLink('deposit', $leadId, (int)($lead['client_id'] ?? 0));
+
+    $text = "Hello {$first},\n\n"
+          . "Your " . ($car !== '' ? '*' . $car . '*' : 'vehicle') . " is now reserved with {$co}.";
+    if ($depositAmt > 0) {
+        $text .= "\n\nDeposit received: *" . money($depositAmt) . "*";
+    }
+    $text .= "\n\nReply to this message if you have any questions.";
+    if ($link !== '') {
+        $text .= "\n\nYour reservation and deposit receipt:";
+    }
+
+    dispatchToClient($phone, 'reservation', $text, $link);
 }
 
 /** The client behind a lead, or 0. Used to decide whether a link may be issued. */

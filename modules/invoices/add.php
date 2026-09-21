@@ -115,6 +115,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $db->commit();
             logActivity('create', 'invoices', $invId, "Created invoice {$invNum}");
+
+            require_once __DIR__ . '/../../includes/dispatch.php';
+            dispatchToRoles(['admin','sales_manager','general_manager'], 'invoice', [
+                'title'   => "New Invoice: {$invNum}",
+                'message' => $d['customer_name'] . ' — ' . money((float)$total),
+                'link'    => BASE_URL . '/modules/invoices/view.php?id=' . $invId,
+            ]);
+
+            $co   = getSetting('company_name', 'Mascardi');
+            $link = dispatchDocLink('invoice', (int)$invId, (int)$d['client_id']);
+            dispatchToClient((string)$d['customer_phone'], 'invoice',
+                "Hello " . ($d['customer_name'] ?: 'there') . ",\n\n"
+                . "Invoice *{$invNum}* from {$co} — *" . money((float)$total) . "*"
+                . (!empty($d['due_date']) ? ", due " . date('j M Y', strtotime($d['due_date'])) : '') . "."
+                . "\n\nReply to this message if you have any questions."
+                . ($link !== '' ? "\n\nYou can open your invoice here:" : ''),
+                $link);
+
             setFlash('success', "Invoice {$invNum} created.");
             redirect(BASE_URL . '/modules/invoices/view.php?id=' . $invId);
         } catch (\Throwable $e) {

@@ -3,6 +3,11 @@ require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
 requireRole('admin');
 
+// Loaded up here rather than beside their first use further down: the POST
+// handlers run before that point, and one of them calls dispatchEvents().
+require_once __DIR__ . '/../../includes/whatsapp.php';
+require_once __DIR__ . '/../../includes/dispatch.php';
+
 $pageTitle = 'Messaging & Alerts';
 $db        = getDB();
 
@@ -107,6 +112,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     redirect(BASE_URL . '/modules/settings/messaging.php?tab=rules');
 }
 
+// ── POST: save the document & update notifications ────────────────────────────
+// Written as explicit 1/0 for every box rather than only the ticked ones: an
+// unticked checkbox sends nothing at all, so saving only what arrived would
+// make switching something OFF impossible.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_notify') {
+    verifyCsrf();
+    $uStmt = $db->prepare("INSERT INTO settings (setting_key,setting_value) VALUES (?,?)
+                           ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
+    foreach (array_keys(dispatchEvents()) as $ev) {
+        foreach (['client', 'email', 'whatsapp'] as $ch) {
+            $key = "notify_{$ch}_{$ev}";
+            $uStmt->execute([$key, isset($_POST[$key]) ? '1' : '0']);
+            $settings[$key] = isset($_POST[$key]) ? '1' : '0';
+        }
+    }
+    setFlash('success', 'Notification settings saved.');
+    redirect(BASE_URL . '/modules/settings/messaging.php?tab=notify');
+}
+
 // ── POST: test SMS ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'test_sms') {
     header('Content-Type: application/json');
@@ -169,8 +193,14 @@ usort($combined, fn($a, $b) => strtotime($b['created_at']) - strtotime($a['creat
 $logs = array_slice($combined, $logOffset, $logPer);
 
 $smsOk   = !empty($settings['at_api_key']) && !empty($settings['at_username']);
-// Whether WhatsApp is usable is asked of the connection, inside the card below.
 $emailOk = !empty($settings['smtp_from_email']) && !empty($settings['smtp_host']);
+
+// $waOk was read in four places on this page and assigned in none of them, so
+// it was null everywhere: WhatsApp showed "Not Configured" however well it was
+// connected, and every WhatsApp switch on the rules table rendered disabled.
+// Anyone trying to turn customer WhatsApp alerts on found a control that could
+// not be clicked and no reason given.
+$waOk = whatsappEnabled();
 
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -224,6 +254,7 @@ include __DIR__ . '/../../includes/header.php';
     <?php $tabs = [
         'credentials' => ['fa-key',         'API Credentials'],
         'rules'       => ['fa-sliders',      'Alert Rules'],
+        'notify'      => ['fa-paper-plane',  'Documents & Updates'],
         'log'         => ['fa-list-check',   'Message Log'],
     ]; foreach ($tabs as $tid => [$icon, $lbl]): ?>
     <li class="nav-item">
@@ -506,6 +537,159 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </div>
         <?php endif; ?>
+    </div>
+</div>
+
+<!-- ══ DOCUMENTS & UPDATES ═══════════════════════════════════════════════════ -->
+<?php elseif ($activeTab === 'notify'): ?>
+
+<div class="row g-4">
+    <div class="col-lg-9">
+        <form method="POST">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="save_notify">
+        <div class="card">
+            <div class="card-header fw-semibold">
+                <i class="fa fa-paper-plane me-2 text-primary"></i>Who hears about what
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                <table class="table table-bordered align-middle mb-0" style="font-size:13.5px">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3" style="width:40%">When this happens</th>
+                            <th class="text-center" style="width:20%">
+                                <i class="fa fa-brands fa-whatsapp me-1" style="color:#25d366"></i>The customer
+                                <?php if (!$waOk): ?><span class="badge bg-secondary ms-1" style="font-size:9px">Not connected</span><?php endif; ?>
+                            </th>
+                            <th class="text-center" style="width:20%">
+                                <i class="fa fa-envelope me-1" style="color:#6366f1"></i>The team, by email
+                                <?php if (!$emailOk): ?><span class="badge bg-secondary ms-1" style="font-size:9px">Not set</span><?php endif; ?>
+                            </th>
+                            <th class="text-center" style="width:20%">
+                                <i class="fa fa-brands fa-whatsapp me-1" style="color:#25d366"></i>The team, on WhatsApp
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php
+                    $clientAble = dispatchClientEvents();
+                    foreach (dispatchEvents() as $ev => $label):
+                        $hasDoc = in_array($ev, ['reservation','deposit','quotation','invoice','booking'], true);
+                    ?>
+                        <tr>
+                            <td class="ps-3">
+                                <div class="fw-medium"><?= e($label) ?></div>
+                                <div class="text-muted small">
+                                    <?php if ($hasDoc): ?>
+                                        The customer gets a private link they can open without
+                                        logging in. It expires after two weeks.
+                                    <?php elseif ($ev === 'delivery'): ?>
+                                        A thank-you to the customer. No document — the delivery
+                                        note is signed on paper at handover.
+                                    <?php else: ?>
+                                        Team only. There is nobody outside the yard to tell.
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <?php if (in_array($ev, $clientAble, true)): ?>
+                                <div class="form-check form-switch d-inline-block">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="notify_client_<?= $ev ?>"
+                                           <?= dispatchOn($ev, 'client') ? 'checked' : '' ?>>
+                                </div>
+                                <?php else: ?>
+                                    <span class="text-muted small">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-center">
+                                <div class="form-check form-switch d-inline-block">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="notify_email_<?= $ev ?>"
+                                           <?= !$emailOk ? 'disabled title="Configure SMTP email first"' : '' ?>
+                                           <?= dispatchOn($ev, 'email') ? 'checked' : '' ?>>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="form-check form-switch d-inline-block">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="notify_whatsapp_<?= $ev ?>"
+                                           <?= dispatchOn($ev, 'whatsapp') ? 'checked' : '' ?>>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                </div>
+            </div>
+            <div class="card-footer bg-white d-flex align-items-center justify-content-between">
+                <span class="text-muted small">The bell inside the system always fires; it is the record.</span>
+                <button type="submit" class="btn btn-primary btn-sm px-4">
+                    <i class="fa fa-save me-1"></i>Save
+                </button>
+            </div>
+        </div>
+        </form>
+    </div>
+
+    <div class="col-lg-3">
+        <div class="card">
+            <div class="card-header fw-semibold">
+                <i class="fa fa-circle-info me-2 text-primary"></i>What the customer gets
+            </div>
+            <div class="card-body" style="font-size:13px">
+                <p class="text-muted mb-2">
+                    A message in the same WhatsApp thread the team uses, so whoever picks up the
+                    phone next can see exactly what the system already told them.
+                </p>
+                <p class="text-muted mb-2">
+                    Where there is a document, it goes as a link. The link is signed, it names
+                    the one record it opens, and it shows the customer their own summary — not
+                    the internal print view with the yard's costs and margins on it.
+                </p>
+                <div class="alert alert-warning py-2 small mb-0">
+                    <i class="fa fa-triangle-exclamation me-1"></i>
+                    A customer with no phone number on file cannot be reached, and nothing
+                    will be sent. Quotation and invoice links also need the record to be
+                    attached to a client.
+                </div>
+            </div>
+        </div>
+
+        <?php if (!$waOk): ?>
+        <div class="card mt-3 border-warning">
+            <div class="card-body py-3 small">
+                <i class="fa fa-plug me-1 text-warning"></i>
+                WhatsApp is not connected, so none of these will send however they are set.
+                <a href="<?= BASE_URL ?>/modules/whatsapp/connect.php">Connect WhatsApp</a>.
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php
+        // Staff WhatsApp is only as good as the numbers on file, and this is the
+        // question people actually need answered before switching it on.
+        $withPhone = 0; $activeStaff = 0;
+        try {
+            dispatchMigrate($db);
+            $activeStaff = (int)$db->query("SELECT COUNT(*) FROM users WHERE status='active'")->fetchColumn();
+            $withPhone   = (int)$db->query("SELECT COUNT(*) FROM users
+                                             WHERE status='active' AND phone IS NOT NULL AND phone <> ''")->fetchColumn();
+        } catch (\Throwable $e) {}
+        ?>
+        <div class="card mt-3">
+            <div class="card-body py-3 small text-muted">
+                <i class="fa fa-user-group me-1"></i>
+                <strong><?= $withPhone ?></strong> of <?= $activeStaff ?> active staff have a
+                phone number on file.
+                <?php if ($withPhone < $activeStaff): ?>
+                    The rest cannot receive team WhatsApp.
+                    <a href="<?= BASE_URL ?>/modules/users/index.php">Add their numbers</a>.
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 </div>
 

@@ -82,6 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name       = trim($_POST['name']     ?? '');
     $username   = trim($_POST['username'] ?? '');
     $email      = trim($_POST['email']    ?? '');
+    $phone      = trim($_POST['phone']    ?? '');
     $role       = $_POST['role']   ?? 'mechanic';
     $pass       = $_POST['password']         ?? '';
     $pass2      = $_POST['password_confirm'] ?? '';
@@ -103,8 +104,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $lt = ($linkedType && $linkedId) ? $linkedType : null;
             $li = ($linkedType && $linkedId) ? $linkedId   : null;
-            $db->prepare("INSERT INTO users (name,username,email,password,role,linked_id,linked_type,status,location_id) VALUES (?,?,?,?,?,?,?,?,?)")
-               ->execute([$name, $username, $email, password_hash($pass, PASSWORD_DEFAULT), $role, $li, $lt, $status, $locationId]);
+            require_once __DIR__ . '/../../includes/dispatch.php';
+            dispatchMigrate($db);   // the phone column is added by the dispatcher
+            $db->prepare("INSERT INTO users (name,username,email,phone,password,role,linked_id,linked_type,status,location_id) VALUES (?,?,?,?,?,?,?,?,?,?)")
+               ->execute([$name, $username, $email, ($phone !== '' ? $phone : null), password_hash($pass, PASSWORD_DEFAULT), $role, $li, $lt, $status, $locationId]);
             $newId = (int)$db->lastInsertId();
 
             if ($role !== 'admin') {
@@ -164,6 +167,13 @@ include __DIR__ . '/../../includes/header.php';
             <div class="col-md-6">
                 <label class="form-label">Email</label>
                 <input type="email" name="email" class="form-control" value="<?= e($_POST['email'] ?? '') ?>">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Phone</label>
+                <input type="tel" name="phone" class="form-control"
+                       placeholder="07xx xxx xxx" value="<?= e($_POST['phone'] ?? '') ?>">
+                <div class="form-text">Used for WhatsApp alerts to the team. Any format —
+                    0712…, +254712… — is understood.</div>
             </div>
             <div class="col-md-3">
                 <label class="form-label">Password <span class="text-danger">*</span></label>

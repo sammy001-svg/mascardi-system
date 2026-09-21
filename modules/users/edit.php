@@ -148,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name       = trim($_POST['name']     ?? '');
     $username   = trim($_POST['username'] ?? '');
     $email      = trim($_POST['email']    ?? '');
+    $phone      = trim($_POST['phone']    ?? '');
     $role       = $isSelf ? 'admin' : ($_POST['role'] ?? $user['role']);
     $pass       = $_POST['password']         ?? '';
     $pass2      = $_POST['password_confirm'] ?? '';
@@ -167,11 +168,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $li = ($linkedType && $linkedId) ? $linkedId   : null;
 
             if ($pass !== '') {
-                $db->prepare("UPDATE users SET name=?,username=?,email=?,password=?,role=?,linked_id=?,linked_type=?,status=?,location_id=? WHERE id=?")
-                   ->execute([$name, $username, $email, password_hash($pass, PASSWORD_DEFAULT), $role, $li, $lt, $status, $locationId, $id]);
+                require_once __DIR__ . '/../../includes/dispatch.php';
+                dispatchMigrate($db);
+                $db->prepare("UPDATE users SET name=?,username=?,email=?,phone=?,password=?,role=?,linked_id=?,linked_type=?,status=?,location_id=? WHERE id=?")
+                   ->execute([$name, $username, $email, ($phone !== '' ? $phone : null), password_hash($pass, PASSWORD_DEFAULT), $role, $li, $lt, $status, $locationId, $id]);
             } else {
-                $db->prepare("UPDATE users SET name=?,username=?,email=?,role=?,linked_id=?,linked_type=?,status=?,location_id=? WHERE id=?")
-                   ->execute([$name, $username, $email, $role, $li, $lt, $status, $locationId, $id]);
+                require_once __DIR__ . '/../../includes/dispatch.php';
+                dispatchMigrate($db);
+                $db->prepare("UPDATE users SET name=?,username=?,email=?,phone=?,role=?,linked_id=?,linked_type=?,status=?,location_id=? WHERE id=?")
+                   ->execute([$name, $username, $email, ($phone !== '' ? $phone : null), $role, $li, $lt, $status, $locationId, $id]);
             }
 
             // ── Profile photo ────────────────────────────────────────────────
@@ -228,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $savedPerms = [];
     foreach ($_POST['perm_access'] ?? [] as $m) { $savedPerms[$m][0] = true; }
     foreach ($_POST['perm_write']  ?? [] as $m) { $savedPerms[$m][1] = true; }
-    $user = array_merge($user, compact('name','username','email','role','status'));
+    $user = array_merge($user, compact('name','username','email','phone','role','status'));
 }
 
 include __DIR__ . '/../../includes/header.php';
@@ -268,6 +273,13 @@ include __DIR__ . '/../../includes/header.php';
             <div class="col-md-6">
                 <label class="form-label">Email</label>
                 <input type="email" name="email" class="form-control" value="<?= e($user['email'] ?? '') ?>">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Phone</label>
+                <input type="tel" name="phone" class="form-control"
+                       placeholder="07xx xxx xxx" value="<?= e($user['phone'] ?? '') ?>">
+                <div class="form-text">Used for WhatsApp alerts to the team. Any format —
+                    0712…, +254712… — is understood.</div>
             </div>
 
             <?php /* Profile photo. Set here for ANY user, not only for oneself —
