@@ -76,6 +76,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'test_
     }
 }
 
+// ── Making Karl answer, now, and reporting what happened ────────────────────
+//
+// "He does not respond" has six possible causes and they are indistinguishable
+// from outside. This runs the real waAutoRespond() against a real waiting
+// conversation and prints its own account of what it did, which turns the
+// question into a one-click answer rather than an afternoon of inference.
+$karlRun = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'karl_now') {
+    verifyCsrf();
+    try {
+        $target = (int)($_POST['conversation_id'] ?? 0);
+        if ($target <= 0) {
+            $target = (int)($db->query("
+                SELECT c.id FROM wa_conversations c
+                  JOIN wa_messages m ON m.id = (SELECT MAX(m2.id) FROM wa_messages m2
+                                                 WHERE m2.conversation_id = c.id)
+                 WHERE c.status='open' AND m.direction='in'
+              ORDER BY m.sent_at DESC LIMIT 1")->fetchColumn() ?: 0);
+        }
+
+        if ($target <= 0) {
+            $karlRun = ['ok' => false, 'why' => 'No conversation is waiting on an answer, so '
+                      . 'there is nothing for him to reply to. Have somebody send a WhatsApp '
+                      . 'message to the yard and run this again.'];
+        } else {
+            // The switch is stepped over on purpose. Left in place it is the
+            // only answer this button can ever give on an install where it is
+            // off, which hides whatever else is wrong until somebody switches
+            // it on and finds the next fault waiting.
+            $was = waAutoConfig()['enabled'];
+            $r   = waAutoRespond($db, $target, true);
+
+            $note = $was ? '' : ' Note that automatic replies are switched off, so he would '
+                              . 'not have done this on his own — but everything else about the '
+                              . 'attempt is real.';
+
+            $karlRun = $r['sent']
+                ? ['ok' => true,  'why' => 'He replied: ' . $r['why'] . '. The message is in the '
+                                         . 'thread and has gone to the customer.' . $note]
+                : ['ok' => false, 'why' => 'He did not reply — ' . rtrim($r['why'], '.') . '.' . $note];
+        }
+    } catch (\Throwable $e) {
+        $karlRun = ['ok' => false, 'why' => 'It stopped with an error: ' . $e->getMessage()];
+    }
+}
+
 // ── The checks ──────────────────────────────────────────────────────────────
 $checks = [];
 $add = function (string $name, string $state, string $detail, string $fix = '') use (&$checks) {
@@ -415,6 +461,26 @@ include __DIR__ . '/../../includes/header.php';
             </div>
             <div class="fw-medium"><?= e($karl['why']) ?></div>
         </div>
+
+        <?php if ($karlRun): ?>
+        <div class="alert alert-<?= $karlRun['ok'] ? 'success' : 'danger' ?> py-2 small mt-3 mb-0">
+            <i class="fa fa-<?= $karlRun['ok'] ? 'circle-check' : 'circle-exclamation' ?> me-1"></i>
+            <?= e($karlRun['why']) ?>
+        </div>
+        <?php endif; ?>
+
+        <form method="POST" class="mt-3">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="karl_now">
+            <button class="btn btn-sm btn-outline-primary">
+                <i class="fa fa-play me-1"></i>Make him answer now
+            </button>
+            <span class="text-muted ms-2" style="font-size:11.5px">
+                Runs the real reply on the newest waiting conversation and says what happened.
+                <strong>This sends a real WhatsApp message to that customer</strong>, and works
+                even while automatic replies are switched off.
+            </span>
+        </form>
 
         <div class="text-muted mt-3" style="font-size:11.5px">
             During opening hours a reply is triggered by a grace period expiring, which is not

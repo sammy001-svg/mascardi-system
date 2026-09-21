@@ -141,6 +141,9 @@ include __DIR__ . '/../../includes/header.php';
 .wi-meta{font-size:10.5px;color:var(--text-3);margin-top:3px;display:flex;gap:6px;align-items:center}
 .wi-msg.out .wi-meta{justify-content:flex-end}
 .wi-fail{color:#b91c1c;font-weight:600}
+.wi-why{color:#b91c1c;font-size:11px;line-height:1.45;margin-top:3px;max-width:340px;
+        background:#fef2f2;border:1px solid #fecaca;border-radius:7px;padding:5px 8px}
+.wi-msg.out .wi-why{margin-left:auto}
 .wi-file{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;
     background:rgba(0,0,0,.05);text-decoration:none;color:inherit;margin-bottom:5px}
 .wi-file i{font-size:19px;opacity:.75}
@@ -396,9 +399,16 @@ include __DIR__ . '/../../includes/header.php';
                   +   (m.direction === 'out' && m.sender ? esc(m.sender) + ' · ' : '')
                   +   esc(when(m.at))
                   +   (m.status === 'failed'
-                        ? ' · <span class="wi-fail" title="' + esc(m.error) + '">not delivered</span>'
+                        ? ' · <span class="wi-fail">not delivered</span>'
                         : (m.direction === 'out' ? ' · <i class="fa fa-check"></i>' : ''))
-                  + '</div></div>';
+                  + '</div>'
+                  // The reason, on the line rather than in a tooltip. A hover
+                  // title cannot be read on a phone and is missed on a desktop,
+                  // so "not delivered" was the whole of the message for anyone
+                  // trying to work out what to do about it.
+                  +   (m.status === 'failed' && m.error
+                        ? '<div class="wi-why">' + esc(m.error) + '</div>' : '')
+                  + '</div>';
             if (m.id > lastId) lastId = m.id;
         });
         elMsgs.dataset.day = lastDay;
@@ -614,6 +624,7 @@ include __DIR__ . '/../../includes/header.php';
                     return;
                 }
                 document.getElementById('waNewBar').style.display = 'none';
+                if (d.warning) window.alert(d.warning);
                 load(function () { open(d.conversation_id); });
             })
             .catch(function () {

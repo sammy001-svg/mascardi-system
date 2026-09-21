@@ -139,12 +139,20 @@ function waWithinHours(PDO $db, ?array $cfg = null): bool
  *   A colleague's reply held the thread for ever. The salesperson who answered
  *   on Monday and went on leave took the thread with them.
  *
+ * $force skips only the on/off switch, and only the diagnostics screen passes
+ * it. With the switch off, every other reason he might stay quiet is hidden
+ * behind the first one — so "it is switched off" was the only answer available,
+ * even when there was a second fault waiting behind it that would still be
+ * there after somebody switched it on. Every other gate is left in place: the
+ * point is to learn the real verdict, not to talk him into a reply.
+ *
  * @return array{allow:bool, why:string, wait:int}  wait = minutes still to go
  */
-function waAutoDecide(PDO $db, int $convId): array
+function waAutoDecide(PDO $db, int $convId, bool $force = false): array
 {
     $cfg = waAutoConfig();
-    if (!$cfg['enabled'])   return ['allow' => false, 'why' => 'automatic replies are switched off', 'wait' => 0];
+    if (!$cfg['enabled'] && !$force)
+        return ['allow' => false, 'why' => 'automatic replies are switched off', 'wait' => 0];
     if (!waConfigured())    return ['allow' => false, 'why' => 'WhatsApp is not connected', 'wait' => 0];
 
     $conv = waConversationById($db, $convId);
@@ -429,9 +437,9 @@ function waAutoLastSaid(PDO $db, int $convId): string
     }
 }
 
-function waAutoRespond(PDO $db, int $convId): array
+function waAutoRespond(PDO $db, int $convId, bool $force = false): array
 {
-    $d = waAutoDecide($db, $convId);
+    $d = waAutoDecide($db, $convId, $force);
     if (!$d['allow']) return ['sent' => false, 'why' => $d['why']];
 
     // Checked before composing rather than after, because where there is no AI

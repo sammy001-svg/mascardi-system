@@ -263,6 +263,68 @@ function waGreenUrl(string $method): string
     return $c['host'] . '/waInstance' . $c['instance'] . '/' . $method . '/' . $c['token'];
 }
 
+/**
+ * Does this number have WhatsApp?
+ *
+ * Not every phone number does, and one that does not is the commonest reason a
+ * message to a real, correctly typed number never arrives. The provider will
+ * usually take the request anyway, so from here it looks like any other send
+ * until it quietly fails — which is how "not delivered" ends up on screen with
+ * no reason beside it.
+ *
+ * Asked only when something has already gone wrong, or when a person is about
+ * to start a conversation. It is a paid call on most plans and there is no
+ * sense spending one on every message to a customer we talk to daily.
+ *
+ * @return array{known:bool, exists:bool, error:string}
+ */
+function waDriverCheckNumber(string $phone): array
+{
+    $none = ['known' => false, 'exists' => false, 'error' => ''];
+    $n = waNormalisePhone($phone);
+    if ($n === null) return array_merge($none, ['error' => 'That is not a usable phone number.']);
+    if (!waConfigured()) return $none;
+
+    // Only the bridge can answer this. Meta has no equivalent that a phone
+    // number token may call, so the official API simply does not know.
+    if (waProvider() === 'cloud') return $none;
+
+    $r = waHttp('POST', waGreenUrl('checkWhatsapp'), [
+        'json'    => ['phoneNumber' => (int)$n],
+        'timeout' => 20,
+    ]);
+    if (!$r['ok']) return array_merge($none, ['error' => $r['error']]);
+    if (!array_key_exists('existsWhatsapp', $r['data'])) return $none;
+
+    return ['known' => true, 'exists' => (bool)$r['data']['existsWhatsapp'], 'error' => ''];
+}
+
+/**
+ * Why a send failed, in words somebody can act on.
+ *
+ * The provider's own message is kept — it is the truth of what happened — but
+ * on its own it is often a status code, and the single most likely cause is one
+ * it never mentions: the number does not have WhatsApp. So that is checked and
+ * said plainly.
+ */
+function waSendFailureReason(string $chatId, string $providerSaid): string
+{
+    $said = trim($providerSaid);
+
+    try {
+        $c = waDriverCheckNumber(waChatPhone($chatId));
+        if ($c['known'] && !$c['exists']) {
+            return 'That number does not have WhatsApp, so the message cannot be delivered. '
+                 . 'Check the number, or reach them another way.'
+                 . ($said !== '' ? ' (The provider said: ' . $said . ')' : '');
+        }
+    } catch (\Throwable $e) {
+        // The check is a courtesy. Its failure must not replace the real reason.
+    }
+
+    return $said !== '' ? $said : 'The provider would not say why.';
+}
+
 // ── Where the connection stands ──────────────────────────────────────────────
 
 /**
@@ -439,10 +501,24 @@ function waDriverSendText(string $chatId, string $text): array
                 'id' => (string)($r['data']['messages'][0]['id'] ?? '')];
     }
 
-    $r = waHttp('POST', waGreenUrl('sendMessage'), [
+    $r  = waHttp('POST', waGreenUrl('sendMessage'), [
         'json' => ['chatId' => $chatId, 'message' => $text],
     ]);
-    return ['ok' => $r['ok'], 'error' => $r['error'], 'id' => (string)($r['data']['idMessage'] ?? '')];
+    $id = (string)($r['data']['idMessage'] ?? '');
+
+    // A 200 carrying no message id is the provider accepting the request and
+    // doing nothing with it — which was being recorded as a successful send, so
+    // the message showed a tick, sat in the thread, and had never existed. An
+    // id is the only evidence it was really taken.
+    if ($r['ok'] && $id === '') {
+        return ['ok' => false, 'id' => '',
+                'error' => waSendFailureReason($chatId, 'the provider accepted the request but '
+                                                      . 'returned no message id')];
+    }
+    if (!$r['ok']) {
+        return ['ok' => false, 'id' => '', 'error' => waSendFailureReason($chatId, $r['error'])];
+    }
+    return ['ok' => true, 'error' => '', 'id' => $id];
 }
 
 /**
@@ -502,7 +578,16 @@ function waDriverSendFile(string $chatId, string $path, string $fileName, string
         ], fn($v) => $v !== ''),
         'timeout'   => 120,   // a 10 MB brochure on a Kenyan uplink is not quick
     ]);
-    return ['ok' => $r['ok'], 'error' => $r['error'], 'id' => (string)($r['data']['idMessage'] ?? '')];
+    $id = (string)($r['data']['idMessage'] ?? '');
+    if ($r['ok'] && $id === '') {
+        return ['ok' => false, 'id' => '',
+                'error' => waSendFailureReason($chatId, 'the provider accepted the file but '
+                                                      . 'returned no message id')];
+    }
+    if (!$r['ok']) {
+        return ['ok' => false, 'id' => '', 'error' => waSendFailureReason($chatId, $r['error'])];
+    }
+    return ['ok' => true, 'error' => '', 'id' => $id];
 }
 
 /** The type of a file, without trusting whatever the browser claimed it was. */

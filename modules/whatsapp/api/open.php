@@ -63,8 +63,21 @@ try {
         exit;
     }
 
+    // Tell them now rather than after a message has failed. The check costs a
+    // call so it is only made when a conversation is being opened by hand, not
+    // on every send — and a provider that cannot answer is not treated as a no.
+    $warn = '';
+    try {
+        $chk = waDriverCheckNumber(waChatPhone($chatId));
+        if ($chk['known'] && !$chk['exists']) {
+            $warn = 'This number does not appear to have WhatsApp. You can still open the '
+                  . 'conversation, but messages to it will not be delivered.';
+        }
+    } catch (\Throwable $e) { /* a courtesy, not a gate */ }
+
     echo json_encode([
         'ok'              => true,
+        'warning'         => $warn,
         'conversation_id' => (int)$conv['id'],
         'name'            => (string)($conv['contact_name'] ?: $conv['contact_phone']),
         'phone'           => (string)$conv['contact_phone'],
