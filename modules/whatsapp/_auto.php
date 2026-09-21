@@ -44,11 +44,14 @@ function waAutoConfig(): array
     return [
         'enabled'   => getSetting('wa_auto_enabled', '0') === '1',
         // Minutes a customer waits during working hours before Karl steps in.
-        'grace'     => max(1, min(180, (int)getSetting('wa_auto_grace', '10'))),
+        'grace'     => max(1, min(180, (int)getSetting('wa_auto_grace', '1'))),
         // How many times Karl may speak into a thread with no human in between.
         'max_run'   => max(1, min(5, (int)getSetting('wa_auto_max', '2'))),
         // The least time between two automatic replies to the same person.
-        'cooldown'  => max(5, min(720, (int)getSetting('wa_auto_cooldown', '30'))),
+        // Low enough that a customer sending three quick lines still gets a
+        // prompt answer to the last of them, high enough that they do not get
+        // three separate replies.
+        'cooldown'  => max(1, min(720, (int)getSetting('wa_auto_cooldown', '5'))),
         'open'      => trim(getSetting('wa_auto_open',  '08:00')),
         'close'     => trim(getSetting('wa_auto_close', '18:00')),
         // 1 = Monday … 7 = Sunday, as MySQL's DAYOFWEEK-1 gives it.
@@ -308,6 +311,61 @@ function waAutoRespond(PDO $db, int $convId): array
     return ['sent' => $r['ok'], 'why' => $r['ok'] ? $d['why'] : $r['error']];
 }
 
+/**
+ * The heartbeat.
+ *
+ * Out of hours the webhook answers on arrival, because the message itself is
+ * the trigger. During opening hours the trigger is the opposite — a minute
+ * passing with nobody replying — and nothing on a web server fires when
+ * nothing happens. Cron is the proper answer and cron_auto.php is there for it,
+ * but a yard that has not set one up would simply never see a reply, and
+ * "it works once you configure a cron job" is not a feature.
+ *
+ * So every logged-in browser already polls the unread badge every twenty
+ * seconds, and that poll drives this. During working hours somebody is almost
+ * always signed in, which is precisely when the grace period matters.
+ *
+ * Guarded by a lock in the settings table so that twenty staff polling at once
+ * produce one sweep between them, not twenty. The lock is taken with a
+ * conditional UPDATE — checking the time and then writing it would let two
+ * requests pass the check together, which is the whole problem it exists to
+ * prevent.
+ */
+function waAutoHeartbeat(PDO $db, int $everySeconds = 25): array
+{
+    if (!waAutoEnabled()) return ['ran' => false, 'sent' => 0];
+
+    try {
+        // Claim the slot. Exactly one caller sees a row affected.
+        $st = $db->prepare("UPDATE settings
+                               SET setting_value = UNIX_TIMESTAMP()
+                             WHERE setting_key = 'wa_auto_last_sweep'
+                               AND setting_value < (UNIX_TIMESTAMP() - ?)");
+        $st->execute([max(5, $everySeconds)]);
+
+        if ($st->rowCount() === 0) {
+            // Either somebody else just swept, or the row does not exist yet.
+            $has = $db->query("SELECT 1 FROM settings WHERE setting_key = 'wa_auto_last_sweep'")
+                      ->fetchColumn();
+            if ($has) return ['ran' => false, 'sent' => 0];
+            $db->prepare("INSERT IGNORE INTO settings (setting_key, setting_value)
+                          VALUES ('wa_auto_last_sweep', UNIX_TIMESTAMP())")->execute();
+        }
+    } catch (\Throwable $e) {
+        error_log('waAutoHeartbeat lock: ' . $e->getMessage());
+        return ['ran' => false, 'sent' => 0];
+    }
+
+    try {
+        // Deliberately small. This runs inside somebody's badge poll, and a
+        // sweep that answers eight customers keeps their sidebar waiting.
+        $r = waAutoSweep($db, 4);
+        return ['ran' => true, 'sent' => $r['sent']];
+    } catch (\Throwable $e) {
+        error_log('waAutoHeartbeat: ' . $e->getMessage());
+        return ['ran' => true, 'sent' => 0];
+    }
+}
 /**
  * Go through the threads that are waiting and answer the ones that are due.
  *

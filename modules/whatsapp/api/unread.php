@@ -13,6 +13,7 @@
 
 require_once __DIR__ . '/../../../includes/functions.php';
 require_once __DIR__ . '/../_wa.php';
+require_once __DIR__ . '/../_auto.php';
 requireLogin();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -23,6 +24,17 @@ if (!waCanUse()) { echo json_encode(['ok' => true, 'count' => 0]); exit; }
 try {
     $db = getDB();
     waMigrate($db);
+
+    // Every signed-in browser polls this every twenty seconds, which makes it
+    // the one thing in the system that ticks. During opening hours the trigger
+    // for an automatic reply is a minute passing with nobody answering — and
+    // nothing fires when nothing happens — so the tick has to come from here.
+    // Internally locked, so twenty staff polling at once sweep once between
+    // them; and it never delays the badge, which is what was actually asked for.
+    try { waAutoHeartbeat($db); } catch (\Throwable $e) {
+        error_log('wa heartbeat: ' . $e->getMessage());
+    }
+
     $count = waUnreadTotal($db);
 } catch (\Throwable $e) {
     error_log('wa unread: ' . $e->getMessage());
