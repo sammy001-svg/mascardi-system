@@ -130,8 +130,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // should never arrive switched on because a form was submitted.
             'wa_auto_enabled'   => !empty($_POST['enabled']) ? '1' : '0',
             'wa_auto_grace'     => (string)max(1, min(180, (int)($_POST['grace'] ?? 10))),
-            'wa_auto_max'       => (string)max(1, min(5,   (int)($_POST['max_run'] ?? 2))),
-            'wa_auto_cooldown'  => (string)max(5, min(720, (int)($_POST['cooldown'] ?? 30))),
+            'wa_auto_handover'  => (string)max(5, min(1440,(int)($_POST['handover'] ?? 60))),
+            'wa_auto_gap'       => (string)max(5, min(600, (int)($_POST['gap'] ?? 45))),
+            'wa_auto_daily'     => (string)max(5, min(200, (int)($_POST['daily'] ?? 40))),
             'wa_auto_open'      => $hhmm($_POST['open'] ?? '', '08:00'),
             'wa_auto_close'     => $hhmm($_POST['close'] ?? '', '18:00'),
             'wa_auto_days'      => $days ? implode(',', $days) : '1,2,3,4,5,6',
@@ -518,9 +519,10 @@ include __DIR__ . '/../../includes/header.php';
             <strong>What Karl will never do:</strong> quote or negotiate a price, say whether a
             particular vehicle is available, promise a date or a callback, accept an offer, or
             invent anything about a car. If a customer asks any of that, he says a colleague
-            will confirm it. He also answers at most
-            <?= (int)$ac['max_run'] ?> time<?= $ac['max_run'] === 1 ? '' : 's' ?>
-            before a person joins in, and never once a colleague has replied.
+            will confirm it. He answers every message while nobody else is, and stops the
+            moment a colleague replies — for the next
+            <?= (int)$ac['handover'] ?> minute<?= $ac['handover'] === 1 ? '' : 's' ?>,
+            after which an unanswered customer is picked up again rather than left.
         </div>
 
         <form method="post">
@@ -568,16 +570,28 @@ include __DIR__ . '/../../includes/header.php';
                         first refusal on a live customer.</div>
                 </div>
                 <div class="col-md-4 wc-field">
-                    <label>Replies before a person must join in</label>
-                    <input type="number" name="max_run" class="form-control" min="1" max="5"
-                           value="<?= (int)$ac['max_run'] ?>">
-                    <div class="hint">Then Karl goes quiet and waits for a colleague.</div>
+                    <label>A colleague holds the thread for</label>
+                    <input type="number" name="handover" class="form-control" min="5" max="1440"
+                           value="<?= (int)$ac['handover'] ?>">
+                    <div class="hint">Minutes. Once anyone here replies, Karl says nothing for
+                        this long — then picks up a customer still being ignored.</div>
                 </div>
                 <div class="col-md-4 wc-field">
                     <label>Least gap between replies</label>
-                    <input type="number" name="cooldown" class="form-control" min="5" max="720"
-                           value="<?= (int)$ac['cooldown'] ?>">
-                    <div class="hint">Minutes, so a burst of messages gets one answer, not five.</div>
+                    <input type="number" name="gap" class="form-control" min="5" max="600"
+                           value="<?= (int)$ac['gap'] ?>">
+                    <div class="hint">Seconds, so three lines typed in a row get one answer.
+                        Not a limit on how often a customer may be answered.</div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4 wc-field">
+                    <label>Most replies to one person a day</label>
+                    <input type="number" name="daily" class="form-control" min="5" max="200"
+                           value="<?= (int)$ac['daily'] ?>">
+                    <div class="hint">A stop against an auto-responder on the other end, not
+                        against a real conversation — no customer will reach it.</div>
                 </div>
             </div>
 

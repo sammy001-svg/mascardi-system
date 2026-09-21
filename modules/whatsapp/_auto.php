@@ -15,9 +15,14 @@
  *   of things that are safely factual — where the yard is, when it opens — and
  *   it says a colleague will pick this up.
  *
- *   It speaks at most twice to a thread before a human has said something. A
- *   customer talking to a machine that keeps replying, on a number they believe
- *   is a business, works out what is happening and thinks less of the business.
+ *   It answers every message a customer sends while nobody else is answering
+ *   them. An assistant that replies once and then ignores the next four
+ *   questions is worse than one that never spoke: the customer has been told
+ *   somebody is there, and then watched them walk away mid-sentence.
+ *
+ *   It stands down the moment a colleague replies, and stays down while that
+ *   colleague is still about. The handover is by the clock, not forever — a
+ *   reply from last Tuesday must not mute Karl on a message sent today.
  *
  *   It is off until somebody turns it on, and it says who it is.
  *
@@ -39,20 +44,37 @@ require_once __DIR__ . '/_tools.php';
 $__karl = __DIR__ . '/../carl/_ai.php';
 if (is_readable($__karl)) { require_once __DIR__ . '/../carl/_skills.php'; require_once $__karl; }
 
-/** Everything that governs the behaviour, in one place. */
+/**
+ * Everything that governs the behaviour, in one place.
+ *
+ * The first three settings replaced a pair that turned out to be the reason
+ * Karl answered once and then went quiet, and they are deliberately under new
+ * keys rather than new meanings for the old ones. Reusing `wa_auto_max` would
+ * have read the 2 already saved on every live install as "two replies a day",
+ * which is the same silence wearing a different hat.
+ */
 function waAutoConfig(): array
 {
     return [
         'enabled'   => getSetting('wa_auto_enabled', '0') === '1',
         // Minutes a customer waits during working hours before Karl steps in.
         'grace'     => max(1, min(180, (int)getSetting('wa_auto_grace', '1'))),
-        // How many times Karl may speak into a thread with no human in between.
-        'max_run'   => max(1, min(5, (int)getSetting('wa_auto_max', '2'))),
-        // The least time between two automatic replies to the same person.
-        // Low enough that a customer sending three quick lines still gets a
-        // prompt answer to the last of them, high enough that they do not get
-        // three separate replies.
-        'cooldown'  => max(1, min(720, (int)getSetting('wa_auto_cooldown', '5'))),
+        // Seconds between two automatic replies. This exists to collapse a
+        // burst — three lines typed in ten seconds deserve one answer — and to
+        // stop two sweeps racing into a double reply. It is NOT a limit on how
+        // often a customer may be answered, which is what the old minute-based
+        // cooldown had quietly become.
+        'gap'       => max(5, min(600, (int)getSetting('wa_auto_gap', '45'))),
+        // Minutes a colleague owns a thread after they speak in it. Inside the
+        // window Karl says nothing at all. Outside it, a customer who writes
+        // again and is ignored gets an answer, because the colleague who
+        // replied yesterday is not the one sitting in silence today.
+        'handover'  => max(5, min(1440, (int)getSetting('wa_auto_handover', '60'))),
+        // A ceiling per conversation per day. Not a conversational limit —
+        // it is high enough that no real customer will reach it — but a stop
+        // against the one failure that cannot be argued with: an auto-responder
+        // on the other end, and the two of them talking until the bill arrives.
+        'daily'     => max(5, min(200, (int)getSetting('wa_auto_daily', '40'))),
         'open'      => trim(getSetting('wa_auto_open',  '08:00')),
         'close'     => trim(getSetting('wa_auto_close', '18:00')),
         // 1 = Monday … 7 = Sunday, as MySQL's DAYOFWEEK-1 gives it.
@@ -99,6 +121,24 @@ function waWithinHours(PDO $db, ?array $cfg = null): bool
  * argued with. "It did not reply" is impossible to debug; "a person answered
  * four minutes ago" is not.
  *
+ * The question this asks is deliberately narrow: is there a customer message
+ * that nobody has answered? If there is, Karl answers it. The previous version
+ * asked a broader one — has Karl said enough already — and got three things
+ * wrong, each of which silenced him permanently on a thread:
+ *
+ *   The gap between replies was counted in minutes and applied to the customer.
+ *   A customer who wrote back four minutes after Karl's answer was refused,
+ *   although nobody had read a word of what they said. Five minutes is a normal
+ *   pace for a WhatsApp conversation; it was the common case, not the edge one.
+ *
+ *   The cap on replies counted rows, and one reply is often several rows —
+ *   Karl sends a car's photographs as separate messages. Three photographs
+ *   and the cap of two was reached inside a single answer, after which that
+ *   thread was mute until a colleague happened to type into it.
+ *
+ *   A colleague's reply held the thread for ever. The salesperson who answered
+ *   on Monday and went on leave took the thread with them.
+ *
  * @return array{allow:bool, why:string, wait:int}  wait = minutes still to go
  */
 function waAutoDecide(PDO $db, int $convId): array
@@ -112,51 +152,77 @@ function waAutoDecide(PDO $db, int $convId): array
     if (($conv['status'] ?? '') === 'closed')
         return ['allow' => false, 'why' => 'the conversation is closed', 'wait' => 0];
 
+    // Everything the decision turns on, asked of the database in one go so that
+    // every clock in it is MySQL's. PHP runs UTC on this host and MySQL runs
+    // EAT; a comparison that crosses the two is three hours wrong.
+    //
+    // "Karl" is an outbound message with no author. That covers his own replies
+    // and the documents the system sends on the yard's behalf, which is right:
+    // neither means a person has read anything.
     try {
-        // Everything since the customer's last message, so the question is
-        // always "has anyone dealt with THIS", not "has anyone ever replied".
         $st = $db->prepare("
-            SELECT direction, sent_by, status, sent_at,
-                   TIMESTAMPDIFF(MINUTE, sent_at, NOW()) AS mins_ago
-              FROM wa_messages
-             WHERE conversation_id = ?
-          ORDER BY id DESC
-             LIMIT 12");
-        $st->execute([$convId]);
-        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+            SELECT
+              (SELECT direction FROM wa_messages
+                WHERE conversation_id = ? ORDER BY id DESC LIMIT 1)              AS last_dir,
+              (SELECT TIMESTAMPDIFF(MINUTE, sent_at, NOW()) FROM wa_messages
+                WHERE conversation_id = ? ORDER BY id DESC LIMIT 1)              AS waiting,
+              (SELECT TIMESTAMPDIFF(MINUTE, MAX(sent_at), NOW()) FROM wa_messages
+                WHERE conversation_id = ? AND direction = 'out'
+                  AND sent_by IS NOT NULL AND sent_by > 0
+                  AND status <> 'failed')                                        AS colleague_mins,
+              (SELECT TIMESTAMPDIFF(SECOND, MAX(sent_at), NOW()) FROM wa_messages
+                WHERE conversation_id = ? AND direction = 'out'
+                  AND (sent_by IS NULL OR sent_by = 0)
+                  AND status <> 'failed')                                        AS karl_secs,
+              (SELECT COUNT(*) FROM wa_messages
+                WHERE conversation_id = ? AND direction = 'out'
+                  AND (sent_by IS NULL OR sent_by = 0)
+                  AND type = 'text' AND status <> 'failed'
+                  AND sent_at >= DATE_SUB(NOW(), INTERVAL 1 DAY))                AS karl_today
+        ");
+        $st->execute(array_fill(0, 5, $convId));
+        $s = $st->fetch(PDO::FETCH_ASSOC) ?: [];
     } catch (\Throwable $e) {
         error_log('waAutoDecide: ' . $e->getMessage());
         return ['allow' => false, 'why' => 'the thread could not be read', 'wait' => 0];
     }
 
-    if (!$rows) return ['allow' => false, 'why' => 'the thread is empty', 'wait' => 0];
+    if (($s['last_dir'] ?? null) === null) {
+        return ['allow' => false, 'why' => 'the thread is empty', 'wait' => 0];
+    }
 
     // The newest message must be from the customer. If the last thing said was
-    // ours, there is nothing waiting to be answered.
-    if (($rows[0]['direction'] ?? '') !== 'in') {
+    // ours, there is nothing waiting to be answered — and since this is the
+    // only thing that decides "has this message been dealt with", it is also
+    // what stops Karl answering the same message twice.
+    if ($s['last_dir'] !== 'in') {
         return ['allow' => false, 'why' => 'the last word was ours', 'wait' => 0];
     }
-    $waiting = (int)$rows[0]['mins_ago'];
+    $waiting = (int)$s['waiting'];
 
-    // Walk back to the customer's previous turn, counting what we said in between.
-    $autoRun = 0;
-    foreach (array_slice($rows, 1) as $r) {
-        if (($r['direction'] ?? '') === 'in') break;          // reached their last turn
-        if ($r['sent_by'] === null && ($r['status'] ?? '') !== 'failed') {
-            $autoRun++;                                        // Karl, not a person
-        } else {
-            // A person has spoken since. They own this conversation now.
-            return ['allow' => false, 'why' => 'a colleague has already replied', 'wait' => 0];
-        }
-        if ((int)$r['mins_ago'] < $cfg['cooldown']) {
-            return ['allow' => false, 'why' => 'Karl replied ' . (int)$r['mins_ago'] . ' minutes ago',
-                    'wait' => $cfg['cooldown'] - (int)$r['mins_ago']];
-        }
+    // A colleague is in this conversation. They own it while they are still
+    // about; the clock decides when that stops being true.
+    if ($s['colleague_mins'] !== null && (int)$s['colleague_mins'] < $cfg['handover']) {
+        $mins = (int)$s['colleague_mins'];
+        return ['allow' => false,
+                'why'   => 'a colleague replied ' . ($mins < 1 ? 'just now' : $mins . ' minutes ago'),
+                'wait'  => $cfg['handover'] - $mins];
     }
 
-    if ($autoRun >= $cfg['max_run']) {
+    // A burst of messages gets one answer, not one each. Seconds, not minutes:
+    // long enough to gather up a customer typing in three short lines, short
+    // enough to be invisible to a customer having a conversation.
+    if ($s['karl_secs'] !== null && (int)$s['karl_secs'] < $cfg['gap']) {
         return ['allow' => false,
-                'why'   => 'Karl has already answered ' . $autoRun . ' times without a colleague joining in',
+                'why'   => 'Karl replied ' . (int)$s['karl_secs'] . ' seconds ago',
+                'wait'  => 1];
+    }
+
+    // The runaway stop.
+    if ((int)$s['karl_today'] >= $cfg['daily']) {
+        return ['allow' => false,
+                'why'   => 'Karl has sent ' . (int)$s['karl_today']
+                         . ' replies to this thread today — stopping until tomorrow',
                 'wait'  => 0];
     }
 
@@ -172,7 +238,6 @@ function waAutoDecide(PDO $db, int $convId): array
     }
     return ['allow' => true, 'why' => 'outside working hours', 'wait' => 0];
 }
-
 /**
  * What Karl actually says.
  *
@@ -320,10 +385,63 @@ function waAutoSign(string $text, array $cfg): string
  *
  * @return array{sent:bool, why:string}
  */
+/**
+ * Has Karl already said something into this thread recently?
+ *
+ * Only asked where he has nothing but the fixed acknowledgement to offer. With
+ * no AI configured every reply he can produce is the same sentence, and now
+ * that he answers every message, a customer writing four lines would get that
+ * sentence four times — a machine with a stuck key, and obviously so. Answering
+ * once and then waiting for a colleague is the honest version of having nothing
+ * further to say.
+ */
+function waAutoAlreadyAcknowledged(PDO $db, int $convId, int $withinHours = 6): bool
+{
+    try {
+        $st = $db->prepare("SELECT 1 FROM wa_messages
+                             WHERE conversation_id = ? AND direction = 'out'
+                               AND (sent_by IS NULL OR sent_by = 0)
+                               AND type = 'text' AND status <> 'failed'
+                               AND sent_at >= DATE_SUB(NOW(), INTERVAL ? HOUR)
+                             LIMIT 1");
+        $st->execute([$convId, max(1, $withinHours)]);
+        return (bool)$st->fetchColumn();
+    } catch (\Throwable $e) {
+        error_log('waAutoAlreadyAcknowledged: ' . $e->getMessage());
+        return false;   // rather a repeat than a silence
+    }
+}
+
+/** The last thing Karl himself said here, trimmed, or '' if he has not. */
+function waAutoLastSaid(PDO $db, int $convId): string
+{
+    try {
+        $st = $db->prepare("SELECT body FROM wa_messages
+                             WHERE conversation_id = ? AND direction = 'out'
+                               AND (sent_by IS NULL OR sent_by = 0)
+                               AND type = 'text' AND status <> 'failed'
+                          ORDER BY id DESC LIMIT 1");
+        $st->execute([$convId]);
+        return trim((string)($st->fetchColumn() ?: ''));
+    } catch (\Throwable $e) {
+        error_log('waAutoLastSaid: ' . $e->getMessage());
+        return '';
+    }
+}
+
 function waAutoRespond(PDO $db, int $convId): array
 {
     $d = waAutoDecide($db, $convId);
     if (!$d['allow']) return ['sent' => false, 'why' => $d['why']];
+
+    // Checked before composing rather than after, because where there is no AI
+    // there is nothing to compose — the answer is known in advance to be the
+    // same sentence as last time.
+    if ((!function_exists('carlAiRound') || !carlAiAvailable())
+        && waAutoAlreadyAcknowledged($db, $convId)) {
+        return ['sent' => false,
+                'why'  => 'already acknowledged, and without an AI key there is nothing to add'];
+    }
 
     $conv = waConversationById($db, $convId);
     if (!$conv) return ['sent' => false, 'why' => 'no such conversation'];
@@ -338,6 +456,19 @@ function waAutoRespond(PDO $db, int $convId): array
 
     $recent = waMessages($db, $convId, 0, 12);
     $text   = waAutoCompose($db, $conv, $recent);
+
+    // The same words twice in a row are not an answer.
+    //
+    // The check above catches the install with no AI key at all. This catches
+    // the worse and less obvious case: a key that is configured but not working
+    // — expired, out of quota, or a network that is down — where every call
+    // fails and compose returns the same fixed acknowledgement each time. From
+    // the customer's side those are identical, and both read as a machine that
+    // has stopped listening. Whatever produced the text, it goes out once.
+    if (waAutoLastSaid($db, $convId) === trim($text)) {
+        error_log('waAutoRespond: held back a reply identical to the last one on thread ' . $convId);
+        return ['sent' => false, 'why' => 'that is word for word what Karl said last time'];
+    }
 
     // sent_by stays null on purpose: that is what marks a message as Karl's
     // rather than a person's, and what waAutoDecide() counts when deciding
@@ -400,9 +531,11 @@ function waAutoHeartbeat(PDO $db, int $everySeconds = 25): array
     }
 
     try {
-        // Deliberately small. This runs inside somebody's badge poll, and a
-        // sweep that answers eight customers keeps their sidebar waiting.
-        $r = waAutoSweep($db, 4);
+        // Still small — this runs inside somebody's badge poll, and a sweep
+        // that answers eight customers keeps their sidebar waiting. It is the
+        // number of replies, though, not the number of threads examined:
+        // skipping a thread nobody needs Karl in costs one query.
+        $r = waAutoSweep($db, 6);
         return ['ran' => true, 'sent' => $r['sent']];
     } catch (\Throwable $e) {
         error_log('waAutoHeartbeat: ' . $e->getMessage());
@@ -412,8 +545,20 @@ function waAutoHeartbeat(PDO $db, int $everySeconds = 25): array
 /**
  * Go through the threads that are waiting and answer the ones that are due.
  *
- * Called from the webhook and from cron. Capped, because a sweep that tries to
- * answer eighty threads in one request finishes none of them.
+ * Called from the webhook and from cron. The number of REPLIES is capped,
+ * because a sweep that tries to answer eighty threads in one request finishes
+ * none of them — but the number of threads LOOKED AT is not the same number,
+ * and conflating the two was its own quiet bug.
+ *
+ * The queue is ordered oldest-waiting-first, which is the right order to answer
+ * people in. It is the wrong order to spend a budget of four on, because most
+ * of the threads at the front are there precisely because they cannot be
+ * answered — a colleague is handling them, or the grace period has not run out.
+ * Those filled all four slots and the sweep went home, so a customer who had
+ * just written waited for a turn that never came. That is the shape of "Karl
+ * answered once and then stopped" seen from the other end.
+ *
+ * So: consider many, send few, stop when the budget is gone.
  *
  * @return array{considered:int, sent:int}
  */
@@ -421,10 +566,11 @@ function waAutoSweep(PDO $db, int $limit = 10): array
 {
     if (!waAutoEnabled()) return ['considered' => 0, 'sent' => 0];
 
+    $limit = max(1, min(50, $limit));
+
     try {
-        $cfg = waAutoConfig();
-        // Only threads whose newest message came from the customer and has been
-        // sitting long enough to be worth looking at.
+        // Only threads whose newest message came from the customer and is
+        // recent enough to be worth answering at all.
         $st = $db->prepare("
             SELECT c.id
               FROM wa_conversations c
@@ -434,7 +580,7 @@ function waAutoSweep(PDO $db, int $limit = 10): array
                AND m.direction = 'in'
                AND m.sent_at >= DATE_SUB(NOW(), INTERVAL 2 DAY)
           ORDER BY m.sent_at ASC
-             LIMIT " . max(1, min(50, $limit)));
+             LIMIT " . ($limit * 10));
         $st->execute();
         $ids = $st->fetchAll(PDO::FETCH_COLUMN);
     } catch (\Throwable $e) {
@@ -442,12 +588,13 @@ function waAutoSweep(PDO $db, int $limit = 10): array
         return ['considered' => 0, 'sent' => 0];
     }
 
-    $sent = 0;
+    $sent = $seen = 0;
     foreach ($ids as $id) {
+        $seen++;
         $r = waAutoRespond($db, (int)$id);
-        if ($r['sent']) $sent++;
+        if ($r['sent'] && ++$sent >= $limit) break;
     }
-    return ['considered' => count($ids), 'sent' => $sent];
+    return ['considered' => $seen, 'sent' => $sent];
 }
 
 } // function_exists('waAutoEnabled')
