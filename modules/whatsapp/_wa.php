@@ -564,18 +564,26 @@ function waFileHistoric(PDO $db, int $convId, array $m): bool
  * and marking it all unread would put a badge of four thousand on the menu and
  * teach everyone to ignore it on the first morning.
  *
- * @return array{messages:int, conversation_id:int}
+ * The return counts both directions separately on purpose. "The import only
+ * brought our own messages, not the customers'" is impossible to act on without
+ * knowing whether the provider sent none or we filed none — the first is the
+ * provider's journal having expired or never held them, the second is a bug
+ * here. Reporting them apart tells you which, instead of leaving it to guesswork.
+ *
+ * @return array{messages:int, conversation_id:int, in:int, out:int, offered:int}
  */
 function waImportChat(PDO $db, string $chatId, string $name = '', int $count = 100): array
 {
     waMigrate($db);
     $conv = waConversation($db, $chatId, $name, waChatPhone($chatId));
-    if (!$conv) return ['messages' => 0, 'conversation_id' => 0];
+    if (!$conv) return ['messages' => 0, 'conversation_id' => 0, 'in' => 0, 'out' => 0, 'offered' => 0];
     $convId = (int)$conv['id'];
 
     $rows  = waDriverHistory($chatId, $count);
     $added = 0;
+    $in = $out = 0;
     foreach ($rows as $m) {
+        if (($m['direction'] ?? 'in') === 'out') $out++; else $in++;
         if (waFileHistoric($db, $convId, $m)) $added++;
     }
 
@@ -597,7 +605,8 @@ function waImportChat(PDO $db, string $chatId, string $name = '', int $count = 1
         } catch (\Throwable $e) { error_log('waImportChat summary: ' . $e->getMessage()); }
     }
 
-    return ['messages' => $added, 'conversation_id' => $convId];
+    return ['messages' => $added, 'conversation_id' => $convId,
+            'in' => $in, 'out' => $out, 'offered' => count($rows)];
 }
 // ── Quick replies ────────────────────────────────────────────────────────────
 

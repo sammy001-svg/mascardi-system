@@ -66,12 +66,19 @@ try {
 
     $slice    = array_slice($chats, $offset, $batch);
     $messages = 0;
+    $fromThem = 0;
+    $fromUs   = 0;
+    $offered  = 0;
     $done     = [];
 
     foreach ($slice as $c) {
         $r = waImportChat($db, $c['chat_id'], $c['name'], $perChat);
         $messages += $r['messages'];
-        $done[] = ['name' => $c['name'] ?: waChatPhone($c['chat_id']), 'messages' => $r['messages']];
+        $fromThem += $r['in'];
+        $fromUs   += $r['out'];
+        $offered  += $r['offered'];
+        $done[] = ['name' => $c['name'] ?: waChatPhone($c['chat_id']),
+                   'messages' => $r['messages'], 'in' => $r['in'], 'out' => $r['out']];
     }
 
     $next = $offset + count($slice);
@@ -88,6 +95,12 @@ try {
         'next'     => $next,
         'finished' => $finished,
         'messages' => $messages,
+        // Counted apart so "it only brought our own messages" can be answered
+        // rather than argued about: 'offered' is what the provider handed over,
+        // 'from_them' and 'from_us' how it split.
+        'offered'   => $offered,
+        'from_them' => $fromThem,
+        'from_us'   => $fromUs,
         'chats'    => $done,
     ], JSON_UNESCAPED_UNICODE);
 } catch (\Throwable $e) {

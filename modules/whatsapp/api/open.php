@@ -44,12 +44,12 @@ if ($chatId === null) {
     // number that is fine — which is exactly what happened when a bad country
     // code was making every local number come out twenty-one digits long.
     $digits = preg_replace('/\D+/', '', $raw) ?? '';
-    $why = strlen($digits) < 9
+    $why = strlen($digits) < 8
         ? 'that is only ' . strlen($digits) . ' digits'
-        : 'that comes to ' . strlen($digits) . ' digits once the country code is added';
+        : 'that comes to ' . strlen($digits) . ' digits, and a phone number cannot be more than 15';
     echo json_encode(['ok' => false,
-        'error' => 'That number cannot be used — ' . $why . '. Enter it as 0712345678 '
-                 . 'or with the country code, like 254712345678.']);
+        'error' => 'That number cannot be used — ' . $why . '. A Kenyan number goes in as '
+                 . '0712345678; anywhere else, include the country code, like +44 7911 123456.']);
     exit;
 }
 

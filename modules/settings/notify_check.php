@@ -25,6 +25,7 @@ require_once __DIR__ . '/../../includes/dispatch.php';
 require_once __DIR__ . '/../../includes/whatsapp.php';
 require_once __DIR__ . '/../whatsapp/_drivers.php';
 require_once __DIR__ . '/../whatsapp/_tools.php';
+require_once __DIR__ . '/../whatsapp/_auto.php';
 requireLogin();
 requireRole('admin');
 
@@ -245,6 +246,64 @@ try {
                                     AND sent_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)")->fetchColumn();
 } catch (\Throwable $e) {}
 
+// ── Karl answering customers ────────────────────────────────────────────────
+//
+// Separate from the chain above because it fails for its own reasons, and
+// because the decision is already written down: waAutoDecide() returns why it
+// said no. Asking it about a real waiting conversation and printing the answer
+// verbatim beats any amount of inference from the outside.
+$karl = ['on' => false, 'why' => '', 'thread' => '', 'inbound24' => 0, 'inbound7' => 0,
+         'ai' => false, 'hours' => false, 'sweep' => '', 'waiting' => 0];
+try {
+    $ac = waAutoConfig();
+    $karl['on']    = $ac['enabled'];
+    $karl['hours'] = waWithinHours($db, $ac);
+    $karl['ai']    = function_exists('carlAiAvailable') && carlAiAvailable();
+
+    // Is anything arriving at all? If not, nothing else about Karl matters —
+    // he cannot answer a message that never reached this system, and the same
+    // silence explains an import that brought back only our own messages.
+    $karl['inbound24'] = (int)$db->query("SELECT COUNT(*) FROM wa_messages
+                                           WHERE direction='in'
+                                             AND sent_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)")->fetchColumn();
+    $karl['inbound7']  = (int)$db->query("SELECT COUNT(*) FROM wa_messages
+                                           WHERE direction='in'
+                                             AND sent_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn();
+
+    $last = (int)($db->query("SELECT setting_value FROM settings
+                               WHERE setting_key='wa_auto_last_sweep'")->fetchColumn() ?: 0);
+    $karl['sweep'] = $last > 0
+        ? (int)(time() - $last) . ' seconds ago'
+        : 'never — no sweep has run on this install';
+
+    // The newest thread actually waiting on an answer, and the verdict on it.
+    $row = $db->query("
+        SELECT c.id, c.contact_name, c.contact_phone
+          FROM wa_conversations c
+          JOIN wa_messages m ON m.id = (SELECT MAX(m2.id) FROM wa_messages m2
+                                         WHERE m2.conversation_id = c.id)
+         WHERE c.status='open' AND m.direction='in'
+      ORDER BY m.sent_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+
+    $karl['waiting'] = (int)$db->query("
+        SELECT COUNT(*) FROM wa_conversations c
+          JOIN wa_messages m ON m.id = (SELECT MAX(m2.id) FROM wa_messages m2
+                                         WHERE m2.conversation_id = c.id)
+         WHERE c.status='open' AND m.direction='in'
+           AND m.sent_at >= DATE_SUB(NOW(), INTERVAL 2 DAY)")->fetchColumn();
+
+    if ($row) {
+        $karl['thread'] = (string)($row['contact_name'] ?: $row['contact_phone']);
+        $d = waAutoDecide($db, (int)$row['id']);
+        $karl['why'] = ($d['allow'] ? 'He would reply: ' : 'He would stay quiet: ') . $d['why'];
+    } else {
+        $karl['why'] = 'No conversation is waiting on an answer right now, so there is '
+                     . 'nothing for him to decide about.';
+    }
+} catch (\Throwable $e) {
+    $karl['why'] = 'Could not check: ' . $e->getMessage();
+}
+
 $fails = count(array_filter($checks, fn($c) => $c['state'] === 'fail'));
 $warns = count(array_filter($checks, fn($c) => $c['state'] === 'warn'));
 
@@ -287,6 +346,82 @@ include __DIR__ . '/../../includes/header.php';
             <strong>Every check passed.</strong> If a customer still did not receive something,
             send yourself a real test below — that is the only check that proves delivery.
         <?php endif; ?>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="fa fa-robot me-2" style="color:#0891b2"></i>Karl answering customers on WhatsApp</span>
+        <span class="badge bg-<?= $karl['on'] ? 'success' : 'secondary' ?>-subtle
+                     text-<?= $karl['on'] ? 'success' : 'secondary' ?>">
+            <?= $karl['on'] ? 'Switched on' : 'Switched off' ?>
+        </span>
+    </div>
+    <div class="card-body">
+        <?php if (!$karl['on']): ?>
+        <div class="alert alert-warning py-2 small mb-3">
+            <i class="fa fa-power-off me-1"></i>
+            <strong>Automatic replies are switched off.</strong> Nothing below matters until
+            they are on — he will never answer anybody.
+            <a href="<?= BASE_URL ?>/modules/whatsapp/connect.php#autoreply">Switch them on</a>.
+        </div>
+        <?php endif; ?>
+
+        <?php if ($karl['inbound7'] === 0): ?>
+        <div class="alert alert-danger py-2 small mb-3">
+            <i class="fa fa-inbox me-1"></i>
+            <strong>No customer message has arrived in seven days.</strong> Karl cannot answer
+            what never reaches this system, and nothing else here will help until it does.
+            This is the receiving side of WhatsApp — the same fault that makes an import bring
+            back only our own messages.
+            <a href="<?= BASE_URL ?>/modules/whatsapp/connect.php#receiving">Check receiving</a>.
+        </div>
+        <?php endif; ?>
+
+        <div class="row g-3 mb-3" style="font-size:13px">
+            <div class="col-6 col-md-3">
+                <div class="text-muted small">Customer messages</div>
+                <div class="fw-semibold"><?= $karl['inbound24'] ?> today · <?= $karl['inbound7'] ?> this week</div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="text-muted small">Waiting on a reply</div>
+                <div class="fw-semibold"><?= $karl['waiting'] ?></div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="text-muted small">Yard is</div>
+                <div class="fw-semibold"><?= $karl['hours'] ? 'open — he waits his grace period first'
+                                                            : 'closed — he answers straight away' ?></div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="text-muted small">Last sweep</div>
+                <div class="fw-semibold"><?= e($karl['sweep']) ?></div>
+            </div>
+        </div>
+
+        <?php if (!$karl['ai']): ?>
+        <div class="alert alert-warning py-2 small mb-3">
+            <i class="fa fa-brain me-1"></i>
+            No AI is reachable, so Karl can only send the fixed acknowledgement — and he sends
+            that once per conversation rather than repeating it at every message.
+            <a href="<?= BASE_URL ?>/modules/settings/index.php?tab=carl">AI settings</a>.
+        </div>
+        <?php endif; ?>
+
+        <div class="p-3 rounded" style="background:var(--bg,#f8fafc);font-size:13px">
+            <div class="text-muted small mb-1">
+                <?= $karl['thread'] !== ''
+                      ? 'Asked about the newest waiting conversation (' . e($karl['thread']) . '):'
+                      : 'His own verdict right now:' ?>
+            </div>
+            <div class="fw-medium"><?= e($karl['why']) ?></div>
+        </div>
+
+        <div class="text-muted mt-3" style="font-size:11.5px">
+            During opening hours a reply is triggered by a grace period expiring, which is not
+            an event anything sends — it is picked up by a sweep that rides on the staff unread
+            badge, so somebody has to be signed in. A cron job calling
+            <code>cron_auto.php</code> removes that dependency.
+        </div>
     </div>
 </div>
 

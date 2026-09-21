@@ -115,27 +115,63 @@ function waCountryCode(): string
  * 0112… — and a number that is one character out simply never arrives, with no
  * error to notice. So the shapes are normalised here, once, rather than at each
  * of the places that sends.
+ *
+ * The yard sells to people abroad, so a number is not assumed to be Kenyan. The
+ * rule is the one people actually follow when they write a number down:
+ *
+ *   A leading + or 00 means the country code is already there. Whatever
+ *   follows is used as given, and the local code is never added to it.
+ *
+ *   A single leading 0 is a trunk prefix, which only has meaning inside a
+ *   country, so it is read as local and the yard's own code replaces it.
+ *
+ *   Nine bare digits is a Kenyan mobile with the 0 left off.
+ *
+ *   Anything else already carries a country code.
+ *
+ * The one shape that used to come out wrong is the written form "+44 (0)7911
+ * 123456" — how a great many people outside Kenya write their own number. The
+ * bracketed 0 is an instruction to the reader, not part of the number, and
+ * stripping punctuation first turned it into 4407911123456: a number nobody
+ * has. It is removed before the digits are read.
  */
 function waNormalisePhone(string $raw): ?string
 {
+    $raw = trim($raw);
+
+    // "+44 (0)7911 …" — the bracketed trunk prefix is a note to the reader and
+    // is dropped, rather than becoming a digit in the middle of the number.
+    $raw = preg_replace('/\((\s*0\s*)\)/', '', $raw) ?? $raw;
+
+    // Whether the country code is already present has to be decided before the
+    // punctuation goes, because the + is the only thing that says so.
+    $international = str_starts_with($raw, '+');
+
     $d = preg_replace('/\D+/', '', $raw) ?? '';
     if ($d === '') return null;
-
-    $cc = waCountryCode();
 
     // Order matters. "00" has to be tested before the single "0", or
     // 00254712345678 is read as a local number and comes out as
     // 2540254712345678 — long enough to be refused, so the message simply
     // never goes anywhere and nobody is told why.
-    if (str_starts_with($d, '00'))           $d = substr($d, 2);
-    // 0712345678 → 254712345678
-    elseif (str_starts_with($d, '0'))        $d = $cc . substr($d, 1);
-    // 712345678 (nine digits, no leading zero) → 254712345678
-    elseif (strlen($d) === 9)                $d = $cc . $d;
+    if (str_starts_with($d, '00')) {
+        $d = substr($d, 2);
+        $international = true;
+    }
 
-    // Short enough to be a typo, long enough to be nonsense: refuse either way
-    // rather than send a message into the void.
-    return (strlen($d) >= 10 && strlen($d) <= 15) ? $d : null;
+    if (!$international) {
+        $cc = waCountryCode();
+        // 0712345678 → 254712345678
+        if (str_starts_with($d, '0'))      $d = $cc . substr($d, 1);
+        // 712345678 (nine digits, no leading zero) → 254712345678
+        elseif (strlen($d) === 9)          $d = $cc . $d;
+    }
+
+    // E.164 allows up to fifteen digits. The floor is eight rather than ten
+    // because some countries' full international numbers are genuinely that
+    // short, and refusing them meant the yard simply could not message anyone
+    // there. Short enough to be a typo is still refused.
+    return (strlen($d) >= 8 && strlen($d) <= 15) ? $d : null;
 }
 
 /** The provider's address for a number. */
@@ -553,7 +589,18 @@ function waDriverHistory(string $chatId, int $count = 100): array
         $file = null;
 
         if ($type === 'textMessage' || $type === 'extendedTextMessage' || $type === 'quotedMessage') {
-            $body = (string)($m['textMessage'] ?? ($m['extendedTextMessage']['text'] ?? ''));
+            // The provider puts the words in a different place depending on the
+            // kind of message and on which endpoint returned it — history uses
+            // extendedTextMessage, the webhook uses extendedTextMessageData, and
+            // a reply to a message uses the quoted form. Reading only the first
+            // of those filed a customer's reply as an empty line.
+            $body = (string)(
+                   $m['textMessage']
+                ?? $m['extendedTextMessage']['text']
+                ?? $m['extendedTextMessageData']['text']
+                ?? $m['quotedMessage']['textMessage']
+                ?? ''
+            );
         } elseif (in_array($type, ['imageMessage','documentMessage','videoMessage','audioMessage'], true)) {
             $kind = match ($type) {
                 'imageMessage'    => 'image',

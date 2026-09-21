@@ -817,7 +817,7 @@ var WA_CSRF = '<?= csrfToken() ?>';
             box.style.display = '';
             impBtn.disabled  = true;
             impBtn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Importing…';
-            var brought = 0;
+            var brought = 0, fromThem = 0, fromUs = 0, offered = 0;
 
             function fail(text) {
                 msg.innerHTML = '<span style="color:#b91c1c">' + text + '</span>';
@@ -836,20 +836,43 @@ var WA_CSRF = '<?= csrfToken() ?>';
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
                         if (!d || !d.ok) { fail((d && d.error) || 'The import stopped.'); return; }
-                        brought += d.messages || 0;
+                        brought  += d.messages   || 0;
+                        fromThem += d.from_them  || 0;
+                        fromUs   += d.from_us    || 0;
+                        offered  += d.offered    || 0;
                         bar.style.width = (d.total ? Math.round((d.next / d.total) * 100) : 100) + '%';
                         msg.textContent = d.next + ' of ' + d.total + ' chats · ' + brought
                                         + ' message' + (brought === 1 ? '' : 's') + ' brought in';
                         (d.chats || []).forEach(function (c) {
                             if (!c.messages) return;
                             var line = document.createElement('div');
-                            line.textContent = c.name + ' — ' + c.messages;
+                            // Both directions per chat, so a chat that came back
+                            // one-sided is visible while it happens rather than
+                            // only noticed later in the inbox.
+                            line.textContent = c.name + ' — ' + c.messages
+                                             + ' (' + (c.in || 0) + ' from them, '
+                                             + (c.out || 0) + ' from us)';
                             log.insertBefore(line, log.firstChild);
                         });
                         if (d.finished) {
-                            msg.innerHTML = '<span style="color:#15803d">Done. ' + brought
-                                          + ' message' + (brought === 1 ? '' : 's') + ' from '
-                                          + d.total + ' chats are now in the inbox.</span>';
+                            var summary = '<span style="color:#15803d">Done. ' + brought
+                                        + ' message' + (brought === 1 ? '' : 's') + ' from '
+                                        + d.total + ' chats are now in the inbox — '
+                                        + fromThem + ' from customers, ' + fromUs + ' from us.</span>';
+                            // The case that brought this about: the provider handed
+                            // over plenty and none of it was inbound. That is its
+                            // journal, not this import, and saying so saves somebody
+                            // running it four more times expecting a different answer.
+                            if (offered > 0 && fromThem === 0) {
+                                summary += '<div style="color:#b45309;margin-top:8px;font-size:12px">'
+                                  + 'Every message the provider handed over was one of ours. '
+                                  + 'WhatsApp history lives on the provider\'s side, and it only '
+                                  + 'keeps what it was recording at the time — if incoming messages '
+                                  + 'were switched off, or the chats are older than it retains, they '
+                                  + 'are not there to fetch. Everything customers send from now on '
+                                  + 'arrives normally.</div>';
+                            }
+                            msg.innerHTML = summary;
                             impBtn.disabled  = false;
                             impBtn.innerHTML = '<i class="fa fa-rotate-right me-1"></i>Run again';
                             return;

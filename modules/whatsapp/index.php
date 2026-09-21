@@ -218,10 +218,13 @@ include __DIR__ . '/../../includes/header.php';
             <div id="waNewBar" style="display:none;padding:11px;border-bottom:1px solid var(--border);
                  background:var(--surface-alt)">
                 <div style="display:flex;gap:7px">
-                    <input type="tel" id="waNewPhone" placeholder="0712345678"
+                    <input type="tel" id="waNewPhone" placeholder="0712345678 or +44 7911 123456"
                            style="flex:1;min-width:0;font-size:13px;border:1px solid var(--border);
                                   border-radius:8px;padding:7px 10px;background:var(--surface);color:var(--text)">
                     <button class="btn btn-sm btn-success" id="waNewGo">Start</button>
+                </div>
+                <div style="color:var(--text-3);font-size:11px;margin-top:5px">
+                    A Kenyan number as 0712345678, or anywhere else with its country code.
                 </div>
                 <div id="waNewErr" style="color:#b91c1c;font-size:11.5px;margin-top:6px"></div>
                 <div style="font-size:11px;color:var(--text-3);margin-top:4px">
