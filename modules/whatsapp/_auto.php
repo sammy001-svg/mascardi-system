@@ -30,6 +30,7 @@
 if (!function_exists('waAutoEnabled')) {
 
 require_once __DIR__ . '/_wa.php';
+require_once __DIR__ . '/_tools.php';
 
 // Karl's own brain lives in the other module. Loaded lazily and guarded at
 // every call site, because an install that has WhatsApp but no AI key must
@@ -185,8 +186,6 @@ function waAutoCompose(PDO $db, array $conv, array $recent): string
 {
     $cfg     = waAutoConfig();
     $company = getSetting('company_name', 'Mascardi Luxury Cars');
-    $open    = $cfg['open'];
-    $close   = $cfg['close'];
     $inHours = waWithinHours($db, $cfg);
 
     $name = trim((string)($conv['client_name'] ?? $conv['contact_name'] ?? ''));
@@ -196,67 +195,111 @@ function waAutoCompose(PDO $db, array $conv, array $recent): string
         . 'Thank you for messaging ' . $company . '. '
         . ($inHours
             ? 'A member of our team will get back to you shortly.'
-            : 'Our office is closed at the moment — we open at ' . $open
+            : 'Our office is closed at the moment — we open at ' . $cfg['open']
               . ' and someone will come back to you then.');
 
     if (!function_exists('carlAiRound') || !carlAiAvailable()) {
         return waAutoSign($fallback, $cfg);
     }
 
+    $known = (int)($conv['client_id'] ?? 0) > 0;
+
+    $system = "You are Karl, answering WhatsApp for {$company}, a car dealership and workshop "
+        . "in Nairobi, Kenya. You are talking to a customer, and no colleague is free right now.\n\n"
+        . "You have tools. USE THEM — never answer about stock, prices or paperwork from memory.\n"
+        . "- A customer asking about any car: search_stock first, then answer from what it returns.\n"
+        . "- Interested in one car: send_car_photos with the car_id you were given.\n"
+        . "- Asking for their invoice, quotation or paperwork: my_documents, then send_document.\n"
+        . "- Asking when you open or where you are: opening_hours.\n\n"
+        . ($known
+            ? "This customer is recognised from their number, so their own documents may be sent.\n\n"
+            : "This number is NOT linked to a customer account, so no documents can be sent. "
+              . "If they ask for paperwork, say a colleague will confirm their details and send it. "
+              . "Never ask them to prove who they are over chat.\n\n")
+        . "The yard is open {$cfg['open']} to {$cfg['close']} and is "
+        . ($inHours ? "OPEN now.\n\n" : "CLOSED now.\n\n")
+        . "YOU MAY state a listed price exactly as search_stock gives it. That price is on the "
+        . "windscreen and on the website; repeating it is service, not a commitment.\n\n"
+        . "YOU MUST NEVER:\n"
+        . "- Offer, imply or negotiate a discount, or say what the yard 'could do'.\n"
+        . "- Promise to hold, reserve or keep a vehicle for anybody.\n"
+        . "- Commit to a delivery date, a viewing time, a callback time or a booking.\n"
+        . "- State a price for anything search_stock did not give you.\n"
+        . "- Invent mileage, year, condition, service history or accident history.\n"
+        . "- Send, describe or confirm a document belonging to anyone but this customer.\n"
+        . "- Claim to be a person. Asked directly, say plainly that you are an assistant.\n\n"
+        . "Anything you cannot do, a colleague will. Say that, briefly, and mean it.\n\n"
+        . "STYLE:\n"
+        . "- Short. Two or three sentences, or a tight list of at most three cars.\n"
+        . "- Warm, plain, human. No markdown, no bullet symbols, no emoji.\n"
+        . "- Listing cars: one per line, as 'Year Make Model — mileage — KES price'.\n"
+        . "- Never open with 'Of course', 'Certainly', 'Sure' or 'Great'.\n"
+        . "- Reply in the language the customer wrote in.\n"
+        . "- End by inviting the next step: which one interests them, or that a colleague "
+        . "will call.";
+
     $lines = [];
-    foreach (array_slice($recent, -8) as $m) {
+    foreach (array_slice($recent, -10) as $m) {
         $who  = ($m['direction'] === 'in') ? 'Customer' : 'Mascardi';
         $body = trim((string)($m['body'] ?? ''));
         if ($body === '') $body = '[' . $m['type'] . ']';
         $lines[] = $who . ': ' . mb_substr($body, 0, 400);
     }
-    $transcript = implode("\n", $lines);
 
-    $system = "You are Karl, answering a WhatsApp message on behalf of {$company}, a car "
-        . "dealership and workshop in Nairobi, Kenya.\n\n"
-        . "A customer has written and no member of staff is available to reply right now. "
-        . "Your job is to acknowledge them warmly, answer only what you can answer safely, "
-        . "and tell them a colleague will follow up.\n\n"
-        . "The yard is open {$open} to {$close}. Right now it is "
-        . ($inHours ? "OPEN." : "CLOSED.") . "\n\n"
-        . "YOU MUST NEVER:\n"
-        . "- Quote, estimate, confirm or negotiate any price, discount, deposit or figure.\n"
-        . "- Say whether a particular vehicle is available, in stock, sold or reserved.\n"
-        . "- Promise a date, a time, a delivery, a booking or a callback time.\n"
-        . "- Agree to anything, accept an offer, or say a deal is done.\n"
-        . "- Invent anything about a vehicle: mileage, year, condition, history, service record.\n"
-        . "- Claim to be a human being. If asked, say plainly that you are an assistant.\n\n"
-        . "If they ask about any of the above, say honestly that a colleague will confirm it, "
-        . "and do not guess.\n\n"
-        . "STYLE:\n"
-        . "- One short paragraph. Two or three sentences at most. This is WhatsApp, not email.\n"
-        . "- Warm and plain. No markdown, no bullet points, no emoji.\n"
-        . "- Do not open with 'Of course', 'Certainly', 'Sure' or 'Great'.\n"
-        . "- Reply in the language the customer used.";
+    $msgs = [['role' => 'user',
+              'content' => "The conversation so far:\n\n" . implode("\n", $lines)
+                         . "\n\nReply to the last customer message."]];
 
-    $user = "The conversation so far:\n\n" . $transcript . "\n\nWrite the reply and nothing else.";
+    $ctx = [
+        'conversation_id' => (int)$conv['id'],
+        'client_id'       => (int)($conv['client_id'] ?? 0),
+    ];
 
+    // A short loop. Two rounds of tools is enough to search stock and then send
+    // photographs, or list documents and then send one; more than that and it is
+    // casting about rather than answering, and every round costs the customer
+    // another few seconds of silence.
+    $usedStock = false;
     try {
-        $round = carlAiRound($system, [['role' => 'user', 'content' => $user]], [], 300);
-        // null is the ordinary failure here — no credit, provider down, a
-        // timeout — and reading ['text'] off it would turn a quiet fallback
-        // into a warning in the log on every message.
-        if (!is_array($round)) return waAutoSign($fallback, $cfg);
-        $text = trim((string)($round['text'] ?? ''));
-        // A model that returns nothing, or a wall, is not answering a customer.
-        if ($text === '' || mb_strlen($text) > 900) return waAutoSign($fallback, $cfg);
-        // Belt and braces: never let a currency figure out, whatever it was told.
-        if (preg_match('/(KES|KSH|Ksh|\bshs?\b)\s*[\d,]{4,}|\b\d{3},\d{3}\b/i', $text)) {
-            error_log('waAutoCompose: refused a reply containing a figure');
-            return waAutoSign($fallback, $cfg);
+        for ($round = 0; $round < 3; $round++) {
+            $r = carlAiRound($system, $msgs, waToolSchema(), 500);
+            if (!is_array($r)) return waAutoSign($fallback, $cfg);
+
+            $calls = $r['calls'] ?? [];
+            if (!$calls) {
+                $text = trim((string)($r['text'] ?? ''));
+                if ($text === '' || mb_strlen($text) > 1200) return waAutoSign($fallback, $cfg);
+                // A figure is allowed only when it came from a stock lookup this
+                // turn. Without that test the model can be talked into a price by
+                // a customer who simply asserts one.
+                if (!$usedStock && preg_match('/(KES|KSH|Ksh)\s*[\d,]{4,}|\b\d{3},\d{3}\b/i', $text)) {
+                    error_log('waAutoCompose: refused an ungrounded figure');
+                    return waAutoSign($fallback, $cfg);
+                }
+                return waAutoSign($text, $cfg);
+            }
+
+            carlAiAppendModelTurn($msgs, $r);
+
+            $results = [];
+            foreach ($calls as $c) {
+                $tool = (string)($c['name'] ?? '');
+                if ($tool === 'search_stock') $usedStock = true;
+                $out = waRunTool($db, $tool, (array)($c['input'] ?? []), $ctx);
+                // The key is 'text': carlAiAppendToolResults() reads that, and a
+                // mismatch here hands the model an empty tool result while
+                // looking perfectly correct from this side.
+                $results[] = ['id' => $c['id'] ?? '', 'name' => $tool, 'text' => $out['result']];
+            }
+            carlAiAppendToolResults($msgs, $results);
         }
-        return waAutoSign($text, $cfg);
     } catch (\Throwable $e) {
         error_log('waAutoCompose: ' . $e->getMessage());
         return waAutoSign($fallback, $cfg);
     }
-}
 
+    return waAutoSign($fallback, $cfg);
+}
 /**
  * Sign it.
  *
