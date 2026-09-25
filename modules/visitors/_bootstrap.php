@@ -381,17 +381,26 @@ function visitorDeskRelease(PDO $db): void
 }
 
 /** Every desk currently signed in, for the management module. */
-function visitorActiveDesks(PDO $db): array
+function visitorActiveDesks(PDO $db, ?int $locationId = null): array
 {
     visitorDeskPrune($db);
+    $where  = '1';
+    $params = [];
+    if ($locationId) {
+        $where  = "k.location_id IN (SELECT id FROM locations WHERE id = ? OR parent_id = ?)";
+        $params = [$locationId, $locationId];
+    }
     try {
-        return $db->query("
+        $st = $db->prepare("
             SELECT k.*, l.name AS location_name, u.name AS user_name,
                    TIMESTAMPDIFF(MINUTE, k.created_at, NOW()) AS held_minutes
             FROM visitor_kiosk_sessions k
             LEFT JOIN locations l ON l.id = k.location_id
             LEFT JOIN users u ON u.id = k.user_id
-            ORDER BY l.name")->fetchAll(PDO::FETCH_ASSOC);
+            WHERE {$where}
+            ORDER BY l.name");
+        $st->execute($params);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
     } catch (\Throwable $_) { return []; }
 }
 
@@ -666,30 +675,45 @@ function visitorStaffList(PDO $db): array
  * forgotten check-out rather than someone still in the building, and carrying
  * those forward would make the on-site figure meaningless.
  */
-function visitorsOnSite(PDO $db, bool $todayOnly = true): array
+function visitorsOnSite(PDO $db, bool $todayOnly = true, ?int $locationId = null): array
 {
-    $where = 'v.checked_out_at IS NULL' . ($todayOnly ? ' AND DATE(v.created_at) = CURDATE()' : '');
+    $where  = 'v.checked_out_at IS NULL' . ($todayOnly ? ' AND DATE(v.created_at) = CURDATE()' : '');
+    $params = [];
+    if ($locationId) {
+        $where  .= " AND v.location_id IN (SELECT id FROM locations WHERE id = ? OR parent_id = ?)";
+        $params  = [$locationId, $locationId];
+    }
     try {
-        return $db->query("
+        $st = $db->prepare("
             SELECT v.*, u.name AS staff_name,
                    TIMESTAMPDIFF(MINUTE, v.created_at, NOW()) AS minutes_here
             FROM visitors v
             LEFT JOIN users u ON u.id = v.staff_id
             WHERE {$where}
-            ORDER BY v.created_at ASC")->fetchAll(PDO::FETCH_ASSOC);
+            ORDER BY v.created_at ASC");
+        $st->execute($params);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
     } catch (\Throwable $_) { return []; }
 }
 
 /** Visits left open from a previous day — a forgotten check-out, to be tidied. */
-function visitorsStale(PDO $db): array
+function visitorsStale(PDO $db, ?int $locationId = null): array
 {
+    $where  = 'v.checked_out_at IS NULL AND DATE(v.created_at) < CURDATE()';
+    $params = [];
+    if ($locationId) {
+        $where  .= " AND v.location_id IN (SELECT id FROM locations WHERE id = ? OR parent_id = ?)";
+        $params  = [$locationId, $locationId];
+    }
     try {
-        return $db->query("
+        $st = $db->prepare("
             SELECT v.*, TIMESTAMPDIFF(HOUR, v.created_at, NOW()) AS hours_open
             FROM visitors v
-            WHERE v.checked_out_at IS NULL AND DATE(v.created_at) < CURDATE()
+            WHERE {$where}
             ORDER BY v.created_at DESC
-            LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+            LIMIT 200");
+        $st->execute($params);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
     } catch (\Throwable $_) { return []; }
 }
 
@@ -962,25 +986,51 @@ function visitorFlushThenSend(callable $work): void
 }
 
 /** Headline counts for the management module. */
-function visitorStats(PDO $db): array
+function visitorStats(PDO $db, ?int $locationId = null): array
 {
-    $out = ['today' => 0, 'week' => 0, 'month' => 0, 'total' => 0, 'by_purpose' => []];
+    $out   = ['today' => 0, 'week' => 0, 'month' => 0, 'total' => 0, 'by_purpose' => []];
+    $where  = '1';
+    $params = [];
+    if ($locationId) {
+        $where  = "location_id IN (SELECT id FROM locations WHERE id = ? OR parent_id = ?)";
+        $params = [$locationId, $locationId];
+    }
     try {
-        $r = $db->query("SELECT
+        $st = $db->prepare("SELECT
                 COUNT(*) AS total,
                 SUM(DATE(created_at) = CURDATE()) AS today,
                 SUM(YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)) AS week,
                 SUM(created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')) AS month
-              FROM visitors")->fetch(PDO::FETCH_ASSOC) ?: [];
+              FROM visitors WHERE {$where}");
+        $st->execute($params);
+        $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
         foreach (['total','today','week','month'] as $k) $out[$k] = (int)($r[$k] ?? 0);
 
-        foreach ($db->query("SELECT purpose, COUNT(*) c FROM visitors GROUP BY purpose") as $row) {
+        $stP = $db->prepare("SELECT purpose, COUNT(*) c FROM visitors WHERE {$where} GROUP BY purpose");
+        $stP->execute($params);
+        foreach ($stP->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $out['by_purpose'][$row['purpose']] = (int)$row['c'];
         }
-        $out['on_site'] = (int)$db->query("SELECT COUNT(*) FROM visitors
-            WHERE checked_out_at IS NULL AND DATE(created_at) = CURDATE()")->fetchColumn();
-        $out['stale'] = (int)$db->query("SELECT COUNT(*) FROM visitors
-            WHERE checked_out_at IS NULL AND DATE(created_at) < CURDATE()")->fetchColumn();
+
+        $vWhere  = 'v.checked_out_at IS NULL AND DATE(v.created_at) = CURDATE()';
+        $vParams = [];
+        if ($locationId) {
+            $vWhere  .= " AND v.location_id IN (SELECT id FROM locations WHERE id = ? OR parent_id = ?)";
+            $vParams  = [$locationId, $locationId];
+        }
+        $stOn = $db->prepare("SELECT COUNT(*) FROM visitors v WHERE {$vWhere}");
+        $stOn->execute($vParams);
+        $out['on_site'] = (int)$stOn->fetchColumn();
+
+        $sWhere  = 'v.checked_out_at IS NULL AND DATE(v.created_at) < CURDATE()';
+        $sParams = [];
+        if ($locationId) {
+            $sWhere  .= " AND v.location_id IN (SELECT id FROM locations WHERE id = ? OR parent_id = ?)";
+            $sParams  = [$locationId, $locationId];
+        }
+        $stStale = $db->prepare("SELECT COUNT(*) FROM visitors v WHERE {$sWhere}");
+        $stStale->execute($sParams);
+        $out['stale'] = (int)$stStale->fetchColumn();
     } catch (\Throwable $_) {}
     return $out;
 }

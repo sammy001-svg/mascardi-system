@@ -17,8 +17,17 @@ $purpose = (string)($_GET['purpose'] ?? '');
 $range   = in_array($_GET['range'] ?? '', ['today','week','month','all'], true) ? $_GET['range'] : 'month';
 $search  = trim($_GET['q'] ?? '');
 
+$supLocId = supervisorLocationId();
+
 $where = ['1'];
 $args  = [];
+
+if ($supLocId) {
+    $where[] = 'v.location_id IN (SELECT id FROM locations WHERE id = ? OR parent_id = ?)';
+    $args[]  = $supLocId;
+    $args[]  = $supLocId;
+}
+
 if (isset(visitorPurposes()[$purpose])) { $where[] = 'v.purpose = ?'; $args[] = $purpose; }
 if ($range === 'today')     $where[] = 'DATE(v.created_at) = CURDATE()';
 elseif ($range === 'week')  $where[] = 'YEARWEEK(v.created_at, 1) = YEARWEEK(CURDATE(), 1)';

@@ -41,6 +41,17 @@ if (!canAccess('visitors') && !$isHost) {
     redirect(BASE_URL . '/index.php');
 }
 
+$supLocId = supervisorLocationId();
+if ($supLocId && !$isHost) {
+    $vLocId = (int)($v['location_id'] ?? 0);
+    $chkLoc = $db->prepare("SELECT COUNT(*) FROM locations WHERE id = ? AND (id = ? OR parent_id = ?)");
+    $chkLoc->execute([$vLocId, $supLocId, $supLocId]);
+    if ((int)$chkLoc->fetchColumn() === 0) {
+        setFlash('error', 'Access denied. This visitor is registered at a different location.');
+        redirect(BASE_URL . '/modules/visitors/index.php');
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check_out') {
     if (visitorCheckOut($db, $id, $meId)) setFlash('success', 'Visitor signed out.');
     else                                  setFlash('error', 'That visitor was already signed out.');

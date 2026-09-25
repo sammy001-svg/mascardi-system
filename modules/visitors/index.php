@@ -31,8 +31,18 @@ $purpose = (string)($_GET['purpose'] ?? '');
 $range   = in_array($_GET['range'] ?? '', ['today','week','month','all'], true) ? $_GET['range'] : 'month';
 $search  = trim($_GET['q'] ?? '');
 
+$supLocId = supervisorLocationId();
+$supLocName = $supLocId ? visitorLocationName($db, $supLocId) : '';
+
 $where = ['1'];
 $args  = [];
+
+if ($supLocId) {
+    $where[] = 'v.location_id IN (SELECT id FROM locations WHERE id = ? OR parent_id = ?)';
+    $args[]  = $supLocId;
+    $args[]  = $supLocId;
+}
+
 if (isset(visitorPurposes()[$purpose])) { $where[] = 'v.purpose = ?'; $args[] = $purpose; }
 if ($range === 'today')      $where[] = 'DATE(v.created_at) = CURDATE()';
 elseif ($range === 'week')   $where[] = 'YEARWEEK(v.created_at, 1) = YEARWEEK(CURDATE(), 1)';
@@ -64,7 +74,7 @@ try {
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
 } catch (\Throwable $_) {}
 
-$stats = visitorStats($db);
+$stats = visitorStats($db, $supLocId);
 
 $pageTitle = 'Visitors';
 include __DIR__ . '/../../includes/header.php';
@@ -91,6 +101,11 @@ include __DIR__ . '/../../includes/header.php';
     <div>
         <h1 style="font-size:19px;font-weight:800;letter-spacing:-.4px;margin:0">
             <i class="fa fa-book-open-reader me-2" style="color:var(--brand)"></i>Visitors
+            <?php if (!empty($supLocName)): ?>
+            <span class="badge bg-primary text-white ms-2" style="font-size:12px;font-weight:600">
+                <i class="fa fa-location-dot me-1"></i><?= e($supLocName) ?>
+            </span>
+            <?php endif; ?>
         </h1>
         <div class="small text-muted">Everyone who signed the visitors book at reception</div>
     </div>
@@ -171,7 +186,7 @@ include __DIR__ . '/../../includes/header.php';
 // A rotation nobody can see is one people assume is broken the first time it
 // does not match their guess, so the queue is shown in the order it will
 // actually be used: whoever has gone longest without a walk-in is at the top.
-$rotation = visitorRotationOrder($db);
+$rotation = visitorRotationOrder($db, $supLocId);
 ?>
 <?php if ($rotation): ?>
 <div class="card mb-3">
@@ -220,7 +235,7 @@ $rotation = visitorRotationOrder($db);
 // The visitors book runs on one device per branch under a shared login. When
 // somebody reports that they cannot sign in at a location, this is the answer:
 // which device is holding it, and since when.
-$desks = visitorActiveDesks($db);
+$desks = visitorActiveDesks($db, $supLocId);
 ?>
 <?php if ($desks): ?>
 <div class="card mb-3">
@@ -253,8 +268,8 @@ $desks = visitorActiveDesks($db);
 // ── Who is in the building ───────────────────────────────────────────────────
 // The reason a visitors book exists: during an evacuation this is the list that
 // matters, so it sits above the historical log rather than inside it.
-$onSite = visitorsOnSite($db);
-$stale  = !empty($_GET['stale']) ? visitorsStale($db) : [];
+$onSite = visitorsOnSite($db, true, $supLocId);
+$stale  = !empty($_GET['stale']) ? visitorsStale($db, $supLocId) : [];
 ?>
 <div class="card mb-3" style="border-color:#bbf7d0;border-width:2px">
     <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2"
