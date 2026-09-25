@@ -26,20 +26,12 @@ try { $db->exec("CREATE TABLE IF NOT EXISTS sms_log (
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $_) {}
 
-try { $db->exec("CREATE TABLE IF NOT EXISTS email_logs (
-    id             INT AUTO_INCREMENT PRIMARY KEY,
-    to_email       VARCHAR(255) NOT NULL,
-    to_name        VARCHAR(255),
-    subject        VARCHAR(500),
-    status         VARCHAR(20) DEFAULT 'sent',
-    error_message  TEXT,
-    reference_type VARCHAR(50),
-    reference_id   INT,
-    sent_by        VARCHAR(100),
-    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_ref    (reference_type, reference_id),
-    INDEX idx_created (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (\Throwable $_) {}
+try {
+    if (file_exists(__DIR__ . '/../../includes/mailer.php')) {
+        require_once __DIR__ . '/../../includes/mailer.php';
+        ensureEmailLogsTable($db);
+    }
+} catch (\Throwable $_) {}
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 $credKeys = [

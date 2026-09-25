@@ -191,9 +191,15 @@ foreach ($recipients as $rec) {
     }
     // Log to email_logs if table exists
     try {
-        $db->prepare("INSERT INTO email_logs (recipient, subject, body, type, status, created_at) VALUES (?,?,?,?,?,NOW())")
-           ->execute([$rec['email'], $subject, $html, 'weekly_digest', $ok ? 'sent' : 'failed']);
-    } catch (Throwable $_) {}
+        if (file_exists(__DIR__ . '/../../includes/mailer.php')) {
+            require_once __DIR__ . '/../../includes/mailer.php';
+            ensureEmailLogsTable($db);
+        }
+        $db->prepare("INSERT INTO email_logs (to_email, to_name, subject, body, reference_type, status, sent_by, created_at) VALUES (?,?,?,?,?,'weekly_digest',?,NOW())")
+           ->execute([$rec['email'], $rec['name'] ?? null, $subject, $html, 'weekly_digest', $ok ? 'sent' : 'failed']);
+    } catch (Throwable $e) {
+        error_log('[weekly_digest logEmail] ' . $e->getMessage());
+    }
 }
 
 // ── Cron log ──────────────────────────────────────────────────────────────────

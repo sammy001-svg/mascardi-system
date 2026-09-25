@@ -35,10 +35,14 @@ function cronLog(PDO $db, string $job, string $status, int $records, string $mes
 // ── Helper: log to email_logs table ──────────────────────────────────────────
 function logEmailAlert(PDO $db, string $type, string $recipient, string $subject, string $body, string $status = 'sent'): void {
     try {
-        $db->prepare("INSERT INTO email_logs (recipient, subject, body, type, status, created_at) VALUES (?, ?, ?, ?, ?, NOW())")
+        if (file_exists(__DIR__ . '/../../includes/mailer.php')) {
+            require_once __DIR__ . '/../../includes/mailer.php';
+            ensureEmailLogsTable($db);
+        }
+        $db->prepare("INSERT INTO email_logs (to_email, subject, body, reference_type, status, sent_by, created_at) VALUES (?, ?, ?, ?, ?, 'cron', NOW())")
            ->execute([$recipient, $subject, $body, $type, $status]);
     } catch (Throwable $e) {
-        // email_logs table columns may differ — silently continue
+        error_log('[logEmailAlert daily_alerts] ' . $e->getMessage());
     }
 }
 

@@ -101,40 +101,78 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
 
         if (strpos($dataResp, '250') !== false) {
             $result['ok'] = true;
-            _logEmail($toEmail, $toName, $subject, 'sent', '', $refType, $refId);
+            _logEmail($toEmail, $toName, $subject, 'sent', '', $refType, $refId, $htmlBody);
         } else {
             throw new \RuntimeException('DATA rejected: ' . trim($dataResp));
         }
     } catch (\Throwable $e) {
         $result['error'] = $e->getMessage();
-        _logEmail($toEmail, $toName, $subject, 'failed', $result['error'], $refType, $refId);
+        _logEmail($toEmail, $toName, $subject, 'failed', $result['error'], $refType, $refId, $htmlBody);
     }
 
     return $result;
 }
 
-function _logEmail(string $to, string $toName, string $subject, string $status, string $error, string $refType, int $refId): void {
+function ensureEmailLogsTable(PDO $db): void {
+    static $healed = false;
+    if ($healed) return;
+    $healed = true;
     try {
-        $db   = getDB();
         $db->exec("CREATE TABLE IF NOT EXISTS email_logs (
             id             INT AUTO_INCREMENT PRIMARY KEY,
             to_email       VARCHAR(255) NOT NULL,
-            to_name        VARCHAR(255),
-            subject        VARCHAR(500),
-            status         VARCHAR(20) DEFAULT 'sent',
-            error_message  TEXT,
-            reference_type VARCHAR(50),
-            reference_id   INT,
-            sent_by        VARCHAR(100),
+            to_name        VARCHAR(255) NULL,
+            subject        VARCHAR(500) NULL,
+            body           LONGTEXT NULL,
+            status         VARCHAR(20) NOT NULL DEFAULT 'sent',
+            error_message  TEXT NULL,
+            reference_type VARCHAR(50) NULL,
+            reference_id   INT NULL,
+            sent_by        VARCHAR(100) NULL,
             created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_status (status),
             INDEX idx_ref    (reference_type, reference_id),
             INDEX idx_created (created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        $auth = authUser();
+
+        // Heal existing table columns if created with old/different types
+        $cols = $db->query("SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'email_logs'")->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        if (isset($cols['sent_by']) && strtolower($cols['sent_by']) === 'int') {
+            $db->exec("ALTER TABLE email_logs MODIFY COLUMN sent_by VARCHAR(100) NULL");
+        }
+        if (isset($cols['status']) && strtolower($cols['status']) === 'enum') {
+            $db->exec("ALTER TABLE email_logs MODIFY COLUMN status VARCHAR(20) NOT NULL DEFAULT 'sent'");
+        }
+        if (!isset($cols['body'])) {
+            $db->exec("ALTER TABLE email_logs ADD COLUMN body LONGTEXT NULL AFTER subject");
+        }
+        if (!isset($cols['to_name'])) {
+            $db->exec("ALTER TABLE email_logs ADD COLUMN to_name VARCHAR(255) NULL AFTER to_email");
+        }
+        if (!isset($cols['reference_type'])) {
+            $db->exec("ALTER TABLE email_logs ADD COLUMN reference_type VARCHAR(50) NULL AFTER error_message");
+        }
+        if (!isset($cols['reference_id'])) {
+            $db->exec("ALTER TABLE email_logs ADD COLUMN reference_id INT NULL AFTER reference_type");
+        }
+    } catch (\Throwable $e) {
+        error_log('[ensureEmailLogsTable] ' . $e->getMessage());
+    }
+}
+
+function _logEmail(string $to, string $toName, string $subject, string $status, string $error, string $refType, int $refId, string $body = ''): void {
+    try {
+        $db = getDB();
+        ensureEmailLogsTable($db);
+        $auth = function_exists('authUser') ? authUser() : null;
         $by   = $auth ? $auth['name'] : 'system';
-        $db->prepare("INSERT INTO email_logs (to_email,to_name,subject,status,error_message,reference_type,reference_id,sent_by) VALUES (?,?,?,?,?,?,?,?)")
-           ->execute([$to, $toName, $subject, $status, $error ?: null, $refType ?: null, $refId ?: null, $by]);
-    } catch (\Throwable $e) { /* silent — don't break the app if logging fails */ }
+        $db->prepare("INSERT INTO email_logs (to_email, to_name, subject, body, status, error_message, reference_type, reference_id, sent_by) VALUES (?,?,?,?,?,?,?,?,?)")
+           ->execute([$to, $toName ?: null, $subject ?: null, $body ?: null, $status, $error ?: null, $refType ?: null, $refId ?: null, $by]);
+    } catch (\Throwable $e) {
+        error_log('[logEmail] Failed to record email log: ' . $e->getMessage());
+    }
 }
 
 function mailTemplate(string $title, string $body): string {
