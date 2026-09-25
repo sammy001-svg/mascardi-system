@@ -43,15 +43,14 @@ if (!empty($visit['assigned_to'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // No officer id means Skip (or the countdown firing) — same path, and the
-    // rotation decides. Nothing to validate: visitorAssignOfficer() checks the
-    // choice against the offered list itself.
-    $picked = (int)($_POST['officer_id'] ?? 0) ?: null;
-    $res    = visitorAssignOfficer($db, $vid, $picked);
+    $picked = (int)($_POST['officer_id'] ?? 0);
+    if ($picked < 1) {
+        setFlash('error', 'Please select a Customer Relations officer to attend to this visitor.');
+        redirect(BASE_URL . '/visitorbook/assign.php?v=' . $vid);
+    }
+    $res = visitorAssignOfficer($db, $vid, $picked);
 
     if (!empty($res['ok'])) {
-        // Only the call that actually made the assignment notifies, so a tap
-        // racing the sweep cannot produce two messages to the same officer.
         if (!empty($res['assigned'])) {
             try {
                 require_once __DIR__ . '/../includes/notifications.php';
@@ -77,10 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $officers = visitorAvailableOfficers($db, (int)($visit['location_id'] ?? 0) ?: null);
 
-// Nobody to choose from at all — skip the screen rather than show an empty one.
-// The sweep will still pick this up if a candidate appears later.
 if (!$officers) {
-    visitorAssignOfficer($db, $vid, null);
     redirect(BASE_URL . '/visitorbook/index.php?done=' . $vid);
 }
 
@@ -108,8 +104,7 @@ require __DIR__ . '/_layout.php';
             <?= $carLabel !== '' ? ' &middot; interested in ' . htmlspecialchars($carLabel) : '' ?>
         </p>
         <p style="color:var(--vb-ink-3);font-size:13px;margin:0 0 18px">
-            Choose whoever is free right now. If you skip this, the next officer in
-            the rotation is allocated automatically.
+            Select the Customer Relations officer to attend to this visitor.
         </p>
 
         <form method="POST" id="vbAssignForm">
@@ -128,9 +123,6 @@ require __DIR__ . '/_layout.php';
                 <label class="vb-off">
                     <input type="radio" name="officer_id" value="<?= (int)$o['id'] ?>">
                     <div>
-                        <?php if ($i === 0): ?>
-                        <span class="vb-off-next">Next in rotation</span>
-                        <?php endif; ?>
                         <div class="vb-off-pic">
                             <?php if (!empty($o['profile_image'])): ?>
                             <img src="<?= BASE_URL ?>/uploads/profiles/<?= htmlspecialchars($o['profile_image']) ?>"
@@ -159,14 +151,6 @@ require __DIR__ . '/_layout.php';
                 <button type="submit" class="vb-submit" id="vbAssignGo" disabled>
                     <i class="fa fa-check me-2"></i>Allocate
                 </button>
-                <?php /* Same form, no officer chosen — the server reads that as skip. */ ?>
-                <button type="submit" class="btn btn-outline-secondary" id="vbSkip"
-                        formnovalidate style="border-radius:10px;padding:13px 22px;font-size:14px">
-                    Skip &mdash; allocate automatically
-                </button>
-                <span class="text-muted" style="font-size:12.5px" id="vbAssignHint">
-                    Allocating automatically in <strong id="vbAssignCount">30</strong>s
-                </span>
             </div>
         </form>
     </div>
@@ -175,38 +159,15 @@ require __DIR__ . '/_layout.php';
 <script>
 (function () {
     'use strict';
-    var form  = document.getElementById('vbAssignForm');
-    var go    = document.getElementById('vbAssignGo');
-    var skip  = document.getElementById('vbSkip');
-    var hint  = document.getElementById('vbAssignHint');
-    var count = document.getElementById('vbAssignCount');
+    var form = document.getElementById('vbAssignForm');
+    var go   = document.getElementById('vbAssignGo');
 
-    // Allocate is meaningless until somebody is picked.
     form.addEventListener('change', function (e) {
-        if (e.target.name === 'officer_id') { go.disabled = false; stop(); }
-    });
-
-    // The countdown is the "skipped" path for an unattended desk: a customer must
-    // never be left looking at a staff screen because nobody pressed anything.
-    var left = 30, timer = null;
-    function stop() {
-        if (timer) { clearInterval(timer); timer = null; }
-        if (hint) hint.style.display = 'none';
-    }
-    timer = setInterval(function () {
-        left -= 1;
-        if (count) count.textContent = left;
-        if (left <= 0) { stop(); skip.click(); }
-    }, 1000);
-
-    // Any interaction means someone is there and deciding — stop hurrying them.
-    ['keydown', 'touchstart', 'mousedown'].forEach(function (ev) {
-        document.addEventListener(ev, function () { stop(); }, { passive: true, once: true });
+        if (e.target.name === 'officer_id') { go.disabled = false; }
     });
 
     form.addEventListener('submit', function () {
-        stop();
-        go.disabled = true; skip.disabled = true;
+        go.disabled = true;
         go.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Allocating…';
     });
 }());

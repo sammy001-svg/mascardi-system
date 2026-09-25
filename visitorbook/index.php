@@ -92,6 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Purpose-specific
     $carId   = (int)($_POST['car_id'] ?? 0);
     $comment = trim($_POST['buy_comment'] ?? '');
+    $officerId = (int)($_POST['assigned_officer_id'] ?? 0);
     $svc = [
         'make'    => trim($_POST['svc_make']    ?? ''),
         'model'   => trim($_POST['svc_model']   ?? ''),
@@ -103,8 +104,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $staffId = (int)($_POST['staff_id'] ?? 0);
     $reason  = trim($_POST['visit_reason'] ?? '');
 
-    if ($purpose === 'buy_car' && $carId < 1) {
-        $errors[] = 'Select the vehicle the visitor is interested in.';
+    $availableOfficers = visitorAvailableOfficers($db, $locationId);
+
+    if ($purpose === 'buy_car') {
+        if ($carId < 1) $errors[] = 'Select the vehicle the visitor is interested in.';
+        if ($availableOfficers && $officerId < 1) {
+            $errors[] = 'Select the Customer Relations officer to attend to the visitor.';
+        }
     }
     if ($purpose === 'car_service') {
         if ($svc['make'] === '')  $errors[] = 'Enter the make of the vehicle to be serviced.';
@@ -121,6 +127,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ok = false;
         foreach (visitorSelectableCars($db, 500) as $c) if ((int)$c['id'] === $carId) { $ok = true; break; }
         if (!$ok) $errors[] = 'That vehicle is no longer available. Please pick another.';
+
+        if ($availableOfficers && $officerId > 0) {
+            $officerOk = false;
+            foreach ($availableOfficers as $o) {
+                if ((int)$o['id'] === $officerId) { $officerOk = true; break; }
+            }
+            if (!$officerOk) $errors[] = 'Please select a valid Customer Relations officer from the list.';
+        }
     }
     if (!$errors && $purpose === 'see_someone') {
         $ok = false;
@@ -137,12 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // ── What the visit becomes ───────────────────────────────────────
             if ($purpose === 'buy_car') {
-                // Left unassigned here on purpose. Reception picks the officer on
-                // the next screen, because they can see who is actually free; the
-                // rotation only steps in when that is skipped. Nothing is left
-                // ownerless either way — assign.php assigns on skip, and
-                // visitorSweepUnassigned() catches an abandoned tablet.
-                $assignee = null;
+                $assignee = $officerId > 0 ? $officerId : null;
                 $car = $db->prepare("SELECT make, model, year FROM cars WHERE id = ?");
                 $car->execute([$carId]);
                 $c = $car->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -243,10 +252,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $fullName . ' is at reception to see you',
                         $reason, BASE_URL . '/modules/visitors/index.php?range=today');
                 }
-                // buy_car is notified from assign.php instead — there is nobody to
-                // tell until an officer has actually been chosen, and notifying an
-                // auto-pick here would send a second message when reception then
-                // chose somebody else.
+                elseif ($purpose === 'buy_car' && $assignee) {
+                    createNotification($assignee, 'lead',
+                        'Walk-in lead: ' . $fullName,
+                        'At reception now, interested in ' . ($interest ?: 'a vehicle') . '. Phone ' . $phone,
+                        BASE_URL . '/modules/crm/view_lead.php?id=' . $leadId);
+
+                    $__vid = $visitorId;
+                    visitorFlushThenSend(function () use ($db, $__vid) {
+                        visitorSendAllocationEmails($db, $__vid);
+                    });
+                }
                 elseif ($purpose === 'car_service') {
                     notifyRoles(['workshop_manager', 'receptionist'], 'service',
                         'Service walk-in: ' . $fullName,
@@ -259,11 +275,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             catch (\Throwable $_) {}
 
             // Redirect so a refresh cannot record the same visitor twice.
-            // A car buyer goes to the officer chooser; everyone else straight to
-            // the thank-you, since there is nobody to allocate for them.
-            redirect($purpose === 'buy_car'
-                ? BASE_URL . '/visitorbook/assign.php?v=' . $visitorId
-                : BASE_URL . '/visitorbook/index.php?done=' . $visitorId);
+            redirect(BASE_URL . '/visitorbook/index.php?done=' . $visitorId);
 
         } catch (\Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();
@@ -293,6 +305,7 @@ if (!empty($_GET['done'])) {
 
 $cars  = visitorSelectableCars($db);
 $staff = visitorStaffList($db);
+$availableOfficers = visitorAvailableOfficers($db, $locationId);
 $P     = $_POST;
 
 $vbTitle = 'Visitors Book';
@@ -607,6 +620,27 @@ require __DIR__ . '/_layout.php';
                 <label class="form-label">Anything you would like us to know?</label>
                 <textarea name="buy_comment" class="form-control" rows="3"
                           placeholder="e.g. looking for something economical, trading in my current car, budget around…"><?= htmlspecialchars($P['buy_comment'] ?? '') ?></textarea>
+            </div>
+
+            <div class="mt-4 pt-3" style="border-top:1px solid var(--vb-line)">
+                <label class="form-label" style="font-weight:600">
+                    Customer Relations Officer <span class="req">*</span>
+                </label>
+                <select name="assigned_officer_id" class="form-select" required>
+                    <option value="">Select Customer Relations Officer to attend to visitor…</option>
+                    <?php foreach ($availableOfficers as $o): ?>
+                    <option value="<?= (int)$o['id'] ?>"
+                        <?= (int)($P['assigned_officer_id'] ?? 0) === (int)$o['id'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($o['name']) ?>
+                        <?= !empty($o['role']) ? ' (' . htmlspecialchars(ucwords(str_replace('_', ' ', $o['role']))) . ')' : '' ?>
+                        <?= !empty($o['location_name']) ? ' — ' . htmlspecialchars($o['location_name']) : '' ?>
+                        <?= (int)($o['in_today'] ?? 0) === 1 ? ' [In Today]' : '' ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="form-text text-muted" style="font-size:12px;margin-top:4px">
+                    Select the Customer Relations officer available at this location to attend to the visitor.
+                </div>
             </div>
         </div>
     </div>

@@ -482,8 +482,9 @@ function visitorNextCrmOfficer(PDO $db, ?int $locationId = null): ?int
  */
 function visitorAvailableOfficers(PDO $db, ?int $locationId = null): array
 {
-    $rows = visitorRotationOrder($db, $locationId);
-    if (!$rows && $locationId) $rows = visitorRotationOrder($db, null);   // widen if the branch has nobody
+    $roles = ['customer_relations', 'sales_person', 'sales_officer', 'sales_manager'];
+    $rows = visitorRotationOrder($db, $locationId, $roles);
+    if (!$rows && $locationId) $rows = visitorRotationOrder($db, null, $roles);   // widen if the branch has nobody
     if (!$rows) return [];
 
     $ids = array_map(fn($r) => (int)$r['id'], $rows);
@@ -492,7 +493,7 @@ function visitorAvailableOfficers(PDO $db, ?int $locationId = null): array
     $extra = [];
     try {
         $st = $db->prepare("
-            SELECT u.id, u.profile_image, u.email,
+            SELECT u.id, u.profile_image, u.email, u.role,
                    (DATE(GREATEST(COALESCE(u.last_seen,'1970-01-01'),
                                   COALESCE(u.last_login,'1970-01-01'))) = CURDATE()) AS in_today,
                    (SELECT COUNT(*) FROM crm_leads l
@@ -507,6 +508,7 @@ function visitorAvailableOfficers(PDO $db, ?int $locationId = null): array
         $e = $extra[(int)$r['id']] ?? [];
         $r['profile_image'] = $e['profile_image'] ?? null;
         $r['email']         = $e['email'] ?? null;
+        $r['role']          = $e['role'] ?? ($r['role'] ?? '');
         $r['in_today']      = (int)($e['in_today'] ?? 1);
         $r['open_leads']    = (int)($e['open_leads'] ?? 0);
     }
@@ -612,16 +614,16 @@ function visitorSweepUnassigned(PDO $db, int $olderThanSeconds = 180): array
  * allocation. Used to show the queue on screen — a rotation nobody can see is
  * one people assume is broken the first time it does not match their guess.
  */
-function visitorRotationOrder(PDO $db, ?int $locationId = null, array $roles = ['customer_relations']): array
+function visitorRotationOrder(PDO $db, ?int $locationId = null, array $roles = ['customer_relations', 'sales_person', 'sales_officer', 'sales_manager']): array
 {
     if (!$roles) return [];
     $in    = implode(',', array_fill(0, count($roles), '?'));
     $args  = $roles;
     $where = "u.role IN ({$in}) AND u.status = 'active'";
-    if ($locationId) { $where .= " AND u.location_id = ?"; $args[] = $locationId; }
+    if ($locationId) { $where .= " AND (u.location_id = ? OR u.location_id IS NULL)"; $args[] = $locationId; }
     try {
         $st = $db->prepare("
-            SELECT u.id, u.name, u.location_id,
+            SELECT u.id, u.name, u.role, u.location_id,
                    l.name AS location_name,
                    MAX(v.created_at)  AS last_at,
                    COUNT(v.id)        AS total_walkins,
@@ -631,7 +633,7 @@ function visitorRotationOrder(PDO $db, ?int $locationId = null, array $roles = [
             LEFT JOIN locations l ON l.id = u.location_id
             WHERE {$where}
             GROUP BY u.id
-            ORDER BY COALESCE(MAX(v.created_at), '1000-01-01') ASC, u.id ASC");
+            ORDER BY " . ($locationId ? "CASE WHEN u.location_id = " . (int)$locationId . " THEN 0 ELSE 1 END, " : "") . "COALESCE(MAX(v.created_at), '1000-01-01') ASC, u.id ASC");
         $st->execute($args);
         return $st->fetchAll(PDO::FETCH_ASSOC);
     } catch (\Throwable $_) { return []; }
