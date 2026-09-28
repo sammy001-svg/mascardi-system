@@ -39,3 +39,8 @@ desktop.ini
 
 # IDE
 .idea/
+
+# Encryption keys and anything else the app generates at runtime.
+# storage/mail.key is what makes every saved mailbox password readable;
+# committing it puts the key beside the lock.
+storage/

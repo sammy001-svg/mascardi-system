@@ -263,6 +263,36 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
         <!-- ══ COMMUNICATION ══════════════════════════════════════ -->
         <div class="nav-section">Communication</div>
 
+        <a href="<?= BASE_URL ?>/modules/mail/index.php"
+           class="nav-item <?= isActive('/modules/mail/') ?>"
+           data-label="Mail"
+           style="position:relative">
+            <i class="fa fa-envelope"></i><span>Mail</span>
+            <span class="mailNavBadge" style="display:none;position:absolute;top:6px;right:8px;
+                  background:#0f6b5c;color:#fff;border-radius:10px;font-size:10px;
+                  font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
+        </a>
+        <script>
+        (function(){
+            var badges = document.querySelectorAll('.mailNavBadge');
+            if (!badges.length) return;
+            function poll(){
+                fetch('<?= BASE_URL ?>/modules/mail/api/unread.php')
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        var n = d.unread || 0;
+                        badges.forEach(function(b){
+                            if (n > 0) { b.textContent = n > 99 ? '99+' : n; b.style.display = ''; }
+                            else { b.style.display = 'none'; }
+                        });
+                    }).catch(function(){});
+            }
+            poll();
+            // The answer is cached for a minute on the server and costs a round
+            // trip to the mail host, so this asks far less often than chat does.
+            setInterval(poll, 120000);
+        }());
+        </script>
         <a href="<?= BASE_URL ?>/modules/chat/index.php"
            class="nav-item <?= str_contains($__uri, '/modules/chat/') ? 'active' : '' ?>"
            data-label="Team Chat"

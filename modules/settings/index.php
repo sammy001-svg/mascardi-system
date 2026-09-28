@@ -154,6 +154,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             $updates['smtp_pass'] = $_POST['smtp_pass'];
         }
 
+    } elseif ($activeTab === 'mailserver') {
+        // The company's own mail server, for staff mailboxes. Separate from
+        // the SMTP above, which is the system's own notification account: one
+        // sends as the company, this lets each person send as themselves.
+        $updates = [
+            'mail_enabled'       => !empty($_POST['mail_enabled']) ? '1' : '0',
+            'mail_imap_host'     => trim($_POST['mail_imap_host'] ?? ''),
+            'mail_imap_port'     => (string)max(1, min(65535, (int)($_POST['mail_imap_port'] ?? 993))),
+            'mail_imap_security' => in_array($_POST['mail_imap_security'] ?? '', ['ssl','tls','none'], true)
+                                        ? $_POST['mail_imap_security'] : 'ssl',
+            'mail_smtp_host'     => trim($_POST['mail_smtp_host'] ?? ''),
+            'mail_smtp_port'     => (string)max(1, min(65535, (int)($_POST['mail_smtp_port'] ?? 465))),
+            'mail_smtp_security' => in_array($_POST['mail_smtp_security'] ?? '', ['ssl','tls','none'], true)
+                                        ? $_POST['mail_smtp_security'] : 'ssl',
+            'mail_max_attach_mb' => (string)max(1, min(50, (int)($_POST['mail_max_attach_mb'] ?? 20))),
+        ];
+
     } elseif ($activeTab === 'integrations') {
         $updates = [
             'mpesa_env'             => in_array($_POST['mpesa_env'] ?? '', ['sandbox','production']) ? $_POST['mpesa_env'] : 'sandbox',
@@ -294,6 +311,7 @@ include __DIR__ . '/../../includes/header.php';
         'branding'     => ['fa-palette',           'Branding'],
         'documents'    => ['fa-file-lines',         'Documents'],
         'email'        => ['fa-envelope',           'Email'],
+        'mailserver'   => ['fa-inbox',              'Staff mail'],
         'integrations' => ['fa-mobile-screen-button','Integrations'],
         'carl'         => ['fa-wand-magic-sparkles', 'Karl AI'],
         'seo'          => ['fa-magnifying-glass',   'SEO'],
@@ -628,6 +646,137 @@ document.getElementById('sendTestEmail').addEventListener('click', function () {
 </div><!-- /email pane -->
 
 <!-- ══ INTEGRATIONS ═══════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade <?= $activeTab === 'mailserver' ? 'show active' : '' ?>" id="pane-mailserver" role="tabpanel">
+<form method="POST">
+<input type="hidden" name="action" value="save">
+<input type="hidden" name="_tab" value="mailserver">
+<?php
+require_once __DIR__ . '/../mail/_bootstrap.php';
+mailMigrate($db);
+$mailReady = trim((string)($settings['mail_imap_host'] ?? '')) !== ''
+          && trim((string)($settings['mail_smtp_host'] ?? '')) !== '';
+$connected = 0;
+try { $connected = (int)$db->query("SELECT COUNT(*) FROM mail_accounts")->fetchColumn(); } catch (\Throwable $e) {}
+?>
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="fa fa-inbox text-primary"></i>
+                <span>Staff mailboxes</span>
+                <span class="badge bg-<?= $mailReady ? 'success' : 'secondary' ?> ms-auto">
+                    <?= $mailReady ? 'Configured' : 'Not configured' ?>
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info py-2 small mb-4">
+                    <i class="fa fa-info-circle me-1"></i>
+                    This lets each member of staff read and send <strong>their own</strong> company
+                    email from inside the system. It is not the same as the SMTP settings on the
+                    Email tab — those send invoices and alerts as the company. On cPanel both hosts
+                    are usually <strong>mail.yourdomain.co.ke</strong>.
+                </div>
+
+                <div class="form-check form-switch mb-4">
+                    <input class="form-check-input" type="checkbox" name="mail_enabled" id="mailEnabled"
+                           <?= ($settings['mail_enabled'] ?? '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="mailEnabled">Staff may connect their mailboxes</label>
+                </div>
+
+                <h6 class="small text-muted text-uppercase mb-2">Incoming — IMAP</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">Host</label>
+                        <input type="text" name="mail_imap_host" class="form-control"
+                               value="<?= e($settings['mail_imap_host'] ?? '') ?>"
+                               placeholder="mail.yourdomain.co.ke">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Port</label>
+                        <input type="number" name="mail_imap_port" class="form-control"
+                               value="<?= e($settings['mail_imap_port'] ?? '993') ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Security</label>
+                        <select name="mail_imap_security" class="form-select">
+                            <?php foreach (['ssl' => 'SSL (993)', 'tls' => 'STARTTLS (143)', 'none' => 'None'] as $v => $l): ?>
+                            <option value="<?= $v ?>" <?= ($settings['mail_imap_security'] ?? 'ssl') === $v ? 'selected' : '' ?>><?= $l ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+
+                <h6 class="small text-muted text-uppercase mb-2">Outgoing — SMTP</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">Host</label>
+                        <input type="text" name="mail_smtp_host" class="form-control"
+                               value="<?= e($settings['mail_smtp_host'] ?? '') ?>"
+                               placeholder="mail.yourdomain.co.ke">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Port</label>
+                        <input type="number" name="mail_smtp_port" class="form-control"
+                               value="<?= e($settings['mail_smtp_port'] ?? '465') ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Security</label>
+                        <select name="mail_smtp_security" class="form-select">
+                            <?php foreach (['ssl' => 'SSL (465)', 'tls' => 'STARTTLS (587)', 'none' => 'None'] as $v => $l): ?>
+                            <option value="<?= $v ?>" <?= ($settings['mail_smtp_security'] ?? 'ssl') === $v ? 'selected' : '' ?>><?= $l ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Largest attachment total</label>
+                        <div class="input-group">
+                            <input type="number" name="mail_max_attach_mb" class="form-control" min="1" max="50"
+                                   value="<?= e($settings['mail_max_attach_mb'] ?? '20') ?>">
+                            <span class="input-group-text">MB</span>
+                        </div>
+                        <div class="form-text">cPanel usually refuses above 50MB.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-white text-end">
+                <button class="btn btn-primary"><i class="fa fa-save me-1"></i>Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header fw-semibold">
+                <i class="fa fa-shield-halved me-2 text-primary"></i>What you can and cannot see
+            </div>
+            <div class="card-body" style="font-size:13px">
+                <p class="text-muted mb-2">
+                    You set the server here. You cannot read anybody's mail through this system, and
+                    neither can any other administrator — there is no screen that opens a colleague's
+                    mailbox and no setting that turns one on.
+                </p>
+                <p class="text-muted mb-0">
+                    If you genuinely need a colleague's mail, reset that mailbox's password in cPanel.
+                    They will notice, which is the point.
+                </p>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-body py-3 small text-muted">
+                <i class="fa fa-user-group me-1"></i>
+                <strong><?= (int)$connected ?></strong> member<?= $connected === 1 ? '' : 's' ?> of staff
+                <?= $connected === 1 ? 'has' : 'have' ?> connected a mailbox.
+                Each person connects their own under <a href="<?= BASE_URL ?>/modules/mail/setup.php">Mail → Mailbox settings</a>.
+            </div>
+        </div>
+    </div>
+</div>
+</form>
+</div>
+
 <div class="tab-pane fade <?= $activeTab === 'integrations' ? 'show active' : '' ?>" id="pane-integrations" role="tabpanel">
 <form method="POST">
 <input type="hidden" name="action" value="save">

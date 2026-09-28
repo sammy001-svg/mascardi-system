@@ -742,6 +742,35 @@ if (authRole() === 'supervisor') {
         }());
         </script>
 
+        <a href="<?= BASE_URL ?>/modules/mail/index.php"
+           class="nav-item <?= isActive('/modules/mail/') ?>"
+           data-label="Mail"
+           style="position:relative">
+            <i class="fa fa-envelope"></i><span>Mail</span>
+            <span id="mailNavBadge" style="display:none;position:absolute;top:6px;right:8px;
+                  background:#0f6b5c;color:#fff;border-radius:10px;font-size:10px;
+                  font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px"></span>
+        </a>
+        <script>
+        (function(){
+            var badge = document.getElementById('mailNavBadge');
+            if (!badge) return;
+            function poll(){
+                fetch('<?= BASE_URL ?>/modules/mail/api/unread.php')
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        var n = d.unread || 0;
+                        if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
+                        else { badge.style.display = 'none'; }
+                    }).catch(function(){});
+            }
+            poll();
+            // A round trip to the mail server is not free and the answer is
+            // cached for a minute anyway, so this asks far less often than chat.
+            setInterval(poll, 120000);
+        }());
+        </script>
+
         <!-- ══ ADMIN ══════════════════════════════════════════════ -->
         <?php if (hasRole('admin')): ?>
         <div class="nav-section">Administration</div>
