@@ -204,7 +204,8 @@ include __DIR__ . '/../../includes/header.php';
         <span class="small"><?= e($failed) ?></span>
     </div>
 </div>
-<?php endif; ?<div class="mb-wrap">
+<?php endif; ?>
+<div class="mb-wrap">
 
     <!-- Folder sidebar -->
     <div class="mb-fold">
@@ -386,8 +387,6 @@ include __DIR__ . '/../../includes/header.php';
 
     </div><!-- /mb-content -->
 </div><!-- /mb-wrap -->
-iv>
-</div>
 
 <script>
 (function () {
