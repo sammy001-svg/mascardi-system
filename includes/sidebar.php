@@ -31,6 +31,15 @@ if (authRole() === 'supervisor') {
     include __DIR__ . '/sidebar_supervisor.php';
     return;
 }
+
+// The finance roles get the money and the things the money touches. These three
+// have had permissions in auth.php since long before they had a menu, and until
+// now fell through to the general staff sidebar — thirty items across Imports,
+// Dispatch, Key Handovers and the workshop floor, almost none of it theirs.
+if (in_array(authRole(), ['finance_manager', 'accountant', 'cashier'], true)) {
+    include __DIR__ . '/sidebar_finance.php';
+    return;
+}
 ?>
 <div class="app-sidebar" id="sidebar">
 
