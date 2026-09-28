@@ -87,6 +87,19 @@ include __DIR__ . '/../../includes/header.php';
     <h5 class="mb-0"><?= e($car['make'].' '.$car['model']) ?> <code class="ms-2"><?= e($car['chassis_number']) ?></code></h5>
     <div class="d-flex gap-2 flex-wrap">
         <a href="media.php?id=<?= $id ?>" class="btn btn-sm btn-outline-primary"><i class="fa fa-camera me-1"></i>Photos (<?= count($images) ?>)</a>
+        <?php
+        // Public share link — points to the no-login car page.
+        $shareUrl = rtrim(BASE_URL, '/') . '/modules/cars/share.php?id=' . $id;
+        ?>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="copyShareBtn"
+                onclick="(function(b){
+                    navigator.clipboard ? navigator.clipboard.writeText('<?= addslashes($shareUrl) ?>').then(function(){
+                        b.innerHTML='<i class=\'fa fa-check me-1\'></i>Copied!';
+                        setTimeout(function(){b.innerHTML='<i class=\'fa fa-share-nodes me-1\'></i>Share link';},2000);
+                    }) : (function(){var t=document.createElement('textarea');t.value='<?= addslashes($shareUrl) ?>';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);b.innerHTML='<i class=\'fa fa-check me-1\'></i>Copied!';setTimeout(function(){b.innerHTML='<i class=\'fa fa-share-nodes me-1\'></i>Share link';},2000);})();
+                })(this)">
+            <i class="fa fa-share-nodes me-1"></i>Share link
+        </button>
         <?php if (canAccess('car_documents')): ?>
         <a href="#documents" class="btn btn-sm btn-outline-secondary">
             <i class="fa fa-folder-open me-1"></i>Docs<?= $docCount > 0 ? " ({$docCount})" : '' ?>
@@ -214,39 +227,128 @@ $isStock  = ($car['car_type'] ?? '') === 'inventory';
     </div>
 </div>
 
-<?php if ($primaryImage): ?>
-<div class="card mb-4 overflow-hidden">
-    <div class="row g-0">
-        <div class="col-md-7">
-            <img src="<?= BASE_URL ?>/uploads/cars/<?= e($primaryImage['file_path']) ?>" class="img-fluid w-100 h-100" style="object-fit:cover; max-height:400px;" fetchpriority="high" decoding="async">
+<?php if ($images): ?>
+<div class="card mb-4 overflow-hidden" id="carGallery">
+    <div class="card-body p-0">
+        <!-- Big main image -->
+        <div id="gMain" style="position:relative;aspect-ratio:16/9;background:#f1f5f9;cursor:zoom-in;overflow:hidden" onclick="openGalleryLightbox(gIdx)">
+            <img id="gMainImg"
+                 src="<?= BASE_URL ?>/uploads/cars/<?= e($images[0]['file_path']) ?>"
+                 alt="<?= e($car['make'].' '.$car['model']) ?>"
+                 fetchpriority="high" decoding="async"
+                 style="width:100%;height:100%;object-fit:cover;display:block;transition:opacity .2s">
+            <?php if (count($images) > 1): ?>
+            <button class="g-arrow g-arrow-l" onclick="event.stopPropagation();gChange(-1)" aria-label="Previous"><i class="fa fa-chevron-left"></i></button>
+            <button class="g-arrow g-arrow-r" onclick="event.stopPropagation();gChange(1)" aria-label="Next"><i class="fa fa-chevron-right"></i></button>
+            <div class="g-counter" id="gCounter">1 / <?= count($images) ?></div>
+            <?php endif; ?>
+            <div class="g-zoom"><i class="fa fa-expand"></i></div>
         </div>
-        <div class="col-md-5 d-flex flex-column">
-            <div class="card-body bg-light flex-grow-1">
-                <h6 class="fw-bold mb-3">Vehicle Gallery</h6>
-                <div class="row g-2">
-                    <?php 
-                    $thumbCount = 0;
-                    foreach($images as $img): 
-                        if($img['is_primary']) continue;
-                        if($thumbCount >= 6) break;
-                    ?>
-                    <div class="col-4">
-                        <img src="<?= thumbUrl('cars', $img['file_path']) ?>" class="img-fluid rounded border shadow-sm" style="height:80px; width:100%; object-fit:cover;" loading="lazy" decoding="async" width="120" height="80">
-                    </div>
-                    <?php $thumbCount++; endforeach; ?>
-                    <?php if (count($images) > 7): ?>
-                    <div class="col-4">
-                        <a href="media.php?id=<?= $id ?>" class="d-flex align-items-center justify-content-center bg-white border rounded text-decoration-none text-primary fw-bold" style="height:80px">
-                            +<?= count($images) - 7 ?>
-                        </a>
-                    </div>
-                    <?php endif; ?>
-                </div>
-            </div>
+
+        <?php if (count($images) > 1): ?>
+        <!-- Scrollable thumbnail strip -->
+        <div id="gThumbs" style="display:flex;gap:6px;padding:8px;overflow-x:auto;scrollbar-width:thin;background:#f8fafc">
+            <?php foreach ($images as $i => $img): ?>
+            <button class="g-thumb <?= $i === 0 ? 'active' : '' ?>"
+                    onclick="gSelect(<?= $i ?>)"
+                    data-full="<?= BASE_URL ?>/uploads/cars/<?= e($img['file_path']) ?>"
+                    style="flex-shrink:0;width:88px;height:58px;padding:0;border:2px solid <?= $i === 0 ? '#0d6efd' : '#dee2e6' ?>;border-radius:6px;overflow:hidden;cursor:pointer;background:none;transition:border-color .15s">
+                <img src="<?= thumbUrl('cars', $img['file_path']) ?>" alt="Photo <?= $i+1 ?>"
+                     loading="<?= $i < 4 ? 'eager' : 'lazy' ?>" decoding="async"
+                     style="width:100%;height:100%;object-fit:cover;display:block">
+            </button>
+            <?php endforeach; ?>
         </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<!-- Lightbox -->
+<div id="gLightbox" onclick="closeGalleryLightbox()" style="display:none;position:fixed;inset:0;background:rgba(4,4,4,.96);z-index:99999;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:24px">
+    <button onclick="event.stopPropagation();closeGalleryLightbox()" style="position:absolute;top:20px;right:20px;background:none;border:1px solid rgba(255,255,255,.3);color:#fff;width:44px;height:44px;border-radius:6px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center"><i class="fa fa-xmark"></i></button>
+    <button onclick="event.stopPropagation();gChange(-1,true)" style="position:absolute;left:20px;top:50%;transform:translateY(-50%);background:none;border:1px solid rgba(255,255,255,.3);color:#fff;width:48px;height:48px;border-radius:6px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center"><i class="fa fa-chevron-left"></i></button>
+    <button onclick="event.stopPropagation();gChange(1,true)" style="position:absolute;right:20px;top:50%;transform:translateY(-50%);background:none;border:1px solid rgba(255,255,255,.3);color:#fff;width:48px;height:48px;border-radius:6px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center"><i class="fa fa-chevron-right"></i></button>
+    <img id="gLbImg" src="" alt="" onclick="event.stopPropagation()" style="max-width:90vw;max-height:80vh;object-fit:contain">
+    <div id="gLbCounter" style="color:rgba(255,255,255,.55);font-size:12px;font-weight:600;letter-spacing:.1em"></div>
+</div>
+
+<style>
+.g-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:42px;height:42px;border-radius:6px;background:rgba(255,255,255,.92);border:1px solid #dee2e6;color:#212529;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
+.g-arrow:hover{background:#fff}
+.g-arrow-l{left:12px}
+.g-arrow-r{right:12px}
+.g-counter{position:absolute;bottom:12px;right:14px;background:rgba(10,10,10,.6);color:#fff;font-size:11px;font-weight:500;letter-spacing:.06em;padding:3px 10px;border-radius:20px;z-index:2}
+.g-zoom{position:absolute;bottom:12px;left:14px;background:rgba(255,255,255,.85);color:#555;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;opacity:0;transition:opacity .2s;z-index:2}
+#gMain:hover .g-zoom{opacity:1}
+.g-thumb.active{border-color:#0d6efd!important}
+.g-thumb:hover{border-color:#6c757d!important}
+#gLightbox{display:none}
+#gLightbox.open{display:flex!important}
+</style>
+
+<script>
+var gPhotos = <?= json_encode(array_values(array_map(fn($img) => BASE_URL . '/uploads/cars/' . $img['file_path'], $images))) ?>;
+var gIdx = 0;
+var gMainImg = document.getElementById('gMainImg');
+var gCounter = document.getElementById('gCounter');
+var gThumbs  = document.querySelectorAll('.g-thumb');
+var gLbImg   = document.getElementById('gLbImg');
+var gLbCnt   = document.getElementById('gLbCounter');
+var gLb      = document.getElementById('gLightbox');
+
+function gSelect(i) {
+    gIdx = (i + gPhotos.length) % gPhotos.length;
+    gMainImg.style.opacity = '0';
+    setTimeout(function(){ gMainImg.src = gPhotos[gIdx]; gMainImg.style.opacity = '1'; }, 100);
+    if (gCounter) gCounter.textContent = (gIdx + 1) + ' / ' + gPhotos.length;
+    gThumbs.forEach(function(t, j) {
+        t.style.borderColor = j === gIdx ? '#0d6efd' : '#dee2e6';
+        t.classList.toggle('active', j === gIdx);
+    });
+    // Scroll active thumb into view
+    if (gThumbs[gIdx]) {
+        gThumbs[gIdx].scrollIntoView({inline:'nearest', block:'nearest', behavior:'smooth'});
+    }
+    if (gLb && gLb.classList.contains('open')) {
+        gLbImg.src = gPhotos[gIdx];
+        if (gLbCnt) gLbCnt.textContent = (gIdx + 1) + ' / ' + gPhotos.length;
+    }
+}
+function gChange(dir, inLb) {
+    gSelect(gIdx + dir);
+}
+function openGalleryLightbox(i) {
+    if (!gLb) return;
+    gSelect(i);
+    gLbImg.src = gPhotos[gIdx];
+    if (gLbCnt) gLbCnt.textContent = (gIdx + 1) + ' / ' + gPhotos.length;
+    gLb.style.display = 'flex';
+    gLb.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeGalleryLightbox() {
+    if (!gLb) return;
+    gLb.style.display = 'none';
+    gLb.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+    if (!gLb || !gLb.classList.contains('open')) return;
+    if (e.key === 'ArrowLeft')  gChange(-1, true);
+    if (e.key === 'ArrowRight') gChange(1, true);
+    if (e.key === 'Escape')     closeGalleryLightbox();
+});
+</script>
+
+<?php else: ?>
+<div class="card mb-4">
+    <div class="card-body text-center py-5 text-muted">
+        <i class="fa fa-camera fa-2x mb-2 d-block opacity-25"></i>
+        No photos uploaded yet. <a href="media.php?id=<?= $id ?>">Upload photos</a>
     </div>
 </div>
 <?php endif; ?>
+
 
 <?php
 $stageSteps = [
