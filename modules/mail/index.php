@@ -62,6 +62,27 @@ if ($message) {
 $box->close();
 
 $pages     = max(1, (int)ceil($list['total'] / MAIL_PER_PAGE));
+
+/* Opening a message hands the whole width over to it, so the list is not
+ * rendered at all. That means the way back, and the way to the next message,
+ * have to be on the message itself — otherwise reading one email is a dead end
+ * that only the browser's Back button escapes.
+ *
+ * The listing has already been fetched, so its neighbours are free: no second
+ * trip to the mail server to find out what comes next. Movement stays inside
+ * the page being viewed; at either edge the arrow is simply disabled rather
+ * than silently jumping a page. */
+$openPos = null; $prevUid = 0; $nextUid = 0;
+if ($message) {
+    $uids = array_map(static fn ($m) => (int)$m['uid'], $list['messages']);
+    $i    = array_search((int)$message['uid'], $uids, true);
+    if ($i !== false) {
+        $openPos = $i + 1 + (($page - 1) * MAIL_PER_PAGE);
+        $prevUid = $uids[$i - 1] ?? 0;
+        $nextUid = $uids[$i + 1] ?? 0;
+    }
+}
+$backUrl = mailUrl(['folder' => $folder, 'q' => $search, 'page' => $page]);
 $pageTitle = 'Mail';
 
 // Load all accounts for the switcher — after box->close() so we reuse the DB.
@@ -76,11 +97,16 @@ include __DIR__ . '/../../includes/header.php';
 .mb-wrap{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;align-items:start}
 @media (max-width:991px){.mb-wrap{grid-template-columns:1fr}}
 
-/* When a message is open the right column becomes its own split:
-   list on the left (~360px), message on the right. */
+/* Opening a message stands the list down and gives the message the whole
+   column, so a long email is read at a sensible width instead of in a narrow
+   pane beside a list nobody is looking at. */
 .mb-content{display:flex;flex-direction:column;gap:12px;min-width:0}
-.mb-split{display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:12px;align-items:start}
-@media (max-width:900px){.mb-split{grid-template-columns:1fr}}
+.mb-readbar{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    flex-wrap:wrap;padding:9px 14px;
+    border-bottom:1px solid var(--border,#e2e8f0);
+    background:var(--surface-alt,#f8fafc);
+    border-radius:.5rem .5rem 0 0}
 
 /* ── Folder sidebar ── */
 .mb-fold a{
@@ -234,12 +260,9 @@ include __DIR__ . '/../../includes/header.php';
             <?php endif; ?>
         </form>
 
-        <!-- Split: list on left, message on right (only when a message is open) -->
-        <?php if ($message): ?>
-        <div class="mb-split">
-        <?php endif; ?>
-
-            <!-- The list -->
+            <!-- The list — stood down while a message is open, so the
+                 message itself gets the full width of the page. -->
+            <?php if (!$message): ?>
             <div>
             <div class="card" id="mbList">
                 <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
@@ -304,8 +327,9 @@ include __DIR__ . '/../../includes/header.php';
                 <?php endif; ?>
             </div>
             </div><!-- /list wrapper -->
+            <?php endif; ?>
 
-            <!-- The message (only when open — appears in right pane of split) -->
+            <!-- The message, across the full width -->
             <?php if ($message):
                 $base    = BASE_URL . '/modules/mail/';
                 $qs      = 'folder=' . rawurlencode($folder) . '&uid=' . (int)$message['uid'];
@@ -313,6 +337,38 @@ include __DIR__ . '/../../includes/header.php';
                 $files   = array_filter($message['attachments'], static fn ($a) => !$a['inline']);
             ?>
             <div class="card" id="mbMessage">
+                <!-- The way back, and the way onward. The list is not on screen,
+                     so these are the only ones. -->
+                <div class="mb-readbar">
+                    <a class="btn btn-outline-secondary btn-sm" href="<?= e($backUrl) ?>">
+                        <i class="fa fa-arrow-left me-1"></i>Back to <?= e($folder) ?>
+                    </a>
+                    <div class="d-flex align-items-center gap-2">
+                        <?php if ($openPos !== null): ?>
+                        <span class="small text-muted d-none d-sm-inline">
+                            <?= (int)$openPos ?> of <?= (int)$list['total'] ?>
+                        </span>
+                        <?php endif; ?>
+                        <div class="btn-group btn-group-sm">
+                            <?php if ($prevUid): ?>
+                            <a class="btn btn-outline-secondary" title="Newer message"
+                               href="<?= e(mailUrl(['folder' => $folder, 'q' => $search, 'page' => $page, 'uid' => $prevUid])) ?>">
+                                <i class="fa fa-chevron-up"></i>
+                            </a>
+                            <?php else: ?>
+                            <span class="btn btn-outline-secondary disabled"><i class="fa fa-chevron-up"></i></span>
+                            <?php endif; ?>
+                            <?php if ($nextUid): ?>
+                            <a class="btn btn-outline-secondary" title="Older message"
+                               href="<?= e(mailUrl(['folder' => $folder, 'q' => $search, 'page' => $page, 'uid' => $nextUid])) ?>">
+                                <i class="fa fa-chevron-down"></i>
+                            </a>
+                            <?php else: ?>
+                            <span class="btn btn-outline-secondary disabled"><i class="fa fa-chevron-down"></i></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
                         <div style="min-width:0">
@@ -381,10 +437,6 @@ include __DIR__ . '/../../includes/header.php';
             </div>
             <?php endif; ?>
 
-        <?php if ($message): ?>
-        </div><!-- /mb-split -->
-        <?php endif; ?>
-
     </div><!-- /mb-content -->
 </div><!-- /mb-wrap -->
 
@@ -422,20 +474,24 @@ include __DIR__ . '/../../includes/header.php';
         });
     }
 
-    // When the page loads with a message open, scroll the open row into
-    // view inside the list — the list is now a fixed-width column, and
-    // on desktop the page itself does not scroll past the top, so a short
-    // smooth scroll to the message card is still useful on mobile.
-    var openRow = document.querySelector('.mb-row.open');
-    var msgCard = document.getElementById('mbMessage');
-    if (openRow) {
-        openRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
-    if (msgCard && window.innerWidth < 900) {
-        // On mobile the split stacks vertically — scroll the message into view.
-        setTimeout(function () {
-            msgCard.scrollIntoView({ block: 'start', behavior: 'smooth' });
-        }, 120);
+    // The list is not on the page while a message is open, so there is no
+    // row to scroll to and nothing stacked below to scroll past — the message
+    // is already at the top. What is worth having instead is the keyboard:
+    // Escape goes back to the folder, J and K move through it. Ignored while
+    // typing, so the search box still works.
+    var read = document.querySelector('.mb-readbar');
+    if (read) {
+        document.addEventListener('keydown', function (ev) {
+            var t = ev.target || {};
+            if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+            if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '') || t.isContentEditable) return;
+
+            var go = null;
+            if (ev.key === 'Escape')                  go = read.querySelector('a[href]');
+            else if (ev.key === 'j' || ev.key === 'J') go = read.querySelector('a[title="Older message"]');
+            else if (ev.key === 'k' || ev.key === 'K') go = read.querySelector('a[title="Newer message"]');
+            if (go) { ev.preventDefault(); window.location.href = go.href; }
+        });
     }
 }());
 </script>
