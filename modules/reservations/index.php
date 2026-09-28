@@ -102,6 +102,30 @@ if ($filterSearch) {
 }
 $whereSQL = implode(' AND ', $where);
 
+// ── Deposits: the first one and every top-up since ────────────────────────────
+//
+// crm_leads.deposit_amount is only the deposit taken when the car was reserved.
+// Every further payment lives in crm_lead_deposits, and this page used to read
+// the first and stop — so a buyer who had paid 300,000 and then topped up twice
+// showed here as having paid 300,000, with a balance to match, while the lead
+// itself showed the real total. Two screens, two answers, and the wrong one on
+// the page accounts actually works from.
+//
+// Joined as one grouped subquery rather than looked up row by row, so the list
+// stays one query however many reservations there are. Voided top-ups — the
+// ones set aside when an earlier reservation on the same lead was cancelled —
+// are stepped over, exactly as modules/crm/_deposits.php does everywhere else.
+require_once __DIR__ . '/../crm/_deposits.php';
+leadDepositsEnsure($db);   // the table has to exist before it can be joined
+
+$topUps = "LEFT JOIN (SELECT lead_id,
+                             SUM(amount)       AS extra,
+                             COUNT(*)          AS extra_n,
+                             MAX(deposit_date) AS last_date
+                        FROM crm_lead_deposits
+                       WHERE voided_at IS NULL
+                    GROUP BY lead_id) dx ON dx.lead_id = l.id";
+
 // ── Main query ────────────────────────────────────────────────────────────────
 $stmt = $db->prepare("
     SELECT
@@ -111,6 +135,10 @@ $stmt = $db->prepare("
         l.email             AS lead_email,
         l.stage             AS lead_stage,
         l.deposit_amount,
+        COALESCE(l.deposit_amount,0) + COALESCE(dx.extra,0) AS deposit_total,
+        COALESCE(dx.extra,0)                                 AS deposit_extra,
+        COALESCE(dx.extra_n,0)                               AS deposit_extra_n,
+        COALESCE(dx.last_date, l.deposit_date)               AS deposit_last_date,
         l.deposit_date,
         l.deposit_notes,
         l.agreed_sale_price,
@@ -133,6 +161,7 @@ $stmt = $db->prepare("
     LEFT JOIN cars    c  ON c.id  = l.pinned_car_id
     LEFT JOIN clients cl ON cl.id = l.client_id
     LEFT JOIN users   u  ON u.id  = l.assigned_to
+    $topUps
     WHERE $whereSQL
     ORDER BY l.updated_at DESC
 ");
@@ -144,14 +173,16 @@ $scopeWhere = $isCrmAgent ? "AND l.assigned_to = $uid" : '';
 $stats = $db->query("
     SELECT
         COUNT(*)                                             AS total,
-        COALESCE(SUM(l.deposit_amount),0)                   AS total_deposits,
+        COALESCE(SUM(COALESCE(l.deposit_amount,0) + COALESCE(dx.extra,0)),0) AS total_deposits,
         COALESCE(SUM(
             GREATEST(0, COALESCE(l.agreed_sale_price,
-                COALESCE(c.offer_price, c.asking_price, 0)) - COALESCE(l.deposit_amount,0))
+                COALESCE(c.offer_price, c.asking_price, 0))
+                - COALESCE(l.deposit_amount,0) - COALESCE(dx.extra,0))
         ),0)                                                 AS total_balance,
         COUNT(DISTINCT l.assigned_to)                       AS agent_count
     FROM crm_leads l
     LEFT JOIN cars c ON c.id = l.pinned_car_id
+    $topUps
     WHERE l.stage = 'reserved' $scopeWhere
 ")->fetch();
 
@@ -517,11 +548,14 @@ include __DIR__ . '/../../includes/header.php';
     $carTitle    = $r['car_id']
                  ? trim(($r['year']??'').' '.($r['make']??'').' '.($r['model']??''))
                  : '—';
-    $deposit  = (float)($r['deposit_amount']    ?? 0);
+    // Everything paid, not just the first payment — see the note above the query.
+    $deposit  = (float)($r['deposit_total']     ?? 0);
+    $depExtraN = (int)($r['deposit_extra_n']    ?? 0);
     $agreed   = (float)($r['agreed_sale_price'] ?? 0)
              ?: ((float)($r['offer_price']  ?? 0) ?: (float)($r['asking_price'] ?? 0));
     $balance  = max(0, $agreed - $deposit);
-    $depFmt   = $r['deposit_date'] ? (new DateTime($r['deposit_date']))->format('d M Y') : '—';
+    // The date of the latest payment, which is what "paid so far" is as at.
+    $depFmt   = $r['deposit_last_date'] ? (new DateTime($r['deposit_last_date']))->format('d M Y') : '—';
     $dueFmt   = $r['due_date']     ? (new DateTime($r['due_date']))->format('d M Y')     : '—';
     $imgUrl   = $r['primary_image'] ? thumbUrl('cars', $r['primary_image'])              : null;
     $daysHeld = (int)($r['days_held'] ?? 0);
@@ -625,8 +659,18 @@ include __DIR__ . '/../../includes/header.php';
     <!-- Payment tiles -->
     <div class="res-pay-row">
         <div class="res-pay-tile deposit">
-            <div class="res-pay-tile-amt green">KES <?= number_format($deposit) ?></div>
-            <div class="res-pay-tile-lbl">Deposit<br><span style="font-weight:400;opacity:.75"><?= $depFmt ?></span></div>
+            <div class="res-pay-tile-amt green"
+                 title="<?= $depExtraN > 0
+                     ? e('Initial KES ' . number_format((float)$r['deposit_amount']) . ' + '
+                         . $depExtraN . ' further payment' . ($depExtraN === 1 ? '' : 's')
+                         . ' of KES ' . number_format((float)$r['deposit_extra']))
+                     : 'Initial deposit' ?>">KES <?= number_format($deposit) ?></div>
+            <div class="res-pay-tile-lbl">
+                <?= $depExtraN > 0 ? 'Paid so far' : 'Deposit' ?><br>
+                <span style="font-weight:400;opacity:.75">
+                    <?= $depExtraN > 0 ? (1 + $depExtraN) . ' payments · ' : '' ?><?= $depFmt ?>
+                </span>
+            </div>
         </div>
         <div class="res-pay-tile balance">
             <div class="res-pay-tile-amt orange">KES <?= number_format($balance) ?></div>
@@ -669,7 +713,7 @@ include __DIR__ . '/../../includes/header.php';
                 data-customer="<?= e($r['client_name'] ?: $r['lead_name']) ?>"
                 data-vehicle="<?= e(trim(($r['year'] ?? '') . ' ' . ($r['make'] ?? '') . ' ' . ($r['model'] ?? ''))) ?>"
                 data-agent="<?= e($r['agent_name'] ?? '') ?>"
-                data-deposit="<?= $r['deposit_amount'] !== null ? number_format((float)$r['deposit_amount']) : '' ?>">
+                data-deposit="<?= $deposit > 0 ? number_format($deposit) : '' ?>">
             <i class="fa fa-ban me-1"></i>Cancel Reservation
         </button>
         <?php endif; ?>
