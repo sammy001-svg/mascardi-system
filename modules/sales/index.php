@@ -8,6 +8,14 @@ $db = getDB();
 // Inline migration — silent no-op if column already exists
 try { $db->exec("ALTER TABLE car_sales ADD COLUMN cost_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 
+// Every car delivered through the CRM belongs in this book. Marking a lead
+// Delivered used to change the vehicle's status and nothing else, so the sale
+// was never written down and this page showed a fraction of what had gone out
+// the gate. Syncing on the way in means opening Sales is always current,
+// whatever else has or has not run.
+require_once __DIR__ . '/_sync.php';
+salesSyncFromLeads($db);
+
 $canSeeProfit = hasRole(['admin','super_admin','general_manager','sales_manager','finance_manager','finance_officer']);
 
 // ── Filter params ─────────────────────────────────────────────────────────────

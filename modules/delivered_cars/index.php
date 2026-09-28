@@ -74,19 +74,64 @@ $stmt = $db->prepare("
 $stmt->execute($params);
 $deliveries = $stmt->fetchAll();
 
-// ── Dashboard stats (unfiltered, scoped to agent if needed) ───────────────────
+// ── The figures, for exactly what is on screen ────────────────────────────────
+// These used to ignore every filter. The query was pinned to all time, and only
+// the table below responded to the month, agent and make boxes — so picking
+// September still showed the year's totals, and the headline disagreed with the
+// rows under it. They now run off the same WHERE and the same parameters as the
+// list, and say what is actually owed as well as what was billed.
 $scopeWhere = $isCrmAgent ? "AND l.assigned_to = $uid" : '';
-$stats = $db->query("
-    SELECT
-        COUNT(*)                                                                       AS total,
-        COALESCE(SUM(COALESCE(l.agreed_sale_price, c.offer_price, c.asking_price, 0)), 0) AS total_revenue,
-        COUNT(CASE WHEN DATE_FORMAT(COALESCE(l.delivered_at,l.converted_at),'%Y-%m')
-                        = DATE_FORMAT(NOW(),'%Y-%m') THEN 1 END)                     AS this_month,
-        COALESCE(AVG(NULLIF(COALESCE(l.agreed_sale_price, c.offer_price, c.asking_price, 0),0)),0) AS avg_sale
-    FROM crm_leads l
-    LEFT JOIN cars c ON c.id = l.pinned_car_id
-    WHERE l.stage = 'delivered' $scopeWhere
-")->fetch();
+
+// Price: what was agreed, falling back to the car's own figures. Paid: the
+// reservation deposit, every top-up that has not been voided, and every credit
+// instalment received. Together they give what is still outstanding, which is
+// the number a delivered car's paperwork actually turns on.
+$statsSQL = "
+    SELECT COUNT(*)                                          AS total,
+           COALESCE(SUM(t.price), 0)                         AS total_revenue,
+           COALESCE(SUM(t.paid), 0)                          AS collected,
+           COALESCE(SUM(GREATEST(t.price - t.paid, 0)), 0)   AS outstanding,
+           COALESCE(AVG(NULLIF(t.price, 0)), 0)              AS avg_sale,
+           COALESCE(SUM(t.on_credit), 0)                     AS on_credit
+      FROM (
+        SELECT
+          COALESCE(NULLIF(l.agreed_sale_price,0), NULLIF(c.offer_price,0),
+                   NULLIF(c.asking_price,0), 0)                              AS price,
+          COALESCE(l.deposit_amount,0)
+            + COALESCE((SELECT SUM(d.amount) FROM crm_lead_deposits d
+                         WHERE d.lead_id = l.id AND d.voided_at IS NULL), 0)
+            + COALESCE((SELECT SUM(cp.amount) FROM credit_payments cp
+                          JOIN credit_agreements ca ON ca.id = cp.agreement_id
+                         WHERE ca.lead_id = l.id), 0)                        AS paid,
+          (SELECT COUNT(*) FROM credit_agreements ca2
+            WHERE ca2.lead_id = l.id AND ca2.status <> 'cancelled') > 0      AS on_credit
+        FROM crm_leads l
+        LEFT JOIN cars    c  ON c.id  = l.pinned_car_id
+        LEFT JOIN clients cl ON cl.id = l.client_id
+        WHERE $whereSQL
+      ) t";
+
+try {
+    $st = $db->prepare($statsSQL);
+    $st->execute($params);
+    $stats = $st->fetch();
+} catch (\Throwable $e) {
+    // An install without the deposit or credit tables still gets its counts
+    // and its value — it just cannot say what has been collected.
+    error_log('delivered_cars stats: ' . $e->getMessage());
+    $st = $db->prepare("
+        SELECT COUNT(*) AS total,
+               COALESCE(SUM(COALESCE(NULLIF(l.agreed_sale_price,0), NULLIF(c.offer_price,0),
+                                     NULLIF(c.asking_price,0), 0)),0) AS total_revenue,
+               0 AS collected, 0 AS outstanding, 0 AS on_credit,
+               COALESCE(AVG(NULLIF(COALESCE(l.agreed_sale_price, c.offer_price, c.asking_price, 0),0)),0) AS avg_sale
+          FROM crm_leads l
+          LEFT JOIN cars    c  ON c.id  = l.pinned_car_id
+          LEFT JOIN clients cl ON cl.id = l.client_id
+         WHERE $whereSQL");
+    $st->execute($params);
+    $stats = $st->fetch();
+}
 
 // ── Filter dropdowns ──────────────────────────────────────────────────────────
 $makesList = $db->query("
@@ -110,10 +155,30 @@ for ($i = 0; $i < 12; $i++) {
     $monthOptions[$dt->format('Y-m')] = $dt->format('M Y');
 }
 
-$total      = (int)$stats['total'];
-$totalRev   = (float)$stats['total_revenue'];
-$thisMonth  = (int)$stats['this_month'];
-$avgSale    = (float)$stats['avg_sale'];
+$total       = (int)$stats['total'];
+$totalRev    = (float)$stats['total_revenue'];
+$collected   = (float)($stats['collected']   ?? 0);
+$outstanding = (float)($stats['outstanding'] ?? 0);
+$onCredit    = (int)($stats['on_credit']     ?? 0);
+$avgSale     = (float)$stats['avg_sale'];
+
+// What the reader is looking at, said in words, so the tiles are never
+// mistaken for the all-time position.
+$scopeBits = [];
+if ($filterMonth)  $scopeBits[] = date('F Y', strtotime($filterMonth . '-01'));
+if ($filterMake)   $scopeBits[] = $filterMake;
+if ($filterAgent)  {
+    foreach ($agentsList as $__a) if ((int)$__a['id'] === $filterAgent) $scopeBits[] = $__a['name'];
+}
+if ($filterSearch) $scopeBits[] = '"' . $filterSearch . '"';
+$scopeLabel = $scopeBits ? implode(' · ', $scopeBits) : 'All deliveries, all time';
+
+/** Big money, kept inside its tile. */
+function dlvMoney(float $n): string {
+    if ($n >= 1000000) return 'KES ' . rtrim(rtrim(number_format($n / 1000000, 1), '0'), '.') . 'M';
+    if ($n >= 1000)    return 'KES ' . number_format($n / 1000) . 'K';
+    return 'KES ' . number_format($n);
+}
 $filtered   = count($deliveries);
 $isFiltered = $filterMake || $filterAgent || $filterSearch || $filterMonth;
 
@@ -143,9 +208,12 @@ include __DIR__ . '/../../includes/header.php';
 .dlv-banner-title { font-size:22px; font-weight:800; letter-spacing:-.4px; margin-bottom:2px; }
 .dlv-banner-sub   { font-size:13px; opacity:.75; margin-bottom:24px; }
 .dlv-stat-row {
-    display:grid; grid-template-columns:repeat(4,1fr); gap:12px;
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:12px;
 }
 @media(max-width:768px){ .dlv-stat-row { grid-template-columns:repeat(2,1fr); } }
+.dlv-scope {
+    font-size:12px; opacity:.75; margin-bottom:10px; letter-spacing:.3px;
+}
 .dlv-stat {
     background:rgba(255,255,255,.12);
     border:1px solid rgba(255,255,255,.18);
@@ -303,30 +371,37 @@ include __DIR__ . '/../../includes/header.php';
         Complete record of all vehicles delivered to buyers
         <?php endif; ?>
     </div>
+    <div class="dlv-scope"><i class="fa fa-filter me-1"></i><?= e($scopeLabel) ?></div>
     <div class="dlv-stat-row">
         <div class="dlv-stat">
             <span class="dlv-stat-icon"><i class="fa fa-truck"></i></span>
             <div class="dlv-stat-val"><?= $total ?></div>
-            <div class="dlv-stat-lbl">Total Delivered</div>
+            <div class="dlv-stat-lbl">Delivered</div>
         </div>
         <div class="dlv-stat">
             <span class="dlv-stat-icon"><i class="fa fa-chart-line"></i></span>
-            <div class="dlv-stat-val" style="font-size:<?= strlen('KES '.number_format($totalRev,0)) > 12 ? '13' : '18' ?>px">
-                KES <?= number_format($totalRev, 0) ?>
-            </div>
-            <div class="dlv-stat-lbl">Total Revenue</div>
+            <div class="dlv-stat-val" title="KES <?= number_format($totalRev, 2) ?>"><?= dlvMoney($totalRev) ?></div>
+            <div class="dlv-stat-lbl">Total Value</div>
         </div>
         <div class="dlv-stat">
-            <span class="dlv-stat-icon"><i class="fa fa-calendar"></i></span>
-            <div class="dlv-stat-val"><?= $thisMonth ?></div>
-            <div class="dlv-stat-lbl">This Month</div>
+            <span class="dlv-stat-icon"><i class="fa fa-hand-holding-dollar"></i></span>
+            <div class="dlv-stat-val" title="KES <?= number_format($collected, 2) ?>"><?= dlvMoney($collected) ?></div>
+            <div class="dlv-stat-lbl">Collected</div>
+        </div>
+        <div class="dlv-stat">
+            <span class="dlv-stat-icon"><i class="fa fa-scale-unbalanced"></i></span>
+            <div class="dlv-stat-val" title="KES <?= number_format($outstanding, 2) ?>"><?= dlvMoney($outstanding) ?></div>
+            <div class="dlv-stat-lbl">Outstanding</div>
+        </div>
+        <div class="dlv-stat">
+            <span class="dlv-stat-icon"><i class="fa fa-file-signature"></i></span>
+            <div class="dlv-stat-val"><?= $onCredit ?></div>
+            <div class="dlv-stat-lbl">On Credit</div>
         </div>
         <div class="dlv-stat">
             <span class="dlv-stat-icon"><i class="fa fa-tag"></i></span>
-            <div class="dlv-stat-val" style="font-size:<?= strlen('KES '.number_format($avgSale,0)) > 12 ? '13' : '18' ?>px">
-                <?= $avgSale > 0 ? 'KES '.number_format($avgSale, 0) : '—' ?>
-            </div>
-            <div class="dlv-stat-lbl">Avg. Sale Price</div>
+            <div class="dlv-stat-val" title="KES <?= number_format($avgSale, 2) ?>"><?= $avgSale > 0 ? dlvMoney($avgSale) : '—' ?></div>
+            <div class="dlv-stat-lbl">Average Price</div>
         </div>
     </div>
 </div>

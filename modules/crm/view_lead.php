@@ -218,6 +218,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // through the Trade-In module would.
                 $__ref      = crmSettleConsignmentOnDelivery($db, $lead);
                 $__clientId = crmDeliverLeadToClient($db, $lead);
+
+                // The car has been sold. Write it into the sales book now
+                // rather than waiting for somebody to open a report — that
+                // wait is why cars delivered this month never showed up there.
+                require_once __DIR__ . '/../sales/_sync.php';
+                salesSyncFromLeads($db, $id);
                 if ($__clientId) {
                     setFlash('success', 'Lead delivered. ' . e($lead['name'])
                         . ' is now a client and the vehicle is registered to them.'
@@ -691,6 +697,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // service booking finds both already on file.
                 $__ref      = crmSettleConsignmentOnDelivery($db, $lead);
                 $__clientId = crmDeliverLeadToClient($db, $lead);
+
+                // The car has been sold. Write it into the sales book now
+                // rather than waiting for somebody to open a report — that
+                // wait is why cars delivered this month never showed up there.
+                require_once __DIR__ . '/../sales/_sync.php';
+                salesSyncFromLeads($db, $id);
                 notifyRoles(['customer_relations','sales_person','sales_manager','super_admin','admin'], 'sale',
                     "Delivery Note Confirmed: {$lead['name']}", "Confirmed by {$me['name']}. The delivery note can now be printed.", $leadUrlDp);
                 logActivity('update', 'crm_leads', $id, "Delivery Protocol: delivery note confirmed by {$me['name']}. Lead marked Delivered.");

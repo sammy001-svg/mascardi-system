@@ -579,40 +579,22 @@ function syncDeliveredCarSales(PDO $db): void {
             CONSTRAINT fk_cost_car FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        $deliveredCars = $db->query("SELECT * FROM cars WHERE status IN ('delivered','sold')")->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($deliveredCars as $c) {
-            $chk = $db->prepare("SELECT id FROM car_sales WHERE car_id = ?");
-            $chk->execute([$c['id']]);
-            if (!$chk->fetch()) {
-                $salePrice = (float)($c['asking_price'] > 0 ? $c['asking_price'] : ($c['offer_price'] > 0 ? $c['offer_price'] : 3500000));
-                $saleNum = 'SALE-' . str_pad($c['id'], 4, '0', STR_PAD_LEFT);
-                $saleDate = date('Y-m-d', strtotime($c['created_at']));
-                $deliveredAt = $c['created_at'];
+        // The backfill that used to live here read the cars table and made up
+        // whatever it could not find: the asking price (or a flat 3,500,000)
+        // as the sale price, the day the car ARRIVED as the day it sold, the
+        // number plate as the buyer's name, no agent at all, and a full set of
+        // costs derived as percentages of that invented price.
+        //
+        // Every one of those figures reached the sales and profit reports. The
+        // date was the worst of them: a car that arrived in July and sold in
+        // September was filed under July, so the month filter finance actually
+        // uses came back empty.
+        //
+        // The real sale is on the lead. modules/sales/_sync.php builds it from
+        // there and invents nothing.
+        require_once __DIR__ . '/../modules/sales/_sync.php';
+        salesSyncFromLeads($db);
 
-                $ins = $db->prepare("INSERT INTO car_sales (sale_number, car_id, sale_date, sale_price, buyer_name, payment_status, delivered_at, status, created_at) VALUES (?, ?, ?, ?, ?, 'paid_full', ?, 'active', ?)");
-                $ins->execute([
-                    $saleNum,
-                    $c['id'],
-                    $saleDate,
-                    $salePrice,
-                    'Client ' . ($c['registration_number'] ?: $c['make'] . ' ' . $c['model']),
-                    $deliveredAt,
-                    $c['created_at']
-                ]);
-
-                $chkCost = $db->prepare("SELECT id FROM car_costs WHERE car_id = ?");
-                $chkCost->execute([$c['id']]);
-                if (!$chkCost->fetch()) {
-                    $purchase = round($salePrice * 0.50, 2);
-                    $duty     = round($salePrice * 0.20, 2);
-                    $freight  = 150000.00;
-                    $clearing = 85000.00;
-                    $workshop = 45000.00;
-                    $insCost  = $db->prepare("INSERT INTO car_costs (car_id, purchase_price, duty_tax, freight, clearing_fees, workshop_costs) VALUES (?, ?, ?, ?, ?, ?)");
-                    $insCost->execute([$c['id'], $purchase, $duty, $freight, $clearing, $workshop]);
-                }
-            }
-        }
     } catch (\Throwable $e) {
         error_log('[syncDeliveredCarSales] ' . $e->getMessage());
     }
