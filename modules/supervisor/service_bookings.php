@@ -28,35 +28,60 @@ if ($fRange === 'today') {
     $fDateTo   = date('Y-m-t');
 }
 
-$where  = "(c.location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?) OR sb.intake_location_id IN (SELECT id FROM locations WHERE id=? OR parent_id=?))";
-$params = [$locId, $locId, $locId, $locId];
+$locIds = [$locId];
+try {
+    $subStmt = $db->prepare("SELECT id FROM locations WHERE parent_id = ?");
+    $subStmt->execute([$locId]);
+    foreach ($subStmt->fetchAll(PDO::FETCH_COLUMN) as $subId) {
+        $locIds[] = (int)$subId;
+    }
+} catch (\Throwable $_) {}
+$inList = implode(',', array_map('intval', array_unique($locIds)));
 
-if ($fStatus) { $where .= " AND sb.status=?"; $params[] = $fStatus; }
-if ($fSearch) {
-    $where .= " AND (sb.client_name LIKE ? OR sb.client_phone LIKE ? OR sb.booking_number LIKE ? OR c.registration_number LIKE ? OR sb.car_registration LIKE ?)";
-    $s = "%{$fSearch}%";
-    $params = array_merge($params, [$s, $s, $s, $s, $s]);
+$whereClauses = [
+    "((c.location_id IN ({$inList})) OR (sb.intake_location_id IN ({$inList})) OR (u.location_id IN ({$inList})) OR (sb.intake_location_id IS NULL AND c.location_id IS NULL))"
+];
+$params = [];
+
+if ($fStatus !== '') {
+    $whereClauses[] = "sb.status = ?";
+    $params[] = $fStatus;
 }
-if ($fDateFrom) {
-    $where .= " AND COALESCE(sb.preferred_date, sb.booking_date, DATE(sb.created_at)) >= ?";
+if ($fSearch !== '') {
+    $whereClauses[] = "(sb.client_name LIKE ? OR sb.client_phone LIKE ? OR sb.booking_number LIKE ? OR c.registration_number LIKE ? OR sb.car_registration LIKE ?)";
+    $s = "%{$fSearch}%";
+    $params[] = $s;
+    $params[] = $s;
+    $params[] = $s;
+    $params[] = $s;
+    $params[] = $s;
+}
+if ($fDateFrom !== '') {
+    $whereClauses[] = "COALESCE(sb.preferred_date, sb.booking_date, DATE(sb.created_at)) >= ?";
     $params[] = $fDateFrom;
 }
-if ($fDateTo) {
-    $where .= " AND COALESCE(sb.preferred_date, sb.booking_date, DATE(sb.created_at)) <= ?";
+if ($fDateTo !== '') {
+    $whereClauses[] = "COALESCE(sb.preferred_date, sb.booking_date, DATE(sb.created_at)) <= ?";
     $params[] = $fDateTo;
 }
+
+$whereSql = implode(' AND ', $whereClauses);
 
 try {
     $stmt = $db->prepare("
         SELECT sb.*, c.make, c.model, c.registration_number
         FROM service_bookings sb
         LEFT JOIN cars c ON c.id = sb.car_id
-        WHERE {$where}
+        LEFT JOIN users u ON u.name = sb.created_by
+        WHERE {$whereSql}
         ORDER BY sb.preferred_date DESC, sb.created_at DESC
     ");
     $stmt->execute($params);
-    $bookings = $stmt->fetchAll();
-} catch (\Throwable $_) { $bookings = []; }
+    $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $e) {
+    error_log('[supervisor/service_bookings] ' . $e->getMessage());
+    $bookings = [];
+}
 
 include __DIR__ . '/../../includes/header.php';
 ?>
