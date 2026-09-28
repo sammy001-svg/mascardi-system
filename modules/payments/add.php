@@ -2,7 +2,18 @@
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/notifications.php';
 require_once __DIR__ . '/../../includes/mailer.php';
+// acctSelect() is used when the form is DRAWN, not only when it is posted, so
+// this belongs at the top rather than inside the POST branch.
+require_once __DIR__ . '/../finance/_accounts.php';
 requireLogin();
+
+// confirmed_at has been in the INSERT below since this page was written and is
+// created by nothing — not schema.sql, not any migration — so recording a
+// payment here failed with "Unknown column" on any database built from the
+// repo. Added inline, the way the rest of this codebase adds a column it
+// forgot, so the page works on an install that never had it.
+try { getDB()->exec("ALTER TABLE payments ADD COLUMN confirmed_at DATETIME NULL"); }
+catch (\Throwable $e) { /* already there */ }
 canAccess('payments') || die('Access denied.');
 canWrite('payments') || die('Permission denied.');
 $pageTitle = 'Record Payment';
@@ -52,6 +63,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $description   = trim($_POST['description'] ?? '');
     $amount        = (float)($_POST['amount'] ?? 0);
     $method = $_POST['payment_method'] ?? '';
+    // Read through the helper rather than taken from the form, so a closed
+    // account cannot be posted into and a stray id cannot create a balance
+    // nothing will ever reconcile.
+    $acctId = acctFromRequest($db);
 
     // Each method uses unique field names — no JS required to pick the right value
     switch ($method) {
@@ -119,14 +134,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  invoice_id, service_booking_id, description, amount, payment_method,
                  reference_number, mpesa_phone, mpesa_name, bank_name, account_number,
                  cheque_number, cheque_date, notes, balance_adjustment, recorded_by,
-                 status, confirmed_by, confirmed_at)
-                VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?)
+                 status, confirmed_by, confirmed_at, account_id)
+                VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?)
             ")->execute([
                 $payNum, $payDate, $clientId, $clientName, $clientPhone,
                 $invoiceId, $bookingId, $description, $amount, $method,
                 $ref, $mpesaPhone, $mpesaName, $bankName, $accountNumber,
                 $chequeNumber, $chequeDate, $notes, $balAdj, $recordedBy,
-                $initStatus, $initConfirmedBy, $initConfirmedAt,
+                $initStatus, $initConfirmedBy, $initConfirmedAt, $acctId,
             ]);
             $newPayId = (int)$db->lastInsertId();
 
@@ -436,6 +451,21 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
             </div>
         </div>
+
+        <?php $accSel = acctSelect($db, 'account_id', (int)($_POST['account_id'] ?? 0)); ?>
+        <?php if ($accSel !== ''): ?>
+        <!-- Which of the company's accounts it landed in -->
+        <div class="card mb-3">
+            <div class="card-header fw-semibold"><i class="fa fa-vault me-2 text-primary"></i>Received into</div>
+            <div class="card-body">
+                <?= $accSel ?>
+                <div class="form-text">
+                    The company account the money actually landed in. It appears on that
+                    account's statement and counts towards its balance.
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Notes -->
         <div class="card mb-3">

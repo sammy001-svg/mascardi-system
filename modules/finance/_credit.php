@@ -386,8 +386,12 @@ function creditRecipient(PDO $db, int $agreementId): array
  *               balance:float, emailed:bool, email_note:string}
  */
 function creditRecordPayment(PDO $db, int $agreementId, float $amount, string $paidOn,
-                             string $method, string $reference, string $notes, int $userId): array
+                             string $method, string $reference, string $notes, int $userId,
+                             ?int $accountId = null): array
 {
+    require_once __DIR__ . '/_accounts.php';
+    acctMigrate($db);
+
     $fail = static fn (string $why) => ['ok' => false, 'error' => $why, 'receipt' => '', 'payment_id' => 0,
                                          'balance' => 0.0, 'emailed' => false, 'email_note' => ''];
     creditMigrate($db);
@@ -418,10 +422,12 @@ function creditRecordPayment(PDO $db, int $agreementId, float $amount, string $p
     try {
         $receipt = creditNextReceipt($db);
         $db->prepare("INSERT INTO credit_payments
-                         (agreement_id, receipt_number, amount, paid_on, method, reference, notes, recorded_by)
-                      VALUES (?,?,?,?,?,?,?,?)")
+                         (agreement_id, receipt_number, amount, paid_on, method, reference, notes,
+                          recorded_by, account_id)
+                      VALUES (?,?,?,?,?,?,?,?,?)")
            ->execute([$agreementId, $receipt, round($amount, 2), $paidOn,
-                      trim($method) ?: null, trim($reference) ?: null, trim($notes) ?: null, $userId ?: null]);
+                      trim($method) ?: null, trim($reference) ?: null, trim($notes) ?: null,
+                      $userId ?: null, $accountId]);
         $payId = (int)$db->lastInsertId();
         creditApplyPayment($db, $agreementId, $amount, $payId);
     } catch (\Throwable $e) {

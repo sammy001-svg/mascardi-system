@@ -468,8 +468,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $date  = trim($_POST['deposit_date'] ?? '') ?: date('Y-m-d');
         $notes = trim($_POST['notes'] ?? '') ?: null;
         if ($amt > 0) {
-            $db->prepare("INSERT INTO crm_lead_deposits (lead_id, amount, deposit_date, notes, created_by) VALUES (?,?,?,?,?)")
-               ->execute([$id, $amt, $date, $notes, $uid]);
+            // Which of the company's accounts the deposit went into, so it
+            // shows on that account's statement like any other money in.
+            require_once __DIR__ . '/../finance/_accounts.php';
+            $db->prepare("INSERT INTO crm_lead_deposits (lead_id, amount, deposit_date, notes, created_by, account_id)
+                          VALUES (?,?,?,?,?,?)")
+               ->execute([$id, $amt, $date, $notes, $uid, acctFromRequest($db)]);
             logActivity('update', 'crm_leads', $id, "Additional deposit recorded: " . number_format($amt, 2) . " on {$date}" . ($notes ? " — {$notes}" : ''));
             require_once __DIR__ . '/../../includes/dispatch.php';
             dispatchToRoles(['super_admin','admin','sales_manager'], 'deposit', [
@@ -925,22 +929,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlash('error', 'Enter the amount received.');
         } else {
             try {
-                $receipt = creditNextReceipt($db);
-                $db->prepare("INSERT INTO credit_payments
-                        (agreement_id, receipt_number, amount, paid_on, method, reference, notes, recorded_by)
-                     VALUES (?,?,?,?,?,?,?,?)")
-                   ->execute([(int)$agr['id'], $receipt, $amt, $on,
-                              trim($_POST['method'] ?? '') ?: null,
-                              trim($_POST['reference'] ?? '') ?: null,
-                              trim($_POST['notes'] ?? '') ?: null, (int)$me['id']]);
-                $payId = (int)$db->lastInsertId();
-                creditApplyPayment($db, (int)$agr['id'], $amt, $payId);
+                // Through the shared helper, so a credit payment taken here is
+                // recorded, allocated, receipted and emailed exactly as one
+                // taken in the finance portal. Two ways of taking money is how
+                // the two screens end up disagreeing.
+                require_once __DIR__ . '/../finance/_credit.php';
+                require_once __DIR__ . '/../finance/_accounts.php';
+                $res = creditRecordPayment($db, (int)$agr['id'], $amt, $on,
+                    (string)($_POST['method'] ?? ''), (string)($_POST['reference'] ?? ''),
+                    (string)($_POST['notes'] ?? ''), (int)$me['id'], acctFromRequest($db));
 
-                $sum = creditSummary($db, (int)$agr['id']);
+                if (!$res['ok']) throw new \RuntimeException($res['error']);
+                $receipt = $res['receipt'];
+
                 logActivity('create', 'crm_leads', $id, "Credit payment {$receipt} of " . money($amt) . ' recorded');
-                setFlash('success', 'Payment of ' . money($amt) . ' recorded (' . $receipt . '). '
-                    . ($sum['balance'] > 0 ? 'Balance now ' . money($sum['balance']) . '.'
-                                           : 'The credit facility is now settled in full.'));
+                // Whether the buyer was told is part of the outcome, not a detail.
+                setFlash($res['emailed'] ? 'success' : 'warning',
+                    'Payment of ' . money($amt) . ' recorded (' . $receipt . '). '
+                    . ($res['balance'] > 0 ? 'Balance now ' . money($res['balance']) . '. '
+                                            : 'The credit facility is now settled in full. ')
+                    . ($res['emailed'] ? 'A confirmation has been emailed.' : $res['email_note']));
             } catch (\Throwable $e) {
                 error_log('record_credit_payment: ' . $e->getMessage());
                 setFlash('error', 'Could not record the payment: ' . $e->getMessage());
@@ -3537,6 +3545,13 @@ $__showCreditModals = $lead['stage'] === 'reserved'
                             <label class="form-label small fw-semibold">Paid by</label>
                             <input type="text" name="method" class="form-control" placeholder="M-Pesa / Bank / Cash">
                         </div>
+                        <?php require_once __DIR__ . '/../finance/_accounts.php';
+                              $__accSel = acctSelect($db); if ($__accSel !== ''): ?>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Into which account</label>
+                            <?= $__accSel ?>
+                        </div>
+                        <?php endif; ?>
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold">Reference</label>
                             <input type="text" name="reference" class="form-control" placeholder="Transaction code">
@@ -3696,6 +3711,14 @@ $__showCreditModals = $lead['stage'] === 'reserved'
                             <label class="form-label fw-semibold">Date Received <span class="text-danger">*</span></label>
                             <input type="date" name="deposit_date" class="form-control" required value="<?= date('Y-m-d') ?>">
                         </div>
+                        <?php require_once __DIR__ . '/../finance/_accounts.php';
+                              $__depAcc = acctSelect($db); if ($__depAcc !== ''): ?>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Received into</label>
+                            <?= $__depAcc ?>
+                            <div class="form-text">Which company account the deposit went into.</div>
+                        </div>
+                        <?php endif; ?>
                         <div class="col-12">
                             <label class="form-label fw-semibold">Notes <span class="text-muted fw-normal small">(optional)</span></label>
                             <input type="text" name="notes" class="form-control" placeholder="e.g. M-Pesa ref, bank transfer…">

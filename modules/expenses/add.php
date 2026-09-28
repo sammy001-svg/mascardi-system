@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../finance/_accounts.php';   // acctSelect(), used when drawing the form
 requireLogin();
 canWrite('expenses') || redirect(BASE_URL . '/index.php');
 
@@ -39,6 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['amount']         = $_POST['amount']         ?? '';
     $d['expense_date']   = $_POST['expense_date']   ?? date('Y-m-d');
     $d['payment_method'] = $_POST['payment_method'] ?? 'cash';
+    // Which account the money left. See modules/finance/_accounts.php.
+    $acctId = acctFromRequest($db);
     $d['reference']      = trim($_POST['reference']      ?? '');
     $d['vendor']         = trim($_POST['vendor']         ?? '');
     $d['notes']          = trim($_POST['notes']          ?? '');
@@ -73,8 +76,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $expNum = nextNumber('expenses', 'expense_number', 'EXP');
             $db->prepare("INSERT INTO expenses
                 (expense_number, category, description, amount, expense_date,
-                 payment_method, reference, vendor, receipt_file, notes, recorded_by)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+                 payment_method, reference, vendor, receipt_file, notes, recorded_by, account_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
                ->execute([
                    $expNum, $d['category'], $d['description'],
                    (float)$d['amount'], $d['expense_date'],
@@ -84,6 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    $receiptFile,
                    $d['notes']     ?: null,
                    authUser()['id'],
+                   $acctId,
                ]);
             logActivity('create','expenses',(int)$db->lastInsertId(),"Expense: {$d['description']} — ".money((float)$d['amount']));
             setFlash('success', "Expense recorded: {$expNum}");
@@ -148,6 +152,15 @@ include __DIR__ . '/../../includes/header.php';
                                    value="<?= e($d['vendor']) ?>"
                                    placeholder="e.g. Kenya Power, Total Petrol Station">
                         </div>
+
+                        <?php $accSel = acctSelect($db, 'account_id', (int)($_POST['account_id'] ?? 0)); ?>
+                        <?php if ($accSel !== ''): ?>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Paid from</label>
+                            <?= $accSel ?>
+                            <div class="form-text">Which company account the money left.</div>
+                        </div>
+                        <?php endif; ?>
 
                         <div class="col-md-3">
                             <label class="form-label fw-semibold">Payment Method</label>

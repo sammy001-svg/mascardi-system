@@ -43,6 +43,7 @@ $__lpoOut     = $__badge("SELECT COUNT(*) FROM lpo WHERE status IN ('sent','ackn
 // Credit accounts with something overdue. Loaded through the finance module so
 // the sidebar and the book cannot disagree about what "overdue" means.
 require_once __DIR__ . '/../modules/finance/_credit.php';
+require_once __DIR__ . '/../modules/finance/_accounts.php';
 $__creditOverdue = $__badge("SELECT COUNT(DISTINCT a.id) FROM credit_agreements a
                                JOIN credit_installments ci ON ci.agreement_id = a.id
                               WHERE a.status IN ('active','defaulted')
@@ -95,6 +96,14 @@ $__arrears    = $__badge("SELECT COUNT(*) FROM sale_installments
         <a href="<?= BASE_URL ?>/modules/reports/index.php"
            class="nav-item <?= $__is('/modules/reports/index') ?>" data-label="All reports">
             <i class="fa fa-folder-tree"></i><span>All reports</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (acctCanView()): ?>
+        <a href="<?= BASE_URL ?>/modules/finance/accounts.php"
+           class="nav-item <?= $__is('/finance/accounts') . $__is('/finance/statement') ?>"
+           data-label="Company accounts">
+            <i class="fa fa-vault"></i><span>Company accounts</span>
         </a>
         <?php endif; ?>
 

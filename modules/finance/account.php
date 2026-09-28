@@ -14,6 +14,7 @@
 
 require_once __DIR__ . '/_credit.php';
 require_once __DIR__ . '/_figures.php';
+require_once __DIR__ . '/_accounts.php';
 requireLogin();
 
 if (!creditCanView()) {
@@ -43,7 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $r = creditRecordPayment($db, $id,
             (float)str_replace(',', '', (string)($_POST['amount'] ?? 0)),
             (string)($_POST['paid_on'] ?? ''), (string)($_POST['method'] ?? ''),
-            (string)($_POST['reference'] ?? ''), (string)($_POST['notes'] ?? ''), $uid);
+            (string)($_POST['reference'] ?? ''), (string)($_POST['notes'] ?? ''), $uid,
+            acctFromRequest($db));
 
         if (!$r['ok']) {
             setFlash('danger', $r['error']);
@@ -384,6 +386,14 @@ include __DIR__ . '/../../includes/header.php';
                             <label class="form-label small">Reference</label>
                             <input type="text" name="reference" class="form-control" placeholder="M-Pesa code, slip number">
                         </div>
+                        <?php $accSel = acctSelect($db, 'account_id', 0, 'form-select'); ?>
+                        <?php if ($accSel !== ''): ?>
+                        <div class="mb-3">
+                            <label class="form-label small">Into which account</label>
+                            <?= $accSel ?>
+                            <div class="form-text">Where the money actually landed, for the statement.</div>
+                        </div>
+                        <?php endif; ?>
                         <button class="btn btn-primary w-100">
                             <i class="fa fa-check me-1"></i>Record payment
                         </button>
