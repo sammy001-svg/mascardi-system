@@ -267,6 +267,116 @@ function finExpenseCategories(PDO $db, string $from, string $to, int $limit = 8)
                           LIMIT " . max(1, min(20, $limit)), [$from, $to]);
 }
 
+// ── Comparison ───────────────────────────────────────────────────────────────
+
+/**
+ * The window immediately before this one, of the same length.
+ *
+ * A figure on its own says almost nothing in finance: 625,000 in is good or bad
+ * entirely depending on what the month before did. Every tile therefore carries
+ * a delta, and this is what it is measured against — the same number of days,
+ * ending the day before the current window starts, so a part-month compares
+ * against the same part of the month before rather than against a whole one.
+ *
+ * @return array{from:string, to:string, label:string}
+ */
+function finPrevPeriod(PDO $db, string $from, string $to): array
+{
+    $r = finRows($db, "SELECT DATE_SUB(?, INTERVAL DATEDIFF(?, ?) + 1 DAY) AS f,
+                              DATE_SUB(?, INTERVAL 1 DAY) AS t",
+                 [$from, $to, $from, $from]);
+
+    return [
+        'from'  => (string)($r[0]['f'] ?? $from),
+        'to'    => (string)($r[0]['t'] ?? $from),
+        'label' => 'the previous period',
+    ];
+}
+
+/**
+ * How a figure moved, as a proportion.
+ *
+ * Returns null where there is nothing to compare against, because "up 100%"
+ * from zero is not information — it is a division dressed up as a trend, and
+ * showing it makes every first month look like a triumph.
+ *
+ * @return array{pct:?float, dir:string, prev:float}
+ */
+function finDelta(float $now, float $before): array
+{
+    if (abs($before) < 0.01) {
+        return ['pct' => null, 'dir' => $now > 0 ? 'up' : 'flat', 'prev' => $before];
+    }
+
+    $pct = ($now - $before) / abs($before) * 100;
+
+    return [
+        'pct'  => $pct,
+        'dir'  => abs($pct) < 0.5 ? 'flat' : ($pct > 0 ? 'up' : 'down'),
+        'prev' => $before,
+    ];
+}
+
+/**
+ * A short series for a tile's sparkline — one point per day across the window,
+ * or per month where the window is long enough that days would be noise.
+ */
+function finSpark(PDO $db, string $what, string $from, string $to): array
+{
+    $days = (int)finNum($db, 'SELECT DATEDIFF(?, ?) + 1', [$to, $from]);
+    $byMonth = $days > 62;
+
+    [$table, $dateCol, $where] = $what === 'out'
+        ? ['expenses', 'expense_date', '1=1']
+        : ['payments', 'payment_date', "status = 'confirmed'"];
+
+    $fmt = $byMonth ? '%Y-%m' : '%Y-%m-%d';
+
+    $rows = finRows($db, "SELECT DATE_FORMAT($dateCol, '$fmt') AS k, COALESCE(SUM(amount),0) AS v
+                            FROM $table
+                           WHERE $where AND DATE($dateCol) BETWEEN ? AND ?
+                        GROUP BY k ORDER BY k ASC", [$from, $to]);
+
+    return array_map(static fn ($r) => (float)$r['v'], $rows);
+}
+
+/**
+ * A date range in words, for the sentence under the hero figure.
+ *
+ * "against 500,000 over the 28 days before" reads; "against 500,000 over
+ * 2026-08-04 to 2026-08-31" does not, and the exact dates are on the period
+ * buttons anyway.
+ */
+function finRangeWords(PDO $db, string $from, string $to): string
+{
+    $days = (int)finNum($db, 'SELECT DATEDIFF(?, ?) + 1', [$to, $from]);
+
+    if ($days <= 1)  return 'day';
+    if ($days === 7) return 'week';
+    if ($days >= 28 && $days <= 31) return 'month';
+    if ($days >= 365) return 'year';
+
+    return $days . ' days';
+}
+
+/**
+ * KES in the space a tile has.
+ *
+ * 1,080,000.00 is unreadable at tile size and pushes the delta off the end, so
+ * big numbers become 1.08M. The full figure is never lost — it is on the tile's
+ * own title attribute and in the table views underneath the charts.
+ */
+function finShort(float $v): string
+{
+    $sign = $v < 0 ? '-' : '';
+    $a    = abs($v);
+
+    if ($a >= 1000000) return $sign . rtrim(rtrim(number_format($a / 1000000, 2, '.', ''), '0'), '.') . 'M';
+    if ($a >= 1000)    return $sign . rtrim(rtrim(number_format($a / 1000, 1, '.', ''), '0'), '.') . 'K';
+
+    return $sign . number_format($a);
+}
+
 /**
  * Who may see the company-wide money.
  *
