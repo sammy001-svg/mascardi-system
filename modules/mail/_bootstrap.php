@@ -108,7 +108,10 @@ function mailDecrypt(string $payload): ?string
 
 // ── Schema ───────────────────────────────────────────────────────────────────
 
-define('MAIL_SCHEMA_VERSION', '1');
+define('MAIL_SCHEMA_VERSION', '2');
+
+/** Maximum email accounts one user may connect. */
+define('MAIL_MAX_ACCOUNTS', 5);
 
 /**
  * The table and its settings, made on first use like the rest of this system.
@@ -122,8 +125,10 @@ function mailMigrate(PDO $db): void
     if ($done) return;
     $done = true;
 
-    if (getSetting('MAIL_SCHEMA_VERSION', '') === MAIL_SCHEMA_VERSION) return;
+    $current = getSetting('MAIL_SCHEMA_VERSION', '');
+    if ($current === MAIL_SCHEMA_VERSION) return;
 
+    // ── Create table for fresh installs (multi-account from the start) ────────
     try {
         $db->exec("
             CREATE TABLE IF NOT EXISTS mail_accounts (
@@ -132,21 +137,42 @@ function mailMigrate(PDO $db): void
               email         VARCHAR(190) NOT NULL,
               password_enc  TEXT         NOT NULL,
               display_name  VARCHAR(120) DEFAULT NULL,
+              account_label VARCHAR(80)  DEFAULT NULL,
               signature     TEXT         DEFAULT NULL,
-              -- Found once and remembered: cPanel calls it INBOX.Sent and
-              -- other servers call it Sent.
+              is_default    TINYINT(1)   NOT NULL DEFAULT 1,
+              sort_order    SMALLINT     NOT NULL DEFAULT 0,
               sent_folder   VARCHAR(190) DEFAULT NULL,
               trash_folder  VARCHAR(190) DEFAULT NULL,
               last_ok_at    DATETIME     DEFAULT NULL,
               last_error    VARCHAR(255) DEFAULT NULL,
               created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
               updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-              UNIQUE KEY uq_mail_accounts_user (user_id)
+              UNIQUE KEY uq_mail_accounts_user_email (user_id, email),
+              KEY idx_mail_accounts_user (user_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    } catch (\Throwable $e) { error_log('mailMigrate: ' . $e->getMessage()); }
+    } catch (\Throwable $e) { error_log('mailMigrate create: ' . $e->getMessage()); }
 
-    // The server, once for everybody. cPanel's usual arrangement: the same
-    // host for both, IMAP on 993 and SMTP on 465, encrypted from the first byte.
+    // ── Upgrade v1 → v2: drop old single-account unique key, add new columns ─
+    if ($current === '1') {
+        $alterSteps = [
+            // Drop the old per-user unique constraint that prevented multiple accounts.
+            "ALTER TABLE mail_accounts DROP INDEX IF EXISTS uq_mail_accounts_user",
+            // Add the new columns if they are not already there.
+            "ALTER TABLE mail_accounts
+               ADD COLUMN IF NOT EXISTS account_label VARCHAR(80)  DEFAULT NULL AFTER display_name,
+               ADD COLUMN IF NOT EXISTS is_default    TINYINT(1)   NOT NULL DEFAULT 1 AFTER signature,
+               ADD COLUMN IF NOT EXISTS sort_order    SMALLINT     NOT NULL DEFAULT 0 AFTER is_default",
+            // Unique on (user_id, email) pair — same person can't connect the same address twice.
+            "ALTER TABLE mail_accounts ADD UNIQUE KEY IF NOT EXISTS uq_mail_accounts_user_email (user_id, email)",
+            // Fast lookup of all accounts for one person.
+            "ALTER TABLE mail_accounts ADD KEY IF NOT EXISTS idx_mail_accounts_user (user_id)",
+        ];
+        foreach ($alterSteps as $sql) {
+            try { $db->exec($sql); } catch (\Throwable $e) { error_log('mailMigrate alter: ' . $e->getMessage()); }
+        }
+    }
+
+    // ── Default settings, once for everybody ─────────────────────────────────
     $defaults = [
         'mail_enabled'       => '1',
         'mail_imap_host'     => '',

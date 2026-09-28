@@ -9,17 +9,16 @@ require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/_lib/Smtp.php';
 
 /**
- * One member of staff's own mailbox.
+ * One email account belonging to a member of staff.
  *
- * Built only from that person's own mail_accounts row — every entry point
- * passes the signed-in user's id and nothing else — so there is no way to ask
- * it for somebody else's mail. That is the whole privacy model, and it is
- * deliberately that simple: no user id ever arrives from a request.
+ * A user may now have up to MAIL_MAX_ACCOUNTS (5) accounts. Every entry
+ * point accepts the signed-in user's id; no account id ever arrives from a
+ * request without being validated against that user first — you can never
+ * reach somebody else's account through here.
  *
- * Every public method opens one IMAP connection, does its work, and lets it
- * close at the end of the request. Shared hosting will not keep a connection
- * alive between requests anyway, and holding none means a crashed request can
- * never leave a mailbox locked.
+ * The active account for a session is chosen by mailBox() in _page.php via
+ * an account id stored in the session, not in a GET/POST parameter that a
+ * script or a link from another page could supply.
  */
 final class Mailbox
 {
@@ -43,11 +42,46 @@ final class Mailbox
         return $db;
     }
 
-    public static function accountFor(int $userId): ?array
+    /**
+     * All accounts for one user, in display order.
+     *
+     * @return list<array>
+     */
+    public static function accountsFor(int $userId): array
     {
         try {
-            $st = self::db()->prepare('SELECT * FROM mail_accounts WHERE user_id = ? LIMIT 1');
+            $st = self::db()->prepare(
+                'SELECT * FROM mail_accounts WHERE user_id = ? ORDER BY is_default DESC, sort_order ASC, id ASC'
+            );
             $st->execute([$userId]);
+
+            return $st->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable $e) {
+            error_log('mail accountsFor: ' . $e->getMessage());
+
+            return [];
+        }
+    }
+
+    /**
+     * One specific account, validated as belonging to $userId.
+     * Returns null when the row does not exist or does not belong to this user.
+     */
+    public static function accountFor(int $userId, ?int $accountId = null): ?array
+    {
+        try {
+            if ($accountId !== null) {
+                $st = self::db()->prepare(
+                    'SELECT * FROM mail_accounts WHERE id = ? AND user_id = ? LIMIT 1'
+                );
+                $st->execute([$accountId, $userId]);
+            } else {
+                // Default: the row marked is_default, or the oldest one.
+                $st = self::db()->prepare(
+                    'SELECT * FROM mail_accounts WHERE user_id = ? ORDER BY is_default DESC, id ASC LIMIT 1'
+                );
+                $st->execute([$userId]);
+            }
 
             return $st->fetch(PDO::FETCH_ASSOC) ?: null;
         } catch (\Throwable $e) {
@@ -57,53 +91,105 @@ final class Mailbox
         }
     }
 
-    /** This person's mailbox, or null if they have not connected one. */
-    public static function for(int $userId): ?self
+    /**
+     * Open a mailbox for the given account.
+     *
+     * @param int      $userId    The signed-in user's id (never from a request).
+     * @param int|null $accountId The specific account row, or null for the default.
+     */
+    public static function for(int $userId, ?int $accountId = null): ?self
     {
-        $row = self::accountFor($userId);
+        $row = self::accountFor($userId, $accountId);
 
         return $row ? new self($row) : null;
     }
 
     /**
-     * Connect a mailbox, proving the password works before keeping it.
+     * Connect (add or update) a mailbox account for $userId.
+     *
+     * When $accountId is null a new row is created (up to the MAIL_MAX_ACCOUNTS
+     * limit). When it is an existing row id that belongs to this user, that row
+     * is updated.
      *
      * @return array{ok:bool, error?:string}
      */
-    public static function connectAccount(int $userId, string $email, string $password,
-                                          string $displayName, string $signature): array
-    {
+    public static function connectAccount(
+        int $userId,
+        string $email,
+        string $password,
+        string $displayName,
+        string $signature,
+        string $accountLabel = '',
+        ?int $accountId = null
+    ): array {
         $email = strtolower(trim($email));
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return ['ok' => false, 'error' => 'That does not look like an email address.'];
         }
 
-        $existing = self::accountFor($userId);
+        $db = self::db();
 
-        // Keeping the saved password when the field is left empty, so changing
-        // a signature does not mean typing the password again.
-        if ($password === '' && $existing && strcasecmp((string) $existing['email'], $email) === 0) {
-            $password = (string) \mailDecrypt((string) $existing['password_enc']);
+        // When editing an existing account, fetch it first to validate ownership.
+        $existing = null;
+        $count    = 0; // number of accounts this user already has (filled below)
+
+        if ($accountId !== null) {
+            $existing = self::accountFor($userId, $accountId);
+            if (!$existing) {
+                return ['ok' => false, 'error' => 'That account was not found.'];
+            }
+        } else {
+            // Adding a new one — check the cap.
+            try {
+                $st = $db->prepare('SELECT COUNT(*) FROM mail_accounts WHERE user_id = ?');
+                $st->execute([$userId]);
+                $count = (int)$st->fetchColumn();
+            } catch (\Throwable $e) {
+                return ['ok' => false, 'error' => 'That could not be checked just now.'];
+            }
+
+            if ($count >= MAIL_MAX_ACCOUNTS) {
+                return ['ok' => false, 'error' => 'You already have ' . MAIL_MAX_ACCOUNTS
+                    . ' email accounts connected. Disconnect one before adding another.'];
+            }
+
+            // Check if this user already has this email connected (as a different account).
+            try {
+                $st = $db->prepare('SELECT id FROM mail_accounts WHERE user_id = ? AND email = ?');
+                $st->execute([$userId, $email]);
+                if ($st->fetchColumn()) {
+                    return ['ok' => false, 'error' => 'You have already connected that email address.'];
+                }
+            } catch (\Throwable $e) {
+                return ['ok' => false, 'error' => 'That could not be checked just now.'];
+            }
+        }
+
+        // Changing an email address? Make sure nobody else already claimed it.
+        $isEmailChange = $existing && strcasecmp((string)$existing['email'], $email) !== 0;
+        if (!$existing || $isEmailChange) {
+            try {
+                $st = $db->prepare('SELECT user_id FROM mail_accounts WHERE email = ? AND user_id <> ?');
+                $st->execute([$email, $userId]);
+                if ($st->fetchColumn()) {
+                    return ['ok' => false, 'error' => 'Somebody else on the team has already connected that mailbox.'];
+                }
+            } catch (\Throwable $e) {
+                return ['ok' => false, 'error' => 'That could not be checked just now.'];
+            }
+        }
+
+        // Keep the saved password when the field is left blank and the address has not changed.
+        if ($password === '' && $existing && !$isEmailChange) {
+            $password = (string)\mailDecrypt((string)$existing['password_enc']);
         }
 
         if ($password === '') {
             return ['ok' => false, 'error' => 'Enter the password for this mailbox.'];
         }
 
-        try {
-            $st = self::db()->prepare('SELECT user_id FROM mail_accounts WHERE email = ? AND user_id <> ?');
-            $st->execute([$email, $userId]);
-
-            // Another member of staff already reading this address here would
-            // make "my mailbox" mean two people's.
-            if ($st->fetchColumn()) {
-                return ['ok' => false, 'error' => 'Somebody else on the team has already connected that mailbox.'];
-            }
-        } catch (\Throwable $e) {
-            return ['ok' => false, 'error' => 'That could not be checked just now.'];
-        }
-
+        // Prove the credentials work before saving anything.
         try {
             $probe = new self(['email' => $email, 'password_enc' => \mailEncrypt($password)]);
             $probe->imap();
@@ -115,28 +201,34 @@ final class Mailbox
             return ['ok' => false, 'error' => $e->getMessage()];
         }
 
+        // Is this the user's first account? Make it the default.
+        $isFirst = ($existing === null && $count === 0);
+
         $data = [
-            'email'        => $email,
-            'password_enc' => \mailEncrypt($password),
-            'display_name' => mb_substr(trim($displayName), 0, 120) ?: null,
-            'signature'    => mb_substr(trim($signature), 0, 2000) ?: null,
-            'sent_folder'  => $roles['sent'],
-            'trash_folder' => $roles['trash'],
-            'last_ok_at'   => date('Y-m-d H:i:s'),
-            'last_error'   => null,
+            'email'         => $email,
+            'password_enc'  => \mailEncrypt($password),
+            'display_name'  => mb_substr(trim($displayName), 0, 120) ?: null,
+            'account_label' => mb_substr(trim($accountLabel), 0, 80) ?: null,
+            'signature'     => mb_substr(trim($signature), 0, 2000) ?: null,
+            'is_default'    => $isFirst ? 1 : ($existing ? (int)$existing['is_default'] : 0),
+            'sent_folder'   => $roles['sent'],
+            'trash_folder'  => $roles['trash'],
+            'last_ok_at'    => date('Y-m-d H:i:s'),
+            'last_error'    => null,
         ];
 
         try {
             if ($existing) {
                 $set = implode(', ', array_map(static fn ($k) => "$k = ?", array_keys($data)));
-                $st  = self::db()->prepare("UPDATE mail_accounts SET $set WHERE user_id = ?");
-                $st->execute([...array_values($data), $userId]);
+                $st  = $db->prepare("UPDATE mail_accounts SET $set WHERE id = ? AND user_id = ?");
+                $st->execute([...array_values($data), (int)$existing['id'], $userId]);
             } else {
-                $data['user_id'] = $userId;
+                $data['user_id']   = $userId;
+                $data['sort_order'] = $count; // append at the end
                 $cols = implode(', ', array_keys($data));
                 $qs   = implode(', ', array_fill(0, count($data), '?'));
-                self::db()->prepare("INSERT INTO mail_accounts ($cols) VALUES ($qs)")
-                          ->execute(array_values($data));
+                $db->prepare("INSERT INTO mail_accounts ($cols) VALUES ($qs)")
+                   ->execute(array_values($data));
             }
         } catch (\Throwable $e) {
             error_log('mail connectAccount: ' . $e->getMessage());
@@ -147,16 +239,68 @@ final class Mailbox
         return ['ok' => true];
     }
 
-    public static function disconnect(int $userId): void
+    /**
+     * Set one account as the default for a user.
+     * Clears is_default on all others first.
+     */
+    public static function setDefault(int $userId, int $accountId): bool
     {
         try {
-            self::db()->prepare('DELETE FROM mail_accounts WHERE user_id = ?')->execute([$userId]);
-        } catch (\Throwable $e) { error_log('mail disconnect: ' . $e->getMessage()); }
+            $db = self::db();
+            // Validate ownership.
+            $st = $db->prepare('SELECT id FROM mail_accounts WHERE id = ? AND user_id = ?');
+            $st->execute([$accountId, $userId]);
+            if (!$st->fetchColumn()) return false;
+
+            $db->prepare('UPDATE mail_accounts SET is_default = 0 WHERE user_id = ?')->execute([$userId]);
+            $db->prepare('UPDATE mail_accounts SET is_default = 1 WHERE id = ? AND user_id = ?')
+               ->execute([$accountId, $userId]);
+
+            return true;
+        } catch (\Throwable $e) {
+            error_log('mail setDefault: ' . $e->getMessage());
+
+            return false;
+        }
     }
 
-    public function email(): string       { return (string) $this->account['email']; }
-    public function displayName(): string { return (string) ($this->account['display_name'] ?? ''); }
-    public function signature(): string   { return (string) ($this->account['signature'] ?? ''); }
+    /**
+     * Remove one account. When it was the default, promote the oldest remaining one.
+     */
+    public static function disconnect(int $userId, int $accountId): void
+    {
+        try {
+            $db = self::db();
+            $st = $db->prepare('SELECT is_default FROM mail_accounts WHERE id = ? AND user_id = ?');
+            $st->execute([$accountId, $userId]);
+            $row = $st->fetch(PDO::FETCH_ASSOC);
+
+            if (!$row) return; // not owned by this user
+
+            $db->prepare('DELETE FROM mail_accounts WHERE id = ? AND user_id = ?')
+               ->execute([$accountId, $userId]);
+
+            // Promote the next oldest account to default if needed.
+            if ((int)$row['is_default'] === 1) {
+                $db->prepare(
+                    'UPDATE mail_accounts SET is_default = 1
+                     WHERE user_id = ? ORDER BY id ASC LIMIT 1'
+                )->execute([$userId]);
+            }
+        } catch (\Throwable $e) {
+            error_log('mail disconnect: ' . $e->getMessage());
+        }
+    }
+
+    public function id(): int          { return (int)$this->account['id']; }
+    public function email(): string    { return (string)$this->account['email']; }
+    public function displayName(): string { return (string)($this->account['display_name'] ?? ''); }
+    public function signature(): string   { return (string)($this->account['signature'] ?? ''); }
+    public function label(): string {
+        $l = trim((string)($this->account['account_label'] ?? ''));
+        return $l !== '' ? $l : $this->email();
+    }
+    public function isDefault(): bool  { return (int)($this->account['is_default'] ?? 0) === 1; }
 
     // ── Reading ──────────────────────────────────────────────────────────────
 
@@ -298,11 +442,6 @@ final class Mailbox
     /**
      * Send as this person, and file a copy in their Sent folder.
      *
-     * Sent through the same server with their own login, so it leaves from
-     * their address with their server's own signing on it — not relayed
-     * through the system's notification account, which would have every staff
-     * message arriving from the wrong place.
-     *
      * @return array{ok:bool, error?:string, warning?:string}
      */
     public function send(array $in): array
@@ -322,7 +461,7 @@ final class Mailbox
             return ['ok' => false, 'error' => 'Add at least one person to send it to.'];
         }
 
-        $text = rtrim((string) ($in['text'] ?? ''));
+        $text = rtrim((string)($in['text'] ?? ''));
 
         if ($this->signature() !== '' && !str_contains($text, $this->signature())) {
             $text .= "\n\n-- \n" . $this->signature();
@@ -333,8 +472,8 @@ final class Mailbox
             'from_name'   => $this->displayName(),
             'to'          => $to['formatted'],
             'cc'          => $cc['formatted'],
-            'subject'     => trim((string) ($in['subject'] ?? '')) !== ''
-                                ? trim((string) $in['subject']) : '(no subject)',
+            'subject'     => trim((string)($in['subject'] ?? '')) !== ''
+                                ? trim((string)$in['subject']) : '(no subject)',
             'text'        => $text,
             'in_reply_to' => $in['in_reply_to'] ?? '',
             'references'  => $in['references']  ?? '',
@@ -342,9 +481,9 @@ final class Mailbox
         ]);
 
         $smtp = new Smtp(
-            (string) \getSetting('mail_smtp_host', ''),
-            (int)    \getSetting('mail_smtp_port', '465'),
-            (string) \getSetting('mail_smtp_security', 'ssl'),
+            (string)\getSetting('mail_smtp_host', ''),
+            (int)   \getSetting('mail_smtp_port', '465'),
+            (string)\getSetting('mail_smtp_security', 'ssl'),
             $this->email(),
             $this->password(),
             $this->email()
@@ -417,7 +556,7 @@ final class Mailbox
 
     private function password(): string
     {
-        $p = \mailDecrypt((string) $this->account['password_enc']);
+        $p = \mailDecrypt((string)$this->account['password_enc']);
 
         if ($p === null) {
             throw new RuntimeException('The saved password for this mailbox can no longer be read. '
@@ -432,9 +571,9 @@ final class Mailbox
         if ($this->imap !== null) return $this->imap;
 
         $imap = new ImapClient(
-            (string) \getSetting('mail_imap_host', ''),
-            (int)    \getSetting('mail_imap_port', '993'),
-            (string) \getSetting('mail_imap_security', 'ssl')
+            (string)\getSetting('mail_imap_host', ''),
+            (int)   \getSetting('mail_imap_port', '993'),
+            (string)\getSetting('mail_imap_security', 'ssl')
         );
         $imap->connect();
         $imap->login($this->email(), $this->password());
@@ -458,7 +597,7 @@ final class Mailbox
                       ->execute([
                           $error === null ? date('Y-m-d H:i:s') : ($this->account['last_ok_at'] ?? null),
                           $error === null ? null : mb_substr($error, 0, 255),
-                          (int) $this->account['id'],
+                          (int)$this->account['id'],
                       ]);
         } catch (\Throwable $e) { /* a note about health must not break the page */ }
     }
@@ -469,8 +608,6 @@ final class Mailbox
         $found = ['sent' => null, 'trash' => null];
 
         foreach ($this->imap()->folders() as $f) {
-            // array_key_exists, not isset: the slots start as null, and isset()
-            // is false for null — which left both unfound.
             $role = $f['role'] ?? '';
 
             if (array_key_exists($role, $found) && $found[$role] === null) {

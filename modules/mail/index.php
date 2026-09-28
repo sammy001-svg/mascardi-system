@@ -17,6 +17,7 @@ requireLogin();
 
 use Mascardi\Mail\AuthFailed;
 use Mascardi\Mail\HtmlSanitizer;
+use Mascardi\Mail\Mailbox;
 
 const MAIL_PER_PAGE = 30;
 
@@ -63,6 +64,10 @@ $box->close();
 $pages     = max(1, (int)ceil($list['total'] / MAIL_PER_PAGE));
 $pageTitle = 'Mail';
 
+// Load all accounts for the switcher — after box->close() so we reuse the DB.
+$allAccounts = Mailbox::accountsFor((int)authUser()['id']);
+$activeAccId = (int)($_SESSION['mail_account_id'] ?? $box->id());
+
 include __DIR__ . '/../../includes/header.php';
 ?>
 
@@ -88,16 +93,58 @@ include __DIR__ . '/../../includes/header.php';
 .mb-file{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border,#e2e8f0);
     border-radius:8px;padding:5px 10px;font-size:12.5px;text-decoration:none;margin:0 6px 6px 0}
 .mb-trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Account switcher */
+.mb-acct-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 6px;
+    background:var(--surface-alt,#f1f5f9);border-radius:20px;font-size:12.5px;cursor:pointer;
+    border:1px solid var(--border,#e2e8f0);transition:background .15s}
+.mb-acct-badge:hover{background:var(--border,#e2e8f0)}
+.mb-acct-dot{width:8px;height:8px;border-radius:50%;background:#0f6b5c;flex-shrink:0}
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
         <h5 class="mb-1"><i class="fa fa-envelope me-2 text-primary"></i>Mail</h5>
-        <p class="text-muted small mb-0"><?= e($box->email()) ?></p>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <?php if (count($allAccounts) > 1): ?>
+            <!-- Account switcher dropdown -->
+            <div class="dropdown">
+                <button class="mb-acct-badge dropdown-toggle border-0 bg-transparent p-0" style="font-size:12.5px;background:var(--surface-alt,#f1f5f9)!important;padding:3px 10px!important;border-radius:20px!important;border:1px solid var(--border,#e2e8f0)!important"
+                        type="button" data-bs-toggle="dropdown" id="acctSwitcher">
+                    <span class="mb-acct-dot"></span>
+                    <?= e($box->label()) ?>
+                    <?php if ($box->isDefault()): ?><span class="text-muted">(default)</span><?php endif; ?>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-start" style="min-width:220px">
+                    <?php foreach ($allAccounts as $acct): ?>
+                    <?php $isActive = (int)$acct['id'] === $activeAccId; ?>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center gap-2 <?= $isActive ? 'active' : '' ?>"
+                           href="<?= BASE_URL ?>/modules/mail/setup.php?switch=<?= (int)$acct['id'] ?>">
+                            <i class="fa <?= $isActive ? 'fa-circle-check text-success' : 'fa-circle' ?> fa-sm"></i>
+                            <div class="min-w-0">
+                                <div class="mb-trunc" style="max-width:160px"><?= e(trim($acct['account_label'] ?? '') ?: $acct['email']) ?></div>
+                                <?php if (trim($acct['account_label'] ?? '') !== ''): ?>
+                                <div class="text-muted" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px"><?= e($acct['email']) ?></div>
+                                <?php endif; ?>
+                            </div>
+                            <?php if ((int)$acct['is_default']): ?>
+                            <span class="badge bg-light text-dark ms-auto" style="font-size:10px">default</span>
+                            <?php endif; ?>
+                        </a>
+                    </li>
+                    <?php endforeach; ?>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item small" href="<?= BASE_URL ?>/modules/mail/setup.php"><i class="fa fa-gear me-2"></i>Manage mailboxes</a></li>
+                </ul>
+            </div>
+            <?php else: ?>
+            <span class="text-muted small"><?= e($box->email()) ?></span>
+            <?php endif; ?>
+        </div>
     </div>
     <div class="d-flex gap-2">
         <a href="<?= BASE_URL ?>/modules/mail/setup.php" class="btn btn-outline-secondary btn-sm">
-            <i class="fa fa-gear me-1"></i>Mailbox settings
+            <i class="fa fa-gear me-1"></i>Mailboxes
         </a>
         <a href="<?= BASE_URL ?>/modules/mail/compose.php" class="btn btn-primary btn-sm">
             <i class="fa fa-pen me-1"></i>New message

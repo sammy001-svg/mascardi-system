@@ -15,7 +15,13 @@ use Mascardi\Mail\Mailbox;
 
 if (!function_exists('mailBox')) {
 
-/** The signed-in person's own mailbox — or off to the setup page. */
+/**
+ * The signed-in person's active mailbox — or off to the setup page.
+ *
+ * The active account is tracked in $_SESSION['mail_account_id'] rather than a
+ * GET/POST parameter, so an external link cannot silently switch someone to a
+ * different account mid-page. The switch happens only through mailSwitchAccount().
+ */
 function mailBox(): Mailbox
 {
     requireLogin();
@@ -24,11 +30,23 @@ function mailBox(): Mailbox
         redirect(BASE_URL . '/modules/mail/setup.php');
     }
 
-    $box = Mailbox::for((int)authUser()['id']);
+    $uid       = (int)authUser()['id'];
+    $accountId = isset($_SESSION['mail_account_id']) ? (int)$_SESSION['mail_account_id'] : null;
+
+    $box = Mailbox::for($uid, $accountId);
+
+    if (!$box) {
+        // Stored account may have been disconnected — fall back to default.
+        unset($_SESSION['mail_account_id']);
+        $box = Mailbox::for($uid, null);
+    }
 
     if (!$box) {
         redirect(BASE_URL . '/modules/mail/setup.php');
     }
+
+    // Keep session in sync with whatever account is actually in use.
+    $_SESSION['mail_account_id'] = $box->id();
 
     return $box;
 }
@@ -56,18 +74,38 @@ function mailUrl(array $q = []): string
 
 /**
  * The saved password has stopped working — almost always because it was
- * changed in cPanel. Say so, and send them to type it again.
+ * changed in cPanel. Say so, and send them to the setup page.
  */
 function mailServerRefused(): never
 {
-    try {
-        getDB()->prepare('UPDATE mail_accounts SET last_error = ? WHERE user_id = ?')
-               ->execute(['Password refused', (int)authUser()['id']]);
-    } catch (\Throwable $e) { /* the message below matters more than the note */ }
+    $accountId = $_SESSION['mail_account_id'] ?? null;
 
-    setFlash('danger', 'The mail server no longer accepts your saved password — it may have been '
-                     . 'changed. Enter it again.');
-    redirect(BASE_URL . '/modules/mail/setup.php');
+    if ($accountId) {
+        try {
+            getDB()->prepare('UPDATE mail_accounts SET last_error = ? WHERE id = ? AND user_id = ?')
+                   ->execute(['Password refused', (int)$accountId, (int)authUser()['id']]);
+        } catch (\Throwable $e) { /* the message below matters more than the note */ }
+    }
+
+    setFlash('danger', 'The mail server no longer accepts the saved password for this account — '
+                     . 'it may have been changed. Enter it again.');
+    redirect(BASE_URL . '/modules/mail/setup.php?edit=' . (int)$accountId);
+}
+
+/**
+ * Switch the active mail account for this session.
+ *
+ * The account id is validated as belonging to the signed-in user before being
+ * stored — an outside link or script cannot switch to somebody else's account.
+ */
+function mailSwitchAccount(int $accountId): void
+{
+    $uid = (int)authUser()['id'];
+    $row = Mailbox::accountFor($uid, $accountId);
+
+    if ($row) {
+        $_SESSION['mail_account_id'] = $accountId;
+    }
 }
 
 /**
