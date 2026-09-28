@@ -40,6 +40,14 @@ $__overdue    = $__badge("SELECT COUNT(*) FROM invoices
                              AND COALESCE(due_date, date) < CURDATE()");
 $__openQuote  = $__badge("SELECT COUNT(*) FROM quotations WHERE status IN ('draft','sent')");
 $__lpoOut     = $__badge("SELECT COUNT(*) FROM lpo WHERE status IN ('sent','acknowledged','partial')");
+// Credit accounts with something overdue. Loaded through the finance module so
+// the sidebar and the book cannot disagree about what "overdue" means.
+require_once __DIR__ . '/../modules/finance/_credit.php';
+$__creditOverdue = $__badge("SELECT COUNT(DISTINCT a.id) FROM credit_agreements a
+                               JOIN credit_installments ci ON ci.agreement_id = a.id
+                              WHERE a.status IN ('active','defaulted')
+                                AND ci.due_date < CURDATE()
+                                AND ci.amount_paid < ci.amount");
 $__arrears    = $__badge("SELECT COUNT(*) FROM sale_installments
                            WHERE due_date < CURDATE()
                              AND COALESCE(amount_paid,0) < amount_due
@@ -136,6 +144,23 @@ $__arrears    = $__badge("SELECT COUNT(*) FROM sale_installments
         </a>
         <?php endif; ?>
 
+        <?php if (creditCanView()): ?>
+        <a href="<?= BASE_URL ?>/modules/finance/receivables.php"
+           class="nav-item <?= $__is('/finance/receivables') . $__is('/finance/account') ?>"
+           data-label="Receivables" style="position:relative">
+            <i class="fa fa-file-invoice-dollar"></i><span>Receivables</span>
+            <?php if ($__creditOverdue > 0): ?>
+            <span style="position:absolute;top:6px;right:8px;background:#dc2626;color:#fff;
+                  border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;
+                  text-align:center;line-height:16px" title="Accounts overdue"><?= $__creditOverdue ?></span>
+            <?php endif; ?>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/finance/month.php"
+           class="nav-item <?= $__is('/finance/month') ?>" data-label="Monthly collection">
+            <i class="fa fa-calendar-days"></i><span>Monthly collection</span>
+        </a>
+        <?php endif; ?>
+
         <?php if (canAccess('installments')): ?>
         <a href="<?= BASE_URL ?>/modules/installments/index.php"
            class="nav-item <?= $__is('/modules/installments/') ?>" data-label="Instalments"
@@ -183,6 +208,13 @@ $__arrears    = $__badge("SELECT COUNT(*) FROM sale_installments
         <a href="<?= BASE_URL ?>/modules/suppliers/index.php"
            class="nav-item <?= $__is('/modules/suppliers/') ?>" data-label="Suppliers">
             <i class="fa fa-truck-field"></i><span>Suppliers</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (hasRole('finance_manager')): // policy, not daily work — see settings.php ?>
+        <a href="<?= BASE_URL ?>/modules/finance/settings.php"
+           class="nav-item <?= $__is('/finance/settings') ?>" data-label="Payment reminders">
+            <i class="fa fa-bell"></i><span>Payment reminders</span>
         </a>
         <?php endif; ?>
 

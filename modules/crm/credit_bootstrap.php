@@ -23,13 +23,20 @@ require_once __DIR__ . '/credit_clauses.php';
 if (!function_exists('creditMigrate')) {
 
 // 2 — added concession_date / concession_amount for the Early Payment Concession.
-if (!defined('CREDIT_SCHEMA_VERSION')) define('CREDIT_SCHEMA_VERSION', '2');
+// 3 — the receivables book: account manager, logbook held, reminders on/off,
+//     irregular schedules, a "with lawyers" status, the follow-up notes trail
+//     and a log of every reminder and receipt emailed.
+if (!defined('CREDIT_SCHEMA_VERSION')) define('CREDIT_SCHEMA_VERSION', '3');
 
 function creditStatuses(): array {
     return [
         'active'    => ['Active',    '#2563eb'],
         'completed' => ['Settled',   '#16a34a'],
         'defaulted' => ['In Default','#dc2626'],
+        // A debt handed to the lawyers. Kept distinct from "in default" because
+        // it changes what the yard does: nobody sends a friendly payment
+        // reminder to somebody the company is suing.
+        'legal'     => ['With lawyers', '#7c3aed'],
         'cancelled' => ['Cancelled', '#64748b'],
     ];
 }
@@ -124,8 +131,58 @@ function creditMigrate(PDO $db, bool $force = false): void
     $columns = [
         "ALTER TABLE credit_agreements ADD COLUMN concession_date DATE NULL AFTER interest_rate",
         "ALTER TABLE credit_agreements ADD COLUMN concession_amount DECIMAL(15,2) NULL AFTER concession_date",
+
+        // v3 — the receivables book. Every row of the finance team's spreadsheet
+        // names the person chasing that account; the system never recorded it.
+        "ALTER TABLE credit_agreements ADD COLUMN account_manager_id INT NULL AFTER client_id",
+        // The logbook held back as security until the car is paid for.
+        "ALTER TABLE credit_agreements ADD COLUMN logbook_held TINYINT(1) NOT NULL DEFAULT 0",
+        // Off for a buyer who has asked not to be emailed, or whose account is
+        // being handled some other way.
+        "ALTER TABLE credit_agreements ADD COLUMN reminders_enabled TINYINT(1) NOT NULL DEFAULT 1",
+        // 'custom' where the instalments are not equal — a good third of the
+        // current book is written as "1m, then 200k five times, then …".
+        "ALTER TABLE credit_agreements ADD COLUMN schedule_type VARCHAR(10) NOT NULL DEFAULT 'equal'",
+        "ALTER TABLE credit_agreements ADD COLUMN last_reviewed_at DATETIME NULL",
+        "ALTER TABLE credit_agreements ADD COLUMN last_reviewed_by INT NULL",
+        "ALTER TABLE credit_agreements MODIFY COLUMN status
+             ENUM('active','completed','defaulted','legal','cancelled') NOT NULL DEFAULT 'active'",
     ];
     foreach ($columns as $sql) { try { $db->exec($sql); } catch (\Throwable $_) {} }
+
+    $more = [
+        // The notes columns of the spreadsheet — Solomon's, management's, the MFS
+        // team's — as one dated trail rather than three cells that get
+        // overwritten, so "what did we last agree with him" has an answer.
+        "CREATE TABLE IF NOT EXISTS credit_notes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            agreement_id INT NOT NULL,
+            kind VARCHAR(20) NOT NULL DEFAULT 'note',
+            body TEXT NOT NULL,
+            created_by INT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_cn_agr (agreement_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        // Every reminder and receipt sent, one row per instalment per stage.
+        // The unique key is what makes the sweep safe to run as often as it
+        // likes: a reminder that has gone cannot go twice.
+        "CREATE TABLE IF NOT EXISTS credit_reminders (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            agreement_id INT NOT NULL,
+            installment_id INT NULL,
+            payment_id INT NULL,
+            stage VARCHAR(20) NOT NULL,
+            channel VARCHAR(12) NOT NULL DEFAULT 'email',
+            sent_to VARCHAR(190) NULL,
+            status VARCHAR(12) NOT NULL DEFAULT 'sent',
+            error VARCHAR(255) NULL,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_cr_once (installment_id, stage, channel),
+            KEY idx_cr_agr (agreement_id, sent_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+    ];
+    foreach ($more as $sql) { try { $db->exec($sql); } catch (\Throwable $_) {} }
 
     try {
         $db->prepare("INSERT INTO settings (setting_key, setting_value)
@@ -212,6 +269,71 @@ function creditBuildSchedule(float $principal, float $monthly, string $firstDue)
     $out['total'] = round($out['total'], 2);
     $out['completion_date'] = $out['rows'] ? end($out['rows'])['due_date'] : null;
     return $out;
+}
+
+/**
+ * A schedule typed out by hand, for the agreements that are not equal
+ * instalments.
+ *
+ * Accepts one instalment per line as "date, amount" in any of the ways people
+ * write a date here — 30/09/2026, 2026-09-30, 30.9.26 — because a form that
+ * rejects the way the finance team already writes dates is a form they stop
+ * using. Amounts may carry commas. Returns the same shape as
+ * creditBuildSchedule(), plus the lines it could not read, so nothing is
+ * silently dropped from a legal document.
+ */
+function creditParseCustomSchedule(string $text): array
+{
+    $out = ['count' => 0, 'completion_date' => null, 'total' => 0.0, 'rows' => [], 'bad' => []];
+    $rows = [];
+
+    foreach (preg_split('/\r\n|\r|\n/', trim($text)) as $n => $line) {
+        $line = trim($line);
+        if ($line === '') continue;
+
+        if (!preg_match('#^\s*([0-9]{1,4}[./-][0-9]{1,2}[./-][0-9]{1,4})\s*[,;\t ]\s*(?:KES|Ksh|KSH)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*$#i', $line, $m)) {
+            $out['bad'][] = 'line ' . ($n + 1) . ': "' . $line . '"';
+            continue;
+        }
+
+        $date = creditReadDate($m[1]);
+        $amt  = (float)str_replace(',', '', $m[2]);
+
+        if ($date === null || $amt <= 0) {
+            $out['bad'][] = 'line ' . ($n + 1) . ': "' . $line . '"';
+            continue;
+        }
+        $rows[] = ['due_date' => $date, 'amount' => round($amt, 2)];
+    }
+
+    usort($rows, static fn ($a, $b) => strcmp($a['due_date'], $b['due_date']));
+
+    foreach ($rows as $i => $r) {
+        $out['rows'][] = ['seq' => $i + 1, 'due_date' => $r['due_date'], 'amount' => $r['amount']];
+        $out['total'] += $r['amount'];
+    }
+    $out['count']           = count($out['rows']);
+    $out['total']           = round($out['total'], 2);
+    $out['completion_date'] = $out['rows'] ? end($out['rows'])['due_date'] : null;
+
+    return $out;
+}
+
+/** 30/09/2026, 30.9.26, 2026-09-30 → 2026-09-30. Day first, as Kenya writes it. */
+function creditReadDate(string $s): ?string
+{
+    $s = trim($s);
+
+    if (preg_match('#^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$#', $s, $m)) {
+        [$y, $mo, $d] = [(int)$m[1], (int)$m[2], (int)$m[3]];
+    } elseif (preg_match('#^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$#', $s, $m)) {
+        [$d, $mo, $y] = [(int)$m[1], (int)$m[2], (int)$m[3]];
+        if ($y < 100) $y += 2000;
+    } else {
+        return null;
+    }
+
+    return checkdate($mo, $d, $y) ? sprintf('%04d-%02d-%02d', $y, $mo, $d) : null;
 }
 
 /** Adds whole months, clamping the day so it never rolls into the next month. */

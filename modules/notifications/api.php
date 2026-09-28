@@ -12,6 +12,18 @@ $action = $_REQUEST['action'] ?? '';
 switch ($action) {
 
     case 'count':
+        // Every signed-in browser polls this every twelve seconds, which makes it
+        // the one thing in the system that ticks on its own. Credit reminders
+        // are triggered by a due date arriving — and nothing fires when nothing
+        // happens — so the tick has to come from somewhere. Internally locked,
+        // so twenty staff polling at once sweep once between them, and it never
+        // delays the badge, which is what this endpoint is actually for.
+        try {
+            require_once __DIR__ . '/../finance/_credit.php';
+            creditHeartbeat(getDB());
+        } catch (\Throwable $e) {
+            error_log('credit heartbeat: ' . $e->getMessage());
+        }
         echo json_encode(['count' => getUnreadNotificationCount($userId)]);
         break;
 

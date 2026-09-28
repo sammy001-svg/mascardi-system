@@ -1,0 +1,516 @@
+<?php
+/**
+ * One credit account: the schedule, what has been paid, and the trail.
+ *
+ * Everything the finance team does to an account happens here — take a
+ * payment, send a reminder by hand, write down what the buyer said, change who
+ * is chasing it, mark it with the lawyers. The printed documents stay where
+ * they were built, on the lead, and are linked to rather than rebuilt.
+ *
+ * Recording a payment goes through creditRecordPayment(), the same call the
+ * lead page uses, so the two screens cannot drift into taking money in two
+ * different ways.
+ */
+
+require_once __DIR__ . '/_credit.php';
+require_once __DIR__ . '/_figures.php';
+requireLogin();
+
+if (!creditCanView()) {
+    setFlash('danger', 'You do not have access to the receivables book.');
+    redirect(BASE_URL . '/index.php');
+}
+
+$db = getDB();
+creditMigrate($db);
+
+$id  = (int)($_GET['id'] ?? 0);
+$me  = authUser();
+$uid = (int)$me['id'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verifyCsrf();
+    $id     = (int)($_POST['id'] ?? $id);
+    $action = (string)($_POST['action'] ?? '');
+    $back   = BASE_URL . '/modules/finance/account.php?id=' . $id;
+
+    if (!creditCanRecord()) {
+        setFlash('danger', 'You do not have permission to change this account.');
+        redirect($back);
+    }
+
+    if ($action === 'payment') {
+        $r = creditRecordPayment($db, $id,
+            (float)str_replace(',', '', (string)($_POST['amount'] ?? 0)),
+            (string)($_POST['paid_on'] ?? ''), (string)($_POST['method'] ?? ''),
+            (string)($_POST['reference'] ?? ''), (string)($_POST['notes'] ?? ''), $uid);
+
+        if (!$r['ok']) {
+            setFlash('danger', $r['error']);
+        } else {
+            $msg = 'Payment recorded — receipt ' . $r['receipt'] . '. '
+                 . ($r['balance'] > 0.009 ? 'Balance now ' . money($r['balance']) . '.'
+                                          : 'This account is now settled in full.');
+            // Whether the buyer was told is part of the outcome, not a detail.
+            setFlash($r['emailed'] ? 'success' : 'warning',
+                     $msg . ' ' . ($r['emailed'] ? 'A confirmation has been emailed.' : $r['email_note']));
+        }
+        redirect($back);
+    }
+
+    if ($action === 'note') {
+        creditAddNote($db, $id, (string)($_POST['kind'] ?? 'note'), (string)($_POST['body'] ?? ''), $uid)
+            ? setFlash('success', 'Note added.')
+            : setFlash('warning', 'Write something first.');
+        redirect($back);
+    }
+
+    if ($action === 'remind') {
+        $inst = finRowsSafe($db, "SELECT ci.*, DATEDIFF(ci.due_date, CURDATE()) AS days_until,
+                                         GREATEST(DATEDIFF(CURDATE(), ci.due_date), 0) AS days_over
+                                    FROM credit_installments ci
+                                   WHERE ci.agreement_id = ? AND ci.amount_paid < ci.amount
+                                ORDER BY ci.seq LIMIT 1", [$id]);
+
+        if (!$inst) {
+            setFlash('warning', 'There is nothing outstanding to remind them about.');
+        } else {
+            // 'manual' is its own stage so a reminder sent by hand never uses up
+            // one of the automatic ones, and can be sent again if needed.
+            $r = creditEmailReminder($db, $inst[0], 'manual');
+            setFlash($r['sent'] ? 'success' : 'danger', $r['note']);
+        }
+        redirect($back);
+    }
+
+    if ($action === 'settings') {
+        try {
+            $status = in_array($_POST['status'] ?? '', array_keys(creditStatuses()), true)
+                    ? $_POST['status'] : 'active';
+            $db->prepare("UPDATE credit_agreements
+                             SET account_manager_id = ?, logbook_held = ?, reminders_enabled = ?, status = ?
+                           WHERE id = ?")
+               ->execute([(int)($_POST['account_manager_id'] ?? 0) ?: null,
+                          !empty($_POST['logbook_held']) ? 1 : 0,
+                          !empty($_POST['reminders_enabled']) ? 1 : 0,
+                          $status, $id]);
+            setFlash('success', 'Account updated.');
+        } catch (\Throwable $e) {
+            setFlash('danger', 'That could not be saved: ' . $e->getMessage());
+        }
+        redirect($back);
+    }
+
+    redirect($back);
+}
+
+$a = creditAccount($db, $id);
+if (!$a) {
+    setFlash('danger', 'That credit account could not be found.');
+    redirect(BASE_URL . '/modules/finance/receivables.php');
+}
+
+$sum      = creditSummary($db, $id);
+$schedule = creditInstallments($db, $id);
+$payments = creditPayments($db, $id);
+$notes    = creditNotes($db, $id);
+$sent     = creditSentLog($db, $id, 12);
+$to       = creditRecipient($db, $id);
+$staff    = finRowsSafe($db, "SELECT id, name FROM users WHERE status='active' ORDER BY name");
+$today    = (string)$db->query('SELECT CURDATE()')->fetchColumn();
+$cfg      = creditReminderConfig();
+
+$standing = $a['standing'] ?? creditStanding($a + ['balance' => $sum['balance']], $today, $cfg['before']);
+$paidPct  = $sum['due'] > 0 ? min(100, round($sum['paid'] / $sum['due'] * 100)) : 0;
+
+$pageTitle = 'Credit account';
+include __DIR__ . '/../../includes/header.php';
+?>
+<?php include __DIR__ . '/_style.php'; ?>
+
+<style>
+.ca-head{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.ca-meter{height:9px;border-radius:5px;background:var(--fin-plane);overflow:hidden;margin-top:9px}
+.ca-meter span{display:block;height:100%;border-radius:5px;background:var(--fin-in)}
+.ca-sched{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.ca-sched th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--fin-muted);font-weight:600;padding:8px 12px;border-bottom:1px solid var(--fin-ring)}
+.ca-sched td{padding:9px 12px;border-bottom:1px solid var(--fin-ring)}
+.ca-sched tr:last-child td{border-bottom:0}
+.ca-sched .num{text-align:right}
+.ca-sched tr.done td{color:var(--fin-muted)}
+.ca-sched tr.late td{background:rgba(208,59,59,.06)}
+.ca-sched tr.next td{box-shadow:inset 3px 0 0 var(--fin-in)}
+.ca-note{padding:11px 0;border-bottom:1px solid var(--fin-ring);font-size:13px}
+.ca-note:last-child{border-bottom:0}
+.ca-note .who{font-size:11.5px;color:var(--fin-muted);margin-bottom:3px}
+.ca-kind{display:inline-block;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;
+    font-weight:700;padding:1px 6px;border-radius:4px;background:var(--fin-plane);color:var(--fin-ink-2)}
+.ca-log{font-size:12px;color:var(--fin-ink-2);padding:7px 0;border-bottom:1px solid var(--fin-ring)}
+.ca-log:last-child{border-bottom:0}
+</style>
+
+<div class="fin">
+
+    <div class="fin-filters">
+        <div>
+            <h5 class="mb-1" style="color:var(--fin-ink)">
+                <i class="fa fa-file-contract me-2" style="color:var(--fin-in)"></i>
+                <?= e((string)($a['buyer'] ?? 'Credit account')) ?>
+            </h5>
+            <div class="fin-asat">
+                <?= e((string)($a['reference'] ?? '')) ?>
+                <?php if (!empty($a['car'])): ?> · <?= e((string)$a['car']) ?><?php endif; ?>
+                <?php if (!empty($a['registration_number'])): ?> · <?= e((string)$a['registration_number']) ?><?php endif; ?>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary btn-sm"
+               href="<?= BASE_URL ?>/modules/crm/credit_statement.php?lead_id=<?= (int)$a['lead_id'] ?>" target="_blank">
+                <i class="fa fa-file-lines me-1"></i>Statement
+            </a>
+            <a class="btn btn-outline-secondary btn-sm"
+               href="<?= BASE_URL ?>/modules/crm/view_lead.php?id=<?= (int)$a['lead_id'] ?>#credit">
+                <i class="fa fa-user me-1"></i>The lead
+            </a>
+            <a class="btn btn-outline-secondary btn-sm" href="<?= BASE_URL ?>/modules/finance/receivables.php">
+                <i class="fa fa-arrow-left me-1"></i>Book
+            </a>
+        </div>
+    </div>
+
+    <!-- Where it stands -->
+    <div class="fin-hero mb-4">
+        <div style="min-width:240px;flex:1">
+            <div class="lbl">Outstanding</div>
+            <div class="fig" title="<?= e(money((float)$sum['balance'])) ?>">
+                KES <?= e(finShort((float)$sum['balance'])) ?>
+            </div>
+            <div class="note">
+                <?= e(money((float)$sum['paid'])) ?> paid of <?= e(money((float)$sum['due'])) ?>
+                · <?= (int)$sum['paid_count'] ?> of <?= (int)$sum['count'] ?> instalments
+            </div>
+            <div class="ca-meter" style="max-width:340px"><span style="width:<?= (int)$paidPct ?>%"></span></div>
+        </div>
+        <div class="text-end">
+            <span class="rb-pill <?= e($standing['tone']) ?>" style="font-size:12px">
+                <?= e($standing['label']) ?>
+            </span>
+            <?php if ($sum['next_due']): ?>
+            <div class="note mt-2">
+                Next: <strong><?= e(money((float)$sum['next_amount'])) ?></strong><br>
+                due <?= e(fmtDate((string)$sum['next_due'], 'j F Y')) ?>
+            </div>
+            <?php endif; ?>
+            <?php if ((float)$sum['overdue_amount'] > 0.009): ?>
+            <div class="note mt-2" style="color:var(--fin-critical)">
+                <?= e(money((float)$sum['overdue_amount'])) ?> overdue
+                across <?= (int)$sum['overdue_count'] ?> instalment<?= $sum['overdue_count'] === 1 ? '' : 's' ?>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <?php if ($to['email'] === ''): ?>
+    <div class="fin-note warning mb-3">
+        <i class="fa fa-triangle-exclamation"></i>
+        <div><strong>No email address on file.</strong> No reminder or receipt can reach this buyer
+            until one is added to their client record.</div>
+    </div>
+    <?php elseif (!(int)$a['reminders_enabled']): ?>
+    <div class="fin-note warning mb-3">
+        <i class="fa fa-bell-slash"></i>
+        <div><strong>Reminders are switched off for this account.</strong> Nothing automatic will be
+            sent to <?= e($to['email']) ?>. You can still send one by hand below.</div>
+    </div>
+    <?php endif; ?>
+
+    <div class="fin-grid2">
+        <div class="fin-stack">
+
+            <!-- The schedule -->
+            <div class="fin-card">
+                <header>
+                    <h2>The schedule</h2>
+                    <span class="hint"><?= (int)$sum['count'] ?> instalments<?php
+                        if (($a['schedule_type'] ?? '') === 'custom'): ?> · irregular<?php endif; ?></span>
+                </header>
+                <?php if (!$schedule): ?>
+                    <div class="fin-body"><p class="fin-empty mb-0">No schedule has been written for this account.</p></div>
+                <?php else: ?>
+                <div class="table-responsive">
+                    <table class="ca-sched">
+                        <thead><tr><th>#</th><th>Due</th><th class="num">Amount</th>
+                                   <th class="num">Paid</th><th>Status</th></tr></thead>
+                        <tbody>
+                        <?php $nextSeen = false; foreach ($schedule as $s):
+                            $owed = (float)$s['amount'] - (float)$s['amount_paid'];
+                            $late = $owed > 0.009 && strtotime((string)$s['due_date']) < strtotime($today);
+                            $isNext = !$nextSeen && $owed > 0.009;
+                            if ($isNext) $nextSeen = true;
+                            $cls = $owed <= 0.009 ? 'done' : ($late ? 'late' : ($isNext ? 'next' : ''));
+                        ?>
+                            <tr class="<?= $cls ?>">
+                                <td><?= (int)$s['seq'] ?></td>
+                                <td><?= e(fmtDate((string)$s['due_date'], 'j M Y')) ?></td>
+                                <td class="num"><?= e(number_format((float)$s['amount'])) ?></td>
+                                <td class="num"><?= e(number_format((float)$s['amount_paid'])) ?></td>
+                                <td>
+                                    <?php if ($owed <= 0.009): ?>
+                                        <span style="color:var(--fin-up-good)"><i class="fa fa-check"></i> paid</span>
+                                    <?php elseif ($late): ?>
+                                        <span class="rb-late">
+                                            <?= (int)((strtotime($today) - strtotime((string)$s['due_date'])) / 86400) ?> days late
+                                        </span>
+                                    <?php elseif ((float)$s['amount_paid'] > 0.009): ?>
+                                        part paid
+                                    <?php else: ?>
+                                        <span style="color:var(--fin-muted)">pending</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Payments -->
+            <div class="fin-card">
+                <header><h2>Payments received</h2><span class="hint"><?= count($payments) ?></span></header>
+                <?php if (!$payments): ?>
+                    <div class="fin-body"><p class="fin-empty mb-0">Nothing has been paid yet.</p></div>
+                <?php else: ?>
+                <div class="table-responsive">
+                    <table class="ca-sched">
+                        <thead><tr><th>Date</th><th>Receipt</th><th>Method</th>
+                                   <th class="num">Amount</th><th>Recorded by</th></tr></thead>
+                        <tbody>
+                        <?php foreach (array_reverse($payments) as $p): ?>
+                            <tr>
+                                <td><?= e(fmtDate((string)$p['paid_on'], 'j M Y')) ?></td>
+                                <td><a href="<?= BASE_URL ?>/modules/crm/credit_receipt.php?lead_id=<?= (int)$a['lead_id'] ?>&amp;payment_id=<?= (int)$p['id'] ?>"
+                                       target="_blank"><?= e((string)$p['receipt_number']) ?></a></td>
+                                <td><?= e((string)($p['method'] ?: '—')) ?>
+                                    <?php if (!empty($p['reference'])): ?>
+                                    <div class="rb-sub"><?= e((string)$p['reference']) ?></div>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="num"><?= e(number_format((float)$p['amount'])) ?></td>
+                                <td class="rb-sub"><?= e((string)($p['by_name'] ?: '—')) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- The trail -->
+            <div class="fin-card">
+                <header><h2>Follow-up</h2><span class="hint"><?= count($notes) ?> note<?= count($notes) === 1 ? '' : 's' ?></span></header>
+                <div class="fin-body">
+                    <?php if (creditCanRecord()): ?>
+                    <form method="post" class="mb-3">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="note">
+                        <input type="hidden" name="id" value="<?= (int)$id ?>">
+                        <div class="d-flex gap-2 mb-2 flex-wrap">
+                            <select name="kind" class="form-select form-select-sm" style="width:auto">
+                                <?php foreach (creditNoteKinds() as $k => $lbl): ?>
+                                <option value="<?= e($k) ?>"><?= e($lbl) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <textarea name="body" class="form-control form-control-sm" rows="2"
+                                  placeholder="What was agreed, and when they said they would pay."></textarea>
+                        <button class="btn btn-outline-secondary btn-sm mt-2">Add note</button>
+                    </form>
+                    <?php endif; ?>
+
+                    <?php if (!$notes): ?>
+                        <p class="fin-empty mb-0">Nothing written down yet.</p>
+                    <?php else: foreach ($notes as $n): ?>
+                    <div class="ca-note">
+                        <div class="who">
+                            <span class="ca-kind"><?= e(creditNoteKinds()[$n['kind']] ?? $n['kind']) ?></span>
+                            <?= e((string)($n['by_name'] ?: 'Someone')) ?> ·
+                            <?= e(fmtDate((string)$n['created_at'], 'j M Y, H:i')) ?>
+                        </div>
+                        <div style="white-space:pre-line"><?= e((string)$n['body']) ?></div>
+                    </div>
+                    <?php endforeach; endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="fin-stack">
+
+            <!-- Take a payment -->
+            <?php if (creditCanRecord() && (float)$sum['balance'] > 0.009): ?>
+            <div class="fin-card">
+                <header><h2>Record a payment</h2></header>
+                <div class="fin-body">
+                    <form method="post">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="payment">
+                        <input type="hidden" name="id" value="<?= (int)$id ?>">
+                        <div class="mb-2">
+                            <label class="form-label small">Amount received</label>
+                            <input type="text" inputmode="decimal" name="amount" class="form-control" required
+                                   placeholder="<?= e(number_format((float)$sum['next_amount'], 0, '.', '')) ?>">
+                            <div class="form-text">
+                                Goes against the oldest unpaid instalment first.
+                                <?= e(money((float)$sum['balance'])) ?> outstanding.
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-7">
+                                <label class="form-label small">Date received</label>
+                                <input type="date" name="paid_on" class="form-control" value="<?= e($today) ?>">
+                            </div>
+                            <div class="col-5">
+                                <label class="form-label small">Method</label>
+                                <select name="method" class="form-select">
+                                    <?php foreach (['mpesa' => 'M-Pesa', 'bank' => 'Bank', 'cash' => 'Cash',
+                                                    'cheque' => 'Cheque'] as $k => $lbl): ?>
+                                    <option value="<?= e($k) ?>"><?= e($lbl) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small">Reference</label>
+                            <input type="text" name="reference" class="form-control" placeholder="M-Pesa code, slip number">
+                        </div>
+                        <button class="btn btn-primary w-100">
+                            <i class="fa fa-check me-1"></i>Record payment
+                        </button>
+                        <div class="form-text mt-2">
+                            <?= $to['email'] !== '' && $cfg['receipts']
+                                ? 'A confirmation will be emailed to ' . e($to['email']) . '.'
+                                : 'No confirmation email will be sent.' ?>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- Chase it -->
+            <?php if (creditCanRecord()): ?>
+            <div class="fin-card">
+                <header><h2>Remind them</h2></header>
+                <div class="fin-body">
+                    <?php if ((float)$sum['balance'] <= 0.009): ?>
+                        <p class="fin-empty mb-0">Nothing outstanding — there is nothing to chase.</p>
+                    <?php else: ?>
+                    <p style="font-size:13px;color:var(--fin-ink-2);margin:0 0 12px">
+                        Sends the reminder now, about the earliest unpaid instalment. It does not use
+                        up one of the automatic reminders, and can be sent again.
+                    </p>
+                    <form method="post">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="remind">
+                        <input type="hidden" name="id" value="<?= (int)$id ?>">
+                        <button class="btn btn-outline-secondary btn-sm w-100" <?= $to['email'] === '' ? 'disabled' : '' ?>>
+                            <i class="fa fa-paper-plane me-1"></i>Send a reminder now
+                        </button>
+                    </form>
+                    <?php endif; ?>
+
+                    <?php if ($sent): ?>
+                    <div class="mt-3">
+                        <div class="rb-sub mb-1">Last sent</div>
+                        <?php foreach ($sent as $l): ?>
+                        <div class="ca-log">
+                            <i class="fa fa-<?= $l['status'] === 'sent' ? 'check' : 'xmark' ?> me-1"
+                               style="color:var(--fin-<?= $l['status'] === 'sent' ? 'up-good' : 'critical' ?>)"></i>
+                            <?= e(match (true) {
+                                $l['stage'] === 'receipt' => 'Payment confirmation',
+                                $l['stage'] === 'before'  => 'Upcoming reminder',
+                                $l['stage'] === 'due'     => 'Due-today reminder',
+                                $l['stage'] === 'manual'  => 'Reminder sent by hand',
+                                str_starts_with((string)$l['stage'], 'overdue') => 'Overdue reminder',
+                                default => (string)$l['stage'],
+                            }) ?>
+                            · <?= e(fmtDate((string)$l['sent_at'], 'j M, H:i')) ?>
+                            <?php if ($l['status'] !== 'sent'): ?>
+                            <div style="color:var(--fin-critical)"><?= e((string)($l['error'] ?: $l['status'])) ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- How the account is handled -->
+            <?php if (creditCanRecord()): ?>
+            <div class="fin-card">
+                <header><h2>How it is handled</h2></header>
+                <div class="fin-body">
+                    <form method="post">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="settings">
+                        <input type="hidden" name="id" value="<?= (int)$id ?>">
+
+                        <div class="mb-3">
+                            <label class="form-label small">Account manager</label>
+                            <select name="account_manager_id" class="form-select form-select-sm">
+                                <option value="">Nobody assigned</option>
+                                <?php foreach ($staff as $s): ?>
+                                <option value="<?= (int)$s['id'] ?>"
+                                    <?= (int)($a['account_manager_id'] ?? 0) === (int)$s['id'] ? 'selected' : '' ?>>
+                                    <?= e((string)$s['name']) ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small">Standing</label>
+                            <select name="status" class="form-select form-select-sm">
+                                <?php foreach (creditStatuses() as $k => [$lbl, ]): ?>
+                                <option value="<?= e($k) ?>" <?= ($a['status'] ?? '') === $k ? 'selected' : '' ?>>
+                                    <?= e($lbl) ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">An account with the lawyers is never emailed automatically.</div>
+                        </div>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="logbook_held" id="lb"
+                                   <?= (int)($a['logbook_held'] ?? 0) ? 'checked' : '' ?>>
+                            <label class="form-check-label small" for="lb">Logbook held as security</label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="reminders_enabled" id="re"
+                                   <?= (int)($a['reminders_enabled'] ?? 1) ? 'checked' : '' ?>>
+                            <label class="form-check-label small" for="re">Send automatic reminders</label>
+                        </div>
+
+                        <button class="btn btn-outline-secondary btn-sm w-100">Save</button>
+                    </form>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <div class="fin-card">
+                <header><h2>The buyer</h2></header>
+                <div class="fin-body" style="font-size:13px">
+                    <div class="mb-1"><strong><?= e($to['name'] ?: '—') ?></strong></div>
+                    <div class="rb-sub"><?= e($to['phone'] ?: 'no phone on file') ?></div>
+                    <div class="rb-sub"><?= e($to['email'] ?: 'no email on file') ?></div>
+                    <?php if (!empty($a['last_reviewed_at'])): ?>
+                    <div class="rb-sub mt-2">Last reviewed <?= e(fmtDate((string)$a['last_reviewed_at'], 'j M Y')) ?></div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php include __DIR__ . '/../../includes/footer.php'; ?>
