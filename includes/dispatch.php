@@ -76,7 +76,12 @@ function dispatchEvents(): array
  */
 function dispatchClientEvents(): array
 {
-    return ['reservation', 'deposit', 'quotation', 'invoice', 'booking', 'delivery'];
+    // 'lead_followup' is Karl checking on a buyer nobody has spoken to in a
+    // fortnight. Listed here so it can be switched off on its own: a yard that
+    // wants the reservation and invoice messages but not this one should not
+    // have to choose between all of them and none.
+    return ['reservation', 'deposit', 'quotation', 'invoice', 'booking', 'delivery',
+            'lead_followup'];
 }
 
 /**
