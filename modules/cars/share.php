@@ -151,6 +151,20 @@ $publicDesc    = trim($car['description'] ?? '') ?: trim($car['notes'] ?? '');
 html{scroll-behavior:smooth}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--paper);color:var(--ink);line-height:1.6;min-height:100vh}
 img{max-width:100%;height:auto;display:block}
+
+/* Nothing here is worth a sideways scrollbar. overflow-x:clip rather than
+   hidden, because hidden would make body a scroll container and silently kill
+   position:sticky on the top bar; clip does not. Browsers without clip ignore
+   the line and rely on the rules above it, which is why those come first
+   rather than this being the only defence. */
+html{max-width:100%}
+body{max-width:100%;overflow-x:clip}
+
+/* A model name, a feature or a pasted address with no spaces in it cannot be
+   allowed to set the width of the page. */
+.sp-title,.sp-sub,.sp-desc,.sp-spec,.sp-feats li,.sp-stats .v,.sp-stats .l,
+.sp-bar-amt,.sp-loc,.sp-acc summary{overflow-wrap:break-word;word-break:break-word}
+.sp-spec strong{min-width:0}
 a{color:inherit;text-decoration:none}
 
 /* ── Layout ── */
@@ -172,6 +186,10 @@ a{color:inherit;text-decoration:none}
 /* ── Hero ── */
 .sp-hero{padding:32px 0 0}
 .sp-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:36px;align-items:start}
+/* Grid and flex children default to min-width:auto, which means "never
+   narrower than my content". On a phone that is the whole of why a page
+   stops fitting. Every child here is allowed to give instead. */
+.sp-grid > *{min-width:0}
 /* Placed by hand rather than by source order: the photographs and the detail
    below them are two grid children now, so that a narrow screen can put the
    price between them without the markup being written twice. */
@@ -184,7 +202,7 @@ a{color:inherit;text-decoration:none}
      it costs and how to ask about it, and only then the specification. The
      price used to sit under the whole accordion, which on a phone is a long
      way past the point where somebody has decided. */
-  .sp-grid{grid-template-columns:1fr;gap:22px}
+  .sp-grid{grid-template-columns:minmax(0,1fr);gap:22px}
   .sp-gal,.sp-detail,.sp-panel-col{grid-column:1;grid-row:auto}
   .sp-gal{order:1}
   .sp-panel-col{order:2}
@@ -233,7 +251,7 @@ a{color:inherit;text-decoration:none}
 
 /* ── Stats strip ── */
 .sp-stats{
-  display:grid;grid-template-columns:repeat(4,1fr);
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
   border:1px solid var(--line);border-radius:var(--r);margin-top:20px;background:var(--white);
 }
 .sp-stats>div{text-align:center;padding:20px 10px;border-right:1px solid var(--line)}
@@ -242,7 +260,7 @@ a{color:inherit;text-decoration:none}
 .sp-stats .v{font-size:18px;font-weight:300;letter-spacing:-.01em;color:var(--ink)}
 .sp-stats .l{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-3);margin-top:4px}
 @media(max-width:560px){
-  .sp-stats{grid-template-columns:1fr 1fr}
+  .sp-stats{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
   .sp-stats>div:nth-child(2){border-right:none}
   .sp-stats>div:nth-child(-n+2){border-bottom:1px solid var(--line)}
 }
@@ -266,10 +284,10 @@ a{color:inherit;text-decoration:none}
 .sp-spec:last-child{border-bottom:none}
 .sp-spec span{color:var(--ink-3)}
 .sp-spec strong{color:var(--ink);font-weight:500;text-align:right}
-.sp-feats{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:4px 20px}
+.sp-feats{list-style:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 20px}
 .sp-feats li{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--paper);font-size:13.5px;color:var(--ink-2)}
 .sp-feats li i{color:var(--ink);font-size:11px;flex-shrink:0}
-@media(max-width:560px){.sp-feats{grid-template-columns:1fr}}
+@media(max-width:560px){.sp-feats{grid-template-columns:minmax(0,1fr)}}
 .sp-desc{color:var(--ink-2);line-height:1.8;font-size:14px}
 
 /* ── Sticky right panel ── */
@@ -323,16 +341,27 @@ a{color:inherit;text-decoration:none}
    This link is nearly always opened from WhatsApp, on a phone, by somebody who
    has been sent one car. That is the primary case, not the fallback. */
 @media(max-width:720px){
-  .sp-wrap{padding:0 16px}
+  .sp-wrap{padding:0 14px}
   .sp-hero{padding:18px 0 0}
-  .sp-panel{padding:20px 18px}
+  .sp-panel{padding:20px 16px}
   .sp-title{font-size:23px}
   .sp-price-amt{font-size:26px}
   .sp-gal-main{aspect-ratio:4/3;border-radius:10px}
   .sp-accs{margin-top:18px}
-  .sp-acc summary{padding:15px 2px;font-size:14px}
-  /* A number that has been read is a number that can be dialled. */
-  .sp-spec{font-size:13px;gap:12px}
+  .sp-acc summary{padding:16px 2px;font-size:15px}
+  /* Read at arm's length on a phone, not leaned into. The specification was
+     set at desktop sizes and shrunk from there, which is how a page ends up
+     technically fitting and still being pinched open to be read. */
+  .sp-spec{font-size:14.5px;gap:14px;padding:11px 0}
+  .sp-feats li{font-size:14.5px;padding:10px 0}
+  .sp-desc{font-size:15px;line-height:1.75}
+  .sp-stats>div{padding:16px 8px}
+  .sp-stats .v{font-size:19px}
+  .sp-stats .l{font-size:10px;letter-spacing:.08em}
+  .sp-sub{font-size:14px}
+  /* Thumbnails big enough to hit with a thumb, and they settle on one. */
+  .sp-thumbs{gap:8px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+  .sp-thumb{width:92px;height:62px;scroll-snap-align:start}
 }
 
 /* The one thing a client needs within reach at any point on the page: what it
