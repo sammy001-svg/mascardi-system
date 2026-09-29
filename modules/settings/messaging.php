@@ -113,6 +113,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
 // Written as explicit 1/0 for every box rather than only the ticked ones: an
 // unticked checkbox sends nothing at all, so saving only what arrived would
 // make switching something OFF impossible.
+// ── POST: how quiet leads get chased ──────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_nudge') {
+    $uStmt = $db->prepare("INSERT INTO settings (setting_key,setting_value) VALUES (?,?)
+                           ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
+    // Bounded on the way in. A follow-up window of zero days would message
+    // everybody the moment they were entered, and a cap of zero would send
+    // nothing while looking switched on.
+    $updates = [
+        'lead_nudge_enabled'  => isset($_POST['lead_nudge_enabled'])  ? '1' : '0',
+        'lead_nudge_whatsapp' => isset($_POST['lead_nudge_whatsapp']) ? '1' : '0',
+        'lead_nudge_email'    => isset($_POST['lead_nudge_email'])    ? '1' : '0',
+        'lead_nudge_days'     => (string)max(1, min(180, (int)($_POST['lead_nudge_days']     ?? 14))),
+        'lead_nudge_cooldown' => (string)max(1, min(365, (int)($_POST['lead_nudge_cooldown'] ?? 30))),
+        'lead_nudge_cap'      => (string)max(1, min(500, (int)($_POST['lead_nudge_cap']      ?? 40))),
+        'lead_nudge_message'  => trim((string)($_POST['lead_nudge_message'] ?? '')),
+    ];
+    foreach ($updates as $k => $v) { $uStmt->execute([$k, $v]); $settings[$k] = $v; }
+    setFlash('success', 'Follow-up settings saved.');
+    redirect(BASE_URL . '/modules/settings/messaging.php?tab=notify');
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_notify') {
     verifyCsrf();
     $uStmt = $db->prepare("INSERT INTO settings (setting_key,setting_value) VALUES (?,?)
@@ -630,6 +651,95 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </div>
         </form>
+
+<!-- ── Chasing a lead nobody has contacted ─────────────────────────────────── -->
+<form method="POST">
+<input type="hidden" name="action" value="save_nudge">
+<div class="card mt-4">
+    <div class="card-header d-flex align-items-center gap-2">
+        <i class="fa fa-user-clock text-primary" style="font-size:17px"></i>
+        <span>Automatic follow-up on quiet leads</span>
+        <span class="badge bg-<?= ($settings['lead_nudge_enabled'] ?? '1') === '1' ? 'success' : 'secondary' ?> ms-auto">
+            <?= ($settings['lead_nudge_enabled'] ?? '1') === '1' ? 'On' : 'Off' ?>
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info py-2 small mb-3">
+            <i class="fa fa-info-circle me-1"></i>
+            Once a day the system looks for leads nobody has touched for a while and sends
+            one message from Karl, on WhatsApp and by email. Lost leads and delivered ones
+            are left alone. A lead is chased once and then rested, because a lead that stays
+            quiet after that needs a person, not a second message.
+        </div>
+
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" value="1"
+                   name="lead_nudge_enabled" id="nudgeOn"
+                   <?= ($settings['lead_nudge_enabled'] ?? '1') === '1' ? 'checked' : '' ?>>
+            <label class="form-check-label" for="nudgeOn">
+                <strong>Chase quiet leads automatically</strong>
+                <div class="text-muted small">Off, and nothing is sent whatever else is set here.</div>
+            </label>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label">Treat as quiet after</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" name="lead_nudge_days" class="form-control" min="1" max="180"
+                           value="<?= e($settings['lead_nudge_days'] ?? '14') ?>">
+                    <span class="input-group-text">days</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Then leave alone for</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" name="lead_nudge_cooldown" class="form-control" min="1" max="365"
+                           value="<?= e($settings['lead_nudge_cooldown'] ?? '30') ?>">
+                    <span class="input-group-text">days</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">At most per run</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" name="lead_nudge_cap" class="form-control" min="1" max="500"
+                           value="<?= e($settings['lead_nudge_cap'] ?? '40') ?>">
+                    <span class="input-group-text">leads</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-4 flex-wrap mb-3">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="1"
+                       name="lead_nudge_whatsapp" id="nudgeWa"
+                       <?= ($settings['lead_nudge_whatsapp'] ?? '1') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label" for="nudgeWa">Send on WhatsApp</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="1"
+                       name="lead_nudge_email" id="nudgeMail"
+                       <?= ($settings['lead_nudge_email'] ?? '1') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label" for="nudgeMail">Send by email</label>
+            </div>
+        </div>
+
+        <div>
+            <label class="form-label">What Karl says</label>
+            <textarea name="lead_nudge_message" class="form-control" rows="4"
+                      placeholder="Leave blank to use the standard wording"><?= e($settings['lead_nudge_message'] ?? '') ?></textarea>
+            <div class="form-text">
+                Leave it blank and the standard wording is used. It goes out as written, on both
+                channels, with nothing added &mdash; so read it back as a customer would.
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button class="btn btn-primary px-4"><i class="fa fa-check me-2"></i>Save follow-up settings</button>
+        </div>
+    </div>
+</div>
+</form>
     </div>
 
     <div class="col-lg-3">
