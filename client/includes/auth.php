@@ -5,7 +5,9 @@ function clientAuth(): ?array {
 
 function requireClientLogin(): void {
     if (!clientAuth()) {
-        header('Location: ' . BASE_URL . '/client/login.php');
+        // Straight to the customer side of the main door, rather than through
+        // the forwarder in client/login.php.
+        header('Location: ' . BASE_URL . '/login.php?door=client');
         exit;
     }
 }

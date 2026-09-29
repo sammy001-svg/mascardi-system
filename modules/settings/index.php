@@ -122,6 +122,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             'company_phone'   => trim($_POST['company_phone'] ?? ''),
             'company_email'   => trim($_POST['company_email'] ?? ''),
             'company_pin'     => trim($_POST['company_pin'] ?? ''),
+            // The customer door on the sign-in page. Off means staff only;
+            // signup off means the door still opens for people already on
+            // file, but will not create anybody new.
+            'client_portal_enabled' => isset($_POST['client_portal_enabled']) ? '1' : '0',
+            'client_portal_signup'  => isset($_POST['client_portal_signup'])  ? '1' : '0',
         ];
         if (!$updates['company_name']) $errors[] = 'Company name is required.';
 
@@ -405,6 +410,53 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+
+<div class="card mt-4">
+    <div class="card-header d-flex align-items-center gap-2">
+        <i class="fa fa-user-lock text-primary" style="font-size:17px"></i>
+        <span>Customer Portal</span>
+        <span class="badge bg-<?= ($settings['client_portal_enabled'] ?? '1') === '1' ? 'success' : 'secondary' ?> ms-auto">
+            <?= ($settings['client_portal_enabled'] ?? '1') === '1' ? 'Open' : 'Closed' ?>
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info py-2 small mb-3">
+            <i class="fa fa-info-circle me-1"></i>
+            Buyers sign in on the same page as staff, with the email address you invoice
+            them at. Nobody is let in on a typed address alone &mdash; a code goes to that
+            address and has to come back, so only the person who can read the mailbox gets
+            the account.
+        </div>
+
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" value="1"
+                   name="client_portal_enabled" id="portalOpen"
+                   <?= ($settings['client_portal_enabled'] ?? '1') === '1' ? 'checked' : '' ?>>
+            <label class="form-check-label" for="portalOpen">
+                <strong>Show the customer door</strong>
+                <div class="text-muted small">
+                    Off, and the sign-in page is staff only. Customers already signed in
+                    are not thrown out, but nobody new can get in.
+                </div>
+            </label>
+        </div>
+
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" value="1"
+                   name="client_portal_signup" id="portalSignup"
+                   <?= ($settings['client_portal_signup'] ?? '1') === '1' ? 'checked' : '' ?>>
+            <label class="form-check-label" for="portalSignup">
+                <strong>Let new people open an account</strong>
+                <div class="text-muted small">
+                    Off, and only people already in your Clients list can set up access &mdash;
+                    useful if you would rather your customer book held buyers only. Either way,
+                    an existing customer can always claim their own record.
+                </div>
+            </label>
+        </div>
+    </div>
+</div>
+
 <div class="mt-4">
     <button type="submit" class="btn btn-primary px-5"><i class="fa fa-check me-2"></i>Save Company Info</button>
 </div>
