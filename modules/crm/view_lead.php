@@ -472,6 +472,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ── Signed paperwork against this deal ──────────────────────────────────
     // One handler for all three summaries; which part of the deal it belongs to
     // arrives as 'context' rather than as a different action.
+    // ── Asking the buyer for their KYC papers ───────────────────────────────
+    if ($action === 'kyc_request' && canWrite('crm')) {
+        require_once __DIR__ . '/_kyc.php';
+        $r = kycCreate($db, $id, (int)($_POST['agreement_id'] ?? 0) ?: null,
+                       (array)($_POST['required'] ?? []),
+                       (string)($_POST['email'] ?? ''),
+                       (int)($_POST['days'] ?? KYC_DEFAULT_DAYS),
+                       (int)$me['id']);
+        if (!$r['ok']) {
+            setFlash('error', $r['error']);
+        } elseif (!empty($_POST['send_email'])) {
+            // Opened and sent in one go. If the mail fails the link still
+            // exists, so say so rather than implying nothing happened.
+            $req  = kycFind($db, $r['token']);
+            $sent = kycSend($db, $req, (string)($_POST['email'] ?? ''));
+            setFlash($sent['ok'] ? 'success' : 'warning',
+                $sent['ok'] ? 'Link created and emailed to ' . e($sent['to']) . '.'
+                            : 'Link created, but the email did not send: ' . e($sent['error'])
+                              . ' Copy the link below and send it yourself.');
+        } else {
+            setFlash('success', 'Link created. Copy it below and send it to the client.');
+        }
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#kyc');
+    }
+
+    if ($action === 'kyc_resend' && canWrite('crm')) {
+        require_once __DIR__ . '/_kyc.php';
+        $cur = kycCurrent($db, $id);
+        if (!$cur) {
+            setFlash('error', 'There is no open link to send.');
+        } else {
+            $sent = kycSend($db, kycFind($db, (string)$cur['token']), (string)($_POST['email'] ?? ''));
+            setFlash($sent['ok'] ? 'success' : 'error',
+                $sent['ok'] ? 'Sent to ' . e($sent['to']) . '.' : $sent['error']);
+        }
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#kyc');
+    }
+
+    if ($action === 'kyc_revoke' && canWrite('crm')) {
+        require_once __DIR__ . '/_kyc.php';
+        $r = kycRevoke($db, (int)($_POST['request_id'] ?? 0), $id);
+        setFlash($r['ok'] ? 'success' : 'error',
+            $r['ok'] ? 'The link has been withdrawn and will no longer open.' : $r['error']);
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#kyc');
+    }
+
     if ($action === 'upload_lead_doc' && canWrite('crm')) {
         require_once __DIR__ . '/_documents.php';
         $ctx = (string)($_POST['context'] ?? 'other');
@@ -2371,6 +2417,21 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
               // the agreement rather than the stage: a credit sale is settled
               // over months and the papers outlive the delivery. ?>
         <?php if (!empty($creditAgr)): ?>
+        <?php // The papers the buyer sends in themselves, then the ones signed
+              // in branch. Asking comes before filing, so it reads in that order. ?>
+        <?php require_once __DIR__ . '/_kyc.php'; ?>
+        <div class="card mb-3">
+            <div class="card-body">
+                <?php kycPanel($db, $id, (int)($creditAgr['id'] ?? 0), $lead, $__docW); ?>
+            </div>
+        </div>
+        <?php if (leadDocsFor($db, $id, 'kyc')): ?>
+        <div class="card mb-3">
+            <div class="card-body">
+                <?php leadDocsPanel($db, $id, 'kyc', $__docW); ?>
+            </div>
+        </div>
+        <?php endif; ?>
         <div class="card mb-3">
             <div class="card-body">
                 <?php leadDocsPanel($db, $id, 'credit', $__docW); ?>
@@ -4108,6 +4169,31 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 });
+</script>
+
+<script>
+// Copying the KYC link. Written here rather than inline on the button so the
+// markup stays readable and the clipboard fallback is not repeated per lead.
+(function () {
+    document.querySelectorAll('.kyc-copy').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var el = document.getElementById(btn.getAttribute('data-target'));
+            if (!el) return;
+            el.select();
+            var done = function () {
+                btn.innerHTML = '<i class="fa fa-check"></i>';
+                setTimeout(function () { btn.innerHTML = '<i class="fa fa-copy"></i>'; }, 1600);
+            };
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(el.value).then(done, function () {
+                    try { document.execCommand('copy'); done(); } catch (e) {}
+                });
+            } else {
+                try { document.execCommand('copy'); done(); } catch (e) {}
+            }
+        });
+    });
+}());
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

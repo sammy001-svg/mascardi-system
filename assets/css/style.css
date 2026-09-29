@@ -2350,3 +2350,29 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
     border-top:1px solid var(--border,#e2e8f0); padding-top:12px;
 }
 .lead-docs-add .form-label{ font-size:11.5px; font-weight:600; color:var(--muted,#64748b); margin-bottom:3px; }
+
+/* ── Asking a buyer for their KYC papers ─────────────────────────────────── */
+.kyc-picks{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin:12px 0 4px}
+@media(max-width:700px){.kyc-picks{grid-template-columns:1fr}}
+.kyc-pick{display:flex;align-items:flex-start;gap:9px;cursor:pointer;padding:5px 0}
+.kyc-pick input{margin-top:3px;flex:none;accent-color:var(--brand,#0f6b5c)}
+.kyc-pick strong{display:block;font-size:13px;font-weight:600;color:var(--text,#334155)}
+.kyc-pick em{display:block;font-size:11.5px;font-style:normal;color:var(--muted,#94a3b8);margin-top:1px}
+.kyc-ask{border-top:1px solid var(--border,#e2e8f0);padding-top:12px}
+.kyc-ask .form-label{font-size:11.5px;font-weight:600;color:var(--muted,#64748b);margin-bottom:3px}
+
+.kyc-live{border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:13px 15px;background:var(--surface-alt,#f8fafc)}
+.kyc-live-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+    font-size:12.5px;font-weight:700;color:var(--text,#334155);margin-bottom:9px}
+.kyc-live-exp{font-weight:500;color:var(--muted,#64748b)}
+.kyc-url{display:flex;gap:6px;margin-bottom:10px}
+.kyc-url input{flex:1;min-width:0;font-size:12px;font-family:ui-monospace,monospace;
+    padding:7px 10px;border:1px solid var(--border,#e2e8f0);border-radius:7px;
+    background:var(--surface,#fff);color:var(--text,#334155)}
+.kyc-asked{font-size:12px;color:var(--muted,#64748b);display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.kyc-asked-l{margin-right:2px}
+.kyc-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:11px;
+    border:1px solid var(--border,#e2e8f0);background:var(--surface,#fff);font-size:11.5px}
+.kyc-chip.in{border-color:#16a34a;color:#15803d;background:rgba(22,163,74,.08);font-weight:600}
+.kyc-sent-note{font-size:11.5px;color:var(--muted,#94a3b8);margin-top:9px}
+.kyc-acts{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}

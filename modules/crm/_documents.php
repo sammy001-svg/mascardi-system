@@ -29,6 +29,10 @@ function leadDocContexts(): array
     return [
         'reservation'  => ['Reservation',  'fa-bookmark'],
         'credit'       => ['Credit',       'fa-file-contract'],
+        // Sent in by the buyer themselves, through a link. Kept apart from the
+        // rest so the agreement can show at a glance what has arrived and what
+        // is still being waited on.
+        'kyc'          => ['KYC',          'fa-id-card'],
         'import_order' => ['Import order', 'fa-ship'],
         'delivery'     => ['Delivery',     'fa-truck'],
         'other'        => ['Other',        'fa-paperclip'],
@@ -45,6 +49,11 @@ function leadDocTypes(): array
         'payment_schedule'  => 'Payment schedule',
         'deposit_receipt'   => 'Deposit receipt',
         'id_copy'           => 'ID / passport copy',
+        'bank_statement'    => 'Bank statement',
+        'payslip'           => 'Payslip',
+        'employment_letter' => 'Employer letter',
+        'business_permit'   => 'Business permit',
+        'utility_bill'      => 'Proof of address',
         'kra_pin'           => 'KRA PIN certificate',
         'import_order'      => 'Import order form',
         'proforma'          => 'Proforma invoice',
@@ -433,6 +442,7 @@ function leadDocsDefaultType(string $context): string
         'reservation'  => 'sales_agreement',
         'credit'       => 'credit_agreement',
         'import_order' => 'import_order',
+        'kyc'          => 'bank_statement',
         'delivery'     => 'delivery_note',
     ][$context] ?? 'other';
 }
