@@ -154,3 +154,51 @@ function carTransferBillingToBuyer(PDO $db, int $carId, int $buyerClientId): boo
 }
 
 } // function_exists('carsEnsureServiceBilling')
+
+/**
+ * The private link a car is shared on.
+ *
+ * Sharing used to be share.php?id=7, which is a count. Anyone handed one link
+ * could reach every other car by changing the number — including stock kept off
+ * the public website, which is usually off it on purpose: a trade-in not yet
+ * prepared, or something being held for a particular buyer. The page itself was
+ * careful about what it showed and then let the address give the rest away.
+ *
+ * A token is not a count. It is generated once, kept on the row, and reused, so
+ * the same car always shares on the same link — send it twice and it is the
+ * same page, and a link already sent to a client keeps working.
+ */
+function carShareToken(PDO $db, int $carId): string
+{
+    static $ensured = false;
+    if (!$ensured) {
+        $ensured = true;
+        foreach ([
+            "ALTER TABLE cars ADD COLUMN share_token VARCHAR(32) NULL DEFAULT NULL",
+            "ALTER TABLE cars ADD UNIQUE KEY uk_car_share (share_token)",
+        ] as $sql) {
+            try { $db->exec($sql); } catch (\Throwable $e) { /* already there */ }
+        }
+    }
+    if ($carId <= 0) return '';
+
+    try {
+        $st = $db->prepare("SELECT share_token FROM cars WHERE id = ?");
+        $st->execute([$carId]);
+        $tok = (string)($st->fetchColumn() ?: '');
+        if ($tok !== '') return $tok;
+
+        // Long enough that guessing is not a strategy, short enough to survive
+        // being pasted into WhatsApp without wrapping.
+        for ($try = 0; $try < 5; $try++) {
+            $tok = bin2hex(random_bytes(12));
+            try {
+                $db->prepare("UPDATE cars SET share_token = ? WHERE id = ?")->execute([$tok, $carId]);
+                return $tok;
+            } catch (\Throwable $e) { /* astronomically unlikely collision — go again */ }
+        }
+    } catch (\Throwable $e) {
+        error_log('carShareToken: ' . $e->getMessage());
+    }
+    return '';
+}

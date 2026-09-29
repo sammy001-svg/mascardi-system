@@ -6,26 +6,36 @@
  * car view). It shows make/model, all photos with a scrollable gallery, price,
  * key specs, features, and a WhatsApp/phone enquiry button.
  *
+ * This is not the website. A client opening it should see one vehicle,
+ * presented properly, and a way to reach the person selling it — not a shop
+ * front with navigation inviting them to go and browse. Nothing here links back
+ * into the public showroom, deliberately: the link was sent to somebody about a
+ * particular car, and every door out of it is a door away from that
+ * conversation.
+ *
  * Security:
  *  • Only inventory cars (car_type = 'inventory' | 'sale_on_behalf') are exposed.
- *  • Sold/delivered cars are not shown — they redirect to a polite "unavailable" page.
+ *  • Sold/delivered cars are not shown — they get a polite "unavailable" page.
  *  • No internal fields (chassis, entry number, costs, import details, billing) appear.
- *  • No authentication at all — the link itself is the access control, same as the
- *    existing showroom/view.php, which is already public.
+ *  • The link is the access control, so it is a token rather than a row id.
+ *    ?id=7 is a count: anyone handed one link could reach every other car by
+ *    changing the number, including stock kept off the public site on purpose.
+ *    ?t=<token> cannot be counted through. The old form still resolves, because
+ *    links sent to clients before this are out in the world and should not break.
  */
 
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../config/app.php';
+require_once __DIR__ . '/_bootstrap.php';
 
-// Register this path with BASE_URL so it resolves correctly:
-// app.php already strips /modules from the path. ✓
+$db    = getDB();
+$token = trim((string)($_GET['t'] ?? ''));
+$id    = (int)($_GET['id'] ?? 0);
 
-$db = getDB();
-$id = (int)($_GET['id'] ?? 0);
-
-if (!$id) {
-    header('Location: ' . BASE_URL . '/showroom/');
-    exit;
+if ($token !== '' && preg_match('/^[a-f0-9]{16,32}$/', $token)) {
+    $st = $db->prepare("SELECT id FROM cars WHERE share_token = ? LIMIT 1");
+    $st->execute([$token]);
+    $id = (int)($st->fetchColumn() ?: 0);
 }
 
 // Pull the car — inventory stock only, not sold/delivered.
@@ -44,8 +54,12 @@ $stmt = $db->prepare("
 $stmt->execute([$id]);
 $car = $stmt->fetch(PDO::FETCH_ASSOC);
 
+if (!$id) { $car = null; }
+
 if (!$car) {
     // Car not found, or sold/delivered, or a client vehicle (not shareable).
+    // Whoever opened this was sent it by somebody; send them back to that
+    // person rather than to a catalogue they did not ask for.
     http_response_code(404);
     $companyName = getSetting('company_name', 'Mascardi Luxury Cars');
     ?><!DOCTYPE html>
@@ -58,11 +72,16 @@ if (!$car) {
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/bootstrap.min.css">
 </head>
 <body class="d-flex align-items-center justify-content-center min-vh-100 bg-light">
-<div class="text-center p-5">
-    <div style="font-size:64px;margin-bottom:16px">🚗</div>
+<div class="text-center p-5" style="max-width:420px">
+    <div style="font-size:60px;margin-bottom:14px">🚗</div>
     <h4 class="fw-semibold mb-2">This vehicle is no longer available</h4>
-    <p class="text-muted mb-4">It may have been sold, or the link may have expired.</p>
-    <a href="<?= BASE_URL ?>/showroom/" class="btn btn-dark">Browse all vehicles</a>
+    <p class="text-muted mb-4">It may have been sold, or the link may have expired.
+       Whoever sent this to you will know what else is in.</p>
+    <?php $__ph = getSetting('company_phone', ''); if ($__ph !== ''): ?>
+    <a href="tel:<?= htmlspecialchars($__ph) ?>" class="btn btn-dark">
+        <i class="fa fa-phone me-2"></i>Call <?= htmlspecialchars($companyName) ?>
+    </a>
+    <?php endif; ?>
 </div>
 </body>
 </html>
@@ -93,7 +112,12 @@ $inTransit     = ($car['status'] ?? '') === 'in_transit';
 $primaryImg    = $images ? BASE_URL . '/uploads/cars/' . $images[0]['file_path'] : null;
 $logoInfo      = companyLogo();
 
-$shareUrl      = rtrim(BASE_URL, '/') . '/modules/cars/share.php?id=' . $id;
+// The link this page calls itself, for og: tags and the forward buttons. The
+// token form, so a client who passes it on passes on the private link rather
+// than a number somebody can count from.
+$shareTok      = carShareToken($db, $id);
+$shareUrl      = rtrim(BASE_URL, '/') . '/modules/cars/share.php?'
+               . ($shareTok !== '' ? 't=' . $shareTok : 'id=' . $id);
 $waMsg         = urlencode("Hi, I'm interested in the {$carTitle}" . ($dispPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? {$shareUrl}");
 
 $featureList   = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string)($car['features'] ?? '')))));
@@ -288,14 +312,16 @@ a{color:inherit;text-decoration:none}
 <!-- Top nav -->
 <nav class="sp-nav">
   <div class="sp-wrap sp-nav-inner">
-    <a href="<?= BASE_URL ?>/showroom/" class="sp-logo">
+    <?php // The company, stated rather than linked. This is not a shop front,
+          // and a logo that navigates is an invitation to leave. ?>
+    <span class="sp-logo">
       <?php if ($logoInfo['exists']): ?>
       <img src="<?= htmlspecialchars($logoInfo['url']) ?>" alt="<?= htmlspecialchars($companyName) ?>">
       <?php else: ?>
       <?= htmlspecialchars($companyName) ?>
       <?php endif; ?>
-    </a>
-    <span class="sp-nav-badge">Vehicle Detail</span>
+    </span>
+    <span class="sp-nav-badge">Prepared for you</span>
   </div>
 </nav>
 
@@ -479,6 +505,17 @@ a{color:inherit;text-decoration:none}
             <i class="fa fa-phone"></i> <?= htmlspecialchars($companyPhone) ?>
           </a>
           <?php endif; ?>
+          <?php // A yard with an address but no phone would otherwise show a
+                // vehicle and no way to answer about it. Email is the fallback,
+                // with the car already named in the subject so the reply lands
+                // on somebody who knows which one is meant. ?>
+          <?php $sellEmail = getSetting('company_email', '');
+                if ($sellEmail !== '' && !$whatsappNum): ?>
+          <a href="mailto:<?= htmlspecialchars($sellEmail) ?>?subject=<?= urlencode('Enquiry: ' . $carTitle) ?>"
+             class="sp-btn sp-btn-ph">
+            <i class="fa fa-envelope"></i> Email us about this vehicle
+          </a>
+          <?php endif; ?>
 
           <!-- Copy link -->
           <button type="button" class="sp-btn sp-btn-copy" id="spCopyBtn"
@@ -520,9 +557,19 @@ a{color:inherit;text-decoration:none}
 
 <footer class="sp-foot">
   <div class="sp-wrap">
-    <?= htmlspecialchars($companyName) ?> &nbsp;·&nbsp;
-    <a href="<?= BASE_URL ?>/showroom/">Browse all vehicles</a>
-    <?php if ($companyPhone): ?>&nbsp;·&nbsp; <a href="tel:<?= htmlspecialchars($companyPhone) ?>"><?= htmlspecialchars($companyPhone) ?></a><?php endif; ?>
+    <div style="margin-bottom:6px">
+      Sent to you by <strong><?= htmlspecialchars($companyName) ?></strong>.
+      Questions about this vehicle? Just reply to whoever sent it, or reach us below.
+    </div>
+    <?php if ($companyPhone): ?>
+    <a href="tel:<?= htmlspecialchars($companyPhone) ?>"><?= htmlspecialchars($companyPhone) ?></a>
+    <?php endif; ?>
+    <?php $__em = getSetting('company_email', ''); if ($__em !== ''): ?>
+    &nbsp;·&nbsp; <a href="mailto:<?= htmlspecialchars($__em) ?>"><?= htmlspecialchars($__em) ?></a>
+    <?php endif; ?>
+    <?php $__ad = getSetting('company_address', ''); if ($__ad !== ''): ?>
+    <div style="margin-top:6px;opacity:.75"><?= htmlspecialchars($__ad) ?></div>
+    <?php endif; ?>
   </div>
 </footer>
 

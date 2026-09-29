@@ -88,8 +88,13 @@ include __DIR__ . '/../../includes/header.php';
     <div class="d-flex gap-2 flex-wrap">
         <a href="media.php?id=<?= $id ?>" class="btn btn-sm btn-outline-primary"><i class="fa fa-camera me-1"></i>Photos (<?= count($images) ?>)</a>
         <?php
-        // Public share link — points to the no-login car page.
-        $shareUrl = rtrim(BASE_URL, '/') . '/modules/cars/share.php?id=' . $id;
+        // Public share link — points to the no-login car page. A token rather
+        // than the row id, so the client cannot count through the rest of the
+        // stock from the link they were sent.
+        require_once __DIR__ . '/_bootstrap.php';
+        $shareTok = carShareToken($db, $id);
+        $shareUrl = rtrim(BASE_URL, '/') . '/modules/cars/share.php?'
+                  . ($shareTok !== '' ? 't=' . $shareTok : 'id=' . $id);
         ?>
         <button type="button" class="btn btn-sm btn-outline-secondary" id="copyShareBtn"
                 onclick="(function(b){
