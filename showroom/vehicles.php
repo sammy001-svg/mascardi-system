@@ -550,7 +550,10 @@ include __DIR__ . '/header.php';
     overflow: hidden; display: flex; flex-direction: column;
     transition: box-shadow .35s var(--ease), border-color .35s var(--ease), transform .35s var(--ease);
 }
-.sv-card:hover { box-shadow: 0 24px 56px rgba(0,0,0,.10); border-color: #cfcfcd; transform: translateY(-3px); }
+/* No lift on hover: moving a card out from under the pointer at its own edge
+   makes it shake. The shadow, the border and the photo easing in still say it
+   is live, and none of them shifts the hit area. */
+.sv-card:hover { box-shadow: 0 24px 56px rgba(0,0,0,.10); border-color: #cfcfcd; }
 .sv-card-reserved { opacity: .8; }
 
 .sv-card-img { display: block; position: relative; aspect-ratio: 16/10; overflow: hidden; background: linear-gradient(180deg, #f7f7f5 0%, #ececea 100%); flex-shrink: 0; }

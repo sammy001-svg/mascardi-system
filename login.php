@@ -411,13 +411,15 @@ body {
 
 .auth-inner{ max-width:480px; }
 .auth-lockup{ display:flex; align-items:center; gap:13px; margin-bottom:18px; }
-.auth-lockup img{ height:52px; width:auto; max-width:180px; object-fit:contain; }
-.auth-mark{
-    width:52px; height:52px; border-radius:15px; display:flex; align-items:center;
-    justify-content:center; font-size:23px; color:#fff;
-    background:linear-gradient(135deg,#3b82f6,#1d4ed8); box-shadow:0 8px 24px rgba(37,99,235,.42);
+/* Standing on its own, the name carries the panel, so it is set as a
+   nameplate rather than as a label beside a mark. */
+.auth-company{
+    font-size:28px; font-weight:800; color:#fff; letter-spacing:.14em;
+    text-transform:uppercase; line-height:1.15;
+    font-family:'Orbitron','Inter',system-ui,sans-serif;
+    text-shadow:0 0 22px rgba(59,130,246,.45);
 }
-.auth-company{ font-size:19px; font-weight:800; color:#fff; letter-spacing:-.3px; }
+@media (min-width:900px){ .auth-company{ font-size:34px; } }
 .auth-tagline{
     color:rgba(255,255,255,.82); font-size:15px; line-height:1.6; margin:0 0 22px; max-width:30em;
 }
@@ -442,7 +444,7 @@ body {
     padding:30px 20px 38px; background:#111c33;
 }
 @media (min-width:900px){ .auth-panel{ padding:48px 44px; } }
-.auth-form{ width:100%; max-width:410px; }
+.auth-form{ width:100%; }
 
 /* Repeated for the phone, where the picture side is only a band and the
    lockup on it has been pushed off the top. */
@@ -450,7 +452,7 @@ body {
     display:flex; align-items:center; gap:10px; margin-bottom:22px;
     color:#e6edf7; font-weight:800; font-size:16px;
 }
-.auth-smallbrand img{ height:34px; width:auto; max-width:130px; object-fit:contain; }
+.auth-smallbrand span{ letter-spacing:.1em; text-transform:uppercase; }
 @media (min-width:900px){ .auth-smallbrand{ display:none; } }
 
 .auth-foot{
@@ -471,7 +473,6 @@ body {
 @media (min-width:900px){ .auth-backsm{ display:none; } }
 
 .login-card{ background:transparent; border:0; padding:0; box-shadow:none; }
-.brand-icon { width: 58px; height: 58px; background: linear-gradient(135deg,#3b82f6,#1d4ed8); border-radius: 16px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 26px; margin: 0 auto 16px; box-shadow: 0 8px 24px rgba(37,99,235,.4); }
 .login-title { font-size: 23px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 4px; letter-spacing: -.4px; }
 .login-sub { color: #64748b; font-size: 13px; text-align: center; margin-bottom: 28px; }
 .form-label { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 5px; }
@@ -561,14 +562,26 @@ body::before{
    the panel IS the surface, so a second bordered box inside it would only be a
    box inside a box. What is kept is the arrival: the form still eases in as
    the welcome animation steps aside, because that join should not be abrupt. */
+/* The form sits on its own lit panel inside the picture/form split: a dark
+   surface with a neon rim turning slowly around it, and a soft aura behind.
+   The rim is a rotating conic gradient masked down to the border itself, so it
+   is a line of moving colour rather than a glowing box — a sharp edge reads as
+   deliberate where a halo reads as a mistake. */
 .login-card{
-    background:transparent !important; border:0 !important;
-    box-shadow:none !important; padding:0; overflow:visible;
+    position:relative; overflow:hidden;
+    background:rgba(13,22,42,.86) !important;
+    -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
+    border:1px solid rgba(59,130,246,.22) !important;
+    border-radius:22px;
+    padding:34px 30px;
+    box-shadow:0 26px 70px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05) !important;
 }
-.neon-aura, .neon-ring{ display:none !important; }
+@media (min-width:900px){ .login-card{ padding:38px 34px; } }
 /* ── 3D tilt + animated neon glow ──────────────────────────────────── */
-.login-wrap{ width:100%; }
+.login-wrap{ width:100%; max-width:410px; position:relative; }
 .card-3d{ position:relative; }
+/* Above the aura, which sits behind the panel and bleeds out past its edge. */
+.login-card > *{ position:relative; z-index:1; }
 .auth-form{ opacity:0; }
 body.no-intro .auth-form,
 body.has-intro .login-stage.show .auth-form{
@@ -592,10 +605,9 @@ body.has-intro .login-stage.show .auth-form{
 
 /* Soft neon aura breathing around the card (sits behind it in 3D space) */
 .neon-aura{
-    position:absolute; inset:-14px; border-radius:36px; z-index:0;
-    overflow:hidden; filter:blur(28px); opacity:.45;
+    position:absolute; inset:-18px; border-radius:40px; z-index:0;
+    overflow:hidden; filter:blur(34px); opacity:.42;
     pointer-events:none; transition:opacity .5s ease;
-    transform:translateZ(-40px);
 }
 .neon-aura::before{
     content:''; position:absolute; left:50%; top:50%;
@@ -603,11 +615,13 @@ body.has-intro .login-stage.show .auth-form{
     background:conic-gradient(#22d3ee, #3b82f6, #8b5cf6, #d946ef, #3b82f6, #22d3ee);
     animation:neonSpin 7s linear infinite;
 }
-.card-3d:hover .neon-aura{ opacity:.72; }
+/* Brighter while somebody is actually filling the form in. */
+.login-wrap:hover .neon-aura,
+.login-wrap:focus-within .neon-aura{ opacity:.7; }
 
 /* Crisp neon ring tracing the card edge — same rotating gradient */
 .neon-ring{
-    position:absolute; inset:0; border-radius:24px; padding:1.5px;
+    position:absolute; inset:0; border-radius:22px; padding:1.4px;
     z-index:2; pointer-events:none; overflow:hidden;
     -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite:xor; mask-composite:exclude;
@@ -643,12 +657,6 @@ body.has-intro .login-stage.show .auth-form{
 .password-toggle{ color:#5b6b85; }
 .password-toggle:hover{ color:var(--neon-b); }
 .form-check-label{ color:#93a3bb; }
-.brand-icon{ box-shadow:0 8px 26px rgba(37,99,235,.5), 0 0 24px rgba(59,130,246,.35); }
-.brand-icon.has-logo{
-    background:#ffffff !important; padding:8px;
-    box-shadow:0 8px 26px rgba(0,0,0,.4), 0 0 22px rgba(59,130,246,.28);
-}
-.brand-icon.has-logo img{ width:100%; height:100%; object-fit:contain; display:block; border-radius:8px; }
 .first-run-badge{
     background:rgba(59,130,246,.12) !important;
     border-color:rgba(59,130,246,.3) !important;
@@ -790,7 +798,6 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 
 <!-- ═══════════════════ LOGIN STAGE ═══════════════════ -->
 <div class="login-stage" id="loginStage">
-<?php $__logo = companyLogo(); ?>
 
 <div class="auth">
 
@@ -798,12 +805,11 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
        it is decoration plus a repeat of what the form side already says. -->
   <section class="auth-stage"<?= $loginBg !== '' ? ' style="background-image:url(\'' . htmlspecialchars($loginBg) . '\')"' : '' ?> aria-hidden="true">
     <div class="auth-inner">
+      <?php // The name on its own. A logo here competed with the photograph
+            // behind it and with the nameplate the welcome animation has just
+            // finished drawing; set as a wordmark it reads as the company
+            // rather than as a badge stuck on a picture. ?>
       <div class="auth-lockup">
-        <?php if ($__logo['exists']): ?>
-        <img src="<?= htmlspecialchars($__logo['url']) ?>" alt="">
-        <?php else: ?>
-        <span class="auth-mark"><i class="fa fa-car-side"></i></span>
-        <?php endif; ?>
         <span class="auth-company"><?= htmlspecialchars($companyName) ?></span>
       </div>
 
@@ -850,17 +856,14 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
   <main class="auth-panel" id="main">
     <div class="login-wrap">
     <div class="card-3d" id="card3d">
+    <div class="neon-aura" aria-hidden="true"></div>
     <div class="login-card">
+      <span class="neon-ring" aria-hidden="true"></span>
       <div class="auth-form<?= $error || $clientError ? ' err' : '' ?>">
 
         <?php // On a phone the picture side is only a band, so the brand is
               // repeated here where there is room to read it. ?>
         <div class="auth-smallbrand">
-          <?php if ($__logo['exists']): ?>
-          <img src="<?= htmlspecialchars($__logo['url']) ?>" alt="<?= htmlspecialchars($companyName) ?>">
-          <?php else: ?>
-          <span class="auth-mark" style="width:34px;height:34px;font-size:15px;border-radius:10px"><i class="fa fa-car-side"></i></span>
-          <?php endif; ?>
           <span><?= htmlspecialchars($companyName) ?></span>
         </div>
         <div class="login-title"><?= $isFirstRun ? 'System Setup' : htmlspecialchars(APP_NAME) ?></div>
@@ -1114,7 +1117,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
           <div class="auth-legal">
             &copy; <?= date('Y') ?> <?= htmlspecialchars($companyName) ?>
             <span aria-hidden="true">&middot;</span>
-            <?= $clientSide ? 'Customer portal' : 'Car yard management' ?>
+            <?= $clientSide ? 'Customer portal' : 'Showroom yard management' ?>
           </div>
 
           <?php // Repeated for the phone, where the picture side is a band and
@@ -1166,7 +1169,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
         });
         var legal = document.querySelector('.auth-legal');
         if (legal) {
-            legal.lastChild.textContent = toClient ? ' Customer portal' : ' Car yard management';
+            legal.lastChild.textContent = toClient ? ' Customer portal' : ' Showroom yard management';
         }
         var first = (toClient ? client : staff).querySelector('input:not([type=hidden])');
         if (first && !first.hasAttribute('autofocus')) { try { first.focus(); } catch (e) {} }

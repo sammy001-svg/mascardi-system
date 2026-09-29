@@ -770,7 +770,10 @@ include __DIR__ . '/header.php';
     overflow: hidden; background: var(--white);
     transition: box-shadow .35s var(--ease), transform .35s var(--ease);
 }
-.dv-sim-card:hover { box-shadow: 0 22px 48px rgba(0,0,0,.09); transform: translateY(-3px); }
+/* No lift on hover: moving a card out from under the pointer at its own edge
+   makes it shake. The shadow, the border and the photo easing in still say it
+   is live, and none of them shifts the hit area. */
+.dv-sim-card:hover { box-shadow: 0 22px 48px rgba(0,0,0,.09); }
 .dv-sim-card .img { aspect-ratio: 16/10; overflow: hidden; background: var(--paper); }
 .dv-sim-card .img img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease); }
 .dv-sim-card:hover .img img { transform: scale(1.04); }

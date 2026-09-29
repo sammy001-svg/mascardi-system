@@ -211,7 +211,10 @@ include __DIR__ . '/header.php';
     overflow: hidden; display: flex; flex-direction: column;
     transition: box-shadow .35s var(--ease), border-color .35s var(--ease), transform .35s var(--ease);
 }
-.ish-card:hover { box-shadow: 0 24px 56px rgba(0,0,0,.10); border-color: #cfcfcd; transform: translateY(-3px); }
+/* No lift on hover: moving a card out from under the pointer at its own edge
+   makes it shake. The shadow, the border and the photo easing in still say it
+   is live, and none of them shifts the hit area. */
+.ish-card:hover { box-shadow: 0 24px 56px rgba(0,0,0,.10); border-color: #cfcfcd; }
 
 /* The image is now a link, so it has to lay out like the block it replaced. */
 .ish-img { position: relative; display: block; aspect-ratio: 4/3; background: var(--paper); overflow: hidden; }

@@ -2261,3 +2261,46 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
     .stat-card::before, .stat-card::after { display: none !important; }
 }
 
+/* ── Cards hold still ───────────────────────────────────────────────────────
+ *
+ * Card hovers used to lift the card a couple of pixels. Run the cursor along
+ * the bottom or side edge of one and it shakes: the lift moves the card out
+ * from under the pointer, which drops the hover, which drops the lift, which
+ * puts the card back under the pointer — several times a second for as long
+ * as you rest there. It is worst on a dense list, where the edges of one card
+ * are the edges of the next, and the leads list is the densest we have.
+ *
+ * The fix is not a smaller lift or a slower transition; either still crosses
+ * the pointer eventually. A hover must not move the thing being hovered. So
+ * the movement goes and the shadow stays: every one of these already brightens
+ * its shadow or its border on hover, which says "this is live" without
+ * shifting a single pixel of the hit area.
+ *
+ * !important because each of these is declared in its own page's inline
+ * <style>, which the cascade puts after this file.
+ *
+ * Buttons keep their lift on purpose — they are small, the pointer sits near
+ * the middle of them, and they are not what shakes. So do transforms on a
+ * CHILD driven by a parent's hover (.lx-promo:hover .arr, the WhatsApp tooltip):
+ * the element under the pointer is the parent, and the parent never moves.
+ */
+.stat-card:hover,
+.gm-kpi-card:hover, .gm-nav-tile:hover,
+.admin-kpi-card:hover,
+.cc-link:hover, .hr-link:hover,
+.gallery-card:hover,
+.crm-kpi:hover, .crm-lead-card:hover,
+.tasks-stat-card:hover,
+.rpt-kpi:hover,
+.dlv-card:hover,
+.emp-card:hover,
+.imp-card:hover,
+.res-card:hover,
+.ti-card:hover {
+    transform: none !important;
+}
+
+/* The gallery card said everything with the lift and nothing else, so taking
+   it away would leave hovering with no visible answer at all. */
+.gallery-card { transition: box-shadow .15s ease; }
+.gallery-card:hover { box-shadow: 0 6px 22px rgba(0,0,0,.16) !important; }
