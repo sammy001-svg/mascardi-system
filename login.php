@@ -159,6 +159,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $portalOn
 // different questions. Reading the staff branch off the visible pane meant
 // that arriving at ?door=client and then switching to Staff posted a form
 // nothing would process.
+/* Staff who have forgotten their password. Same shape as the customer door:
+ * a code to the address on file, and nothing changes until it comes back.
+ * The engine is in includes/staff_auth.php. */
+require_once __DIR__ . '/includes/staff_auth.php';
+
+$staffPane   = 'signin';   // signin | forgot | reset
+$resetSignIn = '';         // username to prefill after a successful reset
+$staffWho   = '';          // the username or address they typed
+$resetError = '';
+$resetNote  = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && in_array(($_POST['staff_do'] ?? ''), ['forgot', 'reset'], true)) {
+
+    $clientPost = true;            // not a sign-in; keep the sign-in branch off
+    $clientSide = false;           // but this is the staff side of the door
+    $staffWho   = trim((string)($_POST['who'] ?? ''));
+    $db         = getDB();
+
+    if ($_POST['staff_do'] === 'forgot') {
+        $r = staffResetStart($db, $staffWho);
+        if (!$r['ok']) {
+            $staffPane  = 'forgot';
+            $resetError = $r['error'];
+        } else {
+            $staffPane = 'reset';
+            // Said the same way whether the account exists, has no address on
+            // file, or the mail itself failed. Anything more specific is a way
+            // to find out who works here, or which accounts cannot be
+            // recovered and are therefore worth attacking directly.
+            $resetNote = 'If that account exists and has an email address on file, a 6-digit '
+                       . 'code is on its way. Enter it below with your new password. '
+                       . 'Nothing arriving? Ask an administrator — they can set one for you.';
+        }
+    } else {
+        $r = staffResetComplete($db, $staffWho, (string)($_POST['code'] ?? ''),
+                                (string)($_POST['password'] ?? ''),
+                                (string)($_POST['password_confirm'] ?? ''));
+        if ($r['ok']) {
+            // Straight back to a clean sign-in form, with the username filled
+            // in — they have just proved it is theirs.
+            $staffPane   = 'signin';
+            $resetSignIn = $r['username'];
+            $resetNote   = 'Password changed. Sign in with it below.';
+        } else {
+            $staffPane  = 'reset';
+            $resetError = $r['error'];
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$clientPost) {
 
     // Whatever ?door said, a staff form was posted, so show the staff pane —
@@ -305,8 +356,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$clientPost) {
 $showIntro = $_SERVER['REQUEST_METHOD'] === 'GET' && !$isFirstRun && !$setupDone && !$error && !isset($_GET['timeout']);
 
 // Username remembered from a previous "Remember me" login (never the password —
-// that stays with the browser's own password manager via autocomplete).
-$rememberedUser = trim($_COOKIE['rm_user'] ?? '');
+// that stays with the browser's own password manager via autocomplete). A reset
+// that has just finished wins over the cookie: they proved that username is
+// theirs a moment ago, which the cookie cannot say.
+$rememberedUser = $resetSignIn !== '' ? $resetSignIn : trim($_COOKIE['rm_user'] ?? '');
 
 /* The photograph for the picture side.
  *
@@ -946,6 +999,15 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
         <?php else: ?>
         <!-- ── Staff: a username against `users` ── -->
         <div class="door-pane" id="paneStaff"<?= $clientSide ? ' hidden' : '' ?>>
+
+        <?php if ($resetError): ?>
+        <div class="alert alert-danger py-2"><i class="fa fa-circle-exclamation me-2"></i><?= e($resetError) ?></div>
+        <?php endif; ?>
+        <?php if ($resetNote): ?>
+        <div class="alert alert-success py-2"><i class="fa fa-envelope-circle-check me-2"></i><?= e($resetNote) ?></div>
+        <?php endif; ?>
+
+        <div class="door-pane" id="stfSignin"<?= $staffPane === 'signin' ? '' : ' hidden' ?>>
         <form method="POST">
             <div class="mb-3">
                 <label class="form-label">Username</label>
@@ -970,6 +1032,73 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
                 <i class="fa fa-right-to-bracket me-2"></i>Sign In
             </button>
         </form>
+            <div class="door-alt">
+                <a href="#" id="toForgot">Forgotten your password? →</a>
+            </div>
+        </div><!-- /stfSignin -->
+
+        <!-- Ask for a code -->
+        <div class="door-pane" id="stfForgot"<?= $staffPane === 'forgot' ? '' : ' hidden' ?>>
+            <form method="POST">
+                <input type="hidden" name="staff_do" value="forgot">
+                <div class="mb-3">
+                    <label class="form-label">Your username or email</label>
+                    <div class="field-wrap"><i class="fa fa-user"></i>
+                    <input type="text" name="who" class="form-control" required autocomplete="username"
+                           placeholder="Either one will do"
+                           value="<?= e($staffPane === 'forgot' ? $staffWho : '') ?>"></div>
+                    <div class="form-text">
+                        We will send a code to the address we hold for that account.
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-login btn-primary w-100 text-white">
+                    <i class="fa fa-paper-plane me-2"></i>Send me a code
+                </button>
+            </form>
+            <div class="door-alt">
+                Remembered it? <a href="#" id="toStaffSignin">Sign in instead →</a>
+            </div>
+        </div>
+
+        <!-- Code plus the new password, in one step -->
+        <div class="door-pane" id="stfReset"<?= $staffPane === 'reset' ? '' : ' hidden' ?>>
+            <form method="POST">
+                <input type="hidden" name="staff_do" value="reset">
+                <input type="hidden" name="who" value="<?= e($staffWho) ?>">
+                <div class="mb-3">
+                    <label class="form-label">The 6-digit code</label>
+                    <input type="text" name="code" class="form-control code-input" required
+                           inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                           autocomplete="one-time-code" placeholder="000000">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">New password</label>
+                    <div class="field-wrap">
+                        <i class="fa fa-lock"></i>
+                        <input type="password" name="password" class="form-control password-input"
+                               required minlength="8" autocomplete="new-password"
+                               placeholder="At least 8 characters">
+                        <button type="button" class="password-toggle"><i class="fa fa-eye"></i></button>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label">Confirm new password</label>
+                    <div class="field-wrap">
+                        <i class="fa fa-lock"></i>
+                        <input type="password" name="password_confirm" class="form-control password-input"
+                               required minlength="8" autocomplete="new-password" placeholder="Repeat it">
+                        <button type="button" class="password-toggle"><i class="fa fa-eye"></i></button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-login btn-primary w-100 text-white">
+                    <i class="fa fa-circle-check me-2"></i>Set my new password
+                </button>
+            </form>
+            <div class="door-alt">
+                Nothing arrived? <a href="#" id="toForgot2">Try again →</a>
+            </div>
+        </div>
+
         </div><!-- /paneStaff -->
 
         <?php if ($portalOn): ?>
@@ -1197,14 +1326,35 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
     var back = document.getElementById('toSignin');
     if (back) back.addEventListener('click', function (ev) { ev.preventDefault(); step('signin'); });
 
+    // The staff side has the same three steps: sign in, ask for a code, set a
+    // new password. The server has already chosen the right one on a POST, so
+    // this only handles the clicking.
+    var stf = {
+        signin: document.getElementById('stfSignin'),
+        forgot: document.getElementById('stfForgot'),
+        reset:  document.getElementById('stfReset')
+    };
+    function staffStep(which) {
+        Object.keys(stf).forEach(function (k) {
+            if (stf[k]) stf[k].hidden = (k !== which);
+        });
+        var first = stf[which] && stf[which].querySelector('input:not([type=hidden])');
+        if (first) { try { first.focus(); } catch (e) {} }
+    }
+    ['toForgot', 'toForgot2'].forEach(function (id) {
+        var a = document.getElementById(id);
+        if (a) a.addEventListener('click', function (ev) { ev.preventDefault(); staffStep('forgot'); });
+    });
+    var stfBack = document.getElementById('toStaffSignin');
+    if (stfBack) stfBack.addEventListener('click', function (ev) { ev.preventDefault(); staffStep('signin'); });
+
     // A pasted code arrives with spaces or dashes in it more often than not.
-    var code = document.querySelector('.code-input');
-    if (code) {
+    document.querySelectorAll('.code-input').forEach(function (code) {
         code.addEventListener('input', function () {
             var v = code.value.replace(/\D/g, '').slice(0, 6);
             if (v !== code.value) code.value = v;
         });
-    }
+    });
 }());
 
 document.querySelectorAll('.password-toggle').forEach(btn => {
