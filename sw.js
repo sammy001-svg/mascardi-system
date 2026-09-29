@@ -1,5 +1,5 @@
 /**
- * Mascardi Car Yard — Service Worker v58
+ * Mascardi Showroom — Service Worker v58
  *
  * Strategy:
  *   HTML pages    → Network-first, cache fallback, offline page last resort

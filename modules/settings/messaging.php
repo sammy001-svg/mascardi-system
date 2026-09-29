@@ -586,7 +586,7 @@ include __DIR__ . '/../../includes/header.php';
                                         A thank-you to the customer. No document — the delivery
                                         note is signed on paper at handover.
                                     <?php else: ?>
-                                        Team only. There is nobody outside the yard to tell.
+                                        Team only. There is nobody outside the showroom to tell.
                                     <?php endif; ?>
                                 </div>
                             </td>
@@ -645,7 +645,7 @@ include __DIR__ . '/../../includes/header.php';
                 <p class="text-muted mb-2">
                     Where there is a document, it goes as a link. The link is signed, it names
                     the one record it opens, and it shows the customer their own summary — not
-                    the internal print view with the yard's costs and margins on it.
+                    the internal print view with the showroom's costs and margins on it.
                 </p>
                 <div class="alert alert-warning py-2 small mb-0">
                     <i class="fa fa-triangle-exclamation me-1"></i>

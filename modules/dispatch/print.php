@@ -8,7 +8,7 @@ $stmt = $db->prepare("SELECT dj.*,c.make,c.model,c.year,c.registration_number,c.
 $stmt->execute([$id]); $job = $stmt->fetch();
 if (!$job) die('Not found.');
 
-$co = ['name'=>getSetting('company_name','Mascardi Car Yard'),'address'=>getSetting('company_address','Nairobi, Kenya'),'phone'=>getSetting('company_phone',''),'logo'=>getSetting('company_logo','')];
+$co = ['name'=>getSetting('company_name','Mascardi Showroom'),'address'=>getSetting('company_address','Nairobi, Kenya'),'phone'=>getSetting('company_phone',''),'logo'=>getSetting('company_logo','')];
 $typeLabels = ['client_pickup'=>'Client Pickup','client_return'=>'Client Return','test_drive'=>'Test Drive','delivery'=>'Delivery','transfer'=>'Transfer','ad_hoc'=>'Ad Hoc'];
 $fromLabel  = $job['from_type']==='address' ? $job['from_address'] : ($job['from_location_name'] ?? '—');
 $toLabel    = $job['to_type']  ==='address' ? $job['to_address']   : ($job['to_location_name']   ?? '—');

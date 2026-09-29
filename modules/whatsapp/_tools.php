@@ -82,7 +82,7 @@ function waToolSchema(): array
         ],
         [
             'name' => 'opening_hours',
-            'description' => 'The yard opening hours and where it is. Use it when they ask.',
+            'description' => 'The showroom opening hours and where it is. Use it when they ask.',
             'input_schema' => ['type' => 'object', 'properties' => [], 'required' => []],
         ],
     ];
@@ -390,7 +390,7 @@ function waToolHours(PDO $db): string
     $cfg  = waAutoConfig();
     $open = waWithinHours($db, $cfg);
     $addr = trim((string)getSetting('company_address', ''));
-    return 'The yard is open ' . $cfg['open'] . ' to ' . $cfg['close']
+    return 'The showroom is open ' . $cfg['open'] . ' to ' . $cfg['close']
          . ' and is ' . ($open ? 'OPEN right now' : 'CLOSED right now') . '.'
          . ($addr !== '' ? ' It is at ' . $addr . '.' : '');
 }

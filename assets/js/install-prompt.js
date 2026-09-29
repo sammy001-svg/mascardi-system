@@ -1,5 +1,5 @@
 /**
- * Mascardi Car Yard — PWA install
+ * Mascardi Showroom — PWA install
  *
  * Two routes, because browsers differ in a way that cannot be papered over:
  *

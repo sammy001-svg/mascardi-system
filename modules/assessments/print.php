@@ -81,7 +81,7 @@ $typeLabels = [
     'arrival'        => 'Vehicle Intake / Arrival',
     'pre_delivery'   => 'Pre-Delivery Inspection',
     'client_service' => 'Client Service Assessment',
-    'yard'           => 'Yard Assessment',
+    'yard'           => 'Showroom Assessment',
 ];
 
 $overallMeta = [

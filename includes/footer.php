@@ -27,7 +27,7 @@ if ($__wa): ?>
 .fab-wa:hover .fab-wa-tip{opacity:1;transform:translateY(-50%) translateX(0)}
 @media(max-width:576px){.fab-wa{bottom:80px;right:16px;width:50px;height:50px;font-size:24px}.fab-wa-tip{display:none}}
 </style>
-<a href="https://wa.me/<?= $__wa ?>?text=<?= urlencode('Hi, I have a question about the Mascardi Car Yard system.') ?>"
+<a href="https://wa.me/<?= $__wa ?>?text=<?= urlencode('Hi, I have a question about the Mascardi Showroom system.') ?>"
    class="fab-wa" target="_blank" rel="noopener" aria-label="WhatsApp">
     <span class="fab-wa-tip">WhatsApp Us</span>
     <i class="fa-brands fa-whatsapp"></i>

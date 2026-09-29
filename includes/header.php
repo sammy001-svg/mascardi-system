@@ -46,7 +46,7 @@
 <meta name="msapplication-tap-highlight" content="no">
 
 <!-- SEO / sharing -->
-<meta name="description" content="Car Yard Management — fleet, workshop, sales and finance.">
+<meta name="description" content="Showroom Management — fleet, workshop, sales and finance.">
 <link rel="icon" type="image/svg+xml" href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
 <link rel="shortcut icon" href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
 

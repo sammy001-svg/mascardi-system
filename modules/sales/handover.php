@@ -19,7 +19,7 @@ $stmt->execute([$id]); $sale = $stmt->fetch();
 if (!$sale) die('Sale not found.');
 
 $co = [
-    'name'    => getSetting('company_name', 'Mascardi Car Yard'),
+    'name'    => getSetting('company_name', 'Mascardi Showroom'),
     'address' => getSetting('company_address', 'Nairobi, Kenya'),
     'phone'   => getSetting('company_phone', ''),
     'email'   => getSetting('company_email', ''),

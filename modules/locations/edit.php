@@ -132,7 +132,7 @@ include __DIR__ . '/../../includes/header.php';
                         <label class="form-label fw-semibold">Type</label>
                         <select name="type" class="form-select">
                             <?php
-                            $types = ['yard' => 'Yard / Storage', 'showroom' => 'Showroom', 'port' => 'Port', 'office' => 'Office'];
+                            $types = ['yard' => 'Storage', 'showroom' => 'Showroom', 'port' => 'Port', 'office' => 'Office'];
                             foreach ($types as $v => $label): ?>
                             <option value="<?= $v ?>" <?= ($form['type'] ?? '') === $v ? 'selected' : '' ?>>
                                 <?= $label ?>

@@ -103,7 +103,7 @@ $typesMeta = [
     'arrival'        => ['Vehicle Intake Protocol',   'fa-anchor',          '#0284c7'],
     'pre_delivery'   => ['Pre-Delivery',              'fa-flag-checkered',  '#16a34a'],
     'client_service' => ['Client Service Assessment', 'fa-user-check',      '#7c3aed'],
-    'yard'           => ['Yard Assessment',            'fa-warehouse',       '#d97706'],
+    'yard'           => ['Showroom Assessment',        'fa-warehouse',       '#d97706'],
 ];
 
 include __DIR__ . '/../../includes/header.php';

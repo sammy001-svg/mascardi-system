@@ -437,7 +437,7 @@ include __DIR__ . '/../../includes/header.php';
         metaTitle: document.getElementById('metaTitleInput'),
         metaDesc:  document.getElementById('metaDescInput'),
     };
-    var companyName = <?= json_encode(getSetting('company_name', 'Mascardi Car Yard')) ?>;
+    var companyName = <?= json_encode(getSetting('company_name', 'Mascardi Showroom')) ?>;
     var baseUrl      = <?= json_encode(rtrim(BASE_URL, '/') . '/showroom/view.php?id=') ?>;
 
     function slugify(s) {

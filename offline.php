@@ -4,7 +4,7 @@
  * is unavailable and no cached version of the requested page exists.
  * Must work entirely without CDN assets (inlined CSS only).
  */
-$appName = 'Mascardi Car Yard';
+$appName = 'Mascardi Showroom';
 if (file_exists(__DIR__ . '/config/app.php')) {
     try {
         require_once __DIR__ . '/config/app.php';

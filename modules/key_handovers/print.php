@@ -33,7 +33,7 @@ $items = $db->prepare("
 $items->execute([$id]);
 $items = $items->fetchAll();
 
-$company = getSetting('company_name', 'Mascardi Car Yard');
+$company = getSetting('company_name', 'Mascardi Showroom');
 $phone   = getSetting('company_phone', '');
 
 $runLabels = ['morning_run' => 'Morning Key Run', 'evening_run' => 'Evening Key Run', 'ad_hoc' => 'Ad-hoc Key Run'];

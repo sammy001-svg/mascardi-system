@@ -289,12 +289,12 @@ function waAutoCompose(PDO $db, array $conv, array $recent): string
             : "This number is NOT linked to a customer account, so no documents can be sent. "
               . "If they ask for paperwork, say a colleague will confirm their details and send it. "
               . "Never ask them to prove who they are over chat.\n\n")
-        . "The yard is open {$cfg['open']} to {$cfg['close']} and is "
+        . "The showroom is open {$cfg['open']} to {$cfg['close']} and is "
         . ($inHours ? "OPEN now.\n\n" : "CLOSED now.\n\n")
         . "YOU MAY state a listed price exactly as search_stock gives it. That price is on the "
         . "windscreen and on the website; repeating it is service, not a commitment.\n\n"
         . "YOU MUST NEVER:\n"
-        . "- Offer, imply or negotiate a discount, or say what the yard 'could do'.\n"
+        . "- Offer, imply or negotiate a discount, or say what the showroom 'could do'.\n"
         . "- Promise to hold, reserve or keep a vehicle for anybody.\n"
         . "- Commit to a delivery date, a viewing time, a callback time or a booking.\n"
         . "- State a price for anything search_stock did not give you.\n"

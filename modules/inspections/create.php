@@ -171,7 +171,7 @@ include __DIR__ . '/../../includes/header.php';
                             <label class="form-label fw-semibold">Checklist Type</label>
                             <select name="checklist_type" class="form-select">
                                 <option value="pre_delivery">Pre-Delivery (before handing to buyer)</option>
-                                <option value="incoming">Incoming Inspection (on arrival at yard)</option>
+                                <option value="incoming">Incoming Inspection (on arrival)</option>
                                 <option value="pre_sale">Pre-Sale Inspection (before listing for sale)</option>
                             </select>
                         </div>

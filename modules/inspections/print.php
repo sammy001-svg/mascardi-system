@@ -35,7 +35,7 @@ $failCount  = count(array_filter($items, fn($i)=>$i['result']==='fail'));
 $naCount    = count(array_filter($items, fn($i)=>$i['result']==='na'));
 
 $typeLabels   = ['pre_delivery'=>'Pre-Delivery Inspection','incoming'=>'Incoming Inspection','pre_sale'=>'Pre-Sale Inspection'];
-$companyName  = getSetting('company_name', 'Mascardi Car Yard');
+$companyName  = getSetting('company_name', 'Mascardi Showroom');
 $companyPhone = getSetting('company_phone', '');
 $companyAddr  = getSetting('company_address', '');
 ?><!DOCTYPE html>

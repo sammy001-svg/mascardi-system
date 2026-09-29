@@ -20,7 +20,7 @@ $typeMeta = [
     'arrival'        => ['Vehicle Intake Protocol',   'bg-info text-dark'],
     'pre_delivery'   => ['Pre-Delivery',              'bg-success'],
     'client_service' => ['Client Service Assessment', 'bg-purple'],
-    'yard'           => ['Yard Assessment',            'bg-warning text-dark'],
+    'yard'           => ['Showroom Assessment',        'bg-warning text-dark'],
     'workshop'       => ['Workshop',                  'bg-secondary'],
 ];
 

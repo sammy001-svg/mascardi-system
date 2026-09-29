@@ -414,7 +414,7 @@ document.getElementById('client_id').addEventListener('change', function() {
         metaTitle: document.getElementById('metaTitleInput'),
         metaDesc:  document.getElementById('metaDescInput'),
     };
-    var companyName = <?= json_encode(getSetting('company_name', 'Mascardi Car Yard')) ?>;
+    var companyName = <?= json_encode(getSetting('company_name', 'Mascardi Showroom')) ?>;
     var pageUrl      = <?= json_encode(rtrim(BASE_URL, '/') . '/showroom/view.php?id=' . (int)$id) ?>;
 
     function slugify(s) {

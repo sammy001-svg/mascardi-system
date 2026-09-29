@@ -213,7 +213,7 @@ include __DIR__ . '/../../includes/header.php';
                         signed-in browser already makes, so nothing needs a cron job — but it does
                         mean somebody has to be signed in. A scheduled call to
                         <code>cron_reminders.php</code> removes that dependency and is worth setting
-                        up if the yard is ever empty on a due date.
+                        up if the showroom is ever empty on a due date.
                     </p>
                     <p class="mb-0">
                         Last sweep:

@@ -30,7 +30,7 @@ if (count($cars) < 2) {
     exit;
 }
 
-$companyName = getSetting('company_name', 'Mascardi Car Yard');
+$companyName = getSetting('company_name', 'Mascardi Showroom');
 $waClean = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSetting('company_phone', '')));
 $pageTitle = 'Compare Vehicles';
 $metaDesc = 'Compare ' . implode(' vs ', array_map(fn($c) => $c['year'].' '.$c['make'].' '.$c['model'], $cars)) . ' at ' . $companyName;

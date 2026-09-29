@@ -89,7 +89,7 @@ $stages = [
     'customs'          => ['label'=>'Customs',         'color'=>'warning',   'icon'=>'fa-stamp'],
     'cleared'          => ['label'=>'Cleared',         'color'=>'success',   'icon'=>'fa-circle-check'],
     'in_transit_road'  => ['label'=>'Road Transit',    'color'=>'info',      'icon'=>'fa-truck'],
-    'arrived_yard'     => ['label'=>'Arrived Yard',    'color'=>'success',   'icon'=>'fa-warehouse'],
+    'arrived_yard'     => ['label'=>'Arrived',         'color'=>'success',   'icon'=>'fa-warehouse'],
     'intake'           => ['label'=>'In Intake',       'color'=>'primary',   'icon'=>'fa-clipboard-check'],
     'completed'        => ['label'=>'Completed',       'color'=>'dark',      'icon'=>'fa-flag-checkered'],
 ];
@@ -157,7 +157,7 @@ include __DIR__ . '/../../includes/header.php';
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
         <h5 class="mb-1"><i class="fa fa-ship me-2 text-primary"></i>Import Pipeline</h5>
-        <div class="text-muted small">Track vehicles from purchase through to yard intake</div>
+        <div class="text-muted small">Track vehicles from purchase through to showroom intake</div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <?php if(canWrite('imports')): ?>
@@ -173,7 +173,7 @@ include __DIR__ . '/../../includes/header.php';
         ['Active Imports',      $stats['active']          ?? 0, 'text-primary',   'fa-ship'],
         ['In Customs',          $stats['in_customs']      ?? 0, 'text-warning',   'fa-stamp'],
         ['In Transit',          $stats['in_transit']      ?? 0, 'text-info',      'fa-truck'],
-        ['At Yard (Pending)',   $stats['at_yard']         ?? 0, 'text-success',   'fa-warehouse'],
+        ['Arrived (Pending)',   $stats['at_yard']         ?? 0, 'text-success',   'fa-warehouse'],
         ['Needs Car Record',    $stats['needs_car_record']?? 0, 'text-danger',    'fa-triangle-exclamation'],
         ['Completed',           $stats['completed']       ?? 0, 'text-secondary', 'fa-flag-checkered'],
     ] as [$lbl,$val,$cls,$ico]): ?>

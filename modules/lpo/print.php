@@ -7,7 +7,7 @@ $db=getDB();
 $stmt=$db->prepare("SELECT l.*,s.name AS supplier_name,s.contact_person,s.phone AS supplier_phone,s.email AS supplier_email,s.address AS supplier_address,s.pin_number AS supplier_pin FROM lpo l JOIN suppliers s ON s.id=l.supplier_id WHERE l.id=?");
 $stmt->execute([$id]); $lpo=$stmt->fetch(); if(!$lpo) die('Not found');
 $items=$db->prepare("SELECT * FROM lpo_items WHERE lpo_id=? ORDER BY id"); $items->execute([$id]); $items=$items->fetchAll();
-$company=['name'=>getSetting('company_name','Mascardi Car Yard'),'address'=>getSetting('company_address','Nairobi, Kenya'),'phone'=>getSetting('company_phone',''),'email'=>getSetting('company_email',''),'pin'=>getSetting('company_pin','')];
+$company=['name'=>getSetting('company_name','Mascardi Showroom'),'address'=>getSetting('company_address','Nairobi, Kenya'),'phone'=>getSetting('company_phone',''),'email'=>getSetting('company_email',''),'pin'=>getSetting('company_pin','')];
 ?><!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><title>LPO <?= e($lpo['lpo_number']) ?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">

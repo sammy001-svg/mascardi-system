@@ -9,7 +9,7 @@
  */
 require_once __DIR__ . '/../includes/functions.php';
 
-$__companyName  = getSetting('company_name',    'Mascardi Car Yard');
+$__companyName  = getSetting('company_name',    'Mascardi Showroom');
 $__companyPhone = getSetting('company_phone',   '');
 $__companyEmail = getSetting('company_email',   '');
 $__whatsapp     = getSetting('whatsapp_number', $__companyPhone);

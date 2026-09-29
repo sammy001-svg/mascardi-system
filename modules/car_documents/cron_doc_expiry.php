@@ -58,7 +58,7 @@ if (empty($recipients)) {
     exit(0);
 }
 
-$co   = getSetting('company_name', 'Mascardi Car Yard');
+$co   = getSetting('company_name', 'Mascardi Showroom');
 $base = BASE_URL;
 
 // Build HTML table rows

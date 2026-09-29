@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'karl_
         if ($target <= 0) {
             $karlRun = ['ok' => false, 'why' => 'No conversation is waiting on an answer, so '
                       . 'there is nothing for him to reply to. Have somebody send a WhatsApp '
-                      . 'message to the yard and run this again.'];
+                      . 'message to the showroom and run this again.'];
         } else {
             // The switch is stepped over on purpose. Left in place it is the
             // only answer this button can ever give on an install where it is
@@ -483,7 +483,7 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="fw-semibold"><?= $karl['waiting'] ?></div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="text-muted small">Yard is</div>
+                <div class="text-muted small">Showroom is</div>
                 <div class="fw-semibold"><?= $karl['hours'] ? 'open — he waits his grace period first'
                                                             : 'closed — he answers straight away' ?></div>
             </div>

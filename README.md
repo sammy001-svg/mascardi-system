@@ -1,4 +1,4 @@
-# Mascardi Car Yard Management System
+# Mascardi Showroom Management System
 
 A comprehensive PHP-based management system designed for car yards, focusing on logistics, workshop management, and financial tracking.
 

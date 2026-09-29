@@ -285,7 +285,7 @@ include __DIR__ . '/../../includes/header.php';
                         <input type="text" inputmode="decimal" name="opening_balance" class="form-control"
                                value="<?= e(number_format((float)($edit['opening_balance'] ?? 0), 2, '.', '')) ?>">
                         <div class="form-text">
-                            What was in it when the yard started recording here. Without it every
+                            What was in it when the showroom started recording here. Without it every
                             balance is short by whatever was already in the account.
                         </div>
                     </div>

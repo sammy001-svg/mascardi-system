@@ -13,7 +13,7 @@
 $credentials = [
     'name'     => 'Mascardi Admin',
     'username' => 'Mascardiadmin',
-    'email'    => 'admin@mascardicaryard.com',
+    'email'    => 'admin@mascardishowroom.com',
     'password' => 'Mas@123@1s',
     'role'     => 'admin',
     'status'   => 'active',

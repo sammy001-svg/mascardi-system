@@ -820,7 +820,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
             // just to reword a list. ?>
       <div class="stage-copy" data-door="staff"<?= $clientSide ? ' hidden' : '' ?>>
         <p class="auth-tagline">
-          The yard, its stock and its money &mdash; one system, from the showroom
+          The Showroom, its stock and its money &mdash; one system, from the showroom
           floor to the books.
         </p>
         <ul class="auth-points">
@@ -1117,7 +1117,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
           <div class="auth-legal">
             &copy; <?= date('Y') ?> <?= htmlspecialchars($companyName) ?>
             <span aria-hidden="true">&middot;</span>
-            <?= $clientSide ? 'Customer portal' : 'Showroom yard management' ?>
+            <?= $clientSide ? 'Customer portal' : 'Showroom management System' ?>
           </div>
 
           <?php // Repeated for the phone, where the picture side is a band and
@@ -1169,7 +1169,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
         });
         var legal = document.querySelector('.auth-legal');
         if (legal) {
-            legal.lastChild.textContent = toClient ? ' Customer portal' : ' Showroom yard management';
+            legal.lastChild.textContent = toClient ? ' Customer portal' : ' Showroom management System';
         }
         var first = (toClient ? client : staff).querySelector('input:not([type=hidden])');
         if (first && !first.hasAttribute('autofocus')) { try { first.focus(); } catch (e) {} }

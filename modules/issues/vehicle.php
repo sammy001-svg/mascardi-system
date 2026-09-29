@@ -81,7 +81,7 @@ $typeLabel = [
     'arrival'        => 'Vehicle Intake Protocol',
     'pre_delivery'   => 'Pre-Delivery',
     'client_service' => 'Client Service',
-    'yard'           => 'Yard Assessment',
+    'yard'           => 'Showroom Assessment',
     'workshop'       => 'Workshop',
 ];
 

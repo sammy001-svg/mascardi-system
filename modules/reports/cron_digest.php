@@ -16,7 +16,7 @@ $weekStart = date('Y-m-d', strtotime('monday this week'));
 $weekEnd   = date('Y-m-d', strtotime('sunday this week'));
 $prevStart = date('Y-m-d', strtotime('monday last week'));
 $prevEnd   = date('Y-m-d', strtotime('sunday last week'));
-$co        = getSetting('company_name', 'Mascardi Car Yard');
+$co        = getSetting('company_name', 'Mascardi Showroom');
 
 // Sales this week
 $salesRow = $db->prepare("

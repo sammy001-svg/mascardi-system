@@ -194,8 +194,14 @@ function carlSkills(): array
         'stock' => [
             'label'    => 'Vehicles in stock',
             'module'   => 'cars',
-            'patterns' => ['stock', 'inventory', 'on the yard', 'in the yard', 'the yard', 'how many cars', 'vehicles available',
-                           'cars available', 'what cars', 'fleet'],
+            // These are what somebody TYPES, not what Karl says back. The older
+            // wording stays so a customer who still asks what is "on the yard"
+            // is understood; dropping it would only make him answer "I did not
+            // catch that" to a perfectly clear question.
+            'patterns' => ['stock', 'inventory', 'how many cars', 'vehicles available',
+                           'cars available', 'what cars', 'fleet',
+                           'in the showroom', 'on the floor', 'the showroom',
+                           'on the yard', 'in the yard', 'the yard'],
         ],
         'leads' => [
             'label'    => 'Sales pipeline',

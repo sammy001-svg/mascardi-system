@@ -23,7 +23,7 @@ if ($fromDate === '1970-01-01') $fromDate = null;
 if ($toDate   === '1970-01-01') $toDate   = null;
 
 $company = [
-    'name'    => getSetting('company_name',    'Mascardi Car Yard'),
+    'name'    => getSetting('company_name',    'Mascardi Showroom'),
     'address' => getSetting('company_address', 'Nairobi, Kenya'),
     'phone'   => getSetting('company_phone',   ''),
     'email'   => getSetting('company_email',   ''),

@@ -101,7 +101,7 @@ function carlTools(array $user): array
     if (canAccess('cars')) {
         $t[] = [
             'name' => 'list_stock',
-            'description' => 'Vehicles on the yard with make, model, year, registration, price and '
+            'description' => 'Vehicles in stock with make, model, year, registration, price and '
                            . 'status. Use for questions about what is available or to find a '
                            . 'particular car.',
             'input_schema' => [

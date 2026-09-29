@@ -21,7 +21,7 @@ $a = $stmt->fetch();
 if (!$a) die('Assessment not found.');
 
 $company = [
-    'name'    => getSetting('company_name', 'Mascardi Car Yard'),
+    'name'    => getSetting('company_name', 'Mascardi Showroom'),
     'address' => getSetting('company_address', 'Nairobi, Kenya'),
     'phone'   => getSetting('company_phone', ''),
     'email'   => getSetting('company_email', ''),

@@ -24,7 +24,7 @@ $t->execute([$id]);
 $t = $t->fetch();
 if (!$t) die('Transfer not found.');
 
-$company = getSetting('company_name', 'Mascardi Car Yard');
+$company = getSetting('company_name', 'Mascardi Showroom');
 $phone   = getSetting('company_phone', '');
 $email   = getSetting('company_email', '');
 ?>

@@ -16,7 +16,7 @@ if (!$exp) { setFlash('error','Expense not found.'); redirect(BASE_URL.'/modules
 $categories = [
     'salaries'=>'Salaries & Wages','rent'=>'Rent & Premises','fuel'=>'Fuel & Transport',
     'utilities'=>'Utilities','marketing'=>'Marketing & Advertising',
-    'maintenance'=>'Yard Maintenance','office'=>'Office & Stationery',
+    'maintenance'=>'Premises Maintenance','office'=>'Office & Stationery',
     'insurance'=>'Insurance','taxes'=>'Taxes & Levies','other'=>'Other',
 ];
 $methods = ['cash'=>'Cash','mpesa'=>'M-Pesa','bank'=>'Bank Transfer','cheque'=>'Cheque'];

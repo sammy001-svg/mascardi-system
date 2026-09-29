@@ -51,7 +51,7 @@ $similar = $db->prepare("
 $similar->execute([$id, $car['make'], $car['body_type']]);
 $similar = $similar->fetchAll(PDO::FETCH_ASSOC);
 
-$companyName   = getSetting('company_name',    'Mascardi Car Yard');
+$companyName   = getSetting('company_name',    'Mascardi Showroom');
 $companyPhone  = getSetting('company_phone',   '');
 $whatsappPhone = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', $companyPhone));
 $isReserved = ($car['status'] ?? '') === 'reserved';

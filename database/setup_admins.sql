@@ -41,7 +41,7 @@ INSERT INTO `users` (`name`, `username`, `email`, `password`, `role`, `status`)
 VALUES (
     'Mascardi Super Admin',
     'Mascardisuper',
-    'superadmin@mascardicaryard.com',
+    'superadmin@mascardishowroom.com',
     '$2y$10$35prhpQQYuPx.TmbKmXOf.z5dGD1Tbn4y5CDjLpcCsYEn/pZ7CN16',
     'super_admin',
     'active'
@@ -58,7 +58,7 @@ INSERT INTO `users` (`name`, `username`, `email`, `password`, `role`, `status`)
 VALUES (
     'Mascardi Admin',
     'Mascardiadmin',
-    'admin@mascardicaryard.com',
+    'admin@mascardishowroom.com',
     '$2y$10$35prhpQQYuPx.TmbKmXOf.z5dGD1Tbn4y5CDjLpcCsYEn/pZ7CN16',
     'admin',
     'active'

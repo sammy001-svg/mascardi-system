@@ -1,5 +1,5 @@
 -- ============================================================
--- Mascardi Car Yard Management System — Database Schema
+-- Mascardi Showroom Management System — Database Schema
 -- ============================================================
 
 -- CREATE DATABASE IF NOT EXISTS mascardi_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

@@ -19,7 +19,7 @@ $item->execute([$itemId]); $item = $item->fetch();
 if (!$item) die('Payslip not found.');
 
 $months      = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
-$companyName = getSetting('company_name','Mascardi Car Yard');
+$companyName = getSetting('company_name','Mascardi Showroom');
 $companyAddr = getSetting('company_address','');
 $companyPhone= getSetting('company_phone','');
 

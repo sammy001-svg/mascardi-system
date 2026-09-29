@@ -6,7 +6,7 @@ $stmt=$db->prepare("SELECT q.*,c.chassis_number,c.make,c.model,c.year,c.color,c.
 $stmt->execute([$id]); $q=$stmt->fetch();
 if(!$q) die('Not found');
 $items=$db->prepare("SELECT * FROM quotation_items WHERE quotation_id=? ORDER BY id"); $items->execute([$id]); $items=$items->fetchAll();
-$company = ['name'=>getSetting('company_name','Mascardi Car Yard'),'address'=>getSetting('company_address','Nairobi, Kenya'),'phone'=>getSetting('company_phone',''),'email'=>getSetting('company_email',''),'pin'=>getSetting('company_pin','')];
+$company = ['name'=>getSetting('company_name','Mascardi Showroom'),'address'=>getSetting('company_address','Nairobi, Kenya'),'phone'=>getSetting('company_phone',''),'email'=>getSetting('company_email',''),'pin'=>getSetting('company_pin','')];
 $isClient = (bool)($_SESSION['_client'] ?? false);
 if ($isClient && $q['client_id'] !== $_SESSION['_client']['id']) {
     die('Unauthorized access.');

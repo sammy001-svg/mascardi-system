@@ -87,7 +87,7 @@ include __DIR__ . '/../../includes/header.php';
                             </option>
                             <?php endforeach; ?>
                         </select>
-                        <div class="form-text">Selecting a parent makes this a sub-location (e.g. "Bay A" under "Main Yard").</div>
+                        <div class="form-text">Selecting a parent makes this a sub-location (e.g. "Bay A" under "Main Showroom").</div>
                     </div>
                     <?php endif; ?>
 
@@ -98,7 +98,7 @@ include __DIR__ . '/../../includes/header.php';
                         </label>
                         <input type="text" name="name" class="form-control"
                                value="<?= e($post['name'] ?? '') ?>"
-                               placeholder="<?= $preParentId ? 'e.g. Section A, Bay 1, North Wing…' : 'e.g. Nairobi HQ, Mombasa Yard…' ?>"
+                               placeholder="<?= $preParentId ? 'e.g. Section A, Bay 1, North Wing…' : 'e.g. Nairobi HQ, Mombasa Showroom…' ?>"
                                required autofocus>
                     </div>
 
@@ -107,7 +107,7 @@ include __DIR__ . '/../../includes/header.php';
                         <label class="form-label fw-semibold">Type</label>
                         <select name="type" class="form-select">
                             <?php
-                            $types = ['yard' => 'Yard / Storage', 'showroom' => 'Showroom', 'port' => 'Port', 'office' => 'Office'];
+                            $types = ['yard' => 'Storage', 'showroom' => 'Showroom', 'port' => 'Port', 'office' => 'Office'];
                             foreach ($types as $v => $label): ?>
                             <option value="<?= $v ?>" <?= ($post['type'] ?? 'yard') === $v ? 'selected' : '' ?>>
                                 <?= $label ?>

@@ -117,7 +117,7 @@ function sv_page_url(int $p): string {
 
 $isFiltered = $filterMake || $filterBody || $filterFuel || $filterTrans || $filterMin || $filterMax
            || $filterYearMin || $filterYearMax || $filterMileMax || $search;
-$companyName = getSetting('company_name', 'Mascardi Car Yard');
+$companyName = getSetting('company_name', 'Mascardi Showroom');
 $__waClean   = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSetting('company_phone', '')));
 $pageTitle   = $filterMake ? $filterMake . ' Vehicles for Sale' : 'Available Vehicles';
 $metaDesc    = $filterMake

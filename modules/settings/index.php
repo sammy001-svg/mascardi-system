@@ -6,7 +6,7 @@ $pageTitle = 'System Settings';
 $db = getDB();
 
 $defaults = [
-    'company_name'      => 'Mascardi Car Yard',
+    'company_name'      => 'Mascardi Showroom',
     'company_address'   => 'Nairobi, Kenya',
     'company_phone'     => '+254 700 000 000',
     'company_email'     => 'info@mascardi.co.ke',
@@ -1083,12 +1083,12 @@ try { $connected = (int)$db->query("SELECT COUNT(*) FROM mail_accounts")->fetchC
                     <label class="form-label">Default Meta Title <small class="text-muted">(~60 characters)</small></label>
                     <input type="text" name="seo_default_title" id="seoTitleInput" class="form-control" maxlength="255"
                            value="<?= e($settings['seo_default_title'] ?? '') ?>"
-                           placeholder="<?= e(($settings['company_name'] ?? 'Mascardi Car Yard') . ' — Quality Imported Vehicles in Kenya') ?>">
+                           placeholder="<?= e(($settings['company_name'] ?? 'Mascardi Showroom') . ' — Quality Imported Vehicles in Kenya') ?>">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Default Meta Description <small class="text-muted">(~160 characters)</small></label>
                     <textarea name="seo_default_description" id="seoDescInput" class="form-control" rows="2" maxlength="500"
-                              placeholder="Browse quality vehicles at Mascardi Car Yard. Transparent pricing, flexible financing."><?= e($settings['seo_default_description'] ?? '') ?></textarea>
+                              placeholder="Browse quality vehicles at Mascardi Showroom. Transparent pricing, flexible financing."><?= e($settings['seo_default_description'] ?? '') ?></textarea>
                 </div>
                 <div class="mb-0">
                     <label class="form-label">Default Social Share Image (OG Image) <small class="text-muted">(absolute URL)</small></label>
@@ -1139,7 +1139,7 @@ try { $connected = (int)$db->query("SELECT COUNT(*) FROM mail_accounts")->fetchC
                     <div class="d-flex align-items-center gap-2 mb-1">
                         <div style="width:22px;height:22px;border-radius:50%;background:#e2e8f0;flex-shrink:0"></div>
                         <div>
-                            <div id="serpSite" style="font-size:13px;color:#202124;line-height:1.3"><?= e($settings['company_name'] ?? 'Mascardi Car Yard') ?></div>
+                            <div id="serpSite" style="font-size:13px;color:#202124;line-height:1.3"><?= e($settings['company_name'] ?? 'Mascardi Showroom') ?></div>
                             <div id="serpUrl" style="font-size:12px;color:#4d5156;line-height:1.3"><?= e(rtrim(BASE_URL, '/')) ?>/showroom/</div>
                         </div>
                     </div>
@@ -1159,8 +1159,8 @@ try { $connected = (int)$db->query("SELECT COUNT(*) FROM mail_accounts")->fetchC
 (function () {
     var titleEl = document.getElementById('seoTitleInput');
     var descEl  = document.getElementById('seoDescInput');
-    var fallbackTitle = <?= json_encode(($settings['company_name'] ?? 'Mascardi Car Yard') . ' — Quality Imported Vehicles in Kenya') ?>;
-    var fallbackDesc  = <?= json_encode('Browse quality vehicles at ' . ($settings['company_name'] ?? 'Mascardi Car Yard') . '. Transparent pricing, flexible financing.') ?>;
+    var fallbackTitle = <?= json_encode(($settings['company_name'] ?? 'Mascardi Showroom') . ' — Quality Imported Vehicles in Kenya') ?>;
+    var fallbackDesc  = <?= json_encode('Browse quality vehicles at ' . ($settings['company_name'] ?? 'Mascardi Showroom') . '. Transparent pricing, flexible financing.') ?>;
     function render() {
         var title = titleEl.value.trim() || fallbackTitle;
         var desc  = descEl.value.trim()  || fallbackDesc;

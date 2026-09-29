@@ -164,7 +164,7 @@ $roleLabels = [
                             ?>
                             <option value="<?= $loc['id'] ?>"
                                 <?= (int)($user['location_id'] ?? 0) === (int)$loc['id'] ? 'selected' : '' ?>>
-                                <?= e($loc['name']) ?> (<?= ucfirst($loc['type']) ?>)
+                                <?= e($loc['name']) ?> (<?= e(locationTypeLabel($loc['type'])) ?>)
                             </option>
                             <?php endforeach; ?>
                         </select>

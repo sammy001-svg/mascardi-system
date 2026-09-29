@@ -142,7 +142,7 @@ function carlContinueReserve(PDO $db, array $user, array $pending, string $r): a
     if ($step === 'car') {
         $car = carlFindCar($db, $r);
         if (!$car) {
-            return $ask('I could not match that to a vehicle on the yard. Try the registration '
+            return $ask('I could not match that to a vehicle in stock. Try the registration '
                       . 'number, or just the make and model.');
         }
         if (in_array($car['status'] ?? '', ['reserved', 'sold', 'delivered'], true)) {
@@ -576,7 +576,7 @@ function carlCreateCar(PDO $db, array $user, array $got): array
        . carlLink(BASE_URL . '/modules/cars/view.php?id=' . $carId, 'Open ' . $label, 'fa-car')
        . carlLink(BASE_URL . '/modules/cars/edit.php?id=' . $carId,
                   'Add price, photos and description', 'fa-pen')
-       . carlChips(['How many cars do we have', 'What is on the yard']);
+       . carlChips(['How many cars do we have', 'What is in stock']);
 
     return ['skill' => 'add_car', 'done' => true,
             'say'   => 'Added. The ' . $label . ' is in inventory. It has no price or photographs '

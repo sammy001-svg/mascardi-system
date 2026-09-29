@@ -1,6 +1,6 @@
 <?php
 /**
- * Mascardi Car Yard — Weekly Digest Cron Job
+ * Mascardi Showroom — Weekly Digest Cron Job
  *
  * Automatically sends the weekly executive summary email every Monday.
  * Reuses the same KPI data and HTML template from modules/reports/weekly_digest.php
@@ -113,7 +113,7 @@ if (empty($recipients)) {
 }
 
 // ── Build HTML ────────────────────────────────────────────────────────────────
-$co       = getSetting('company_name', 'Mascardi Car Yard');
+$co       = getSetting('company_name', 'Mascardi Showroom');
 $numFmt   = fn($n) => number_format((float)$n);
 $revChange = (float)$prevSales['revenue'] > 0
     ? round(((float)$sales['revenue'] - (float)$prevSales['revenue']) / (float)$prevSales['revenue'] * 100, 1)

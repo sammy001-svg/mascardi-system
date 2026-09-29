@@ -15,7 +15,7 @@
 require_once __DIR__ . '/../includes/functions.php';
 $db = getDB();
 
-$companyName   = getSetting('company_name',  'Mascardi Car Yard');
+$companyName   = getSetting('company_name',  'Mascardi Showroom');
 $companyPhone  = getSetting('company_phone', '');
 $whatsappPhone = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', $companyPhone));
 
@@ -68,7 +68,7 @@ include __DIR__ . '/header.php';
         </div>
         <h1 class="lx-h2" style="font-size:clamp(32px,4.6vw,52px)">Cars in shipment</h1>
         <p style="max-width:620px;margin:18px 0 0;color:var(--ink-2);line-height:1.75;font-size:15px">
-            These vehicles are on their way to us and are not yet available for viewing at the yard.
+            These vehicles are on their way to us and are not yet available for viewing at the showroom.
             Reserve one now and we will contact you the moment it arrives and clears.
         </p>
     </div>
@@ -105,7 +105,7 @@ include __DIR__ . '/header.php';
                 <?= $filterMake ? 'No ' . htmlspecialchars($filterMake) . ' units in shipment' : 'Nothing in shipment right now' ?>
             </h2>
             <p style="color:var(--ink-2);font-size:14px;margin:0 0 22px">
-                Browse what is available at the yard today, or tell us what you are looking for.
+                Browse what is available at the showroom today, or tell us what you are looking for.
             </p>
             <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
                 <a href="<?= BASE_URL ?>/showroom/vehicles.php" class="btn-lx">View Available Vehicles</a>

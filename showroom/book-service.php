@@ -5,7 +5,7 @@
 require_once __DIR__ . '/../includes/functions.php';
 
 $db          = getDB();
-$companyName = getSetting('company_name', 'Mascardi Car Yard');
+$companyName = getSetting('company_name', 'Mascardi Showroom');
 $__waClean   = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSetting('company_phone', '')));
 
 $serviceTypes = [

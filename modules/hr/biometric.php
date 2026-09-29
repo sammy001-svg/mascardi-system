@@ -754,7 +754,7 @@ include __DIR__ . '/../../includes/header.php';
         <div class="bi-card-body">
             <p class="small text-muted">
                 The terminal sends scans to this server by itself, so it works over the internet from any branch
-                and needs no fixed IP or open port at the yard. This is the mode to use.
+                and needs no fixed IP or open port on site. This is the mode to use.
             </p>
             <div class="bi-url mb-3">
                 <i class="fa fa-link" style="color:var(--brand)"></i>
@@ -766,7 +766,7 @@ include __DIR__ . '/../../includes/header.php';
                 </button>
             </div>
             <ol class="bi-steps">
-                <li>On the terminal: <b>Menu → Comm. → Ethernet</b>. Give it an IP on the yard network and confirm
+                <li>On the terminal: <b>Menu → Comm. → Ethernet</b>. Give it an IP on the office network and confirm
                     it can reach the internet.</li>
                 <li><b>Menu → Comm. → Cloud Server Setting</b> (called <i>ADMS</i> or <i>Server Setting</i> on some
                     models).</li>

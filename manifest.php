@@ -38,7 +38,7 @@ header('X-Content-Type-Options: nosniff');
 echo json_encode([
     'name'             => $appName,
     'short_name'       => $appShortName,
-    'description'      => 'Car Yard Management — fleet, workshop, sales and finance.',
+    'description'      => 'Showroom Management — fleet, workshop, sales and finance.',
     'start_url'        => $base . '/index.php',
     'scope'            => $base . '/',
     'id'               => $base . '/',

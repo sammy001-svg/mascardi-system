@@ -27,7 +27,7 @@ foreach ($allCars as $c) {
     $catCounts[$bt] = ($catCounts[$bt] ?? 0) + 1;
 }
 
-$companyName   = getSetting('company_name', 'Mascardi Car Yard');
+$companyName   = getSetting('company_name', 'Mascardi Showroom');
 $companyPhone  = getSetting('company_phone', '');
 $companyEmail  = getSetting('company_email', '');
 $companyAddr   = getSetting('company_address', '');

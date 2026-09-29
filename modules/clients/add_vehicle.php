@@ -216,7 +216,7 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <div class="av-body">
                     <p class="text-muted mb-3" style="font-size:12px">
-                        If the vehicle is already on the yard, pick it here rather than typing it
+                        If the vehicle is already in stock, pick it here rather than typing it
                         again — retyping the chassis would only be rejected as a duplicate.
                     </p>
 

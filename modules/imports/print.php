@@ -31,7 +31,7 @@ if (!$id || !in_array($type, ['order', 'landed', 'manifest'], true)) {
 }
 
 $company = [
-    'name'    => getSetting('company_name', 'Mascardi Car Yard'),
+    'name'    => getSetting('company_name', 'Mascardi Showroom'),
     'address' => getSetting('company_address', 'Nairobi, Kenya'),
     'phone'   => getSetting('company_phone', ''),
     'email'   => getSetting('company_email', ''),
@@ -53,8 +53,8 @@ function impStage(?string $s): string
         'arrived_port'    => 'Arrived at port',
         'customs'         => 'In customs',
         'cleared'         => 'Cleared customs',
-        'in_transit_road' => 'On the road to the yard',
-        'arrived_yard'    => 'Arrived at the yard',
+        'in_transit_road' => 'On the road to the showroom',
+        'arrived_yard'    => 'Arrived at the showroom',
         'intake'          => 'Being taken in',
         'completed'       => 'Completed',
     ][$s ?? ''] ?? ucwords(str_replace('_', ' ', (string)$s));
@@ -284,7 +284,7 @@ $docRef   = $type === 'manifest' ? ($ship['ref'] ?? '') : ($imp['ref'] ?? '');
         </tfoot>
     </table>
     <p class="muted" style="font-size:11px;margin-top:10px">
-        This is what the vehicle has cost to put on the yard. Any sale price has to clear it
+        This is what the vehicle has cost to put on the floor. Any sale price has to clear it
         before there is a margin.
     </p>
 

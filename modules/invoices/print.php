@@ -30,7 +30,7 @@ $stmt=$db->prepare("
 $stmt->execute([$id]); $inv=$stmt->fetch();
 if(!$inv) die('Not found');
 $items=$db->prepare("SELECT * FROM invoice_items WHERE invoice_id=? ORDER BY id"); $items->execute([$id]); $items=$items->fetchAll();
-$company=['name'=>getSetting('company_name','Mascardi Car Yard'),'address'=>getSetting('company_address','Nairobi, Kenya'),'phone'=>getSetting('company_phone',''),'email'=>getSetting('company_email',''),'pin'=>getSetting('company_pin','')];
+$company=['name'=>getSetting('company_name','Mascardi Showroom'),'address'=>getSetting('company_address','Nairobi, Kenya'),'phone'=>getSetting('company_phone',''),'email'=>getSetting('company_email',''),'pin'=>getSetting('company_pin','')];
 $isClient = (bool)($_SESSION['_client'] ?? false);
 if ($isClient && $inv['client_id'] !== $_SESSION['_client']['id']) {
     die('Unauthorized access.');

@@ -142,7 +142,7 @@ include __DIR__ . '/../../includes/header.php';
                     <div class="mb-3">
                         <label class="form-label small">Delivery Notes (optional)</label>
                         <textarea name="delivery_notes" class="form-control form-control-sm" rows="2"
-                                  placeholder="e.g. Delivered at our yard, buyer satisfied…"></textarea>
+                                  placeholder="e.g. Delivered at our showroom, buyer satisfied…"></textarea>
                     </div>
                     <button type="submit" class="btn btn-success w-100"
                             onclick="return confirm('Confirm delivery to <?= e(addslashes($sale['buyer_name'])) ?>?')">

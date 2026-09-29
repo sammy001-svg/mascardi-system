@@ -17,7 +17,7 @@ $stages = [
     'customs'         =>['label'=>'Customs',      'color'=>'warning',  'icon'=>'fa-stamp'],
     'cleared'         =>['label'=>'Cleared',      'color'=>'success',  'icon'=>'fa-circle-check'],
     'in_transit_road' =>['label'=>'Road Transit', 'color'=>'info',     'icon'=>'fa-truck'],
-    'arrived_yard'    =>['label'=>'Arrived Yard', 'color'=>'success',  'icon'=>'fa-warehouse'],
+    'arrived_yard'    =>['label'=>'Arrived',      'color'=>'success',  'icon'=>'fa-warehouse'],
     'intake'          =>['label'=>'In Intake',    'color'=>'primary',  'icon'=>'fa-clipboard-check'],
     'completed'       =>['label'=>'Completed',    'color'=>'dark',     'icon'=>'fa-flag-checkered'],
 ];

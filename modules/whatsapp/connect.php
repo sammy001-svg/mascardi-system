@@ -421,7 +421,7 @@ include __DIR__ . '/../../includes/header.php';
                 <label class="wc-opt <?= $provider === 'green' ? 'on' : '' ?>" id="optGreen">
                     <input type="radio" name="provider" value="green" <?= $provider === 'green' ? 'checked' : '' ?>>
                     <b>Scan a QR code</b>
-                    <span>Uses the number the yard already has, with its existing chats.
+                    <span>Uses the number the showroom already has, with its existing chats.
                           Live the moment it is scanned. Not sanctioned by Meta, so the
                           number carries some risk, and the bridge is a paid service.</span>
                 </label>
@@ -504,7 +504,7 @@ include __DIR__ . '/../../includes/header.php';
         <span style="font-size:11.5px;color:<?= $ac['enabled'] ? '#15803d' : 'var(--text-3)' ?>">
             <?= $ac['enabled'] ? 'On' : 'Off' ?>
             <?php if ($ac['enabled']): ?>
-                · <?= waWithinHours($db, $ac) ? 'the yard is open now' : 'the yard is closed now' ?>
+                · <?= waWithinHours($db, $ac) ? 'the showroom is open now' : 'the showroom is closed now' ?>
             <?php endif; ?>
         </span>
     </header>
@@ -633,7 +633,7 @@ include __DIR__ . '/../../includes/header.php';
     </header>
     <div class="wc-body">
         <p class="small" style="color:var(--text-2);margin-bottom:12px">
-            The yard did not start using WhatsApp the day this system was connected.
+            The showroom did not start using WhatsApp the day this system was connected.
             This pulls the conversations already on the linked phone into the inbox —
             both sides of each thread, dated as they happened, and marked read, because
             they have been. It can be run again at any time: nothing is ever added twice,
@@ -702,7 +702,7 @@ include __DIR__ . '/../../includes/header.php';
 
         <?php if (!$templates): ?>
             <div style="color:var(--text-3);font-size:13px;text-align:center;padding:14px">
-                No quick replies yet. The six sentences the yard sends every day belong here.
+                No quick replies yet. The six sentences the showroom sends every day belong here.
             </div>
         <?php else: foreach ($templates as $t): ?>
         <div class="wc-tpl">

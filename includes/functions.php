@@ -529,6 +529,25 @@ function transferFuelLevels(): array
 /**
  * Auto-ensure car_sales and car_costs tables exist and sync delivered/sold cars
  */
+/**
+ * What a location's type is called on screen.
+ *
+ * The stored value is still 'yard' — it is in every locations row already, and
+ * renaming it would be a migration rather than a wording change. Pages used to
+ * print it through ucfirst(), which is how a database key ended up being the
+ * label a user reads. This keeps the key where it is and puts a word in front
+ * of it.
+ */
+function locationTypeLabel(?string $type): string
+{
+    return [
+        'yard'     => 'Storage',
+        'showroom' => 'Showroom',
+        'port'     => 'Port',
+        'office'   => 'Office',
+    ][(string)$type] ?? ucfirst((string)$type);
+}
+
 function syncDeliveredCarSales(PDO $db): void {
     static $synced = false;
     if ($synced) return;

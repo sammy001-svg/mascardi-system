@@ -178,7 +178,7 @@ $recipientRows = $db->query("
 // ── Handle Send Digest Email ──────────────────────────────────────────────────
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send_digest'])) {
     verifyCsrf();
-    $co   = getSetting('company_name', 'Mascardi Car Yard');
+    $co   = getSetting('company_name', 'Mascardi Showroom');
     $numFmt = fn($n) => number_format((float)$n);
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
@@ -426,11 +426,11 @@ include __DIR__ . '/_nav.php';
                         </div>
                         <div class="col-sm-6">
                             <div class="p-3 rounded-3" style="background:#f0f9ff">
-                                <div class="text-muted small">Active Yard Stock</div>
-                                <div class="fw-bold text-info fs-6"><?= (int)$invRow['total_stock'] ?> vehicles in yard</div>
+                                <div class="text-muted small">Active Showroom Stock</div>
+                                <div class="fw-bold text-info fs-6"><?= (int)$invRow['total_stock'] ?> vehicles in stock</div>
                                 <div class="text-muted" style="font-size:11px">Total Stock Value: <?= money((float)$invRow['stock_value']) ?></div>
                                 <?php if ((int)$invRow['slow_movers'] > 0): ?>
-                                <div class="text-danger mt-1 fw-semibold" style="font-size:11px"><i class="fa fa-clock me-1"></i><?= (int)$invRow['slow_movers'] ?> slow movers (&gt;90 days in yard)</div>
+                                <div class="text-danger mt-1 fw-semibold" style="font-size:11px"><i class="fa fa-clock me-1"></i><?= (int)$invRow['slow_movers'] ?> slow movers (&gt;90 days in stock)</div>
                                 <?php endif; ?>
                             </div>
                         </div>

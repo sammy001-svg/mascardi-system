@@ -64,7 +64,7 @@ if (in_array(authRole(), ['finance_manager', 'accountant', 'cashier'], true)) {
             <?php if (authRole() === 'super_admin'): ?>
             <span class="brand-sub" style="color:#f59e0b;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase">Super Admin</span>
             <?php else: ?>
-            <span class="brand-sub">Car Yard System</span>
+            <span class="brand-sub">Showroom Management System</span>
             <?php endif; ?>
         </div>
     </div>

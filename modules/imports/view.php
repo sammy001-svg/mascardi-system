@@ -21,8 +21,8 @@ $stages = [
     'arrived_port'     => ['label'=>'Arrived Port',    'color'=>'primary',  'icon'=>'fa-anchor',             'next'=>'customs',         'next_label'=>'Start Customs Process',  'next_field'=>'customs_start_at'],
     'customs'          => ['label'=>'In Customs',      'color'=>'warning',  'icon'=>'fa-stamp',              'next'=>'cleared',         'next_label'=>'Mark Customs Cleared',   'next_field'=>'cleared_at'],
     'cleared'          => ['label'=>'Cleared',         'color'=>'success',  'icon'=>'fa-circle-check',       'next'=>'in_transit_road', 'next_label'=>'Dispatch Road Transit',  'next_field'=>'dispatched_road_at'],
-    'in_transit_road'  => ['label'=>'Road Transit',    'color'=>'info',     'icon'=>'fa-truck',              'next'=>'arrived_yard',    'next_label'=>'Mark Arrived at Yard',   'next_field'=>'arrived_yard_at'],
-    'arrived_yard'     => ['label'=>'Arrived Yard',    'color'=>'success',  'icon'=>'fa-warehouse',          'next'=>'intake',          'next_label'=>'Start Intake',           'next_field'=>'intake_at'],
+    'in_transit_road'  => ['label'=>'Road Transit',    'color'=>'info',     'icon'=>'fa-truck',              'next'=>'arrived_yard',    'next_label'=>'Mark Arrived at Showroom',   'next_field'=>'arrived_yard_at'],
+    'arrived_yard'     => ['label'=>'Arrived',         'color'=>'success',  'icon'=>'fa-warehouse',          'next'=>'intake',          'next_label'=>'Start Intake',           'next_field'=>'intake_at'],
     'intake'           => ['label'=>'In Intake',       'color'=>'primary',  'icon'=>'fa-clipboard-check',   'next'=>'completed',       'next_label'=>'Mark Completed',         'next_field'=>'completed_at'],
     'completed'        => ['label'=>'Completed',       'color'=>'dark',     'icon'=>'fa-flag-checkered',    'next'=>null,              'next_label'=>null,                     'next_field'=>null],
 ];
@@ -46,7 +46,7 @@ $costTypes = [
     'port_charges'      => 'Port Charges / Wharfage',
     'inspection'        => 'Pre-Shipment Inspection',
     'clearing_agent'    => 'Clearing Agent Fees',
-    'inland_transport'  => 'Inland Transport (Mombasa→Yard)',
+    'inland_transport'  => 'Inland Transport (Mombasa→Showroom)',
     'other'             => 'Other',
 ];
 

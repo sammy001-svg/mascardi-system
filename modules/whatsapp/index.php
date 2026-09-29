@@ -251,7 +251,7 @@ include __DIR__ . '/../../includes/header.php';
                 <i class="fab fa-whatsapp"></i>
                 <b style="color:var(--text-2);font-size:14px">Pick a conversation</b>
                 <div style="font-size:12.5px;margin-top:5px;max-width:320px">
-                    Every message the yard exchanges with a customer is kept here, against
+                    Every message the showroom exchanges with a customer is kept here, against
                     their record — not on somebody's phone.
                 </div>
             </div>

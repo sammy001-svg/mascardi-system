@@ -415,7 +415,7 @@ if (in_array($car['status'], ['delivered','sold']))     $activeStep = 6;
                         <div class="small text-muted"><?= e(($car['owner_phone'] ?? '') ?: 'No Phone') ?></div>
                     </dd>
                     <?php endif; ?>
-                    <dt class="col-5 text-muted">Current Yard</dt>
+                    <dt class="col-5 text-muted">Current Location</dt>
                     <dd class="col-7 fw-bold text-primary"><i class="fa fa-location-dot me-1"></i><?= e($car['location_name'] ?: '—') ?></dd>
                     <dt class="col-5 text-muted">Status</dt>
                     <dd class="col-7"><?= statusBadge($car['status']) ?></dd>

@@ -39,7 +39,7 @@ $confirmed = array_values(array_filter($carList, fn($c) => $c['confirmed']));
 $missing   = array_values(array_filter($carList, fn($c) => !$c['confirmed']));
 
 $company = [
-    'name'    => getSetting('company_name',    'Mascardi Car Yard'),
+    'name'    => getSetting('company_name',    'Mascardi Showroom'),
     'address' => getSetting('company_address', 'Nairobi, Kenya'),
     'phone'   => getSetting('company_phone',   ''),
     'email'   => getSetting('company_email',   ''),

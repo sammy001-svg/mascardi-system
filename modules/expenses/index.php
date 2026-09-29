@@ -39,7 +39,7 @@ $categories = [
     'fuel'        => ['label' => 'Fuel & Transport',     'icon' => 'fa-gas-pump',            'color' => '#d97706'],
     'utilities'   => ['label' => 'Utilities',            'icon' => 'fa-bolt',                'color' => '#0891b2'],
     'marketing'   => ['label' => 'Marketing & Ads',      'icon' => 'fa-bullhorn',            'color' => '#ec4899'],
-    'maintenance' => ['label' => 'Yard Maintenance',     'icon' => 'fa-screwdriver-wrench',  'color' => '#16a34a'],
+    'maintenance' => ['label' => 'Premises Maintenance', 'icon' => 'fa-screwdriver-wrench',  'color' => '#16a34a'],
     'office'      => ['label' => 'Office & Stationery',  'icon' => 'fa-briefcase',           'color' => '#64748b'],
     'insurance'   => ['label' => 'Insurance',            'icon' => 'fa-shield-halved',       'color' => '#0284c7'],
     'taxes'       => ['label' => 'Taxes & Levies',       'icon' => 'fa-file-invoice',        'color' => '#dc2626'],

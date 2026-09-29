@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireRole(['admin', 'manager']);
-$pageTitle = 'Locations & Yards';
+$pageTitle = 'Locations';
 $db = getDB();
 // Super Admin may force-delete a location that still has vehicles or
 // sub-locations attached; everyone else only gets the safe (empty) delete.
@@ -73,7 +73,7 @@ include __DIR__ . '/../../includes/header.php';
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h5 class="mb-0"><i class="fa fa-map-location-dot me-2 text-primary"></i>Locations &amp; Yards</h5>
+        <h5 class="mb-0"><i class="fa fa-map-location-dot me-2 text-primary"></i>Locations</h5>
         <div class="text-muted small mt-1"><?= count($parents) ?> location<?= count($parents) !== 1 ? 's' : '' ?>
             <?php $totalSubs = array_sum(array_map('count', $childrenMap)); ?>
             <?php if ($totalSubs): ?>&nbsp;&bull;&nbsp;<?= $totalSubs ?> sub-location<?= $totalSubs !== 1 ? 's' : '' ?><?php endif; ?>
@@ -138,7 +138,7 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                     <td>
                         <span class="badge bg-light text-secondary border" style="font-size:11px">
-                            <i class="fa <?= $icon ?> me-1"></i><?= ucfirst($l['type']) ?>
+                            <i class="fa <?= $icon ?> me-1"></i><?= e(locationTypeLabel($l['type'])) ?>
                         </span>
                     </td>
                     <td class="text-muted small"><?= e($l['address'] ?: '—') ?></td>
@@ -214,7 +214,7 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                     <td>
                         <span class="badge bg-light text-secondary border" style="font-size:10px">
-                            <i class="fa <?= $subIcon ?> me-1"></i><?= ucfirst($sub['type']) ?>
+                            <i class="fa <?= $subIcon ?> me-1"></i><?= e(locationTypeLabel($sub['type'])) ?>
                         </span>
                     </td>
                     <td class="text-muted" style="font-size:12px"><?= e($sub['address'] ?: '—') ?></td>

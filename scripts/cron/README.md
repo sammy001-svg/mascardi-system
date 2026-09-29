@@ -1,4 +1,4 @@
-# Mascardi Car Yard — Cron Jobs Setup Guide
+# Mascardi Showroom — Cron Jobs Setup Guide
 
 This folder contains PHP scripts designed to run automatically on a schedule.
 
