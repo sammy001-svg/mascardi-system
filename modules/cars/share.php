@@ -172,7 +172,24 @@ a{color:inherit;text-decoration:none}
 /* ── Hero ── */
 .sp-hero{padding:32px 0 0}
 .sp-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:36px;align-items:start}
-@media(max-width:960px){.sp-grid{grid-template-columns:1fr}}
+/* Placed by hand rather than by source order: the photographs and the detail
+   below them are two grid children now, so that a narrow screen can put the
+   price between them without the markup being written twice. */
+.sp-gal{grid-column:1;grid-row:1}
+.sp-detail{grid-column:1;grid-row:2;margin-top:-12px}
+.sp-panel-col{grid-column:2;grid-row:1/span 2}
+
+@media(max-width:960px){
+  /* One column, and the order a person actually wants: see the car, see what
+     it costs and how to ask about it, and only then the specification. The
+     price used to sit under the whole accordion, which on a phone is a long
+     way past the point where somebody has decided. */
+  .sp-grid{grid-template-columns:1fr;gap:22px}
+  .sp-gal,.sp-detail,.sp-panel-col{grid-column:1;grid-row:auto}
+  .sp-gal{order:1}
+  .sp-panel-col{order:2}
+  .sp-detail{order:3;margin-top:0}
+}
 
 /* ── Gallery ── */
 .sp-gal-main{
@@ -302,6 +319,56 @@ a{color:inherit;text-decoration:none}
 .sp-foot{background:var(--white);border-top:1px solid var(--line);padding:24px 0;margin-top:56px;text-align:center;font-size:12.5px;color:var(--ink-3)}
 .sp-foot a{color:var(--ink-2)}
 
+/* ── On a phone ───────────────────────────────────────────────
+   This link is nearly always opened from WhatsApp, on a phone, by somebody who
+   has been sent one car. That is the primary case, not the fallback. */
+@media(max-width:720px){
+  .sp-wrap{padding:0 16px}
+  .sp-hero{padding:18px 0 0}
+  .sp-panel{padding:20px 18px}
+  .sp-title{font-size:23px}
+  .sp-price-amt{font-size:26px}
+  .sp-gal-main{aspect-ratio:4/3;border-radius:10px}
+  .sp-accs{margin-top:18px}
+  .sp-acc summary{padding:15px 2px;font-size:14px}
+  /* A number that has been read is a number that can be dialled. */
+  .sp-spec{font-size:13px;gap:12px}
+}
+
+/* The one thing a client needs within reach at any point on the page: what it
+   costs, and how to ask about it. On desktop the panel is sticky and does this
+   already; on a phone the panel scrolls away, so this takes over. */
+.sp-bar{display:none}
+@media(max-width:960px){
+  .sp-bar{
+    display:flex;align-items:center;gap:12px;
+    position:fixed;left:0;right:0;bottom:0;z-index:200;
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));
+    background:rgba(255,255,255,.97);
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+    border-top:1px solid var(--line);
+    box-shadow:0 -4px 20px rgba(0,0,0,.07);
+  }
+  .sp-bar-price{min-width:0;flex:1}
+  .sp-bar-amt{
+    font-size:17px;font-weight:700;color:var(--ink);letter-spacing:-.01em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;
+  }
+  .sp-bar-lbl{
+    font-size:10px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--ink-3);margin-top:2px;
+  }
+  .sp-bar-btn{
+    flex:none;display:inline-flex;align-items:center;gap:8px;
+    padding:12px 20px;border-radius:9px;font-size:14.5px;font-weight:600;
+    text-decoration:none;color:#fff;background:#25d366;
+  }
+  .sp-bar-btn.is-phone{background:var(--ink)}
+  .sp-bar-btn:hover{opacity:.92;color:#fff}
+  /* So the bar never sits on top of the last line of the footer. */
+  body{padding-bottom:78px}
+}
+
 /* ── Lightbox ── */
 #spLb{display:none;position:fixed;inset:0;background:rgba(4,4,4,.97);z-index:99999;align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:24px}
 #spLb.open{display:flex!important}
@@ -329,8 +396,8 @@ a{color:inherit;text-decoration:none}
   <div class="sp-wrap">
     <div class="sp-grid">
 
-      <!-- LEFT: Gallery + specs -->
-      <div>
+      <!-- LEFT, upper: the photographs -->
+      <div class="sp-gal">
         <?php if ($images): ?>
         <!-- Main image -->
         <div class="sp-gal-main" id="spMain" onclick="spOpen(spIdx)">
@@ -365,6 +432,11 @@ a{color:inherit;text-decoration:none}
         <div class="sp-noimg"><i class="fa fa-car-side"></i><div>No photos yet</div></div>
         <?php endif; ?>
 
+      </div><!-- /gallery -->
+
+      <!-- LEFT, lower: the detail. A separate grid child purely so that a phone
+           can put the price and the enquiry button in front of it. -->
+      <div class="sp-detail">
         <!-- Stats strip -->
         <div class="sp-stats">
           <div>
@@ -443,10 +515,10 @@ a{color:inherit;text-decoration:none}
           <?php endif; ?>
 
         </div>
-      </div><!-- /left -->
+      </div><!-- /detail -->
 
       <!-- RIGHT: Sticky panel -->
-      <div>
+      <div class="sp-panel-col">
         <div class="sp-panel">
 
           <?php if ($inTransit): ?>
@@ -555,6 +627,42 @@ a{color:inherit;text-decoration:none}
   </div><!-- /sp-wrap -->
 </div><!-- /sp-hero -->
 
+<?php // Fixed to the bottom on a phone only. One price, one action — whichever
+      // way of reaching us is actually configured. If none is, it does not
+      // render at all rather than showing a button that goes nowhere. ?>
+<?php
+$barHref = $barText = $barCls = $barIcon = '';
+if ($whatsappNum) {
+    $barHref = 'https://wa.me/' . $whatsappNum . '?text=' . $waMsg;
+    $barText = $inTransit ? 'Reserve' : ($isReserved ? 'Waitlist' : 'Enquire');
+    $barIcon = 'fa-brands fa-whatsapp';
+} elseif ($companyPhone) {
+    $barHref = 'tel:' . $companyPhone;
+    $barText = 'Call us';
+    $barIcon = 'fa fa-phone';
+    $barCls  = ' is-phone';
+} elseif ($sellEmail = getSetting('company_email', '')) {
+    $barHref = 'mailto:' . $sellEmail . '?subject=' . urlencode('Enquiry: ' . $carTitle);
+    $barText = 'Email us';
+    $barIcon = 'fa fa-envelope';
+    $barCls  = ' is-phone';
+}
+?>
+<?php if ($barHref !== ''): ?>
+<div class="sp-bar">
+  <div class="sp-bar-price">
+    <div class="sp-bar-amt"><?= htmlspecialchars($dispPrice ? $priceStr : 'Price on request') ?></div>
+    <div class="sp-bar-lbl">
+      <?= $inTransit ? 'In shipment' : ($isReserved ? 'Reserved' : 'Available') ?>
+    </div>
+  </div>
+  <a class="sp-bar-btn<?= $barCls ?>" href="<?= htmlspecialchars($barHref) ?>"
+     <?= str_starts_with($barHref, 'https://') ? 'target="_blank" rel="noopener"' : '' ?>>
+    <i class="<?= $barIcon ?>"></i><?= htmlspecialchars($barText) ?>
+  </a>
+</div>
+<?php endif; ?>
+
 <footer class="sp-foot">
   <div class="sp-wrap">
     <div style="margin-bottom:6px">
@@ -641,16 +749,45 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'ArrowRight') spChange(1);
   if (e.key === 'Escape')     spClose();
 });
-// Touch swipe support
+// Swiping the photographs.
+//
+// Two things were wrong on a phone. Swiping worked on the main image but not
+// inside the lightbox, which is the one place somebody actually expects it —
+// a full-screen photo that will not move is the moment the page stops feeling
+// finished. And a swipe on the main image also fired its click, so flicking to
+// the next photo threw the viewer open on top of you.
 (function(){
-  var el = document.getElementById('spMain');
-  if (!el || spPhotos.length < 2) return;
-  var sx = 0;
-  el.addEventListener('touchstart', function(e){ sx = e.changedTouches[0].clientX; }, {passive:true});
-  el.addEventListener('touchend',   function(e){
-    var dx = e.changedTouches[0].clientX - sx;
-    if (Math.abs(dx) > 40) spChange(dx < 0 ? 1 : -1);
-  }, {passive:true});
+  if (spPhotos.length < 2) return;
+
+  function swipeable(el, onSwipe) {
+    if (!el) return;
+    var sx = 0, sy = 0, moved = false;
+    el.addEventListener('touchstart', function(e){
+      sx = e.changedTouches[0].clientX;
+      sy = e.changedTouches[0].clientY;
+      moved = false;
+    }, {passive:true});
+    el.addEventListener('touchend', function(e){
+      var dx = e.changedTouches[0].clientX - sx,
+          dy = e.changedTouches[0].clientY - sy;
+      // Sideways, and more sideways than up — otherwise a scroll down the page
+      // that drifts a little counts as a swipe and the photo jumps.
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+        moved = true;
+        onSwipe(dx < 0 ? 1 : -1);
+      }
+    }, {passive:true});
+    // A swipe is not a tap. Swallow the click the browser sends afterwards.
+    el.addEventListener('click', function(e){
+      if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; }
+    }, true);
+  }
+
+  // Both go through spChange, which already refreshes the lightbox when it is
+  // the thing on screen — repeating that here would be a second copy of the
+  // same three lines, waiting to disagree with the first.
+  swipeable(document.getElementById('spMain'), spChange);
+  swipeable(document.getElementById('spLb'),   spChange);
 }());
 </script>
 
