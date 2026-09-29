@@ -76,6 +76,9 @@ foreach ([
 $filterMake   = trim($_GET['make']  ?? '');
 $filterAgent  = $canFilter ? (int)($_GET['agent'] ?? 0) : 0;
 $filterSearch = trim($_GET['q']    ?? '');
+// month=1..12; 0 means "all months"
+$filterMonth  = (int)($_GET['month'] ?? 0);
+if ($filterMonth < 1 || $filterMonth > 12) { $filterMonth = 0; }
 
 // ── Build WHERE ───────────────────────────────────────────────────────────────
 // A reservation taken by a non-Super-Admin is held at reservation_status =
@@ -95,6 +98,11 @@ $params = [];
 if ($isCrmAgent)  { $where[] = "l.assigned_to = $uid"; }
 if ($filterMake)  { $where[] = 'c.make = ?';         $params[] = $filterMake; }
 if ($filterAgent) { $where[] = 'l.assigned_to = ?';  $params[] = $filterAgent; }
+if ($filterMonth) {
+    // Filter by the month the deposit was placed; fall back to updated_at.
+    $where[] = 'MONTH(COALESCE(l.deposit_date, l.updated_at)) = ?';
+    $params[] = $filterMonth;
+}
 if ($filterSearch) {
     $s = '%' . $filterSearch . '%';
     $where[] = '(l.name LIKE ? OR cl.name LIKE ? OR c.make LIKE ? OR c.model LIKE ?)';
@@ -206,7 +214,11 @@ $totalDeposits = (float)$stats['total_deposits'];
 $totalBalance  = (float)$stats['total_balance'];
 $agentCount    = (int)$stats['agent_count'];
 $filtered      = count($reservations);
-$isFiltered    = $filterMake || $filterAgent || $filterSearch;
+$isFiltered    = $filterMake || $filterAgent || $filterSearch || $filterMonth;
+// Build a human-readable label for the active month chip
+$monthNames    = ['','January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+$filterMonthName = $filterMonth ? $monthNames[$filterMonth] : '';
 
 $pageTitle = 'Reservations';
 include __DIR__ . '/../../includes/header.php';
@@ -478,6 +490,18 @@ include __DIR__ . '/../../includes/header.php';
         </select>
     </div>
     <?php endif; ?>
+    <div class="filter-group">
+        <label>Month</label>
+        <select name="month">
+            <option value="">All Months</option>
+            <?php foreach (['','January','February','March','April','May','June',
+                            'July','August','September','October','November','December']
+                           as $mIdx => $mName):
+                if ($mIdx === 0) continue; ?>
+            <option value="<?= $mIdx ?>" <?= $filterMonth === $mIdx ? 'selected' : '' ?>><?= $mName ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
     <?php if ($canFilter && $agentsList): ?>
     <div class="filter-group">
         <label>Sales Agent</label>
@@ -509,6 +533,9 @@ include __DIR__ . '/../../includes/header.php';
     </span>
     <?php if ($filterMake): ?>
     <span class="active-filter-chip"><i class="fa fa-car" style="font-size:9px"></i><?= e($filterMake) ?></span>
+    <?php endif; ?>
+    <?php if ($filterMonth): ?>
+    <span class="active-filter-chip"><i class="fa fa-calendar" style="font-size:9px"></i><?= e($filterMonthName) ?></span>
     <?php endif; ?>
     <?php if ($filterAgent && $canFilter): ?>
     <?php $agName = ''; foreach ($agentsList as $ag) { if ((int)$ag['id'] === $filterAgent) { $agName = $ag['name']; break; } } ?>
