@@ -308,6 +308,37 @@ $showIntro = $_SERVER['REQUEST_METHOD'] === 'GET' && !$isFirstRun && !$setupDone
 // that stays with the browser's own password manager via autocomplete).
 $rememberedUser = trim($_COOKIE['rm_user'] ?? '');
 
+/* The photograph for the picture side.
+ *
+ * The page used to be one card floating in the middle of a gradient. It is now
+ * split: the photograph holds one side and the form the other, so every word
+ * sits on solid colour instead of on a picture that had to be dimmed until it
+ * was barely worth showing.
+ *
+ * Preference order, first hit wins: a photo uploaded in Settings, a file
+ * dropped into assets/images/login-bg.*, and then the showroom hero that ships
+ * with the system. If none of them is there the panel is plain navy and the
+ * page still reads properly — a missing photo should degrade, not break.
+ */
+$loginBg = '';
+$__bgSet = trim((string)getSetting('login_background', ''));
+if ($__bgSet !== '' && is_file(BASE_PATH . '/assets/images/' . basename($__bgSet))) {
+    $loginBg = BASE_URL . '/assets/images/' . rawurlencode(basename($__bgSet))
+             . '?v=' . filemtime(BASE_PATH . '/assets/images/' . basename($__bgSet));
+} else {
+    foreach (['login-bg.jpg', 'login-bg.jpeg', 'login-bg.png', 'login-bg.webp', 'hero.webp'] as $__try) {
+        if (is_file(BASE_PATH . '/assets/images/' . $__try)) {
+            $loginBg = BASE_URL . '/assets/images/' . $__try
+                     . '?v=' . filemtime(BASE_PATH . '/assets/images/' . $__try);
+            break;
+        }
+    }
+}
+
+$companyName    = getSetting('company_name', 'Mascardi');
+$companyPhone   = trim((string)getSetting('company_phone', ''));
+$companyEmail   = trim((string)getSetting('company_email', ''));
+
 // Mokoto nameplate font — self-hosted. Drop the file at assets/fonts/mokoto.woff2
 // (or .woff/.ttf/.otf) and it's picked up automatically, no code change needed.
 // Until then the nameplate falls back to Orbitron.
@@ -344,53 +375,102 @@ foreach (['woff2', 'woff', 'ttf', 'otf'] as $__ext) {
 <style>
 *, *::before, *::after { box-sizing: border-box; }
 body {
-    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%);
+    background: #0b1220;
     min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
     font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-    padding: 24px;
-    position: relative;
+    margin: 0;
 }
-body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image: linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
-    background-size: 50px 50px;
-    pointer-events: none;
+
+/* ── The split ───────────────────────────────────────────────────
+   One column on a phone, with the picture reduced to a band across the top;
+   two side by side from tablet width up. The form column has a floor of 430px
+   so it never squeezes into something unusable on the way there. */
+.auth{ min-height:100vh; min-height:100dvh; display:grid; grid-template-columns:1fr; }
+@media (min-width:900px){
+    .auth{ grid-template-columns:minmax(0,1.05fr) minmax(430px,.95fr); }
 }
-.back-link {
-    position: fixed;
-    top: 20px;
-    left: 24px;
-    color: rgba(255,255,255,.6);
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 8px 14px;
-    border: 1px solid rgba(255,255,255,.15);
-    border-radius: 8px;
-    background: rgba(255,255,255,.05);
-    transition: all .15s;
-    z-index: 10;
+@media (min-width:1500px){
+    .auth{ grid-template-columns:minmax(0,1.2fr) 560px; }
 }
-.back-link:hover { color: #fff; border-color: rgba(255,255,255,.3); background: rgba(255,255,255,.1); text-decoration: none; }
-.login-wrap { width: 100%; max-width: 420px; position: relative; z-index: 1; }
-.login-card {
-    background: rgba(255,255,255,.97);
-    backdrop-filter: blur(20px);
-    border-radius: 24px;
-    padding: 42px 38px;
-    box-shadow: 0 32px 80px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.2);
-    border: 1px solid rgba(255,255,255,.4);
+
+/* ── The picture side ── */
+.auth-stage{
+    position:relative; display:flex; flex-direction:column; justify-content:space-between;
+    gap:22px; padding:26px; min-height:190px; overflow:hidden;
+    background:#0b1220 center/cover no-repeat;
 }
+@media (min-width:900px){ .auth-stage{ padding:46px; min-height:100vh; min-height:100dvh; } }
+
+/* Dark enough for white text to sit on it, and no darker — the point of
+   splitting the page was to stop dimming the photograph into a blur. */
+.auth-stage::after{
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(115deg, rgba(8,16,34,.86) 0%, rgba(8,16,34,.58) 55%, rgba(8,16,34,.38) 100%);
+}
+.auth-stage > *{ position:relative; z-index:1; }
+
+.auth-inner{ max-width:480px; }
+.auth-lockup{ display:flex; align-items:center; gap:13px; margin-bottom:18px; }
+.auth-lockup img{ height:52px; width:auto; max-width:180px; object-fit:contain; }
+.auth-mark{
+    width:52px; height:52px; border-radius:15px; display:flex; align-items:center;
+    justify-content:center; font-size:23px; color:#fff;
+    background:linear-gradient(135deg,#3b82f6,#1d4ed8); box-shadow:0 8px 24px rgba(37,99,235,.42);
+}
+.auth-company{ font-size:19px; font-weight:800; color:#fff; letter-spacing:-.3px; }
+.auth-tagline{
+    color:rgba(255,255,255,.82); font-size:15px; line-height:1.6; margin:0 0 22px; max-width:30em;
+}
+.auth-points{ list-style:none; padding:0; margin:0; display:grid; gap:11px; }
+.auth-points li{
+    display:flex; align-items:flex-start; gap:11px;
+    color:rgba(255,255,255,.78); font-size:13.5px; line-height:1.5;
+}
+.auth-points i{ color:#60a5fa; margin-top:2px; width:16px; text-align:center; flex:none; }
+.auth-back{
+    align-self:flex-start; color:rgba(255,255,255,.72); font-size:13px; font-weight:600;
+    text-decoration:none; display:inline-flex; align-items:center; gap:8px;
+    padding:8px 14px; border:1px solid rgba(255,255,255,.2);
+    border-radius:9px; background:rgba(255,255,255,.07); transition:all .15s;
+}
+.auth-back:hover{ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.14); }
+@media (max-width:899px){ .auth-back, .auth-points{ display:none; } }
+
+/* ── The form side ── */
+.auth-panel{
+    display:flex; align-items:center; justify-content:center;
+    padding:30px 20px 38px; background:#111c33;
+}
+@media (min-width:900px){ .auth-panel{ padding:48px 44px; } }
+.auth-form{ width:100%; max-width:410px; }
+
+/* Repeated for the phone, where the picture side is only a band and the
+   lockup on it has been pushed off the top. */
+.auth-smallbrand{
+    display:flex; align-items:center; gap:10px; margin-bottom:22px;
+    color:#e6edf7; font-weight:800; font-size:16px;
+}
+.auth-smallbrand img{ height:34px; width:auto; max-width:130px; object-fit:contain; }
+@media (min-width:900px){ .auth-smallbrand{ display:none; } }
+
+.auth-foot{
+    margin-top:26px; padding-top:18px; border-top:1px solid rgba(148,163,184,.16);
+    text-align:center;
+}
+.auth-contact{ display:flex; flex-wrap:wrap; justify-content:center; gap:14px; margin-bottom:9px; }
+.auth-contact a{
+    color:#94a3b8; font-size:12.5px; text-decoration:none;
+    display:inline-flex; align-items:center; gap:6px;
+}
+.auth-contact a:hover{ color:#e6edf7; }
+.auth-legal{ color:rgba(148,163,184,.65); font-size:11.5px; }
+.auth-backsm{
+    display:inline-flex; align-items:center; gap:7px; margin-top:12px;
+    color:#60a5fa; font-size:12.5px; text-decoration:none; font-weight:600;
+}
+@media (min-width:900px){ .auth-backsm{ display:none; } }
+
+.login-card{ background:transparent; border:0; padding:0; box-shadow:none; }
 .brand-icon { width: 58px; height: 58px; background: linear-gradient(135deg,#3b82f6,#1d4ed8); border-radius: 16px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 26px; margin: 0 auto 16px; box-shadow: 0 8px 24px rgba(37,99,235,.4); }
 .login-title { font-size: 23px; font-weight: 800; color: #0f172a; text-align: center; margin-bottom: 4px; letter-spacing: -.4px; }
 .login-sub { color: #64748b; font-size: 13px; text-align: center; margin-bottom: 28px; }
@@ -476,21 +556,23 @@ body::before{
 }
 
 /* ── Login card → dark glass with neon rim ─────────────────────────── */
+/* The card used to float in the middle of the page as dark glass with a neon
+   rim, tilted in 3D. With the page split, the form has a side of its own and
+   the panel IS the surface, so a second bordered box inside it would only be a
+   box inside a box. What is kept is the arrival: the form still eases in as
+   the welcome animation steps aside, because that join should not be abrupt. */
 .login-card{
-    background:rgba(16,26,48,.82) !important;
-    -webkit-backdrop-filter:blur(22px); backdrop-filter:blur(22px);
-    border:1px solid rgba(59,130,246,.28) !important;
-    box-shadow:0 34px 90px rgba(0,0,0,.65), 0 0 40px rgba(59,130,246,.10),
-               inset 0 1px 0 rgba(255,255,255,.05) !important;
-    position:relative; overflow:hidden;
+    background:transparent !important; border:0 !important;
+    box-shadow:none !important; padding:0; overflow:visible;
 }
+.neon-aura, .neon-ring{ display:none !important; }
 /* ── 3D tilt + animated neon glow ──────────────────────────────────── */
-.login-wrap{ perspective:1400px; }
-.card-3d{ position:relative; transform-style:preserve-3d; will-change:transform; }
-body .card-3d{ opacity:0; }
-body.no-intro .card-3d,
-body.has-intro .login-stage.show .card-3d{
-    animation:cardIn .9s cubic-bezier(.17,.75,.28,1) .1s backwards;
+.login-wrap{ width:100%; }
+.card-3d{ position:relative; }
+.auth-form{ opacity:0; }
+body.no-intro .auth-form,
+body.has-intro .login-stage.show .auth-form{
+    animation:cardIn .8s cubic-bezier(.17,.75,.28,1) .1s backwards;
     opacity:1;
 }
 @keyframes cardIn{
@@ -498,9 +580,9 @@ body.has-intro .login-stage.show .card-3d{
     100%{ opacity:1; transform:translateY(0) rotateX(0) scale(1); }
 }
 /* Shake after a failed sign-in, once the card has settled */
-.card-3d.err{
-    animation:cardIn .9s cubic-bezier(.17,.75,.28,1) .05s backwards,
-              shakeX .5s ease 1s;
+.auth-form.err{
+    animation:cardIn .8s cubic-bezier(.17,.75,.28,1) .05s backwards,
+              shakeX .5s ease .9s;
 }
 @keyframes shakeX{
     0%,100%{ transform:translateX(0); }
@@ -539,10 +621,9 @@ body.has-intro .login-stage.show .card-3d{
 @keyframes neonSpin{ to{ transform:rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce){
-    .neon-aura::before, .neon-ring::before{ animation:none; }
-    body.no-intro .card-3d,
-    body.has-intro .login-stage.show .card-3d,
-    .card-3d.err{ animation:none; opacity:1; }
+    body.no-intro .auth-form,
+    body.has-intro .login-stage.show .auth-form,
+    .auth-form.err{ animation:none; opacity:1; }
 }
 .login-title{ color:#f8fafc !important; }
 .login-sub{ color:#93a3bb !important; }
@@ -578,10 +659,10 @@ body.has-intro .login-stage.show .card-3d{
 .alert-success{ background:rgba(34,197,94,.14); border-color:rgba(34,197,94,.35); color:#86efac; }
 
 /* ── Login stage slide-in ──────────────────────────────────────────── */
-.login-stage{ opacity:1; transform:none; width:100%; display:flex; flex-direction:column; align-items:center; }
+.login-stage{ opacity:1; transform:none; }
 body.has-intro .login-stage{
-    opacity:0; transform:translateY(46px) scale(.97);
-    transition:opacity .9s ease, transform .9s cubic-bezier(.2,.9,.25,1.15);
+    opacity:0;
+    transition:opacity .9s ease;
 }
 body.has-intro .login-stage.show{ opacity:1; transform:none; }
 
@@ -709,23 +790,79 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 
 <!-- ═══════════════════ LOGIN STAGE ═══════════════════ -->
 <div class="login-stage" id="loginStage">
+<?php $__logo = companyLogo(); ?>
 
-<!-- Back to showroom -->
-<a href="<?= BASE_URL ?>/showroom/" class="back-link">
-    <i class="fa fa-arrow-left"></i> Back to Showroom
-</a>
+<div class="auth">
 
-<div class="login-wrap">
-    <div class="card-3d<?= $error ? ' err' : '' ?>" id="card3d">
-    <div class="neon-aura" aria-hidden="true"></div>
-    <div class="login-card">
-        <span class="neon-ring" aria-hidden="true"></span>
-        <?php $__logo = companyLogo(); ?>
+  <!-- The photograph, and the company over it. Hidden from screen readers:
+       it is decoration plus a repeat of what the form side already says. -->
+  <section class="auth-stage"<?= $loginBg !== '' ? ' style="background-image:url(\'' . htmlspecialchars($loginBg) . '\')"' : '' ?> aria-hidden="true">
+    <div class="auth-inner">
+      <div class="auth-lockup">
         <?php if ($__logo['exists']): ?>
-        <div class="brand-icon has-logo"><img src="<?= htmlspecialchars($__logo['url']) ?>" alt="<?= htmlspecialchars(getSetting('company_name', 'Mascardi')) ?> logo"></div>
+        <img src="<?= htmlspecialchars($__logo['url']) ?>" alt="">
         <?php else: ?>
-        <div class="brand-icon"><i class="fa fa-car-side"></i></div>
+        <span class="auth-mark"><i class="fa fa-car-side"></i></span>
         <?php endif; ?>
+        <span class="auth-company"><?= htmlspecialchars($companyName) ?></span>
+      </div>
+
+      <?php // What is behind the door, for somebody deciding whether they are
+            // at the right one. The two sides keep different promises, and the
+            // switch on the form side changes which is showing — so both are
+            // rendered and one is hidden, rather than fetching the page again
+            // just to reword a list. ?>
+      <div class="stage-copy" data-door="staff"<?= $clientSide ? ' hidden' : '' ?>>
+        <p class="auth-tagline">
+          The yard, its stock and its money &mdash; one system, from the showroom
+          floor to the books.
+        </p>
+        <ul class="auth-points">
+          <li><i class="fa fa-warehouse"></i><span>Stock, reservations and deliveries</span></li>
+          <li><i class="fa fa-screwdriver-wrench"></i><span>The workshop floor and its jobs</span></li>
+          <li><i class="fa fa-coins"></i><span>Payments, expenses and the accounts</span></li>
+          <li><i class="fa fa-chart-line"></i><span>What was sold, by whom, and for how much</span></li>
+        </ul>
+      </div>
+
+      <div class="stage-copy" data-door="client"<?= $clientSide ? '' : ' hidden' ?>>
+        <p class="auth-tagline">
+          Your vehicles, your paperwork and what you still owe &mdash; in one place,
+          whenever you want to look.
+        </p>
+        <ul class="auth-points">
+          <li><i class="fa fa-car"></i><span>The vehicles you have bought from us</span></li>
+          <li><i class="fa fa-file-invoice"></i><span>Your invoices, receipts and statement</span></li>
+          <li><i class="fa fa-calendar-check"></i><span>Service bookings and what was done</span></li>
+          <li><i class="fa fa-folder-open"></i><span>Logbooks and documents we hold for you</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <?php // The way out, kept on the picture side where it cannot be mistaken
+          // for part of the form. ?>
+    <a class="auth-back" href="<?= BASE_URL ?>/showroom/" aria-hidden="true" tabindex="-1">
+      <i class="fa fa-arrow-left"></i> <span>Back to the showroom</span>
+    </a>
+  </section>
+
+  <!-- The form side -->
+  <main class="auth-panel" id="main">
+    <div class="login-wrap">
+    <div class="card-3d" id="card3d">
+    <div class="login-card">
+      <div class="auth-form<?= $error || $clientError ? ' err' : '' ?>">
+
+        <?php // On a phone the picture side is only a band, so the brand is
+              // repeated here where there is room to read it. ?>
+        <div class="auth-smallbrand">
+          <?php if ($__logo['exists']): ?>
+          <img src="<?= htmlspecialchars($__logo['url']) ?>" alt="<?= htmlspecialchars($companyName) ?>">
+          <?php else: ?>
+          <span class="auth-mark" style="width:34px;height:34px;font-size:15px;border-radius:10px"><i class="fa fa-car-side"></i></span>
+          <?php endif; ?>
+          <span><?= htmlspecialchars($companyName) ?></span>
+        </div>
         <div class="login-title"><?= $isFirstRun ? 'System Setup' : htmlspecialchars(APP_NAME) ?></div>
         <div class="login-sub" id="doorSub"><?= $isFirstRun
             ? 'Create your administrator account to get started.'
@@ -955,19 +1092,45 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
         </div><!-- /paneClient -->
         <?php endif; ?>
         <?php endif; ?>
+        <footer class="auth-foot">
+          <?php // Somebody who cannot get in needs a way to reach a person,
+                // and on the customer side "ask your administrator" means
+                // nothing. These are the details they actually need. ?>
+          <?php if ($companyPhone !== '' || $companyEmail !== ''): ?>
+          <div class="auth-contact">
+            <?php if ($companyPhone !== ''): ?>
+            <a href="tel:<?= htmlspecialchars(preg_replace('/[^0-9+]/', '', $companyPhone)) ?>">
+              <i class="fa fa-phone"></i><?= htmlspecialchars($companyPhone) ?>
+            </a>
+            <?php endif; ?>
+            <?php if ($companyEmail !== ''): ?>
+            <a href="mailto:<?= htmlspecialchars($companyEmail) ?>">
+              <i class="fa fa-envelope"></i><?= htmlspecialchars($companyEmail) ?>
+            </a>
+            <?php endif; ?>
+          </div>
+          <?php endif; ?>
+
+          <div class="auth-legal">
+            &copy; <?= date('Y') ?> <?= htmlspecialchars($companyName) ?>
+            <span aria-hidden="true">&middot;</span>
+            <?= $clientSide ? 'Customer portal' : 'Car yard management' ?>
+          </div>
+
+          <?php // Repeated for the phone, where the picture side is a band and
+                // the link on it is not shown. ?>
+          <a class="auth-backsm" href="<?= BASE_URL ?>/showroom/">
+            <i class="fa fa-store"></i> Browse the showroom
+          </a>
+        </footer>
+
+      </div><!-- /auth-form -->
     </div><!-- /login-card -->
     </div><!-- /card-3d -->
+    </div><!-- /login-wrap -->
+  </main>
 
-    <div class="text-center mt-3">
-        <p style="font-size:12px;color:rgba(255,255,255,.35);margin:0 0 8px">
-            <?= htmlspecialchars(APP_NAME) ?> &mdash; Staff &amp; Customer Portal
-        </p>
-        <a href="<?= BASE_URL ?>/showroom/" style="font-size:12.5px;color:rgba(255,255,255,.5);text-decoration:none;transition:color .15s"
-           onmouseover="this.style.color='rgba(255,255,255,.9)'" onmouseout="this.style.color='rgba(255,255,255,.5)'">
-            <i class="fa fa-store me-1"></i> Browse public showroom →
-        </a>
-    </div>
-</div>
+</div><!-- /auth -->
 </div><!-- /login-stage -->
 
 <script>
@@ -994,6 +1157,16 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
             sub.textContent = toClient
                 ? 'Customer portal — your vehicles, invoices and documents'
                 : 'Staff portal — sign in to continue';
+        }
+        // The picture side promises different things to the two of them, so it
+        // moves with the switch. Leaving it behind would sit a customer's form
+        // next to a list of what staff can do.
+        document.querySelectorAll('.stage-copy').forEach(function (c) {
+            c.hidden = (c.getAttribute('data-door') !== (toClient ? 'client' : 'staff'));
+        });
+        var legal = document.querySelector('.auth-legal');
+        if (legal) {
+            legal.lastChild.textContent = toClient ? ' Customer portal' : ' Car yard management';
         }
         var first = (toClient ? client : staff).querySelector('input:not([type=hidden])');
         if (first && !first.hasAttribute('autofocus')) { try { first.focus(); } catch (e) {} }
