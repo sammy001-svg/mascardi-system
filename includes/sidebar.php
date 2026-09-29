@@ -7,12 +7,17 @@ function isActive(string $path): string {
     return str_contains($__uri, $path) ? 'active' : '';
 }
 
-// Super Admin gets the full comprehensive sidebar (no early-exit; falls through below)
-// Admin gets the simple focused portal sidebar
-if (authRole() === 'admin') {
-    include __DIR__ . '/sidebar_admin.php';
-    return;
-}
+// Administrators get the full sidebar, the same as Super Admin.
+//
+// A two-tier split put Admin on a cut-down "portal" menu of Workshop and Sales
+// while Super Admin kept everything. The permissions never followed it —
+// canAccess() has always returned true for both roles — so the only thing the
+// split achieved was hiding from administrators the modules they could still
+// reach by typing the address. A menu that is narrower than the access it
+// describes is not a restriction, it is a missing map.
+//
+// sidebar_admin.php is left in place: nothing includes it now, but it is the
+// cut-down menu itself and is worth keeping should a reduced role be wanted.
 
 // Customer Relations Managers get a lean, focused sidebar
 if (authRole() === 'customer_relations') {

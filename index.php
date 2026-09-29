@@ -20,11 +20,11 @@ if ($role === 'visitor_book') {
     exit;
 }
 
-// Admin role → simple focused portal (Workshop + Sales dashboards)
-if ($role === 'admin') {
-    header('Location: ' . BASE_URL . '/modules/admin/workshop_dashboard.php');
-    exit;
-}
+// Administrators land on the main dashboard, the same as Super Admin. They
+// were being sent to the Workshop board instead — the other half of the
+// two-tier split undone in includes/sidebar.php. The dashboard below already
+// names 'admin' in every one of its role checks, so it has always been able
+// to render for them; nobody was being taken to it.
 
 // General Manager → dedicated executive dashboard
 if ($role === 'general_manager') {
