@@ -268,6 +268,17 @@ function crmDeliverLeadToClient(PDO $db, array $lead): int
             logActivity('update', 'cars', $carId, "Vehicle assigned to client #{$clientId} on delivery of lead #{$leadId}");
         }
 
+        // The deal's paperwork becomes the client's. Stamped rather than
+        // moved, so a buyer on their second car keeps two sets of papers told
+        // apart instead of one undated pile.
+        try {
+            require_once __DIR__ . '/_documents.php';
+            leadDocsAttachToClient($db, $leadId, $clientId);
+        } catch (\Throwable $e) {
+            // A delivery that worked should not fail over its filing.
+            error_log('leadDocsAttachToClient on delivery: ' . $e->getMessage());
+        }
+
         return $clientId;
     } catch (\Throwable $e) {
         // Record the reason so callers can show it. Previously this returned 0

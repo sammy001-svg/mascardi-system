@@ -469,6 +469,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
     }
 
+    // ── Signed paperwork against this deal ──────────────────────────────────
+    // One handler for all three summaries; which part of the deal it belongs to
+    // arrives as 'context' rather than as a different action.
+    if ($action === 'upload_lead_doc' && canWrite('crm')) {
+        require_once __DIR__ . '/_documents.php';
+        $ctx = (string)($_POST['context'] ?? 'other');
+        $res = leadDocsStore(
+            $db, $id, $ctx,
+            (string)($_POST['doc_type'] ?? 'other'),
+            (string)($_POST['title'] ?? ''),
+            (string)($_POST['notes'] ?? ''),
+            $_FILES['document'] ?? [],
+            (int)$me['id']
+        );
+        setFlash($res['ok'] ? 'success' : 'error',
+            $res['ok'] ? 'Document attached.' : $res['error']);
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#docs-' . $ctx);
+    }
+
+    if ($action === 'delete_lead_doc' && canWrite('crm')) {
+        require_once __DIR__ . '/_documents.php';
+        $res = leadDocsDelete($db, (int)($_POST['doc_id'] ?? 0), $id);
+        setFlash($res['ok'] ? 'success' : 'error',
+            $res['ok'] ? 'Document removed.' : $res['error']);
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
     if ($action === 'add_deposit' && canWrite('crm')) {
         $amt   = (float)($_POST['amount'] ?? 0);
         $date  = trim($_POST['deposit_date'] ?? '') ?: date('Y-m-d');
@@ -2114,6 +2141,20 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
         </div>
         <?php endif; ?>
 
+        <?php require_once __DIR__ . '/_documents.php'; $__docW = canWrite('crm'); ?>
+
+        <?php // The signed paperwork for the reservation — the sales agreement
+              // above all. Shown from the moment there is a deal to sign for,
+              // and it stays visible afterwards, because afterwards is exactly
+              // when somebody goes looking for it. ?>
+        <?php if (!in_array($lead['stage'], ['new', 'lost'], true)): ?>
+        <div class="card mb-3">
+            <div class="card-body">
+                <?php leadDocsPanel($db, $id, 'reservation', $__docW); ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- ══ CREDIT SUMMARY ══════════════════════════════════════════════════
              Sits directly under the Reservation Summary. Before an agreement
              exists this is a single call to action; once saved it becomes the
@@ -2326,6 +2367,17 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
         <?php endif; ?>
         <?php endif; ?>
 
+        <?php // The credit agreement and its schedule, once one exists. Tied to
+              // the agreement rather than the stage: a credit sale is settled
+              // over months and the papers outlive the delivery. ?>
+        <?php if (!empty($creditAgr)): ?>
+        <div class="card mb-3">
+            <div class="card-body">
+                <?php leadDocsPanel($db, $id, 'credit', $__docW); ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Import Order Summary (shown only when stage = import_order) -->
         <?php if ($lead['stage'] === 'import_order'): ?>
         <?php
@@ -2436,6 +2488,17 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         <i class="fa fa-pen me-1"></i>Update Import Order
                     </button>
                 </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php // Paperwork raised against an import order — the order form itself,
+              // the proforma, and whatever the buyer signed to commit to a car
+              // that is not here yet. ?>
+        <?php if ($lead['stage'] === 'import_order' || leadDocsFor($db, $id, 'import_order')): ?>
+        <div class="card mb-3">
+            <div class="card-body">
+                <?php leadDocsPanel($db, $id, 'import_order', $__docW); ?>
             </div>
         </div>
         <?php endif; ?>

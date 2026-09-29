@@ -430,6 +430,58 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<?php
+// The paperwork the sale itself produced — what the buyer signed on the way to
+// owning the car, carried across when the lead was delivered. Kept apart from
+// the invoices and quotations below: those are what we issued, these are what
+// came back with a signature on them, and the question "what did they actually
+// agree to" is only ever answered by the second kind.
+require_once __DIR__ . '/../crm/_documents.php';
+$signedDocs = clientDocsFor($db, (int)$client['id']);
+$__docTypes = leadDocTypes();
+?>
+<?php if ($signedDocs): ?>
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="fa fa-file-signature me-2"></i>Signed Documents (<?= count($signedDocs) ?>)</span>
+        <span class="text-muted small">From their purchase paperwork</span>
+    </div>
+    <div class="card-body">
+        <div class="lead-docs-list mb-0">
+            <?php foreach ($signedDocs as $d):
+                $ext = strtolower(pathinfo((string)$d['file_name'], PATHINFO_EXTENSION));
+                $ico = in_array($ext, ['jpg','jpeg','png','gif','webp'], true) ? 'fa-file-image'
+                     : ($ext === 'pdf' ? 'fa-file-pdf'
+                     : (in_array($ext, ['xls','xlsx','csv'], true) ? 'fa-file-excel' : 'fa-file-lines'));
+            ?>
+            <div class="lead-doc">
+                <i class="fa <?= $ico ?> lead-doc-ico"></i>
+                <div class="lead-doc-main">
+                    <a href="<?= BASE_URL ?>/modules/crm/document_file.php?id=<?= (int)$d['id'] ?>&view=1"
+                       target="_blank" rel="noopener" class="lead-doc-title"><?= e((string)$d['title']) ?></a>
+                    <div class="lead-doc-meta">
+                        <?= e($__docTypes[$d['doc_type']] ?? 'Document') ?>
+                        <?php if (!empty($d['vehicle']) && trim((string)$d['vehicle']) !== ''): ?>
+                        &middot; <?= e(trim((string)$d['vehicle'])) ?>
+                        <?php endif; ?>
+                        <?php if ($sz = leadDocSize((int)$d['file_size'])): ?> &middot; <?= $sz ?><?php endif; ?>
+                        &middot; <?= date('j M Y', strtotime((string)$d['created_at'])) ?>
+                    </div>
+                    <?php if (!empty($d['notes'])): ?>
+                    <div class="lead-doc-note"><?= e((string)$d['notes']) ?></div>
+                    <?php endif; ?>
+                </div>
+                <div class="lead-doc-acts">
+                    <a href="<?= BASE_URL ?>/modules/crm/document_file.php?id=<?= (int)$d['id'] ?>"
+                       class="lead-doc-btn" title="Download"><i class="fa fa-download"></i></a>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Financial Documents: Invoices · Quotations · Receipts -->
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
