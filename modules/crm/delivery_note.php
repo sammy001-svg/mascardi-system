@@ -268,7 +268,7 @@ include __DIR__ . '/../../includes/header.php';
             <td style="color:#15803d;font-weight:700">KES <?= number_format($depositAmt, 0) ?>/-</td>
         </tr>
         <tr>
-            <th>Balance Settled</th>
+            <th>Balance To Be Settled</th>
             <td style="font-weight:700">
                 <?= $balance <= 0 ? '<span style="color:#15803d">Fully Paid</span>' : 'KES ' . number_format($balance, 0) . '/-' ?>
             </td>
