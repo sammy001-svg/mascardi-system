@@ -21,7 +21,8 @@ $st->execute([$id]);
 $stockTake = $st->fetch(PDO::FETCH_ASSOC);
 if (!$stockTake) die('Stock take record not found.');
 
-// All cars at the location, with confirmed status
+// Only inventory cars physically at the location — exclude delivered/sold cars
+// and client workshop cars (car_type = 'client'), which are not company stock.
 $items = $db->prepare("
     SELECT c.id, c.make, c.model, c.year, c.registration_number,
            c.chassis_number, c.color, c.status, c.car_type,
@@ -30,6 +31,8 @@ $items = $db->prepare("
     LEFT   JOIN stock_take_items sti
                ON sti.car_id = c.id AND sti.stock_take_id = ?
     WHERE  c.location_id = ?
+      AND  c.car_type != 'client'
+      AND  (c.status IS NULL OR c.status NOT IN ('delivered', 'sold', 'cancelled'))
     ORDER  BY confirmed DESC, c.make ASC, c.model ASC
 ");
 $items->execute([$id, $stockTake['location_id']]);
