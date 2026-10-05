@@ -40,11 +40,17 @@
 
     /* Status. Fixed, never themed, never used for a series. */
     --fin-good:     #0ca30c;
-    --fin-warning:  #fab219;
+    /* Amber, re-stepped twice. The original #fab219 measures 1.83:1 on white,
+       invisible as a bar fill. The obvious darker amber (#c2770a) fixed that
+       but sat 13.7 from the critical red in OKLab, under the floor of 15 that
+       labels do not excuse — and these two are adjacent rows on the standing
+       chart. This is 3.45:1 on white and 18.6 from the red. */
+    --fin-warning:  #a8860b;
     --fin-critical: #d03b3b;
     --fin-up-good:  #006300;
 }
 [data-theme="dark"] .fin {
+    --fin-warning:  #fab219;   /* 7.97:1 on #1e293b */
     --fin-surface:  #1e293b;
     --fin-plane:    #172033;
     --fin-ink:      #e2e8f0;
@@ -152,4 +158,23 @@
 .fin-empty{font-size:13px;color:var(--fin-muted)}
 details.fin-tv{margin-top:14px}
 details.fin-tv > summary{font-size:12px;color:var(--fin-muted);cursor:pointer}
+
+/* ── Dashboard additions ────────────────────────────────────────────────────
+   The credit dashboard needs a padded card body, a legend row in a card
+   header, a footnote under a set of bars, and the reserved status tones as
+   both a swatch and a bar fill. */
+.fin-pad{padding:15px 17px}
+.fin-card > header .hint{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.fin-key{display:inline-flex;align-items:center;font-size:11.5px;color:var(--fin-ink-2)}
+.fin-foot{margin-top:13px;padding-top:11px;border-top:1px solid var(--fin-ring);
+    font-size:12px;color:var(--fin-muted)}
+
+/* Status, reserved and never reused for a series. Each is only ever shown
+   next to its own word, so the colour reinforces the label rather than
+   replacing it. */
+.fin-tone-good{background:var(--fin-good)}
+.fin-tone-warning{background:var(--fin-warning)}
+.fin-tone-critical{background:var(--fin-critical)}
+.fin-tone-neutral{background:var(--fin-axis)}
+.fin-tone-legal{background:var(--fin-ink-2)}
 </style>

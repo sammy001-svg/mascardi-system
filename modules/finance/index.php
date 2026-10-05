@@ -1,657 +1,376 @@
 <?php
 /**
- * Finance & Accounts — the dashboard.
+ * The finance dashboard.
  *
- * Deliberately not another version of Reports → Financial. That screen answers
- * "how did we do", over a period, with year-on-year and profit per vehicle. It
- * is for looking back. This one answers "what is the position, and what needs
- * doing" — the questions an accountant has at nine in the morning.
+ * It used to answer everything: cash flow, expense composition, payment
+ * methods, deposits held, supplier commitments, sales splits. Finance did not
+ * read most of it, because the question they arrive with each morning is
+ * narrower and more urgent — who owes us money on credit, how much came in
+ * this month, and who has stopped paying. Four figures and four pictures, all
+ * of them about the credit book, and nothing else on the page.
  *
- * ON THE SHAPE OF IT
+ * Expenses, suppliers, vehicle costs and the full reports still exist on their
+ * own screens. A dashboard that tries to be all of them is one nobody reads.
  *
- * One filter row at the top scoping everything below it, then one hero figure,
- * then four tiles, then the charts. Every tile carries a delta against the
- * previous window of the same length, because a figure on its own says almost
- * nothing here: 625,000 in is good or bad entirely depending on what the month
- * before did.
- *
- * ON THE COLOUR
- *
- * Two jobs, two treatments, and neither picked by eye:
- *
- *   Cash in and cash out are two identities, so they take categorical slots 1
- *   and 2 — blue and orange, in fixed order, meaning the same thing in every
- *   chart on the page. Orange is money leaving, everywhere.
- *
- *   The ageing bands are ordered — not yet due, 1–30, 31–60, 60+ — so they take
- *   a single-hue ordinal ramp rather than four unrelated colours, which would
- *   claim they are four separate things rather than one thing getting worse.
- *
- * Both were run through the palette validator against this system's own
- * surfaces (#ffffff light, #1e293b dark) rather than assumed. The dark ordinal
- * ramp is a different set of steps from the light one, because the light one's
- * darkest step measures 1.81:1 against the dark surface and disappears into it.
- *
- * Status colours — good, warning, critical — are reserved for state and always
- * ship with an icon and a word, so nothing on this page is carried by colour
- * alone. Every chart has a table underneath it holding the same numbers.
+ * Two of the four pictures are canvases and two are plain HTML bars. That is
+ * not inconsistency: four ageing bands and five standings are short, ordered
+ * lists where the label and the figure have to be legible anyway, and once
+ * they are, a canvas adds a dependency and takes away selectable text.
  */
 
-require_once __DIR__ . '/_figures.php';
+require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/_credit.php';
+require_once __DIR__ . '/_dash.php';
 requireLogin();
 
-if (!finCanUse()) {
-    setFlash('danger', 'You do not have access to the finance dashboard.');
-    redirect(BASE_URL . '/index.php');
-}
+// The same gate as the rest of the credit book: whoever may read Receivables
+// may read the summary of it.
+(creditCanView() || canAccess('payments')) || die('Access denied.');
 
+$pageTitle = 'Finance';
 $db = getDB();
 
-// ── The period ───────────────────────────────────────────────────────────────
-// Every date comes from MySQL, because PHP runs UTC on this host and MySQL runs
-// EAT: a "today" worked out in PHP is three hours out, which on a day's takings
-// is the difference between right and wrong.
-$now   = (string)$db->query("SELECT DATE_FORMAT(NOW(), '%e %b %Y, %H:%i')")->fetchColumn();
-$today = (string)$db->query('SELECT CURDATE()')->fetchColumn();
+$due      = dashDueSoon($db, 7);
+$overdue  = dashOverdue($db);
+$got      = dashCollected($db);
+$book     = dashOutstanding($db);
+$months   = dashMonths($db, 12);
+$ageing   = dashAgeing($db);
+$standing = dashStanding($db);
+$top      = dashTopClients($db, 8);
+$asAt     = (string)($db->query("SELECT DATE_FORMAT(NOW(),'%W %e %M %Y, %H:%i')")->fetchColumn() ?: '');
 
-$ranges = [
-    'today' => ['Today',      $today, $today],
-    'week'  => ['This week',  (string)$db->query("SELECT DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)")->fetchColumn(), $today],
-    'month' => ['This month', (string)$db->query("SELECT DATE_FORMAT(CURDATE(),'%Y-%m-01')")->fetchColumn(), $today],
-    'year'  => ['This year',  (string)$db->query("SELECT DATE_FORMAT(CURDATE(),'%Y-01-01')")->fetchColumn(), $today],
-];
+$ageMax   = max(array_map(static fn ($b) => (float)$b['amount'], $ageing)) ?: 1.0;
+$standMax = max(array_map(static fn ($b) => (int)$b['n'], $standing)) ?: 1;
 
-$key = array_key_exists($_GET['period'] ?? '', $ranges) ? $_GET['period'] : 'month';
-[$periodLabel, $from, $to] = $ranges[$key];
-
-$prev = finPrevPeriod($db, $from, $to);
-
-// ── The figures ──────────────────────────────────────────────────────────────
-$cash     = finCashFlow($db, $from, $to);
-$cashPrev = finCashFlow($db, $prev['from'], $prev['to']);
-
-$dIn  = finDelta($cash['in'],  $cashPrev['in']);
-$dOut = finDelta($cash['out'], $cashPrev['out']);
-$dNet = finDelta($cash['net'], $cashPrev['net']);
-
-$sparkIn  = finSpark($db, 'in',  $from, $to);
-$sparkOut = finSpark($db, 'out', $from, $to);
-
-$byMethod   = finByMethod($db, $from, $to);
-$recv       = finReceivables($db);
-$overdue    = finOverdueInvoices($db, 8);
-$arrears    = finArrears($db, 6);
-$held       = finDepositsHeld($db);
-$committed  = finCommitments($db);
-$pending    = finPendingPayments($db);
-$categories = finExpenseCategories($db, $from, $to, 6);
-
-// Cars handed over in this period, split by whether the money is actually in.
-// A delivered car with no credit agreement is a completed sale; one with an
-// agreement is a sale whose money is still owed, and counting the two together
-// overstates what the business has been paid.
-$sales      = creditSalesSplit($db, $from, $to);
-$creditBook = creditBookTotals(creditBook($db));
-$series     = finMonthly($db, 12);
-
-$methodLabels = ['mpesa' => 'M-Pesa', 'bank' => 'Bank transfer', 'cheque' => 'Cheque', 'cash' => 'Cash'];
-$methodIcons  = ['mpesa' => 'fa-mobile-screen', 'bank' => 'fa-building-columns',
-                 'cheque' => 'fa-money-check', 'cash' => 'fa-money-bill-wave'];
-
-$ageBands = [
-    ['Not yet due', $recv['current'], 'The invoice date has not passed'],
-    ['1–30 days',   $recv['d30'],     'A month or less overdue'],
-    ['31–60 days',  $recv['d60'],     'Between one and two months overdue'],
-    ['60+ days',    $recv['d90'],     'More than two months overdue'],
-];
-
-/** A signed delta, in words a person reads, with its direction. */
-$delta = function (array $d, bool $upIsGood = true): array {
-    if ($d['pct'] === null) {
-        return ['text' => 'no earlier figure', 'tone' => 'flat', 'icon' => 'fa-minus'];
-    }
-    if ($d['dir'] === 'flat') {
-        return ['text' => 'level', 'tone' => 'flat', 'icon' => 'fa-minus'];
-    }
-
-    $up   = $d['dir'] === 'up';
-    $good = $up === $upIsGood;
-
-    return [
-        'text' => sprintf('%+.0f%%', $d['pct']),
-        'tone' => $good ? 'good' : 'bad',
-        'icon' => $up ? 'fa-arrow-up' : 'fa-arrow-down',
-    ];
-};
-
-$pageTitle = 'Finance & Accounts';
 include __DIR__ . '/../../includes/header.php';
+include __DIR__ . '/_style.php';
 ?>
 
-<?php include __DIR__ . '/_style.php'; ?>
+<div class="fin fin-body">
 
-<div class="fin">
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-1">
+    <div>
+        <h5 class="mb-1"><i class="fa fa-file-contract me-2"></i>The credit book</h5>
+        <div class="fin-asat">As at <?= e($asAt) ?></div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="<?= BASE_URL ?>/modules/finance/receivables.php" class="btn btn-sm btn-primary">
+            <i class="fa fa-list me-1"></i>Receivables
+        </a>
+        <a href="<?= BASE_URL ?>/modules/finance/month.php" class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-calendar-check me-1"></i>This month
+        </a>
+    </div>
+</div>
 
-    <!-- One filter row, scoping everything below it -->
-    <div class="fin-filters">
-        <div>
-            <h5 class="mb-1" style="color:var(--fin-ink)">
-                <i class="fa fa-scale-balanced me-2" style="color:var(--fin-in)"></i>Finance &amp; Accounts
-            </h5>
-            <div class="fin-asat">As at <?= e($now) ?></div>
-        </div>
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-            <div class="btn-group btn-group-sm" role="group" aria-label="Period">
-                <?php foreach ($ranges as $k => [$lbl, , ]): ?>
-                <a class="btn btn-<?= $k === $key ? 'primary' : 'outline-secondary' ?>"
-                   href="?period=<?= $k ?>"><?= e($lbl) ?></a>
-                <?php endforeach; ?>
-            </div>
-            <a class="btn btn-outline-secondary btn-sm" href="<?= BASE_URL ?>/modules/reports/financial.php">
-                <i class="fa fa-chart-line me-1"></i>Full report
-            </a>
+<?php // Four numbers, not four charts: a single value has no shape to show. ?>
+<div class="fin-tiles">
+    <div class="fin-tile">
+        <div class="lbl">Due in the next <?= (int)$due['days'] ?> days</div>
+        <div class="val"><?= e(dashShort($due['amount'])) ?></div>
+        <div class="sub">
+            <?= (int)$due['count'] ?> instalment<?= $due['count'] === 1 ? '' : 's' ?>
+            across <?= (int)$due['accounts'] ?> account<?= $due['accounts'] === 1 ? '' : 's' ?>
         </div>
     </div>
 
-    <!-- What is waiting on somebody. Icon + words, never colour alone. -->
-    <?php if ($pending['count'] > 0 || $recv['d90'] > 0): ?>
-    <div class="d-flex flex-column gap-2 mb-3">
-        <?php if ($pending['count'] > 0): ?>
-        <div class="fin-note warning">
-            <i class="fa fa-triangle-exclamation"></i>
-            <div>
-                <strong>Waiting to be confirmed.</strong>
-                <?= $pending['count'] ?> payment<?= $pending['count'] === 1 ? '' : 's' ?>
-                worth <?= e(money($pending['total'])) ?>
-                <?= $pending['count'] === 1 ? 'is' : 'are' ?> keyed in but not confirmed, so
-                <?= $pending['count'] === 1 ? 'it is' : 'they are' ?> not counted as cash
-                anywhere on this page.
-                <a href="<?= BASE_URL ?>/modules/payments/index.php?status=pending">Confirm
-                    <?= $pending['count'] === 1 ? 'it' : 'them' ?></a>.
-            </div>
-        </div>
-        <?php endif; ?>
-        <?php if ($recv['d90'] > 0): ?>
-        <div class="fin-note critical">
-            <i class="fa fa-circle-exclamation"></i>
-            <div>
-                <strong>Owed for more than two months.</strong>
-                <?= e(money($recv['d90'])) ?> has been outstanding beyond sixty days.
-            </div>
-        </div>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
-    <!-- The hero figure: exactly one -->
-    <div class="fin-hero">
-        <div>
-            <div class="lbl">Net cash · <?= e($periodLabel) ?></div>
-            <div class="fig" title="<?= e(money($cash['net'])) ?>">
-                KES <?= e(finShort($cash['net'])) ?>
-            </div>
-            <div class="note">
-                <?php $dh = $delta($dNet); ?>
-                <span class="fin-d <?= $dh['tone'] ?>">
-                    <i class="fa <?= $dh['icon'] ?>"></i><?= e($dh['text']) ?>
-                </span>
-                against <?= e(money($cashPrev['net'])) ?> over the
-                <?= e(finRangeWords($db, $prev['from'], $prev['to'])) ?> before
-            </div>
-        </div>
-        <div class="text-end">
-            <div class="lbl">Owed to us</div>
-            <div style="font-size:23px;font-weight:600;color:var(--fin-ink);margin-top:5px"
-                 title="<?= e(money($recv['owed'])) ?>">
-                KES <?= e(finShort($recv['owed'])) ?>
-            </div>
-            <div class="note">
-                across <?= (int)$recv['count'] ?> unpaid invoice<?= $recv['count'] === 1 ? '' : 's' ?>
-            </div>
-        </div>
-    </div>
-
-    <!-- Tiles -->
-    <div class="fin-tiles">
-        <?php
-        $tiles = [
-            ['Money in',            $cash['in'],  $delta($dIn,  true),  'Confirmed payments',  $sparkIn,  'in'],
-            ['Money out',           $cash['out'], $delta($dOut, false), 'Recorded expenses',   $sparkOut, 'out'],
-            ['Held for customers',  $held['total'], null,
-                $held['count'] . ' reserved vehicle' . ($held['count'] === 1 ? '' : 's'), [], 'in'],
-            ['Ordered, not received', $committed['total'], null,
-                $committed['count'] . ' purchase order' . ($committed['count'] === 1 ? '' : 's'), [], 'out'],
-        ];
-        foreach ($tiles as [$lbl, $val, $d, $sub, $spark, $hue]): ?>
-        <div class="fin-tile">
-            <div class="lbl"><?= e($lbl) ?></div>
-            <div class="val" title="<?= e(money($val)) ?>">KES <?= e(finShort($val)) ?></div>
-            <div class="sub">
-                <?php if ($d): ?>
-                <span class="fin-d <?= $d['tone'] ?>"><i class="fa <?= $d['icon'] ?>"></i><?= e($d['text']) ?></span>
-                <span class="text-nowrap">· <?= e($sub) ?></span>
-                <?php else: ?>
-                <?= e($sub) ?>
-                <?php endif; ?>
-            </div>
-            <?php if ($spark && count($spark) > 1): ?>
-            <div class="fin-spark" data-spark="<?= e(implode(',', array_map('intval', $spark))) ?>"
-                 data-hue="<?= e($hue) ?>"></div>
+    <div class="fin-tile">
+        <div class="lbl">Collected this month</div>
+        <div class="val"><?= e(dashShort($got['amount'])) ?></div>
+        <div class="sub">
+            <?= (int)$got['payments'] ?> payment<?= $got['payments'] === 1 ? '' : 's' ?>
+            <?php if ($got['delta'] !== null): ?>
+            &middot;
+            <span class="fin-d <?= $got['delta'] >= 0 ? 'good' : 'bad' ?>">
+                <i class="fa fa-arrow-<?= $got['delta'] >= 0 ? 'up' : 'down' ?>"></i><?php
+                ?><?= number_format(abs($got['delta']), 0) ?>%
+            </span>
+            on last month
+            <?php else: ?>
+            &middot; nothing last month to compare with
             <?php endif; ?>
         </div>
-        <?php endforeach; ?>
     </div>
 
-    <div class="fin-grid2">
-        <div class="fin-stack">
-
-            <!-- Cash in and out: two identities, two categorical slots, one axis -->
-            <div class="fin-card">
-                <header>
-                    <h2>Money in and out</h2>
-                    <span class="hint">Last twelve months</span>
-                </header>
-                <div class="fin-body">
-                    <div class="fin-plot"><canvas id="finFlow"></canvas></div>
-                    <details class="fin-tv">
-                        <summary>Show these figures as a table</summary>
-                        <table class="fin-table mt-2">
-                            <thead><tr><th>Month</th><th class="num">In</th><th class="num">Out</th><th class="num">Net</th></tr></thead>
-                            <tbody>
-                            <?php foreach (array_reverse($series) as $m): ?>
-                                <tr>
-                                    <td><?= e($m['label']) ?></td>
-                                    <td class="num"><?= e(number_format($m['in'])) ?></td>
-                                    <td class="num"><?= e(number_format($m['out'])) ?></td>
-                                    <td class="num"><?= e(number_format($m['in'] - $m['out'])) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </details>
-                </div>
-            </div>
-
-            <!-- Ageing: ordered bands, one hue, light to dark -->
-            <div class="fin-card">
-                <header>
-                    <h2>How long it has been owed</h2>
-                    <a class="hint" href="<?= BASE_URL ?>/modules/invoices/index.php?status=unpaid">All unpaid</a>
-                </header>
-                <div class="fin-body">
-                    <?php if ($recv['owed'] <= 0): ?>
-                        <p class="fin-empty mb-0">Nothing is outstanding.</p>
-                    <?php else: ?>
-                    <div class="fin-age">
-                        <?php foreach ($ageBands as $i => [$lbl, $amt, $why]): ?>
-                        <div class="fin-age-row" title="<?= e($why) ?>">
-                            <span class="band"><?= e($lbl) ?></span>
-                            <span class="track">
-                                <span style="width:<?= $recv['owed'] > 0 ? max(1, round($amt / $recv['owed'] * 100)) : 0 ?>%;
-                                             background:var(--fin-age-<?= $i + 1 ?>)"></span>
-                            </span>
-                            <span class="amt"><?= e($amt > 0 ? money($amt) : '—') ?></span>
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <!-- Who owes, worst first -->
-            <div class="fin-card">
-                <header><h2>Overdue invoices</h2><span class="hint">Oldest first</span></header>
-                <?php if (!$overdue): ?>
-                    <div class="fin-body"><p class="fin-empty mb-0">Nothing is overdue.</p></div>
-                <?php else: ?>
-                <table class="fin-table">
-                    <thead><tr><th>Invoice</th><th>Customer</th><th class="num">Owed</th><th class="num">Late by</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($overdue as $o): ?>
-                        <tr>
-                            <td><a href="<?= BASE_URL ?>/modules/invoices/view.php?id=<?= (int)$o['id'] ?>"><?= e((string)$o['invoice_number']) ?></a></td>
-                            <td><?= e((string)($o['customer_name'] ?: '—')) ?></td>
-                            <td class="num"><?= e(money((float)$o['owed'])) ?></td>
-                            <td class="num fin-late"><?= (int)$o['days_over'] ?> days</td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <?php endif; ?>
-            </div>
+    <?php // Status colour, with the word beside it — never colour alone. ?>
+    <div class="fin-tile">
+        <div class="lbl">
+            <?php if ($overdue['amount'] > 0.009): ?>
+            <i class="fa fa-triangle-exclamation me-1" style="color:var(--fin-critical)"></i>
+            <?php endif; ?>
+            Overdue
         </div>
-
-        <div class="fin-stack">
-
-            <!-- Where it went: one series, one colour -->
-            <div class="fin-card">
-                <header><h2>Where it went</h2><span class="hint"><?= e($periodLabel) ?></span></header>
-                <div class="fin-body">
-                    <?php if (!$categories): ?>
-                        <p class="fin-empty mb-0">Nothing was recorded over this period.</p>
-                    <?php else: ?>
-                    <div class="fin-plot-sm"><canvas id="finCats"></canvas></div>
-                    <details class="fin-tv">
-                        <summary>Show these figures as a table</summary>
-                        <table class="fin-table mt-2">
-                            <thead><tr><th>Category</th><th class="num">Amount</th><th class="num">Entries</th></tr></thead>
-                            <tbody>
-                            <?php foreach ($categories as $c): ?>
-                                <tr>
-                                    <td><?= e(ucfirst(str_replace('_', ' ', (string)$c['category']))) ?></td>
-                                    <td class="num"><?= e(number_format((float)$c['total'])) ?></td>
-                                    <td class="num"><?= (int)$c['n'] ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </details>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <!-- How it arrived -->
-            <div class="fin-card">
-                <header><h2>How it came in</h2><span class="hint"><?= e($periodLabel) ?></span></header>
-                <div class="fin-body">
-                    <?php if (!$byMethod): ?>
-                        <p class="fin-empty mb-0">Nothing came in over this period.</p>
-                    <?php else: foreach ($byMethod as $method => $d): ?>
-                    <div class="fin-meth">
-                        <span>
-                            <i class="fa <?= $methodIcons[$method] ?? 'fa-coins' ?> me-2" style="color:var(--fin-muted)"></i>
-                            <?= e($methodLabels[$method] ?? ucfirst((string)$method)) ?>
-                            <span style="color:var(--fin-muted)">· <?= (int)$d['n'] ?></span>
-                        </span>
-                        <strong style="font-variant-numeric:tabular-nums"><?= e(money($d['total'])) ?></strong>
-                    </div>
-                    <?php endforeach; endif; ?>
-                </div>
-            </div>
-
-            <!-- Cars out, and whether the money is in -->
-            <div class="fin-card">
-                <header>
-                    <h2>Cars handed over</h2>
-                    <span class="hint"><?= e($periodLabel) ?></span>
-                </header>
-                <div class="fin-body">
-                    <?php if (!$sales['sold']['count'] && !$sales['credit']['count']): ?>
-                        <p class="fin-empty mb-0">No vehicle was handed over in this period.</p>
-                    <?php else: ?>
-                    <div class="d-flex justify-content-between align-items-baseline mb-2">
-                        <div>
-                            <div style="font-size:19px;font-weight:600;color:var(--fin-ink)">
-                                <?= (int)$sales['sold']['count'] ?> sold
-                            </div>
-                            <div class="rb-sub" style="font-size:12px;color:var(--fin-muted)">
-                                paid for · <?= e(money($sales['sold']['value'])) ?>
-                            </div>
-                        </div>
-                        <div class="text-end">
-                            <div style="font-size:19px;font-weight:600;color:var(--fin-ink)">
-                                <?= (int)$sales['credit']['count'] ?> on credit
-                            </div>
-                            <div class="rb-sub" style="font-size:12px;color:var(--fin-muted)">
-                                <?= e(money($sales['credit']['outstanding'])) ?> still owed
-                            </div>
-                        </div>
-                    </div>
-                    <?php
-                    $total = $sales['sold']['count'] + $sales['credit']['count'];
-                    $pct   = $total > 0 ? round($sales['sold']['count'] / $total * 100) : 0;
-                    ?>
-                    <div style="height:9px;border-radius:5px;background:var(--fin-out);overflow:hidden">
-                        <span style="display:block;height:100%;width:<?= (int)$pct ?>%;
-                                     background:var(--fin-in);border-radius:5px"></span>
-                    </div>
-                    <p style="font-size:12.5px;color:var(--fin-ink-2);margin:12px 0 0">
-                        A car handed over on credit is a sale, but not money in the bank. It counts
-                        here as sold only once nothing is owed against it.
-                    </p>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <!-- The receivables book -->
-            <?php if (creditCanView() && $creditBook['accounts'] > 0): ?>
-            <div class="fin-card">
-                <header>
-                    <h2>Owed on credit</h2>
-                    <a class="hint" href="<?= BASE_URL ?>/modules/finance/receivables.php">The book</a>
-                </header>
-                <div class="fin-body">
-                    <div class="d-flex justify-content-between align-items-baseline">
-                        <div>
-                            <div style="font-size:20px;font-weight:600;color:var(--fin-ink)"
-                                 title="<?= e(money($creditBook['outstanding'])) ?>">
-                                KES <?= e(finShort($creditBook['outstanding'])) ?>
-                            </div>
-                            <div style="font-size:12px;color:var(--fin-muted)">
-                                across <?= (int)$creditBook['accounts'] ?> account<?= $creditBook['accounts'] === 1 ? '' : 's' ?>
-                            </div>
-                        </div>
-                        <?php if ($creditBook['overdue'] > 0): ?>
-                        <div class="text-end">
-                            <div style="font-size:16px;font-weight:600;color:var(--fin-critical)">
-                                <?= e(money($creditBook['overdue'])) ?>
-                            </div>
-                            <div style="font-size:12px;color:var(--fin-muted)">
-                                overdue on <?= (int)$creditBook['overdue_accounts'] ?>
-                            </div>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                    <?php if ($creditBook['legal'] > 0): ?>
-                    <p style="font-size:12.5px;color:var(--fin-ink-2);margin:12px 0 0">
-                        <i class="fa fa-gavel me-1"></i>
-                        <?= e(money($creditBook['legal'])) ?> of that is with the lawyers.
-                    </p>
-                    <?php endif; ?>
-                </div>
-            </div>
+        <div class="val" <?= $overdue['amount'] > 0.009 ? 'style="color:var(--fin-critical)"' : '' ?>>
+            <?= e(dashShort($overdue['amount'])) ?>
+        </div>
+        <div class="sub">
+            <?php if ($overdue['amount'] > 0.009): ?>
+            <?= (int)$overdue['accounts'] ?> account<?= $overdue['accounts'] === 1 ? '' : 's' ?>
+            &middot; worst <?= (int)$overdue['worst'] ?> days late
+            <?php else: ?>
+            Nothing is late
             <?php endif; ?>
+        </div>
+    </div>
 
-            <!-- Not ours -->
-            <div class="fin-card">
-                <header><h2>Money we are holding</h2></header>
-                <div class="fin-body">
-                    <p style="font-size:13px;color:var(--fin-ink-2);margin:0">
-                        <?= e(money($held['total'])) ?> in deposits on
-                        <?= (int)$held['count'] ?> reserved vehicle<?= $held['count'] === 1 ? '' : 's' ?>.
-                        This is the customer's money until the car is handed over — if a reservation
-                        falls through it goes back, so it is not revenue and should not be spent as
-                        though it were.
-                    </p>
-                    <a class="btn btn-outline-secondary btn-sm mt-3"
-                       href="<?= BASE_URL ?>/modules/reservations/index.php">Reservations</a>
-                </div>
-            </div>
-
-            <?php if ($arrears): ?>
-            <div class="fin-card">
-                <header><h2>Instalments in arrears</h2></header>
-                <table class="fin-table">
-                    <thead><tr><th>Due</th><th class="num">Owed</th><th class="num">Late by</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($arrears as $a): ?>
-                        <tr>
-                            <td><?= e(fmtDate((string)$a['due_date'], 'j M Y')) ?></td>
-                            <td class="num"><?= e(money((float)$a['owed'])) ?></td>
-                            <td class="num fin-late"><?= (int)$a['days_over'] ?> days</td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php endif; ?>
+    <div class="fin-tile">
+        <div class="lbl">Still owed on credit</div>
+        <div class="val"><?= e(dashShort($book['amount'])) ?></div>
+        <div class="sub">
+            across <?= (int)$book['accounts'] ?> live agreement<?= $book['accounts'] === 1 ? '' : 's' ?>
         </div>
     </div>
 </div>
 
+<?php // ── Twelve months ─────────────────────────────────────────────────────
+      // Two measures in the same unit, so one axis. Collected and still-owed
+      // are different things rather than more or less of one thing, so the
+      // colour job is identity and the pair is the validated categorical one. ?>
+<div class="fin-card">
+    <header>
+        <h2>Collected each month, and what that month is still owed</h2>
+        <span class="hint">
+            <span class="fin-key"><i class="fin-swatch" style="background:var(--fin-in)"></i>Collected</span>
+            <span class="fin-key"><i class="fin-swatch" style="background:var(--fin-out)"></i>Still owed</span>
+        </span>
+    </header>
+    <div class="fin-pad">
+        <div class="fin-plot"><canvas id="finMonths"></canvas></div>
+    </div>
+    <details class="fin-tv">
+        <summary>Read it as a table</summary>
+        <table class="fin-table">
+            <thead><tr><th>Month</th><th class="num">Collected</th><th class="num">Still owed</th></tr></thead>
+            <tbody>
+            <?php foreach ($months as $m): ?>
+                <tr>
+                    <td><?= e($m['label']) ?></td>
+                    <td class="num"><?= number_format($m['collected']) ?></td>
+                    <td class="num"><?= number_format($m['owed']) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </details>
+</div>
+
+<div class="fin-grid2">
+
+    <?php // ── Arrears ageing ────────────────────────────────────────────────
+          // Ordered magnitude, so one hue darkening with lateness. Drawn as
+          // rows rather than on a canvas: four bands need their band name and
+          // their figure legible regardless, and once both are text the colour
+          // is reinforcement rather than the only thing carrying the meaning. ?>
+    <div class="fin-card">
+        <header><h2>How late the arrears are</h2></header>
+        <div class="fin-pad">
+            <?php if ($overdue['amount'] > 0.009): ?>
+            <div class="fin-age">
+                <?php foreach ($ageing as $i => $b): ?>
+                <div class="fin-age-row">
+                    <div class="band">
+                        <i class="fin-swatch" style="background:var(--fin-age-<?= $i + 1 ?>)"></i><?php
+                        ?><?= e($b['label']) ?>
+                    </div>
+                    <div class="track" role="img"
+                         aria-label="<?= e($b['label']) ?>: KES <?= number_format($b['amount']) ?>">
+                        <span style="width:<?= round($b['amount'] / $ageMax * 100, 1) ?>%;
+                                     background:var(--fin-age-<?= $i + 1 ?>)"></span>
+                    </div>
+                    <div class="amt"><?= number_format($b['amount']) ?></div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="fin-foot">
+                <?= (int)$overdue['count'] ?> unpaid instalment<?= $overdue['count'] === 1 ? '' : 's' ?>
+                behind, oldest <?= (int)$overdue['worst'] ?> days
+            </div>
+            <?php else: ?>
+            <div class="fin-empty"><i class="fa fa-circle-check me-2"></i>Nothing is overdue.</div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <?php // ── Where the accounts stand ──────────────────────────────────────
+          // State, so the reserved status colours, and every row says in words
+          // which state it is. ?>
+    <div class="fin-card">
+        <header><h2>Where the credit accounts stand</h2></header>
+        <div class="fin-pad">
+            <?php if (array_sum(array_column($standing, 'n')) > 0): ?>
+            <div class="fin-age">
+                <?php foreach ($standing as $b): ?>
+                <div class="fin-age-row">
+                    <div class="band">
+                        <i class="fin-swatch fin-tone-<?= e($b['tone']) ?>"></i><?= e($b['label']) ?>
+                    </div>
+                    <div class="track" role="img"
+                         aria-label="<?= e($b['label']) ?>: <?= (int)$b['n'] ?> accounts">
+                        <span class="fin-tone-<?= e($b['tone']) ?>"
+                              style="width:<?= round($b['n'] / $standMax * 100, 1) ?>%"></span>
+                    </div>
+                    <div class="amt"><?= (int)$b['n'] ?></div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <div class="fin-empty"><i class="fa fa-circle-info me-2"></i>No credit agreements yet.</div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+</div>
+
+<?php // ── Who owes the most ─────────────────────────────────────────────────
+      // One series, so no legend: the heading names the measure. The table
+      // underneath is both the way into each account and the table view the
+      // chart owes a reader who cannot use it. ?>
+<div class="fin-card">
+    <header>
+        <h2>Credit clients who owe the most</h2>
+        <span class="hint"><a href="<?= BASE_URL ?>/modules/finance/receivables.php">See all &rarr;</a></span>
+    </header>
+    <?php if ($top): ?>
+    <div class="fin-pad">
+        <div style="position:relative;height:<?= max(150, count($top) * 34) ?>px">
+            <canvas id="finTop"></canvas>
+        </div>
+    </div>
+    <table class="fin-table">
+        <thead><tr><th>Client</th><th class="num">Still owed</th><th class="num">Of which overdue</th><th></th></tr></thead>
+        <tbody>
+        <?php foreach ($top as $r): ?>
+            <tr>
+                <td><?= e((string)$r['name']) ?></td>
+                <td class="num"><?= number_format((float)$r['owed']) ?></td>
+                <td class="num">
+                    <?php if ((float)$r['overdue'] > 0.009): ?>
+                    <span class="fin-late"><i class="fa fa-triangle-exclamation me-1"></i><?php
+                        ?><?= number_format((float)$r['overdue']) ?></span>
+                    <?php else: ?>&mdash;<?php endif; ?>
+                </td>
+                <td class="num">
+                    <a href="<?= BASE_URL ?>/modules/finance/account.php?id=<?= (int)$r['id'] ?>">Open</a>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php else: ?>
+    <div class="fin-pad">
+        <div class="fin-empty"><i class="fa fa-circle-info me-2"></i>Nobody is on credit at the moment.</div>
+    </div>
+    <?php endif; ?>
+</div>
+
+</div><!-- /fin -->
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function () {
+    if (typeof Chart === 'undefined') return;
     var root = document.querySelector('.fin');
     if (!root) return;
 
-    /* Colours are read from the CSS roles rather than written twice, so the
-       theme toggle changes one place and the charts follow. */
-    function role(name) {
-        return getComputedStyle(root).getPropertyValue('--fin-' + name).trim();
-    }
-
+    /* The colour roles are read off the stylesheet rather than repeated here.
+       Dark mode redefines the same names, so the charts follow the theme
+       without a second set of hexes to keep in step with the first. */
+    function tone(n) { return getComputedStyle(root).getPropertyValue('--fin-' + n).trim(); }
     function shortKes(v) {
         var a = Math.abs(v), s = v < 0 ? '-' : '';
         if (a >= 1e6) return s + (a / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M';
         if (a >= 1e3) return s + Math.round(a / 1e3) + 'K';
-        return s + a;
+        return s + Math.round(a);
     }
-    function fullKes(v) {
-        return 'KES ' + Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    function fullKes(v) { return 'KES ' + Math.round(v).toLocaleString(); }
+
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    Chart.defaults.font.size   = 11.5;
+    Chart.defaults.color       = tone('muted');
+    Chart.defaults.animation   = { duration: 300 };
+
+    /* Grid and axes stay recessive: the data is the thing with colour in it. */
+    function xy(extra) {
+        return Object.assign({
+            grid:   { color: tone('grid'), drawTicks: false },
+            border: { display: false },
+            ticks:  { color: tone('muted'), padding: 6 }
+        }, extra || {});
     }
+    var hover = {
+        backgroundColor: tone('ink'), titleColor: tone('surface'),
+        bodyColor: tone('surface'), padding: 9, cornerRadius: 6, boxPadding: 4
+    };
 
-    var charts = [];
-
-    function baseScales() {
-        return {
-            x: {
-                grid: { display: false },
-                border: { color: role('axis') },
-                ticks: { color: role('muted'), font: { size: 11 } }
+    // ── Twelve months, collected against what that month still owes ────────
+    var m = <?= json_encode($months, JSON_UNESCAPED_UNICODE) ?>;
+    var elM = document.getElementById('finMonths');
+    if (elM && m.length) {
+        new Chart(elM, {
+            type: 'bar',
+            data: {
+                labels: m.map(function (x) { return x.label; }),
+                datasets: [
+                    { label: 'Collected',  data: m.map(function (x) { return x.collected; }),
+                      backgroundColor: tone('in'),  borderRadius: 4, borderSkipped: 'bottom',
+                      maxBarThickness: 15 },
+                    { label: 'Still owed', data: m.map(function (x) { return x.owed; }),
+                      backgroundColor: tone('out'), borderRadius: 4, borderSkipped: 'bottom',
+                      maxBarThickness: 15 }
+                ]
             },
-            y: {
-                beginAtZero: true,
-                /* Hairline, solid, one shade off the surface. Never dashed. */
-                grid: { color: role('grid'), drawTicks: false },
-                border: { display: false },
-                ticks: { color: role('muted'), font: { size: 11 }, callback: shortKes }
-            }
-        };
-    }
-
-    function tooltip() {
-        return {
-            backgroundColor: role('surface'),
-            titleColor: role('ink'),
-            bodyColor: role('ink-2'),
-            borderColor: role('ring'),
-            borderWidth: 1,
-            padding: 10,
-            displayColors: true,
-            callbacks: {
-                label: function (c) { return ' ' + c.dataset.label + ': ' + fullKes(c.parsed.y ?? c.parsed.x); }
-            }
-        };
-    }
-
-    function build() {
-        charts.forEach(function (c) { c.destroy(); });
-        charts = [];
-
-        var flow = document.getElementById('finFlow');
-        if (flow) {
-            var data = <?= json_encode($series, JSON_UNESCAPED_UNICODE) ?>;
-            charts.push(new Chart(flow, {
-                type: 'bar',
-                data: {
-                    labels: data.map(function (d) { return d.label; }),
-                    datasets: [
-                        { label: 'In',  data: data.map(function (d) { return d.in; }),
-                          backgroundColor: role('in'),
-                          /* 4px rounded data-ends, anchored to the baseline. */
-                          borderRadius: 4, borderSkipped: 'bottom',
-                          /* A 2px surface gap between adjacent bars, not a border. */
-                          borderColor: role('surface'), borderWidth: { top: 0, left: 1, right: 1, bottom: 0 } },
-                        { label: 'Out', data: data.map(function (d) { return d.out; }),
-                          backgroundColor: role('out'),
-                          borderRadius: 4, borderSkipped: 'bottom',
-                          borderColor: role('surface'), borderWidth: { top: 0, left: 1, right: 1, bottom: 0 } }
-                    ]
+            options: {
+                maintainAspectRatio: false,
+                /* Surface left between neighbouring bars, so two fills never
+                   touch and read as one block. */
+                datasets: { bar: { categoryPercentage: 0.72, barPercentage: 0.84 } },
+                plugins: {
+                    legend:  { display: false },   // drawn in the card header instead
+                    tooltip: Object.assign({}, hover, { callbacks: { label: function (c) {
+                        return c.dataset.label + ': ' + fullKes(c.parsed.y); } } })
                 },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        /* Two series, so a legend is always present. */
-                        legend: { position: 'bottom', labels: { color: role('ink-2'), boxWidth: 10,
-                                  boxHeight: 10, usePointStyle: true, pointStyle: 'rectRounded' } },
-                        tooltip: tooltip()
-                    },
-                    scales: baseScales()
+                scales: {
+                    x: xy({ grid: { display: false } }),
+                    y: xy({ beginAtZero: true, ticks: { color: tone('muted'), padding: 6,
+                            callback: function (v) { return shortKes(v); } } })
                 }
-            }));
-        }
-
-        var cats = document.getElementById('finCats');
-        if (cats) {
-            var c = <?= json_encode(array_map(static fn ($r) => [
-                'label' => ucfirst(str_replace('_', ' ', (string)$r['category'])),
-                'total' => (float)$r['total'],
-            ], $categories), JSON_UNESCAPED_UNICODE) ?>;
-
-            charts.push(new Chart(cats, {
-                type: 'bar',
-                data: {
-                    labels: c.map(function (d) { return d.label; }),
-                    /* One series, so one colour for every bar — never a ramp,
-                       which would double-encode the length as hue. */
-                    datasets: [{ label: 'Spent', data: c.map(function (d) { return d.total; }),
-                                 backgroundColor: role('out'), borderRadius: 4,
-                                 borderSkipped: 'start' }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                        /* One series needs no legend box — the card title names it. */
-                        legend: { display: false },
-                        tooltip: tooltip()
-                    },
-                    scales: {
-                        x: { beginAtZero: true, grid: { color: role('grid'), drawTicks: false },
-                             border: { display: false },
-                             ticks: { color: role('muted'), font: { size: 11 }, callback: shortKes } },
-                        y: { grid: { display: false }, border: { color: role('axis') },
-                             ticks: { color: role('ink-2'), font: { size: 11.5 } } }
-                    }
-                }
-            }));
-        }
-
-        /* Sparklines: a de-emphasised line with the last point accented. Drawn
-           as inline SVG rather than a Chart.js instance per tile — four more
-           canvases for twenty-six pixels of trend is not a fair trade. */
-        document.querySelectorAll('[data-spark]').forEach(function (el) {
-            var pts = el.getAttribute('data-spark').split(',').map(Number);
-            if (pts.length < 2) return;
-
-            var w = el.clientWidth || 160, h = 26, max = Math.max.apply(null, pts) || 1;
-            var step = w / (pts.length - 1);
-            var d = pts.map(function (p, i) {
-                return (i ? 'L' : 'M') + (i * step).toFixed(1) + ' ' + (h - (p / max) * (h - 3) - 1.5).toFixed(1);
-            }).join(' ');
-
-            var hue  = role(el.getAttribute('data-hue') === 'out' ? 'out' : 'in');
-            var last = pts[pts.length - 1];
-
-            el.innerHTML =
-                '<svg width="100%" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" ' +
-                'preserveAspectRatio="none" aria-hidden="true">' +
-                '<path d="' + d + '" fill="none" stroke="' + hue + '" stroke-opacity=".35" ' +
-                'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
-                '<circle cx="' + (w - 2) + '" cy="' + (h - (last / max) * (h - 3) - 1.5).toFixed(1) +
-                '" r="2.5" fill="' + hue + '"/></svg>';
+            }
         });
     }
 
-    build();
-
-    /* The theme toggle swaps the CSS roles; the charts have to be told. */
-    new MutationObserver(build).observe(document.documentElement, {
-        attributes: true, attributeFilter: ['data-theme']
-    });
+    // ── Who owes the most: one series, one hue, no legend ──────────────────
+    var tp = <?= json_encode(array_map(static fn ($r) => [
+                  'name' => (string)$r['name'], 'owed' => (float)$r['owed'],
+              ], $top), JSON_UNESCAPED_UNICODE) ?>;
+    var elT = document.getElementById('finTop');
+    if (elT && tp.length) {
+        new Chart(elT, {
+            type: 'bar',
+            data: {
+                labels: tp.map(function (x) { return x.name; }),
+                datasets: [{
+                    label: 'Still owed', data: tp.map(function (x) { return x.owed; }),
+                    backgroundColor: tone('age-3'), borderRadius: 4,
+                    borderSkipped: 'start', maxBarThickness: 17
+                }]
+            },
+            options: {
+                indexAxis: 'y', maintainAspectRatio: false,
+                plugins: {
+                    legend:  { display: false },
+                    tooltip: Object.assign({}, hover, { callbacks: { label: function (c) {
+                        return fullKes(c.parsed.x); } } })
+                },
+                scales: {
+                    x: xy({ beginAtZero: true, ticks: { color: tone('muted'), padding: 6,
+                            callback: function (v) { return shortKes(v); } } }),
+                    y: xy({ grid: { display: false },
+                            ticks: { color: tone('ink-2'), padding: 6 } })
+                }
+            }
+        });
+    }
 }());
 </script>
 

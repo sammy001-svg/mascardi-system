@@ -2376,3 +2376,19 @@ a, button, [role="button"], .nav-item, .btn, .topbar-icon-btn, .toggle-btn {
 .kyc-chip.in{border-color:#16a34a;color:#15803d;background:rgba(22,163,74,.08);font-weight:600}
 .kyc-sent-note{font-size:11.5px;color:var(--muted,#94a3b8);margin-top:9px}
 .kyc-acts{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
+
+/* ── A count on a sidebar item ───────────────────────────────────────────────
+   The finance menu has carried class="nav-badge" since it was written and the
+   class was never defined anywhere, so those counts rendered as bare numbers
+   drifting after the label. They mean "something here needs doing today", so
+   they are worth drawing properly. */
+.nav-item .nav-badge{
+    position:absolute; top:50%; right:10px; transform:translateY(-50%);
+    min-width:18px; padding:1px 6px; border-radius:9px;
+    background:var(--surface-alt,#f1f5f9); color:var(--muted,#64748b);
+    font-size:10.5px; font-weight:700; line-height:16px; text-align:center;
+}
+.nav-item .nav-badge-bad{ background:#dc2626; color:#fff; }
+.nav-item.active .nav-badge{ background:rgba(255,255,255,.22); color:#fff; }
+/* Collapsed to icons, the label is gone and a number beside nothing is noise. */
+.app-sidebar.collapsed .nav-item .nav-badge{ display:none; }
