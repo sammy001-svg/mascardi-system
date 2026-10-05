@@ -92,6 +92,15 @@ function creditBook(PDO $db, array $f = []): array
                COALESCE(NULLIF(cl.phone,''), l.phone) AS phone,
                COALESCE(NULLIF(cl.email,''), l.email) AS email,
                c.make, c.model, c.year, c.registration_number,
+               c.id AS car_id, c.color,
+               /* The photograph of the car this credit was taken out on, picked
+                  here rather than per row on the page: the receivables list is
+                  one card per agreement and a query inside that loop is a
+                  hundred round trips on a hundred accounts. Primary image if one
+                  is flagged, otherwise the first that was uploaded. */
+               (SELECT ci2.file_path FROM car_images ci2
+                 WHERE ci2.car_id = c.id
+              ORDER BY ci2.is_primary DESC, ci2.id ASC LIMIT 1) AS car_photo,
                u.name                               AS manager_name,
                x.due_total, x.paid_total, x.next_due, x.overdue_amount, x.oldest_overdue,
                (SELECT ci.amount - ci.amount_paid FROM credit_installments ci

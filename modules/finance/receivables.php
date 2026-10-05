@@ -57,6 +57,11 @@ $managers = finRowsSafe($db, "SELECT DISTINCT u.id, u.name FROM credit_agreement
                             ORDER BY u.name");
 
 $now       = (string)$db->query("SELECT DATE_FORMAT(NOW(), '%e %b %Y, %H:%i')")->fetchColumn();
+// Today, once. Days-late is worked out per card and a query inside that loop
+// would be one round trip per account. MySQL's date, not PHP's: this host runs
+// PHP on UTC and MySQL on EAT, so the two disagree by three hours about when
+// today started.
+$todayTs   = strtotime((string)$db->query("SELECT CURDATE()")->fetchColumn());
 $cfg       = creditReminderConfig();
 $pageTitle = 'Receivables';
 
@@ -65,26 +70,64 @@ include __DIR__ . '/../../includes/header.php';
 <?php include __DIR__ . '/_style.php'; ?>
 
 <style>
-.rb-table{width:100%;border-collapse:collapse;font-size:13px}
-.rb-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;
-    color:var(--fin-muted);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--fin-ring);
-    white-space:nowrap}
-.rb-table td{padding:11px 12px;border-bottom:1px solid var(--fin-ring);color:var(--fin-ink);
-    vertical-align:top}
-.rb-table tr:last-child td{border-bottom:0}
-.rb-table tr:hover td{background:var(--fin-plane)}
-.rb-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.rb-buyer{font-weight:600}
-.rb-sub{font-size:11.5px;color:var(--fin-muted)}
-.rb-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
-    padding:2px 8px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
-.rb-pill.good{color:var(--fin-up-good);border-color:var(--fin-up-good)}
-.rb-pill.critical{color:var(--fin-critical);border-color:var(--fin-critical)}
-.rb-pill.warning{color:#8a6100;border-color:var(--fin-warning)}
-.rb-pill.legal{color:#6d28d9;border-color:#6d28d9}
-.rb-pill.neutral{color:var(--fin-muted);border-color:var(--fin-axis)}
+/* ── One card per account ────────────────────────────────────────────────────
+   The book was a table of figures. It is now a card per agreement, each led by
+   the car the money was lent against, because "who is 90 days late" is a
+   question people answer by picture faster than by registration number.
+
+   auto-fill rather than a fixed column count, so the grid thins to one column
+   on a phone and widens to four on a desk without a breakpoint for each. */
+.rb-cards{display:grid;gap:16px;
+    grid-template-columns:repeat(auto-fill,minmax(264px,1fr))}
+.rb-card{display:flex;flex-direction:column;overflow:hidden;text-decoration:none;
+    background:var(--fin-surface);border:1px solid var(--fin-ring);border-radius:14px;
+    transition:box-shadow .14s,border-color .14s}
+/* No lift on hover: a card that moves out from under the pointer at its own
+   edge flickers, and a dense grid is all edges. */
+.rb-card:hover{border-color:var(--fin-in);box-shadow:0 6px 22px rgba(11,11,11,.09)}
+.rb-card.is-done{opacity:.68}
+.rb-card.is-done:hover{opacity:1}
+
+.rb-shot{position:relative;aspect-ratio:16/10;background:var(--fin-plane);overflow:hidden}
+.rb-shot img{width:100%;height:100%;object-fit:cover;display:block}
+.rb-noshot{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+    font-size:40px;color:var(--fin-axis)}
+
+.rb-body{padding:13px 15px 15px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.rb-buyer{font-size:14.5px;font-weight:600;color:var(--fin-ink);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rb-sub{font-size:12px;color:var(--fin-muted);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.rb-figs{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px}
+.rb-fig{display:flex;flex-direction:column;gap:1px;min-width:0}
+.rb-fig span{font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--fin-muted)}
+.rb-fig strong{font-size:15px;font-weight:600;color:var(--fin-ink);
+    font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.rb-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:11px;padding-top:10px;
+    border-top:1px solid var(--fin-ring);font-size:11.5px;color:var(--fin-muted)}
+.rb-meta span{display:inline-flex;align-items:center;gap:5px;min-width:0}
+.rb-meta i{opacity:.75}
+
+/* The standing, over the photograph. Backed so it stays legible whatever the
+   picture behind it happens to be, and it always carries its own word. */
+.rb-pill{position:absolute;top:9px;right:9px;
+    display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;
+    padding:3px 9px;border-radius:999px;white-space:nowrap;
+    background:rgba(255,255,255,.94);color:var(--fin-ink-2);
+    box-shadow:0 1px 4px rgba(11,11,11,.18)}
+.rb-pill.good{color:#0a6b0a}
+.rb-pill.critical{color:#a61b1b}
+.rb-pill.warning{color:#7a5c00}
+.rb-pill.legal{color:#5b21b6}
+.rb-pill.neutral{color:var(--fin-ink-2)}
+[data-theme="dark"] .rb-pill{background:rgba(13,20,33,.9)}
+[data-theme="dark"] .rb-pill.good{color:#5ed95e}
+[data-theme="dark"] .rb-pill.critical{color:#f58a8a}
 [data-theme="dark"] .rb-pill.warning{color:var(--fin-warning)}
-[data-theme="dark"] .rb-pill.legal{color:#c4b5fd;border-color:#8b5cf6}
+[data-theme="dark"] .rb-pill.legal{color:#c4b5fd}
 .rb-late{color:var(--fin-critical);font-weight:600}
 .rb-filters{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
 .rb-chip{font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;
@@ -189,88 +232,97 @@ include __DIR__ . '/../../includes/header.php';
                 <?= count($all) ? 'Nothing matches that.' : 'No car has been sold on credit yet. A credit agreement is created from a lead once it is reserved.' ?>
             </p></div>
         <?php else: ?>
-        <div class="table-responsive">
-            <table class="rb-table">
-                <thead>
-                    <tr>
-                        <th>Buyer</th>
-                        <th>Vehicle</th>
-                        <th>Standing</th>
-                        <th class="num">Outstanding</th>
-                        <th class="num">Overdue</th>
-                        <th>Next due</th>
-                        <th>Last payment</th>
-                        <th>Manager</th>
-                    </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($book as $r):
-                    $st = $r['standing'];
-                    $icon = match ($st['tone']) {
-                        'good'     => 'fa-circle-check',
-                        'critical' => 'fa-circle-exclamation',
-                        'warning'  => 'fa-clock',
-                        'legal'    => 'fa-gavel',
-                        default    => 'fa-circle-dot',
-                    };
-                ?>
-                    <tr>
-                        <td>
-                            <a class="rb-buyer text-decoration-none"
-                               href="<?= BASE_URL ?>/modules/finance/account.php?id=<?= (int)$r['id'] ?>">
-                                <?= e((string)($r['buyer'] ?: 'Unnamed')) ?>
-                            </a>
-                            <div class="rb-sub">
-                                <?= e((string)($r['reference'] ?: '')) ?>
-                                <?php if (!empty($r['phone'])): ?> · <?= e((string)$r['phone']) ?><?php endif; ?>
-                                <?php if (empty($r['email'])): ?>
-                                    · <span title="No email address, so no reminders can be sent"
-                                            style="color:var(--fin-warning)"><i class="fa fa-envelope-circle-check"></i> no email</span>
-                                <?php elseif (!(int)$r['reminders_enabled']): ?>
-                                    · <span title="Reminders switched off for this account"
-                                            style="color:var(--fin-muted)"><i class="fa fa-bell-slash"></i> muted</span>
-                                <?php endif; ?>
-                            </div>
-                        </td>
-                        <td>
-                            <?= e($r['car'] ?: '—') ?>
-                            <?php if (!empty($r['registration_number'])): ?>
-                            <div class="rb-sub"><?= e((string)$r['registration_number']) ?>
-                                <?php if ((int)$r['logbook_held']): ?>
-                                    · <i class="fa fa-book" title="Logbook held"></i> logbook held
-                                <?php endif; ?>
-                            </div>
+
+        <?php /* One card per account, each led by the car the money was lent
+                 against. A row of figures told you the balance; the photograph
+                 tells you which car is sitting on the forecourt unpaid for, and
+                 that is the thing a finance conversation actually turns on.
+
+                 The whole card is the link. A card with one small "open" link
+                 on it wastes the other ninety per cent of a target that is
+                 already the right shape. */ ?>
+        <div class="rb-cards">
+            <?php foreach ($book as $r):
+                $st    = $r['standing'];
+                $icon  = match ($st['tone']) {
+                    'good'     => 'fa-circle-check',
+                    'critical' => 'fa-triangle-exclamation',
+                    'warning'  => 'fa-clock',
+                    'legal'    => 'fa-gavel',
+                    default    => 'fa-circle',
+                };
+                $car   = trim(($r['year'] ? $r['year'] . ' ' : '')
+                            . ($r['make'] ?? '') . ' ' . ($r['model'] ?? ''));
+                $photo = trim((string)($r['car_photo'] ?? ''));
+                $over  = (float)($r['overdue_amount'] ?? 0);
+                $late  = $over > 0.009;
+            ?>
+            <a class="rb-card<?= $st['key'] === 'cleared' ? ' is-done' : '' ?>"
+               href="<?= BASE_URL ?>/modules/finance/account.php?id=<?= (int)$r['id'] ?>">
+
+                <div class="rb-shot">
+                    <?php if ($photo !== ''): ?>
+                    <img src="<?= e(thumbUrl('cars', $photo)) ?>"
+                         alt="<?= e($car !== '' ? $car : 'The vehicle') ?>"
+                         loading="lazy" decoding="async">
+                    <?php else: ?>
+                    <?php /* No photograph on file. A grey panel with a car in it
+                             rather than a broken image or an empty hole, and the
+                             card keeps its shape in the grid either way. */ ?>
+                    <div class="rb-noshot"><i class="fa fa-car-side"></i></div>
+                    <?php endif; ?>
+
+                    <span class="rb-pill <?= e($st['tone']) ?>">
+                        <i class="fa <?= $icon ?>"></i><?= e($st['label']) ?>
+                    </span>
+                </div>
+
+                <div class="rb-body">
+                    <div class="rb-buyer"><?= e((string)($r['buyer'] ?? 'Unnamed')) ?></div>
+                    <div class="rb-sub">
+                        <?= $car !== '' ? e($car) : 'Vehicle not recorded' ?>
+                        <?php if (!empty($r['registration_number'])): ?>
+                        &middot; <?= e((string)$r['registration_number']) ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="rb-figs">
+                        <div class="rb-fig">
+                            <span>Outstanding</span>
+                            <strong><?= e(money((float)$r['balance'])) ?></strong>
+                        </div>
+                        <?php if ($late): ?>
+                        <div class="rb-fig">
+                            <span>Overdue</span>
+                            <strong class="rb-late"><?= e(money($over)) ?></strong>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="rb-meta">
+                        <?php if (!empty($r['next_due']) && $st['key'] !== 'cleared'): ?>
+                        <span><i class="fa fa-calendar-day"></i>
+                            <?php if ($late && !empty($r['oldest_overdue'])): ?>
+                            <?= e(fmtDate((string)$r['oldest_overdue'], 'j M')) ?> &mdash;
+                            <?= (int)max(0, (int)round(($todayTs - strtotime((string)$r['oldest_overdue'])) / 86400)) ?> days late
+                            <?php else: ?>
+                            due <?= e(fmtDate((string)$r['next_due'], 'j M')) ?>
                             <?php endif; ?>
-                        </td>
-                        <td>
-                            <span class="rb-pill <?= e($st['tone']) ?>">
-                                <i class="fa <?= $icon ?>"></i><?= e($st['label']) ?>
-                            </span>
-                        </td>
-                        <td class="num"><?= e(number_format((float)$r['balance'])) ?></td>
-                        <td class="num">
-                            <?php if ((float)$r['overdue_amount'] > 0.009): ?>
-                                <span class="rb-late"><?= e(number_format((float)$r['overdue_amount'])) ?></span>
-                                <div class="rb-sub rb-late"><?= (int)$r['days_over'] ?> days</div>
-                            <?php else: ?>—<?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if ($r['next_due']): ?>
-                                <?= e(fmtDate((string)$r['next_due'], 'j M Y')) ?>
-                                <div class="rb-sub"><?= e(number_format((float)$r['next_amount'])) ?></div>
-                            <?php else: ?>—<?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if ($r['last_paid_on']): ?>
-                                <?= e(fmtDate((string)$r['last_paid_on'], 'j M Y')) ?>
-                                <div class="rb-sub"><?= e(number_format((float)$r['last_paid_amount'])) ?></div>
-                            <?php else: ?><span class="rb-sub">nothing yet</span><?php endif; ?>
-                        </td>
-                        <td class="rb-sub"><?= e((string)($r['manager_name'] ?: '—')) ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+                        </span>
+                        <?php endif; ?>
+                        <?php if (!empty($r['last_paid_on'])): ?>
+                        <span><i class="fa fa-receipt"></i>paid <?= e(fmtDate((string)$r['last_paid_on'], 'j M')) ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($r['manager_name'])): ?>
+                        <span><i class="fa fa-user"></i><?= e((string)$r['manager_name']) ?></span>
+                        <?php endif; ?>
+                        <?php if ((int)($r['note_count'] ?? 0) > 0): ?>
+                        <span><i class="fa fa-note-sticky"></i><?= (int)$r['note_count'] ?></span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </a>
+            <?php endforeach; ?>
         </div>
         <?php endif; ?>
     </div>
