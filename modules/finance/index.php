@@ -206,7 +206,7 @@ include __DIR__ . '/_style.php';
                         <i class="fin-swatch fin-tone-<?= e($b['tone']) ?>"></i><?= e($b['label']) ?>
                     </div>
                     <div class="track" role="img"
-                         aria-label="<?= e($b['label']) ?>: <?= (int)$b['n'] ?> accounts">
+                         aria-label="<?= e($b['label']) ?>: <?= (int)$b['n'] ?> account<?= $b['n'] === 1 ? '' : 's' ?>">
                         <span class="fin-tone-<?= e($b['tone']) ?>"
                               style="width:<?= round($b['n'] / $standMax * 100, 1) ?>%"></span>
                     </div>
