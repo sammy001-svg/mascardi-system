@@ -23,7 +23,11 @@
     --fin-plane:    #f8fafc;
     --fin-ink:      #0f172a;
     --fin-ink-2:    #52514e;
-    --fin-muted:    #898781;
+    /* #898781 came to 3.59:1 on white and 4.07:1 on the dark card, so every
+       label, hint and table head in the portal sat under the 4.5:1 floor. The
+       warm grey is kept; it is only stepped far enough to be readable, and
+       dark now gets its own value instead of sharing the light one. */
+    --fin-muted:    #726f68;   /* 5.01:1 on the card, 4.64:1 on the plane */
     --fin-grid:     #e1e0d9;
     --fin-axis:     #c3c2b7;
     --fin-ring:     rgba(11,11,11,.10);
@@ -55,7 +59,7 @@
     --fin-plane:    #172033;
     --fin-ink:      #e2e8f0;
     --fin-ink-2:    #c3c2b7;
-    --fin-muted:    #898781;
+    --fin-muted:    #a8a6a0;   /* 6.01:1 on the card, 7.57:1 on the plane */
     --fin-grid:     #2c3a52;
     --fin-axis:     #384a66;
     --fin-ring:     rgba(255,255,255,.10);

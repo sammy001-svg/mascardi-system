@@ -8,7 +8,12 @@
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/credit_bootstrap.php';
 requireLogin();
-canAccess('crm') || redirect(BASE_URL . '/index.php');
+// Whoever can see the receivables book can print the paperwork for an
+// account in it. These are the documents of a deal finance is chasing, and
+// no finance role holds 'crm' — so the Statement button on the account page
+// bounced every one of them to the dashboard. 'installments' is the
+// receivables permission; this grants the documents, not the CRM module.
+canAccess('crm') || canAccess('installments') || redirect(BASE_URL . '/index.php');
 
 $db = getDB(); $me = authUser(); $uid = (int)$me['id'];
 creditMigrate($db);
