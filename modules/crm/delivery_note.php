@@ -283,8 +283,8 @@ include __DIR__ . '/../../includes/header.php';
     <!-- ── Declaration ────────────────────────────────────────────────────── -->
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;
                 padding:10px 14px;margin-top:14px;font-size:11.5px;color:#374151;line-height:1.7">
-        I, <strong><?= e($buyerName) ?></strong>, hereby confirm that I have received the above-described vehicle
-        from Mascardi Ventures Limited in satisfactory condition on
+        I, <strong><?= e($buyerName) ?></strong>, hereby acknowledge receipt of the vehicle in full roadworthy condition, accepted 
+        on an “as-is, where-is” basis, without any express or implied warranty
         <strong><?= (new DateTime($deliveryDate))->format('d F Y') ?></strong>.
     </div>
 
