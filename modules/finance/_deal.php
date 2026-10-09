@@ -118,45 +118,45 @@ function finIssuedDocs(PDO $db, array $a, array $figures, array $payments): arra
 
     $docs = [
         ['key' => 'proforma', 'label' => 'Proforma invoice', 'icon' => 'fa-file-invoice',
-         'url' => $crm . 'proforma.php' . $q, 'available' => true,
+         'url' => $crm . 'proforma.php' . $q, 'available' => $leadId > 0,
          'btn' => 'btn-outline-primary', 'short' => 'Proforma',
-         'note' => 'Priced from the deal as it stands'],
+         'note' => $leadId > 0 ? 'Priced from the deal as it stands' : 'No lead attached to this imported account'],
 
         ['key' => 'sales_agreement', 'label' => 'Sales agreement', 'icon' => 'fa-file-signature',
-         'url' => $crm . 'sales_agreement.php' . $q, 'available' => true,
+         'url' => $crm . 'sales_agreement.php' . $q, 'available' => $leadId > 0,
          'btn' => 'btn-outline-success', 'short' => 'Agreement',
-         'note' => 'The sale itself'],
+         'note' => $leadId > 0 ? 'The sale itself' : 'No lead attached to this imported account'],
 
         // Solid purple rather than an outline, exactly as on the lead page: this
         // is the contract the money is owed under, and it leads the row.
         ['key' => 'credit_agreement', 'label' => 'Credit payment agreement', 'icon' => 'fa-file-contract',
-         'url' => $crm . 'credit_payment_agreement.php' . $q, 'available' => $hasCredit,
+         'url' => $crm . 'credit_payment_agreement.php' . $q, 'available' => $leadId > 0 && $hasCredit,
          'btn' => 'btn-credit', 'short' => 'Credit Agreement',
-         'note' => $hasCredit ? 'The schedule, as signed' : 'No credit agreement on this account'],
+         'note' => $leadId > 0 ? ($hasCredit ? 'The schedule, as signed' : 'No credit agreement on this account') : 'No lead attached to this imported account'],
 
         ['key' => 'deposit_receipt', 'label' => 'Deposit receipt', 'icon' => 'fa-receipt',
          'url' => $crm . 'deposit_receipt.php' . $q,
-         'available' => (float)$figures['deposit'] > 0,
+         'available' => $leadId > 0 && (float)$figures['deposit'] > 0,
          'btn' => 'btn-outline-warning', 'short' => 'Deposit Receipt',
          'note' => (float)$figures['deposit'] > 0
                     ? money((float)$figures['deposit']) . ' received up front'
                     : 'No deposit recorded'],
 
         ['key' => 'statement', 'label' => 'Statement of account', 'icon' => 'fa-file-lines',
-         'url' => $crm . 'credit_statement.php' . $q, 'available' => $hasCredit,
+         'url' => $crm . 'credit_statement.php' . $q, 'available' => $leadId > 0 && $hasCredit,
          'btn' => 'btn-outline-dark', 'short' => 'Statement',
-         'note' => 'Every instalment and payment to date'],
+         'note' => $leadId > 0 ? 'Every instalment and payment to date' : 'No lead attached to this imported account'],
 
         ['key' => 'sales_receipt', 'label' => 'Sales receipt', 'icon' => 'fa-receipt',
          'url' => $crm . 'sales_receipt.php' . $q,
-         'available' => (float)$figures['balance'] <= 0.009 && (float)$figures['paid'] > 0,
+         'available' => $leadId > 0 && (float)$figures['balance'] <= 0.009 && (float)$figures['paid'] > 0,
          'btn' => 'btn-outline-info', 'short' => 'Sales Receipt',
          'note' => (float)$figures['balance'] <= 0.009 && (float)$figures['paid'] > 0
                     ? 'Paid in full'
                     : 'Issued once the account is settled'],
 
         ['key' => 'delivery_note', 'label' => 'Delivery note', 'icon' => 'fa-truck-ramp-box',
-         'url' => $crm . 'delivery_note.php' . $q, 'available' => $delivered,
+         'url' => $crm . 'delivery_note.php' . $q, 'available' => $leadId > 0 && $delivered,
          'btn' => 'btn-outline-secondary', 'short' => 'Delivery Note',
          'note' => $delivered ? 'Handover certificate' : 'The car has not been handed over yet'],
     ];

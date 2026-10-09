@@ -292,10 +292,12 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
         <!-- Navigation only. The documents are a row of their own below, so
              the Statement button that used to sit here is in the toolbar. -->
         <div class="d-flex gap-2 flex-wrap">
+            <?php if (!empty($a['lead_id'])): ?>
             <a class="btn btn-outline-secondary btn-sm"
                href="<?= BASE_URL ?>/modules/crm/view_lead.php?id=<?= (int)$a['lead_id'] ?>#credit">
                 <i class="fa fa-user me-1"></i>The lead
             </a>
+            <?php endif; ?>
             <a class="btn btn-outline-secondary btn-sm" href="<?= BASE_URL ?>/modules/finance/receivables.php">
                 <i class="fa fa-arrow-left me-1"></i>Book
             </a>
