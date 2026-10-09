@@ -66,6 +66,7 @@ try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN kd_number VARCHAR(50) NU
 try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN chassis_number VARCHAR(100) NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN entry_number VARCHAR(100) NULL"); } catch (\Throwable $_) {}
 require_once __DIR__ . '/crm_helpers.php';
+require_once __DIR__ . '/_delete.php';
 $id  = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/crm/leads.php');
 
@@ -154,24 +155,30 @@ $sourceLabels = [
 
 $salesUsers = $db->query("SELECT id, name FROM users WHERE status='active' ORDER BY name")->fetchAll();
 
+// Whether this lead may be deleted, and if not, why. Worked out here so the
+// modal can show the reasons up front rather than refusing after the click.
+$canDeleteLeads = leadDeleteAllowed($me);
+$delBlockers    = $canDeleteLeads ? leadDeleteBlockers($db, $id) : [];
+
 // ── POST handlers ─────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'delete_lead') {
-        if ($me['role'] !== 'super_admin') {
-            setFlash('danger', 'Only Super Admin can delete leads.');
+        verifyCsrf();
+        if (!leadDeleteAllowed($me)) {
+            setFlash('danger', 'Only the General Manager or a Super Admin can delete leads.');
             redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
         }
-        try {
-            $db->prepare("DELETE FROM crm_activities  WHERE lead_id = ?")->execute([$id]);
-            $db->prepare("DELETE FROM crm_test_drives WHERE lead_id = ?")->execute([$id]);
-            $db->prepare("DELETE FROM crm_leads        WHERE id      = ?")->execute([$id]);
-            setFlash('success', 'Lead "' . $lead['name'] . '" has been deleted.');
-        } catch (\Throwable $e) {
-            setFlash('danger', 'Delete failed: ' . $e->getMessage());
+        $res = leadDelete($db, $id);
+        if (!$res['ok']) {
+            // Stay on the lead: the reason given refers to what is on this page.
+            setFlash('warning', 'Cannot delete this lead. ' . $res['error']
+                . ' Mark it Lost instead — that keeps the record.');
             redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
         }
+        setFlash('success', 'Lead "' . $res['name'] . '" has been deleted.'
+            . ($res['freed'] ? ' ' . $res['freed'] . ' is back in stock.' : ''));
         redirect(BASE_URL . '/modules/crm/leads.php');
     }
 
@@ -1272,16 +1279,17 @@ include __DIR__ . '/../../includes/header.php';
         <a href="leads.php" class="btn btn-sm btn-outline-secondary">
             <i class="fa fa-arrow-left me-1"></i>Back
         </a>
-        <?php if ($me['role'] === 'super_admin'): ?>
-        <button type="button" class="btn btn-sm btn-danger" id="deleteLeadBtn"
-                data-name="<?= e($lead['name']) ?>">
+        <?php if ($canDeleteLeads): ?>
+        <button type="button" class="btn btn-sm <?= $delBlockers ? 'btn-outline-secondary' : 'btn-danger' ?>"
+                id="deleteLeadBtn" data-name="<?= e($lead['name']) ?>"
+                title="<?= $delBlockers ? 'This lead cannot be deleted' : 'Delete this duplicate' ?>">
             <i class="fa fa-trash me-1"></i>Delete Lead
         </button>
         <?php endif; ?>
     </div>
 </div>
 
-<?php if ($me['role'] === 'super_admin'): ?>
+<?php if ($canDeleteLeads): ?>
 <!-- Delete confirmation modal -->
 <div class="modal fade" id="deleteLeadModal" tabindex="-1" aria-labelledby="deleteLeadModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -1293,22 +1301,50 @@ include __DIR__ . '/../../includes/header.php';
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <?php if ($delBlockers): ?>
+                <!-- A lead carrying money or a history is a real deal, not a
+                     duplicate. Say so here, with the reasons, rather than
+                     offering a button that is going to be refused. -->
+                <p class="mb-2">This lead cannot be deleted:</p>
+                <p class="fw-bold fs-5 text-dark mb-3"><?= e($lead['name']) ?></p>
+                <ul class="mb-3 ps-3" style="font-size:13px">
+                    <?php foreach ($delBlockers as $b): ?>
+                    <li><?= e($b) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+                <div class="alert alert-info py-2 mb-0" style="font-size:13px">
+                    <i class="fa fa-circle-info me-1"></i>
+                    Deleting is for duplicates. To close a deal that fell through,
+                    move it to <strong>Lost</strong> &mdash; that keeps the record
+                    and the money against it.
+                </div>
+                <?php else: ?>
                 <p class="mb-2">You are about to permanently delete:</p>
                 <p class="fw-bold fs-5 text-dark mb-3"><?= e($lead['name']) ?></p>
                 <div class="alert alert-danger py-2 mb-0" style="font-size:13px">
                     <i class="fa fa-circle-exclamation me-1"></i>
-                    This will also delete all activity history and test drives for this lead.
+                    Its activity timeline, follow-up reminders and enquiry notes go with it.
+                    Call recordings and showroom visits are kept, unlinked.
+                    <?php if (!empty($lead['pinned_car_id'])): ?>
+                    Any reservation on the pinned car is released.
+                    <?php endif; ?>
                     <strong>This cannot be undone.</strong>
                 </div>
+                <?php endif; ?>
             </div>
             <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <?= $delBlockers ? 'Close' : 'Cancel' ?>
+                </button>
+                <?php if (!$delBlockers): ?>
                 <form method="POST">
+                    <?= csrfField() ?>
                     <input type="hidden" name="action"  value="delete_lead">
                     <button type="submit" class="btn btn-danger">
                         <i class="fa fa-trash me-1"></i>Yes, Delete Permanently
                     </button>
                 </form>
+                <?php endif; ?>
             </div>
         </div>
     </div>

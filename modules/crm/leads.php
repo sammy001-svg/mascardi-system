@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 // whole page fataled the moment there was a single lead to draw — which is why
 // it looked fine on an empty list.
 require_once __DIR__ . '/crm_helpers.php';
+require_once __DIR__ . '/_delete.php';
 requireLogin();
 canAccess('crm') || redirect(BASE_URL . '/index.php');
 
@@ -16,27 +17,31 @@ $isCrmAgent   = ($me['role'] === 'customer_relations');
 $isSupervisor = ($me['role'] === 'supervisor');
 $supLocId     = $isSupervisor ? supervisorLocationId() : null;
 $pageTitle    = $isCrmAgent ? 'My Leads' : ($isSupervisor ? 'Location Leads' : 'All Leads');
+$canDeleteLeads = leadDeleteAllowed($me);
 
-// ─── SINGLE LEAD DELETE (super_admin only) ───────────────────────────────────
+// ─── SINGLE LEAD DELETE (General Manager and Super Admin) ────────────────────
+// For duplicates. leadDelete() refuses any lead carrying money or a history,
+// so the worst this can do is tidy the list.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_lead') {
-    if ($me['role'] !== 'super_admin') {
-        setFlash('danger', 'Only Super Admin can delete leads.');
+    verifyCsrf();
+    if (!leadDeleteAllowed($me)) {
+        setFlash('danger', 'Only the General Manager or a Super Admin can delete leads.');
         redirect('leads.php');
     }
     $delId = (int)($_POST['lead_id'] ?? 0);
     if (!$delId) { setFlash('warning', 'Invalid lead.'); redirect('leads.php'); }
 
-    try {
-        $db->prepare("DELETE FROM crm_activities  WHERE lead_id = ?")->execute([$delId]);
-        $db->prepare("DELETE FROM crm_test_drives WHERE lead_id = ?")->execute([$delId]);
-        $db->prepare("DELETE FROM crm_leads        WHERE id      = ?")->execute([$delId]);
-        setFlash('success', 'Lead deleted successfully.');
-    } catch (\Throwable $e) {
-        setFlash('danger', 'Delete failed: ' . $e->getMessage());
+    $res = leadDelete($db, $delId);
+    if ($res['ok']) {
+        setFlash('success', 'Lead "' . $res['name'] . '" deleted.'
+            . ($res['freed'] ? ' ' . $res['freed'] . ' is back in stock.' : ''));
+    } else {
+        setFlash('warning', 'Cannot delete "' . ($res['name'] ?: 'that lead') . '". '
+            . $res['error'] . ' Mark it Lost instead — that keeps the record.');
     }
     redirect('leads.php');
 }
-// ─── END DELETE HANDLER ───────────────────────────────────────────────────────
+// ─── END DELETE HANDLER ─────────────────────────────────────────────────────
 
 // ─── BULK ACTION POST HANDLER ────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_action'])) {
@@ -292,9 +297,12 @@ $stages = [
     'delivered' => ['Delivered', 'success'],
 ];
 
-// ── Duplicate scan (admin / super_admin only, once per session) ───────────────
+// ── Duplicate scan (whoever may delete, once per session) ─────────────────────
+// Gated on who can act on it rather than on its own role list: the whole
+// message of this alert is "delete one of these", and it now carries the
+// button to do it, so showing it to someone who cannot would be noise.
 $systemDuplicates = [];
-if (in_array($me['role'], ['admin','super_admin']) && empty($_GET['skip_dup_scan'])) {
+if ($canDeleteLeads && empty($_GET['skip_dup_scan'])) {
     try {
         // Find leads that share a normalised phone suffix (last 9 digits) — most reliable duplicate signal
         $dupRows = $db->query("
@@ -330,7 +338,7 @@ if (in_array($me['role'], ['admin','super_admin']) && empty($_GET['skip_dup_scan
     if ($systemDuplicates) {
         require_once __DIR__ . '/../../includes/notifications.php';
         foreach ($systemDuplicates as $pair) {
-            notifyRoles(['admin','super_admin'], 'warning',
+            notifyRoles(['admin','super_admin','general_manager'], 'warning',
                 'Duplicate Leads Detected',
                 '"' . $pair['name_a'] . '" (#' . $pair['id_a'] . ') and "'
                     . $pair['name_b'] . '" (#' . $pair['id_b'] . ') have the same phone number. Please delete one.',
@@ -374,14 +382,16 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <?php if (!empty($systemDuplicates)): ?>
-<!-- ── Duplicate leads alert (admin / super_admin) ─────────────────────── -->
+<!-- ── Duplicate leads alert, with the delete it asks for ────────────── -->
 <div class="alert alert-warning border-warning mb-3 shadow-sm" id="dupSystemAlert">
     <div class="d-flex align-items-start gap-2">
         <i class="fa fa-triangle-exclamation fa-lg mt-1 text-warning flex-shrink-0"></i>
         <div class="flex-grow-1">
             <strong><?= count($systemDuplicates) ?> duplicate lead pair<?= count($systemDuplicates) > 1 ? 's' : '' ?> found in the system.</strong>
             <p class="mb-2 mt-1" style="font-size:13px">
-                The following leads share the same phone number. Please review and delete the unwanted entry.
+                The following leads share the same phone number. Open each one to see which
+                to keep, then delete the other. A lead holding a deposit, a credit agreement,
+                signed papers or a delivery will not delete &mdash; that one is the real deal.
             </p>
             <div class="table-responsive">
                 <table class="table table-sm table-bordered mb-0" style="font-size:12.5px;background:#fff">
@@ -395,11 +405,31 @@ include __DIR__ . '/../../includes/header.php';
                         <td class="fw-semibold"><?= e($pair['name_a']) ?> <small class="text-muted">#<?= $pair['id_a'] ?></small></td>
                         <td><?= e($pair['phone_a']) ?></td>
                         <td><span class="badge bg-secondary"><?= ucfirst($pair['stage_a']) ?></span></td>
-                        <td><a href="view_lead.php?id=<?= $pair['id_a'] ?>" class="btn btn-xs btn-outline-primary" target="_blank">View</a></td>
+                        <td class="text-nowrap">
+                            <a href="view_lead.php?id=<?= $pair['id_a'] ?>" class="btn btn-xs btn-outline-primary" target="_blank">View</a>
+                            <form method="POST" class="delete-lead-form d-inline" data-name="<?= e($pair['name_a']) ?>">
+                                <?= csrfField() ?>
+                                <input type="hidden" name="action"  value="delete_lead">
+                                <input type="hidden" name="lead_id" value="<?= $pair['id_a'] ?>">
+                                <button type="submit" class="btn btn-xs btn-outline-danger" title="Delete this one">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
                         <td class="fw-semibold"><?= e($pair['name_b']) ?> <small class="text-muted">#<?= $pair['id_b'] ?></small></td>
                         <td><?= e($pair['phone_b']) ?></td>
                         <td><span class="badge bg-secondary"><?= ucfirst($pair['stage_b']) ?></span></td>
-                        <td><a href="view_lead.php?id=<?= $pair['id_b'] ?>" class="btn btn-xs btn-outline-primary" target="_blank">View</a></td>
+                        <td class="text-nowrap">
+                            <a href="view_lead.php?id=<?= $pair['id_b'] ?>" class="btn btn-xs btn-outline-primary" target="_blank">View</a>
+                            <form method="POST" class="delete-lead-form d-inline" data-name="<?= e($pair['name_b']) ?>">
+                                <?= csrfField() ?>
+                                <input type="hidden" name="action"  value="delete_lead">
+                                <input type="hidden" name="lead_id" value="<?= $pair['id_b'] ?>">
+                                <button type="submit" class="btn btn-xs btn-outline-danger" title="Delete this one">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
                     </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -656,8 +686,9 @@ include __DIR__ . '/../../includes/header.php';
                 <td class="pe-3">
                     <div class="d-flex gap-1">
                         <a href="view_lead.php?id=<?= $l['id'] ?>" class="btn btn-xs btn-outline-primary">View</a>
-                        <?php if ($me['role'] === 'super_admin'): ?>
+                        <?php if ($canDeleteLeads): ?>
                         <form method="POST" class="delete-lead-form" data-name="<?= e($l['name']) ?>">
+                            <?= csrfField() ?>
                             <input type="hidden" name="action"  value="delete_lead">
                             <input type="hidden" name="lead_id" value="<?= $l['id'] ?>">
                             <button type="submit" class="btn btn-xs btn-outline-danger" title="Delete lead">
@@ -731,7 +762,8 @@ document.querySelectorAll('.delete-lead-form').forEach(function (form) {
     form.addEventListener('submit', function (e) {
         e.preventDefault();
         var name = form.dataset.name || 'this lead';
-        if (confirm('Permanently delete "' + name + '" and all their activities?\n\nThis cannot be undone.')) {
+        if (confirm('Delete "' + name + '"?\n\nUse this for duplicates only. A lead with a deposit, a credit '
+                  + 'agreement, signed papers or a delivery will be refused.\n\nThis cannot be undone.')) {
             form.submit();
         }
     });
