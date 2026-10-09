@@ -82,16 +82,20 @@ function creditBook(PDO $db, array $f = []): array
     if (!empty($f['q'])) {
         $q = '%' . $f['q'] . '%';
         $where[] = '(l.name LIKE ? OR cl.name LIKE ? OR c.registration_number LIKE ?
-                     OR c.make LIKE ? OR c.model LIKE ? OR a.reference LIKE ?)';
-        array_push($args, $q, $q, $q, $q, $q, $q);
+                     OR c.make LIKE ? OR c.model LIKE ? OR a.reference LIKE ?
+                     OR a.ext_name LIKE ? OR a.ext_registration LIKE ? OR a.ext_vehicle LIKE ?)';
+        array_push($args, $q, $q, $q, $q, $q, $q, $q, $q, $q);
     }
 
     $sql = "
         SELECT a.*,
-               COALESCE(cl.name, l.name)            AS buyer,
-               COALESCE(NULLIF(cl.phone,''), l.phone) AS phone,
-               COALESCE(NULLIF(cl.email,''), l.email) AS email,
-               c.make, c.model, c.year, c.registration_number,
+               /* Imported accounts have no lead, client or car — the buyer and
+                  vehicle the spreadsheet named are kept on the agreement. */
+               COALESCE(cl.name, l.name, a.ext_name)  AS buyer,
+               COALESCE(NULLIF(cl.phone,''), l.phone, a.ext_phone) AS phone,
+               COALESCE(NULLIF(cl.email,''), l.email, a.ext_email) AS email,
+               COALESCE(c.make, a.ext_vehicle) AS make, c.model, c.year,
+               COALESCE(c.registration_number, a.ext_registration) AS registration_number,
                c.id AS car_id, c.color,
                /* The photograph of the car this credit was taken out on, picked
                   here rather than per row on the page: the receivables list is
@@ -228,9 +232,9 @@ function creditMonth(PDO $db, string $ym): array
 
     $due = finRowsSafe($db, "
         SELECT ci.id, ci.seq, ci.due_date, ci.amount, ci.amount_paid, ci.agreement_id,
-               a.reference, a.status, COALESCE(cl.name, l.name) AS buyer,
-               COALESCE(NULLIF(cl.phone,''), l.phone) AS phone,
-               c.registration_number, u.name AS manager_name
+               a.reference, a.status, COALESCE(cl.name, l.name, a.ext_name) AS buyer,
+               COALESCE(NULLIF(cl.phone,''), l.phone, a.ext_phone) AS phone,
+               COALESCE(c.registration_number, a.ext_registration) AS registration_number, u.name AS manager_name
           FROM credit_installments ci
           JOIN credit_agreements a ON a.id = ci.agreement_id AND a.status <> 'cancelled'
      LEFT JOIN crm_leads l  ON l.id  = a.lead_id
@@ -254,7 +258,8 @@ function creditMonth(PDO $db, string $ym): array
 
     $payments = finRowsSafe($db, "
         SELECT p.id, p.receipt_number, p.amount, p.paid_on, p.method, p.reference,
-               a.id AS agreement_id, COALESCE(cl.name, l.name) AS buyer, c.registration_number,
+               a.id AS agreement_id, COALESCE(cl.name, l.name, a.ext_name) AS buyer,
+               COALESCE(c.registration_number, a.ext_registration) AS registration_number,
                u.name AS by_name
           FROM credit_payments p
           JOIN credit_agreements a ON a.id = p.agreement_id
@@ -363,9 +368,9 @@ function creditSentLog(PDO $db, int $agreementId, int $limit = 30): array
 /** @return array{email:string, name:string, phone:string} */
 function creditRecipient(PDO $db, int $agreementId): array
 {
-    $r = finRowsSafe($db, "SELECT COALESCE(NULLIF(cl.email,''), l.email) AS email,
-                                  COALESCE(cl.name, l.name) AS name,
-                                  COALESCE(NULLIF(cl.phone,''), l.phone) AS phone
+    $r = finRowsSafe($db, "SELECT COALESCE(NULLIF(cl.email,''), l.email, a.ext_email) AS email,
+                                  COALESCE(cl.name, l.name, a.ext_name) AS name,
+                                  COALESCE(NULLIF(cl.phone,''), l.phone, a.ext_phone) AS phone
                              FROM credit_agreements a
                         LEFT JOIN crm_leads l  ON l.id  = a.lead_id
                         LEFT JOIN clients  cl ON cl.id = COALESCE(a.client_id, l.client_id)
@@ -567,7 +572,8 @@ function creditKes(float $v): string
 /** The account lines every email carries, so a buyer always knows where they stand. */
 function creditEmailFacts(PDO $db, int $agreementId, array $rows): string
 {
-    $acct = finRowsSafe($db, "SELECT a.reference, c.make, c.model, c.year, c.registration_number
+    $acct = finRowsSafe($db, "SELECT a.reference, COALESCE(c.make, a.ext_vehicle) AS make, c.model, c.year,
+                                     COALESCE(c.registration_number, a.ext_registration) AS registration_number
                                 FROM credit_agreements a
                            LEFT JOIN crm_leads l ON l.id = a.lead_id
                            LEFT JOIN cars c ON c.id = COALESCE(a.car_id, l.pinned_car_id)

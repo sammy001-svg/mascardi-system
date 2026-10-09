@@ -145,6 +145,11 @@ include __DIR__ . '/../../includes/header.php';
             <div class="fin-asat">Cars sold on credit · as at <?= e($now) ?></div>
         </div>
         <div class="d-flex gap-2 flex-wrap">
+            <?php if (creditCanRecord()): ?>
+            <a class="btn btn-primary btn-sm" id="rb-import" href="<?= BASE_URL ?>/modules/finance/receivables_import.php">
+                <i class="fa fa-file-excel me-1"></i>Import from Excel
+            </a>
+            <?php endif; ?>
             <a class="btn btn-outline-secondary btn-sm" href="<?= BASE_URL ?>/modules/finance/month.php">
                 <i class="fa fa-calendar-days me-1"></i>Monthly collection
             </a>

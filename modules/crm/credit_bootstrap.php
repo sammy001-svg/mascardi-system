@@ -26,7 +26,9 @@ if (!function_exists('creditMigrate')) {
 // 3 — the receivables book: account manager, logbook held, reminders on/off,
 //     irregular schedules, a "with lawyers" status, the follow-up notes trail
 //     and a log of every reminder and receipt emailed.
-if (!defined('CREDIT_SCHEMA_VERSION')) define('CREDIT_SCHEMA_VERSION', '4');
+// 5 — accounts imported from the finance team's Excel book for buyers who were
+//     never in the system: no lead, so the buyer and vehicle live on the row.
+if (!defined('CREDIT_SCHEMA_VERSION')) define('CREDIT_SCHEMA_VERSION', '5');
 
 function creditStatuses(): array {
     return [
@@ -157,6 +159,18 @@ function creditMigrate(PDO $db, bool $force = false): void
         "ALTER TABLE credit_payments ADD COLUMN void_reason VARCHAR(255) NULL",
         // Every sum of this table filters on voided_at, so it leads the index.
         "ALTER TABLE credit_payments ADD KEY idx_cp_live (voided_at, paid_on)",
+
+        // v5 — imported accounts. A buyer from the old spreadsheet has no lead
+        // and often no client or car record either, so lead_id may be NULL (the
+        // unique key still holds: MySQL allows any number of NULLs in it) and
+        // the details the sheet carried are kept on the agreement.
+        "ALTER TABLE credit_agreements MODIFY COLUMN lead_id INT NULL",
+        "ALTER TABLE credit_agreements ADD COLUMN source VARCHAR(12) NOT NULL DEFAULT 'system'",
+        "ALTER TABLE credit_agreements ADD COLUMN ext_name VARCHAR(150) NULL",
+        "ALTER TABLE credit_agreements ADD COLUMN ext_phone VARCHAR(40) NULL",
+        "ALTER TABLE credit_agreements ADD COLUMN ext_email VARCHAR(150) NULL",
+        "ALTER TABLE credit_agreements ADD COLUMN ext_vehicle VARCHAR(150) NULL",
+        "ALTER TABLE credit_agreements ADD COLUMN ext_registration VARCHAR(30) NULL",
     ];
     foreach ($columns as $sql) { try { $db->exec($sql); } catch (\Throwable $_) {} }
 
