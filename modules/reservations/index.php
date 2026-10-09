@@ -76,9 +76,11 @@ foreach ([
 $filterMake   = trim($_GET['make']  ?? '');
 $filterAgent  = $canFilter ? (int)($_GET['agent'] ?? 0) : 0;
 $filterSearch = trim($_GET['q']    ?? '');
-// month=1..12; 0 means "all months"
-$filterMonth  = (int)($_GET['month'] ?? 0);
-if ($filterMonth < 1 || $filterMonth > 12) { $filterMonth = 0; }
+// YYYY-MM, as on the delivered-cars page. It used to be a bare 1..12, which
+// matched that month in every year — two Octobers added together once the
+// yard had been open a year, with no way to ask for one of them.
+$filterMonth  = trim($_GET['month'] ?? '');
+if (!preg_match('/^\d{4}-\d{2}$/', $filterMonth)) { $filterMonth = ''; }
 
 // ── Build WHERE ───────────────────────────────────────────────────────────────
 // A reservation taken by a non-Super-Admin is held at reservation_status =
@@ -99,8 +101,9 @@ if ($isCrmAgent)  { $where[] = "l.assigned_to = $uid"; }
 if ($filterMake)  { $where[] = 'c.make = ?';         $params[] = $filterMake; }
 if ($filterAgent) { $where[] = 'l.assigned_to = ?';  $params[] = $filterAgent; }
 if ($filterMonth) {
-    // Filter by the month the deposit was placed; fall back to updated_at.
-    $where[] = 'MONTH(COALESCE(l.deposit_date, l.updated_at)) = ?';
+    // The month the deposit was placed, falling back to when the reservation
+    // was last touched for the rows that never recorded a deposit date.
+    $where[] = "DATE_FORMAT(COALESCE(l.deposit_date, l.updated_at), '%Y-%m') = ?";
     $params[] = $filterMonth;
 }
 if ($filterSearch) {
@@ -176,23 +179,43 @@ $stmt = $db->prepare("
 $stmt->execute($params);
 $reservations = $stmt->fetchAll();
 
-// ── Dashboard stats (unfiltered totals for the current user scope) ─────────────
+// ── The figures, for exactly what is on screen ────────────────────────────────
+// These used to ignore every filter: the query was pinned to all reservations
+// ever taken, and only the list below answered the month, make and agent
+// boxes. So filtering to one agent still showed the whole yard's deposits, and
+// the headline disagreed with the rows under it. The same fault, and the same
+// fix, as the delivered-cars page.
+//
+// They now run off $whereSQL and $params — the list's own WHERE and its own
+// parameters — so the four tiles describe the rows and nothing else. That also
+// picks up the reservations still waiting on approval, which the list has
+// always included and this query used to leave out, so the count on the tile
+// could be lower than the number of rows beneath it with no filter set at all.
 $scopeWhere = $isCrmAgent ? "AND l.assigned_to = $uid" : '';
-$stats = $db->query("
-    SELECT
-        COUNT(*)                                             AS total,
-        COALESCE(SUM(COALESCE(l.deposit_amount,0) + COALESCE(dx.extra,0)),0) AS total_deposits,
-        COALESCE(SUM(
-            GREATEST(0, COALESCE(l.agreed_sale_price,
-                COALESCE(c.offer_price, c.asking_price, 0))
-                - COALESCE(l.deposit_amount,0) - COALESCE(dx.extra,0))
-        ),0)                                                 AS total_balance,
-        COUNT(DISTINCT l.assigned_to)                       AS agent_count
-    FROM crm_leads l
-    LEFT JOIN cars c ON c.id = l.pinned_car_id
-    $topUps
-    WHERE l.stage = 'reserved' $scopeWhere
-")->fetch();
+
+$statsSQL = "
+    SELECT COUNT(*)                                        AS total,
+           COALESCE(SUM(t.deposit), 0)                     AS total_deposits,
+           COALESCE(SUM(GREATEST(t.price - t.deposit, 0)), 0) AS total_balance,
+           COUNT(DISTINCT t.agent)                         AS agent_count
+      FROM (
+        SELECT
+          COALESCE(NULLIF(l.agreed_sale_price,0), NULLIF(c.offer_price,0),
+                   NULLIF(c.asking_price,0), 0)                AS price,
+          -- The deposit taken at reservation plus every top-up since. Voided
+          -- top-ups are already excluded by the dx subquery.
+          COALESCE(l.deposit_amount,0) + COALESCE(dx.extra,0)  AS deposit,
+          l.assigned_to                                        AS agent
+        FROM crm_leads l
+        LEFT JOIN cars    c  ON c.id  = l.pinned_car_id
+        LEFT JOIN clients cl ON cl.id = l.client_id
+        $topUps
+        WHERE $whereSQL
+      ) t";
+
+$st = $db->prepare($statsSQL);
+$st->execute($params);
+$stats = $st->fetch();
 
 // ── Filter dropdowns ──────────────────────────────────────────────────────────
 $makesList = $db->query("
@@ -215,10 +238,16 @@ $totalBalance  = (float)$stats['total_balance'];
 $agentCount    = (int)$stats['agent_count'];
 $filtered      = count($reservations);
 $isFiltered    = $filterMake || $filterAgent || $filterSearch || $filterMonth;
-// Build a human-readable label for the active month chip
-$monthNames    = ['','January','February','March','April','May','June',
-                  'July','August','September','October','November','December'];
-$filterMonthName = $filterMonth ? $monthNames[$filterMonth] : '';
+// The last twelve months, newest first, as on the delivered-cars page. A
+// reservation older than that is still reachable by clearing the filter; the
+// list exists to answer "this month" and "last month" without reading a year
+// out of a dropdown of twelve ambiguous names.
+$monthOptions = [];
+for ($i = 0; $i < 12; $i++) {
+    $dt = new DateTime("first day of -$i months");
+    $monthOptions[$dt->format('Y-m')] = $dt->format('M Y');
+}
+$filterMonthName = $filterMonth ? ($monthOptions[$filterMonth] ?? $filterMonth) : '';
 
 $pageTitle = 'Reservations';
 include __DIR__ . '/../../includes/header.php';
@@ -494,11 +523,8 @@ include __DIR__ . '/../../includes/header.php';
         <label>Month</label>
         <select name="month">
             <option value="">All Months</option>
-            <?php foreach (['','January','February','March','April','May','June',
-                            'July','August','September','October','November','December']
-                           as $mIdx => $mName):
-                if ($mIdx === 0) continue; ?>
-            <option value="<?= $mIdx ?>" <?= $filterMonth === $mIdx ? 'selected' : '' ?>><?= $mName ?></option>
+            <?php foreach ($monthOptions as $mVal => $mName): ?>
+            <option value="<?= e($mVal) ?>" <?= $filterMonth === $mVal ? 'selected' : '' ?>><?= e($mName) ?></option>
             <?php endforeach; ?>
         </select>
     </div>
