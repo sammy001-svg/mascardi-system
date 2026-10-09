@@ -152,7 +152,7 @@ function acctAll(PDO $db, bool $includeClosed = false): array
      LEFT JOIN (SELECT account_id, SUM(amount) total FROM payments
                  WHERE status = 'pending'   GROUP BY account_id) pend ON pend.account_id = a.id
      LEFT JOIN (SELECT account_id, SUM(amount) total FROM credit_payments
-                GROUP BY account_id) cin  ON cin.account_id  = a.id
+                 WHERE voided_at IS NULL GROUP BY account_id) cin  ON cin.account_id  = a.id
      LEFT JOIN (SELECT account_id, SUM(amount) total FROM crm_lead_deposits
                  WHERE voided_at IS NULL GROUP BY account_id) din ON din.account_id = a.id
      LEFT JOIN (SELECT account_id, SUM(amount) total FROM expenses
@@ -280,7 +280,8 @@ function acctStatement(PDO $db, int $accountId, string $from, string $to): array
      LEFT JOIN credit_agreements ag ON ag.id = cp.agreement_id
      LEFT JOIN crm_leads l  ON l.id  = ag.lead_id
      LEFT JOIN clients  cl ON cl.id = COALESCE(ag.client_id, l.client_id)
-         WHERE cp.account_id = :a_cp AND cp.paid_on BETWEEN :f_cp AND :t_cp
+         WHERE cp.voided_at IS NULL
+           AND cp.account_id = :a_cp AND cp.paid_on BETWEEN :f_cp AND :t_cp
 
         UNION ALL
         SELECT d.deposit_date, 'in', d.amount,
@@ -315,7 +316,8 @@ function acctStatement(PDO $db, int $accountId, string $from, string $to): array
         SELECT
           COALESCE((SELECT SUM(amount) FROM payments
                      WHERE account_id = ? AND status='confirmed' AND DATE(payment_date) < ?),0)
-        + COALESCE((SELECT SUM(amount) FROM credit_payments WHERE account_id = ? AND paid_on < ?),0)
+        + COALESCE((SELECT SUM(amount) FROM credit_payments
+                     WHERE account_id = ? AND voided_at IS NULL AND paid_on < ?),0)
         + COALESCE((SELECT SUM(amount) FROM crm_lead_deposits
                      WHERE account_id = ? AND voided_at IS NULL AND deposit_date < ?),0)
         - COALESCE((SELECT SUM(amount) FROM expenses WHERE account_id = ? AND expense_date < ?),0)
@@ -353,7 +355,7 @@ function acctUnassigned(PDO $db, string $from, string $to): array
     $in = $n("SELECT COALESCE(SUM(amount),0) v FROM payments
                WHERE account_id IS NULL AND status='confirmed' AND DATE(payment_date) BETWEEN ? AND ?", [$from, $to])
         + $n("SELECT COALESCE(SUM(amount),0) v FROM credit_payments
-               WHERE account_id IS NULL AND paid_on BETWEEN ? AND ?", [$from, $to])
+               WHERE account_id IS NULL AND voided_at IS NULL AND paid_on BETWEEN ? AND ?", [$from, $to])
         + $n("SELECT COALESCE(SUM(amount),0) v FROM crm_lead_deposits
                WHERE account_id IS NULL AND voided_at IS NULL AND deposit_date BETWEEN ? AND ?", [$from, $to]);
 

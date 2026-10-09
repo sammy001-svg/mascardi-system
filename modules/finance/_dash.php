@@ -96,12 +96,15 @@ function dashOverdue(PDO $db): array
 function dashCollected(PDO $db): array
 {
     $now = dashNum($db, "SELECT COALESCE(SUM(amount),0) FROM credit_payments
-                          WHERE DATE_FORMAT(paid_on,'%Y-%m') = DATE_FORMAT(CURDATE(),'%Y-%m')");
+                          WHERE voided_at IS NULL
+                            AND DATE_FORMAT(paid_on,'%Y-%m') = DATE_FORMAT(CURDATE(),'%Y-%m')");
     $was = dashNum($db, "SELECT COALESCE(SUM(amount),0) FROM credit_payments
-                          WHERE DATE_FORMAT(paid_on,'%Y-%m')
+                          WHERE voided_at IS NULL
+                            AND DATE_FORMAT(paid_on,'%Y-%m')
                                 = DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH),'%Y-%m')");
     $n = (int)dashNum($db, "SELECT COUNT(*) FROM credit_payments
-                             WHERE DATE_FORMAT(paid_on,'%Y-%m') = DATE_FORMAT(CURDATE(),'%Y-%m')");
+                             WHERE voided_at IS NULL
+                               AND DATE_FORMAT(paid_on,'%Y-%m') = DATE_FORMAT(CURDATE(),'%Y-%m')");
     return ['amount' => $now, 'last_month' => $was, 'payments' => $n,
             'delta'  => $was > 0 ? ($now - $was) / $was * 100 : null];
 }
@@ -136,7 +139,8 @@ function dashMonths(PDO $db, int $months = 12): array
         SELECT DATE_FORMAT(d.m,'%Y-%m') AS ym,
                DATE_FORMAT(d.m,'%b') AS label,
                COALESCE((SELECT SUM(p.amount) FROM credit_payments p
-                          WHERE DATE_FORMAT(p.paid_on,'%Y-%m') = DATE_FORMAT(d.m,'%Y-%m')),0) AS collected,
+                          WHERE p.voided_at IS NULL
+                            AND DATE_FORMAT(p.paid_on,'%Y-%m') = DATE_FORMAT(d.m,'%Y-%m')),0) AS collected,
                COALESCE((SELECT SUM(ci.amount - ci.amount_paid)
                            FROM credit_installments ci
                            JOIN credit_agreements ca ON ca.id = ci.agreement_id

@@ -60,7 +60,7 @@ function salesPaidOnLead(PDO $db, int $leadId, float $initialDeposit): float
         $st = $db->prepare("SELECT COALESCE(SUM(cp.amount),0)
                               FROM credit_payments cp
                               JOIN credit_agreements ca ON ca.id = cp.agreement_id
-                             WHERE ca.lead_id = ?");
+                             WHERE ca.lead_id = ? AND cp.voided_at IS NULL");
         $st->execute([$leadId]);
         $paid += (float)$st->fetchColumn();
     } catch (\Throwable $e) { /* no credit tables on this install */ }

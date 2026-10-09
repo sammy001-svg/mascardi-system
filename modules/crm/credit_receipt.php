@@ -21,10 +21,17 @@ $st = $db->prepare("SELECT p.*, a.lead_id, a.principal, a.reference AS agr_ref, 
                     FROM credit_payments p
                     JOIN credit_agreements a ON a.id = p.agreement_id
                     LEFT JOIN users u ON u.id = p.recorded_by
-                    WHERE " . ($paymentId ? "p.id = ?" : "a.lead_id = ?") . "
+                    WHERE " . ($paymentId ? "p.id = ?" : "a.lead_id = ? AND p.voided_at IS NULL") . "
                     ORDER BY p.id DESC LIMIT 1");
 $st->execute([$paymentId ?: $leadId]);
 $pay = $st->fetch(PDO::FETCH_ASSOC);
+if ($pay && !empty($pay['voided_at'])) {
+    // A reversed entry has no valid receipt. Reprinting one as though it were
+    // good is how a reversal quietly gets undone.
+    setFlash('warning', 'That payment was reversed on '
+        . fmtDate((string)$pay['voided_at'], 'j M Y') . ', so it has no receipt.');
+    redirect(BASE_URL . '/modules/finance/account.php?id=' . (int)$pay['agreement_id']);
+}
 if (!$pay) {
     setFlash('error', 'No payment has been recorded yet, so there is nothing to receipt.');
     redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $leadId);

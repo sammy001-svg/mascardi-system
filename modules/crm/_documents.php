@@ -388,8 +388,9 @@ function leadDocsPanel(PDO $db, int $leadId, string $context, bool $canWrite = t
                     <form method="POST" class="d-inline"
                           onsubmit="return confirm('Remove <?= e(addslashes((string)$d['title'])) ?>? The file is deleted.')">
                         <?= csrfField() ?>
-                        <input type="hidden" name="action" value="delete_lead_doc">
-                        <input type="hidden" name="doc_id" value="<?= (int)$d['id'] ?>">
+                        <input type="hidden" name="action"  value="delete_lead_doc">
+                        <input type="hidden" name="doc_id"  value="<?= (int)$d['id'] ?>">
+                        <input type="hidden" name="lead_id" value="<?= (int)$leadId ?>">
                         <button class="lead-doc-btn lead-doc-del" title="Remove"><i class="fa fa-trash"></i></button>
                     </form>
                     <?php endif; ?>
@@ -399,39 +400,62 @@ function leadDocsPanel(PDO $db, int $leadId, string $context, bool $canWrite = t
         </div>
         <?php endif; ?>
 
-        <?php if ($canWrite): ?>
-        <form method="POST" enctype="multipart/form-data" class="lead-docs-add">
-            <?= csrfField() ?>
-            <input type="hidden" name="action"  value="upload_lead_doc">
-            <input type="hidden" name="context" value="<?= e($context) ?>">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label">Document</label>
-                    <select name="doc_type" class="form-select form-select-sm">
-                        <?php foreach ($types as $k => $v): ?>
-                        <option value="<?= e($k) ?>"<?= $k === leadDocsDefaultType($context) ? ' selected' : '' ?>>
-                            <?= e($v) ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">File <span class="text-muted fw-normal">(PDF or photo, max 10 MB)</span></label>
-                    <input type="file" name="document" class="form-control form-control-sm" required
-                           accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Note <span class="text-muted fw-normal">(optional)</span></label>
-                    <input type="text" name="notes" class="form-control form-control-sm"
-                           placeholder="e.g. signed 12 Oct">
-                </div>
-                <div class="col-md-1 d-grid">
-                    <button class="btn btn-sm btn-primary" title="Attach"><i class="fa fa-upload"></i></button>
-                </div>
-            </div>
-        </form>
-        <?php endif; ?>
+        <?php if ($canWrite) leadDocsAddForm($leadId, $context); ?>
     </div>
+    <?php
+}
+
+/**
+ * The attach-a-file form on its own.
+ *
+ * Pulled out of leadDocsPanel() so the finance account page can offer the same
+ * upload under a list grouped differently — by the whole deal rather than by
+ * one stage of it. One form, so the accepted types and the size cap cannot
+ * come to differ between the two screens.
+ *
+ * The lead id is a field rather than taken from the URL because the finance
+ * page is addressed by agreement id and has no lead in its query string.
+ * $extra carries whatever else the host page needs posted back to it — the
+ * finance page sends its agreement id so its redirect lands where it started.
+ */
+function leadDocsAddForm(int $leadId, string $context, array $extra = []): void
+{
+    $types = leadDocTypes();
+    ?>
+    <form method="POST" enctype="multipart/form-data" class="lead-docs-add">
+        <?= csrfField() ?>
+        <input type="hidden" name="action"  value="upload_lead_doc">
+        <input type="hidden" name="context" value="<?= e($context) ?>">
+        <input type="hidden" name="lead_id" value="<?= (int)$leadId ?>">
+        <?php foreach ($extra as $k => $v): ?>
+        <input type="hidden" name="<?= e((string)$k) ?>" value="<?= e((string)$v) ?>">
+        <?php endforeach; ?>
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Document</label>
+                <select name="doc_type" class="form-select form-select-sm">
+                    <?php foreach ($types as $k => $v): ?>
+                    <option value="<?= e($k) ?>"<?= $k === leadDocsDefaultType($context) ? ' selected' : '' ?>>
+                        <?= e($v) ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">File <span class="text-muted fw-normal">(PDF or photo, max 10 MB)</span></label>
+                <input type="file" name="document" class="form-control form-control-sm" required
+                       accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Note <span class="text-muted fw-normal">(optional)</span></label>
+                <input type="text" name="notes" class="form-control form-control-sm"
+                       placeholder="e.g. signed 12 Oct">
+            </div>
+            <div class="col-md-1 d-grid">
+                <button class="btn btn-sm btn-primary" title="Attach"><i class="fa fa-upload"></i></button>
+            </div>
+        </div>
+    </form>
     <?php
 }
 

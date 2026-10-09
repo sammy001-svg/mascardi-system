@@ -26,7 +26,7 @@ if (!function_exists('creditMigrate')) {
 // 3 — the receivables book: account manager, logbook held, reminders on/off,
 //     irregular schedules, a "with lawyers" status, the follow-up notes trail
 //     and a log of every reminder and receipt emailed.
-if (!defined('CREDIT_SCHEMA_VERSION')) define('CREDIT_SCHEMA_VERSION', '3');
+if (!defined('CREDIT_SCHEMA_VERSION')) define('CREDIT_SCHEMA_VERSION', '4');
 
 function creditStatuses(): array {
     return [
@@ -147,6 +147,16 @@ function creditMigrate(PDO $db, bool $force = false): void
         "ALTER TABLE credit_agreements ADD COLUMN last_reviewed_by INT NULL",
         "ALTER TABLE credit_agreements MODIFY COLUMN status
              ENUM('active','completed','defaulted','legal','cancelled') NOT NULL DEFAULT 'active'",
+
+        // v4 — reversing a payment entered by mistake. The row is kept and
+        // marked rather than deleted, the same way a deposit is voided, so the
+        // trail still shows that the entry was made and who took it back.
+        // Everything that counts money must therefore read voided_at IS NULL.
+        "ALTER TABLE credit_payments ADD COLUMN voided_at DATETIME NULL",
+        "ALTER TABLE credit_payments ADD COLUMN voided_by INT NULL",
+        "ALTER TABLE credit_payments ADD COLUMN void_reason VARCHAR(255) NULL",
+        // Every sum of this table filters on voided_at, so it leads the index.
+        "ALTER TABLE credit_payments ADD KEY idx_cp_live (voided_at, paid_on)",
     ];
     foreach ($columns as $sql) { try { $db->exec($sql); } catch (\Throwable $_) {} }
 
@@ -379,12 +389,25 @@ function creditInstallments(PDO $db, int $agreementId): array
     } catch (\Throwable $_) { return []; }
 }
 
-function creditPayments(PDO $db, int $agreementId): array
+/**
+ * What has been paid on an account, oldest first.
+ *
+ * Reversed entries are left out unless asked for. That is the safe default:
+ * the callers are a customer-facing statement and the lead page's "last
+ * payment", and on both a reversed entry would be a wrong figure shown to
+ * somebody. Only the finance account page asks to see them, because that is
+ * where the reversal has to be visible and auditable.
+ */
+function creditPayments(PDO $db, int $agreementId, bool $includeVoided = false): array
 {
     try {
-        $st = $db->prepare("SELECT p.*, u.name AS by_name FROM credit_payments p
-                            LEFT JOIN users u ON u.id = p.recorded_by
-                            WHERE p.agreement_id = ? ORDER BY p.paid_on, p.id");
+        $st = $db->prepare("SELECT p.*, u.name AS by_name, v.name AS voided_by_name
+                              FROM credit_payments p
+                         LEFT JOIN users u ON u.id = p.recorded_by
+                         LEFT JOIN users v ON v.id = p.voided_by
+                             WHERE p.agreement_id = ?"
+                           . ($includeVoided ? '' : ' AND p.voided_at IS NULL')
+                           . " ORDER BY p.paid_on, p.id");
         $st->execute([$agreementId]);
         return $st->fetchAll(PDO::FETCH_ASSOC);
     } catch (\Throwable $_) { return []; }
@@ -431,6 +454,54 @@ function creditApplyPayment(PDO $db, int $agreementId, float $amount, int $payme
 
     creditRefreshStatus($db, $agreementId);
     return $touched;
+}
+
+/**
+ * Lay every live payment back over the schedule from scratch.
+ *
+ * Used when a payment is reversed. Unwinding one payment's own share is not
+ * possible after the fact: a payment spills across instalments, later payments
+ * fill in behind it, and nothing records which payment paid which part beyond
+ * the first one a receipt was issued against. Zeroing the schedule and
+ * re-applying what is left, oldest first, always lands where it would have if
+ * the reversed entry had never been typed.
+ *
+ * Ordered by paid_on then id, which is the order creditApplyPayment() would
+ * have seen them in. Returns the number of payments re-applied.
+ */
+function creditRebuildAllocation(PDO $db, int $agreementId): int
+{
+    $db->prepare("UPDATE credit_installments
+                     SET amount_paid = 0, status = 'pending', paid_at = NULL
+                   WHERE agreement_id = ?")->execute([$agreementId]);
+    $db->prepare("UPDATE credit_payments SET installment_id = NULL WHERE agreement_id = ?")
+       ->execute([$agreementId]);
+
+    $st = $db->prepare("SELECT id, amount FROM credit_payments
+                         WHERE agreement_id = ? AND voided_at IS NULL
+                      ORDER BY paid_on ASC, id ASC");
+    $st->execute([$agreementId]);
+    $live = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($live as $p) {
+        creditApplyPayment($db, $agreementId, (float)$p['amount'], (int)$p['id']);
+    }
+
+    // creditApplyPayment() ends by refreshing the status, but it only ever
+    // closes an account. One that was completed and now owes again has to be
+    // put back by hand, or a reversed final payment leaves a settled account
+    // with a balance nobody is chasing.
+    $st = $db->prepare("SELECT COALESCE(SUM(amount),0) due, COALESCE(SUM(amount_paid),0) paid
+                          FROM credit_installments WHERE agreement_id = ?");
+    $st->execute([$agreementId]);
+    $r = $st->fetch(PDO::FETCH_ASSOC) ?: ['due' => 0, 'paid' => 0];
+    if ((float)$r['paid'] + 0.009 < (float)$r['due']) {
+        $db->prepare("UPDATE credit_agreements SET status = 'active'
+                       WHERE id = ? AND status = 'completed'")->execute([$agreementId]);
+    }
+    creditRefreshStatus($db, $agreementId);
+
+    return count($live);
 }
 
 /** Marks overdue installments and closes the agreement once it is paid off. */

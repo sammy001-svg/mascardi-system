@@ -10,9 +10,16 @@
  * Recording a payment goes through creditRecordPayment(), the same call the
  * lead page uses, so the two screens cannot drift into taking money in two
  * different ways.
+ *
+ * The deal behind the account — what the car cost, what was put down, and the
+ * paperwork for it — comes from _deal.php. The printed documents are still
+ * built where they always were, on the lead, and are linked rather than
+ * rebuilt; what is new is that the ones on file can be read and added to from
+ * here, so chasing an account no longer means opening the lead in another tab.
  */
 
 require_once __DIR__ . '/_credit.php';
+require_once __DIR__ . '/_deal.php';
 require_once __DIR__ . '/_figures.php';
 require_once __DIR__ . '/_accounts.php';
 requireLogin();
@@ -58,6 +65,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      $msg . ' ' . ($r['emailed'] ? 'A confirmation has been emailed.' : $r['email_note']));
         }
         redirect($back);
+    }
+
+    // Reversing an entry is gated harder than taking one: creditCanReverse()
+    // is a manager, not whoever can record a payment.
+    if ($action === 'reverse_payment') {
+        if (!creditCanReverse()) {
+            setFlash('danger', 'Only a manager can reverse a payment.');
+            redirect($back);
+        }
+        $r = creditReversePayment($db, (int)($_POST['payment_id'] ?? 0),
+                                  (string)($_POST['reason'] ?? ''), $uid);
+        if (!$r['ok']) {
+            setFlash('danger', $r['error']);
+        } else {
+            setFlash('success', 'Payment ' . ($r['receipt'] ?: 'entry') . ' of '
+                . money((float)$r['amount']) . ' reversed. Balance is now '
+                . money((float)$r['balance']) . '.');
+        }
+        redirect($back);
+    }
+
+    // The documents belong to the lead, so the lead is what they are filed
+    // against — this page is only another way in. leadDocsPanel() posts these
+    // two actions, and they are handled here exactly as the lead page does.
+    if ($action === 'upload_lead_doc') {
+        $leadId = (int)($_POST['lead_id'] ?? 0);
+        $ctx    = (string)($_POST['context'] ?? 'other');
+        $res    = leadDocsStore($db, $leadId, $ctx,
+            (string)($_POST['doc_type'] ?? 'other'),
+            (string)($_POST['title'] ?? ''),
+            (string)($_POST['notes'] ?? ''),
+            $_FILES['document'] ?? [], $uid);
+        setFlash($res['ok'] ? 'success' : 'danger',
+                 $res['ok'] ? 'Document attached to this deal.' : $res['error']);
+        redirect($back . '#paperwork');
+    }
+
+    if ($action === 'delete_lead_doc') {
+        $res = leadDocsDelete($db, (int)($_POST['doc_id'] ?? 0),
+                                   (int)($_POST['lead_id'] ?? 0));
+        setFlash($res['ok'] ? 'success' : 'danger',
+                 $res['ok'] ? 'Document removed.' : $res['error']);
+        redirect($back . '#paperwork');
     }
 
     if ($action === 'note') {
@@ -114,13 +164,19 @@ if (!$a) {
 
 $sum      = creditSummary($db, $id);
 $schedule = creditInstallments($db, $id);
-$payments = creditPayments($db, $id);
+// Reversed entries are asked for here and nowhere else: this is the one
+// screen where a reversal has to be visible rather than simply gone.
+$payments = creditPayments($db, $id, true);
 $notes    = creditNotes($db, $id);
 $sent     = creditSentLog($db, $id, 12);
 $to       = creditRecipient($db, $id);
 $staff    = finRowsSafe($db, "SELECT id, name FROM users WHERE status='active' ORDER BY name");
 $today    = (string)$db->query('SELECT CURDATE()')->fetchColumn();
 $cfg      = creditReminderConfig();
+$deal     = finDealFigures($db, $a, $sum);
+$issued   = finIssuedDocs($db, $a, $deal, $payments);
+$filed    = finFiledDocs($db, $a);
+$canVoid  = creditCanReverse();
 
 $standing = $a['standing'] ?? creditStanding($a + ['balance' => $sum['balance']], $today, $cfg['before']);
 $paidPct  = $sum['due'] > 0 ? min(100, round($sum['paid'] / $sum['due'] * 100)) : 0;
@@ -150,6 +206,53 @@ include __DIR__ . '/../../includes/header.php';
     font-weight:700;padding:1px 6px;border-radius:4px;background:var(--fin-plane);color:var(--fin-ink-2)}
 .ca-log{font-size:12px;color:var(--fin-ink-2);padding:7px 0;border-bottom:1px solid var(--fin-ring)}
 .ca-log:last-child{border-bottom:0}
+
+/* ── What the car cost ──────────────────────────────────────────────────────
+   auto-fit rather than a column count, so seven figures wrap to two rows on a
+   laptop and one on a wide screen without a breakpoint for each. */
+.ca-deal{display:grid;gap:14px 22px;
+    grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
+.ca-fig{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ca-fig .lbl{font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--fin-muted)}
+.ca-fig .val{font-size:15.5px;font-weight:600;color:var(--fin-ink);
+    font-variant-numeric:tabular-nums;white-space:nowrap}
+.ca-fig .val.dim{color:var(--fin-muted);font-weight:500}
+.ca-fig .sub{font-size:11px;color:var(--fin-muted)}
+/* The two that matter most on a page about money owed. */
+.ca-fig.lead .val{font-size:18px}
+.ca-fig.owing .val{color:var(--fin-critical)}
+
+/* ── Paperwork ──────────────────────────────────────────────────────────────
+   Two lists: what the system prints on demand, and what has been scanned in.
+   They are different things and are labelled as such — a proforma is always
+   available, a signed one either exists or does not. */
+.ca-docs{display:grid;gap:7px}
+.ca-doc{display:flex;align-items:center;gap:11px;padding:9px 11px;
+    border:1px solid var(--fin-ring);border-radius:9px;background:var(--fin-surface);
+    font-size:13px;color:var(--fin-ink);text-decoration:none}
+a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
+.ca-doc.off{opacity:.55;cursor:default}
+.ca-doc-ico{width:17px;text-align:center;color:var(--fin-in);flex:0 0 auto}
+.ca-doc.off .ca-doc-ico{color:var(--fin-axis)}
+.ca-doc-main{min-width:0;flex:1}
+.ca-doc-t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ca-doc-n{font-size:11.5px;color:var(--fin-muted);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ca-doc-go{font-size:11px;color:var(--fin-muted);flex:0 0 auto}
+.ca-subhead{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--fin-muted);margin:0 0 9px}
+.ca-subhead + .ca-docs{margin-bottom:4px}
+
+/* A reversed payment stays on the page. Struck through rather than removed,
+   because the reason it is still here is to show that it happened. */
+.ca-sched tr.void td{color:var(--fin-muted)}
+.ca-sched tr.void td .amt,
+.ca-sched tr.void td .rcpt{text-decoration:line-through}
+.ca-void-why{font-size:11px;color:var(--fin-critical);margin-top:2px}
+.ca-rev{border:0;background:none;padding:2px 5px;border-radius:5px;
+    color:var(--fin-muted);font-size:12px;cursor:pointer}
+.ca-rev:hover{color:var(--fin-critical);background:var(--fin-plane)}
 </style>
 
 <div class="fin">
@@ -227,6 +330,87 @@ include __DIR__ . '/../../includes/header.php';
     </div>
     <?php endif; ?>
 
+    <!-- What the car cost, and where that money has got to.
+         The hero above answers "how much is still owed"; finance also has to
+         answer "owed against what", and that used to mean opening the lead. -->
+    <div class="fin-card mb-4">
+        <header>
+            <h2>The deal</h2>
+            <span class="hint">
+                <?php if (!empty($a['car'])): ?><?= e((string)$a['car']) ?><?php endif; ?>
+                <?php if (!empty($a['registration_number'])): ?>
+                    · <?= e((string)$a['registration_number']) ?><?php endif; ?>
+            </span>
+        </header>
+        <div class="fin-body">
+            <div class="ca-deal">
+                <div class="ca-fig lead">
+                    <span class="lbl">Car value</span>
+                    <?php if ($deal['price'] > 0): ?>
+                    <span class="val"><?= e(number_format((float)$deal['price'])) ?></span>
+                    <span class="sub"><?= $deal['price_source'] === 'agreed'
+                        ? 'agreed sale price' : 'asking price — no agreed price recorded' ?></span>
+                    <?php else: ?>
+                    <span class="val dim">not recorded</span>
+                    <span class="sub">no price on the lead or the car</span>
+                    <?php endif; ?>
+                </div>
+                <div class="ca-fig">
+                    <span class="lbl">Deposit</span>
+                    <span class="val<?= $deal['deposit'] > 0 ? '' : ' dim' ?>">
+                        <?= $deal['deposit'] > 0 ? e(number_format((float)$deal['deposit'])) : '—' ?>
+                    </span>
+                    <span class="sub">paid up front</span>
+                </div>
+                <div class="ca-fig">
+                    <span class="lbl">Financed</span>
+                    <span class="val"><?= e(number_format((float)$deal['principal'])) ?></span>
+                    <span class="sub">principal</span>
+                </div>
+                <?php if ($deal['charges'] > 0): ?>
+                <div class="ca-fig">
+                    <span class="lbl">Interest</span>
+                    <span class="val"><?= e(number_format((float)$deal['charges'])) ?></span>
+                    <span class="sub">over <?= (int)$sum['count'] ?> instalments</span>
+                </div>
+                <?php endif; ?>
+                <div class="ca-fig">
+                    <span class="lbl">Repayable</span>
+                    <span class="val"><?= e(number_format((float)$deal['repayable'])) ?></span>
+                    <span class="sub">total on the schedule</span>
+                </div>
+                <div class="ca-fig">
+                    <span class="lbl">Paid</span>
+                    <span class="val"><?= e(number_format((float)$deal['paid'])) ?></span>
+                    <span class="sub"><?= (int)$sum['paid_count'] ?> of <?= (int)$sum['count'] ?> instalments</span>
+                </div>
+                <div class="ca-fig lead owing">
+                    <span class="lbl">Outstanding</span>
+                    <span class="val"><?= e(number_format((float)$deal['balance'])) ?></span>
+                    <span class="sub">still to collect</span>
+                </div>
+            </div>
+
+            <div class="fin-foot">
+                <?= e(money((float)$deal['in_hand'])) ?> has been received against this car
+                in total, deposit included.
+                <?php if ($deal['gap_material']): ?>
+                <br>
+                <!-- The principal is defaulted from "price less deposit" when the
+                     agreement is written but the field is editable, so a gap is
+                     reported rather than corrected. It is often deliberate. -->
+                <i class="fa fa-circle-info me-1" style="color:var(--fin-warning)"></i>
+                Car value less deposit comes to
+                <?= e(money((float)$deal['price'] - (float)$deal['deposit'])) ?>,
+                but <?= e(money((float)$deal['principal'])) ?> was financed —
+                a difference of <?= e(money(abs((float)$deal['gap']))) ?>.
+                That is normal where a trade-in or a payment outside the schedule
+                was part of the deal; worth a look otherwise.
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
     <div class="fin-grid2">
         <div class="fin-stack">
 
@@ -280,33 +464,171 @@ include __DIR__ . '/../../includes/header.php';
 
             <!-- Payments -->
             <div class="fin-card">
-                <header><h2>Payments received</h2><span class="hint"><?= count($payments) ?></span></header>
+                <?php $livePays = array_values(array_filter($payments, fn ($p) => empty($p['voided_at'])));
+                      $voidPays = count($payments) - count($livePays); ?>
+                <header><h2>Payments received</h2>
+                    <span class="hint"><?= count($livePays) ?><?php
+                        if ($voidPays): ?> · <?= $voidPays ?> reversed<?php endif; ?></span>
+                </header>
                 <?php if (!$payments): ?>
                     <div class="fin-body"><p class="fin-empty mb-0">Nothing has been paid yet.</p></div>
                 <?php else: ?>
                 <div class="table-responsive">
                     <table class="ca-sched">
                         <thead><tr><th>Date</th><th>Receipt</th><th>Method</th>
-                                   <th class="num">Amount</th><th>Recorded by</th></tr></thead>
+                                   <th class="num">Amount</th><th>Recorded by</th>
+                                   <?php if ($canVoid): ?><th></th><?php endif; ?></tr></thead>
                         <tbody>
-                        <?php foreach (array_reverse($payments) as $p): ?>
-                            <tr>
+                        <?php foreach (array_reverse($payments) as $p):
+                            $void = !empty($p['voided_at']); ?>
+                            <tr class="<?= $void ? 'void' : '' ?>">
                                 <td><?= e(fmtDate((string)$p['paid_on'], 'j M Y')) ?></td>
-                                <td><a href="<?= BASE_URL ?>/modules/crm/credit_receipt.php?lead_id=<?= (int)$a['lead_id'] ?>&amp;payment_id=<?= (int)$p['id'] ?>"
-                                       target="_blank"><?= e((string)$p['receipt_number']) ?></a></td>
+                                <td>
+                                    <?php if ($void): ?>
+                                    <span class="rcpt"><?= e((string)$p['receipt_number']) ?></span>
+                                    <?php else: ?>
+                                    <a href="<?= BASE_URL ?>/modules/crm/credit_receipt.php?lead_id=<?= (int)$a['lead_id'] ?>&amp;payment_id=<?= (int)$p['id'] ?>"
+                                       target="_blank"><?= e((string)$p['receipt_number']) ?></a>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?= e((string)($p['method'] ?: '—')) ?>
                                     <?php if (!empty($p['reference'])): ?>
                                     <div class="rb-sub"><?= e((string)$p['reference']) ?></div>
                                     <?php endif; ?>
+                                    <?php if ($void): ?>
+                                    <div class="ca-void-why">
+                                        Reversed <?= e(fmtDate((string)$p['voided_at'], 'j M Y')) ?><?php
+                                            if (!empty($p['voided_by_name'])): ?>
+                                            by <?= e((string)$p['voided_by_name']) ?><?php endif; ?>
+                                        <?php if (!empty($p['void_reason'])): ?>
+                                        — <?= e((string)$p['void_reason']) ?>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php endif; ?>
                                 </td>
-                                <td class="num"><?= e(number_format((float)$p['amount'])) ?></td>
+                                <td class="num"><span class="amt"><?= e(number_format((float)$p['amount'])) ?></span></td>
                                 <td class="rb-sub"><?= e((string)($p['by_name'] ?: '—')) ?></td>
+                                <?php if ($canVoid): ?>
+                                <td class="num">
+                                    <?php if (!$void): ?>
+                                    <button type="button" class="ca-rev" title="Reverse this entry"
+                                            data-pay="<?= (int)$p['id'] ?>"
+                                            data-rcpt="<?= e((string)$p['receipt_number']) ?>"
+                                            data-amt="<?= e(money((float)$p['amount'])) ?>"
+                                            data-on="<?= e(fmtDate((string)$p['paid_on'], 'j M Y')) ?>">
+                                        <i class="fa fa-rotate-left"></i>
+                                    </button>
+                                    <?php endif; ?>
+                                </td>
+                                <?php endif; ?>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
                 <?php endif; ?>
+            </div>
+
+            <!-- Paperwork.
+                 Two lists, because they are two different things: what the
+                 system prints from live data on demand, and what has been
+                 signed and scanned back in. Both belong to the lead; this is
+                 another way in, so that chasing an account does not mean
+                 opening the lead in a second tab. -->
+            <div class="fin-card" id="paperwork">
+                <header>
+                    <h2>Paperwork</h2>
+                    <span class="hint"><?= count($filed) ?> on file</span>
+                </header>
+                <div class="fin-body">
+
+                    <p class="ca-subhead">Printed on demand</p>
+                    <div class="ca-docs">
+                        <?php foreach ($issued as $d): ?>
+                            <?php if ($d['available']): ?>
+                            <a class="ca-doc" href="<?= e($d['url']) ?>" target="_blank" rel="noopener">
+                                <i class="fa <?= e($d['icon']) ?> ca-doc-ico"></i>
+                                <span class="ca-doc-main">
+                                    <span class="ca-doc-t"><?= e($d['label']) ?></span>
+                                    <span class="ca-doc-n"><?= e($d['note']) ?></span>
+                                </span>
+                                <span class="ca-doc-go"><i class="fa fa-arrow-up-right-from-square"></i></span>
+                            </a>
+                            <?php else: ?>
+                            <!-- Listed even when it cannot be produced: "there is
+                                 no delivery note yet" is itself the answer. -->
+                            <span class="ca-doc off">
+                                <i class="fa <?= e($d['icon']) ?> ca-doc-ico"></i>
+                                <span class="ca-doc-main">
+                                    <span class="ca-doc-t"><?= e($d['label']) ?></span>
+                                    <span class="ca-doc-n"><?= e($d['note']) ?></span>
+                                </span>
+                            </span>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <p class="ca-subhead mt-4">Signed and on file</p>
+                    <?php if (!$filed): ?>
+                    <div class="fin-note mb-3">
+                        <i class="fa fa-paperclip"></i>
+                        <div>Nothing has been scanned in for this deal yet. Once the client has
+                            signed the agreement, or sent a bank slip, attach it here &mdash; it
+                            stays with the deal and follows them to their client profile.</div>
+                    </div>
+                    <?php else: ?>
+                    <div class="ca-docs mb-3">
+                        <?php
+                        $dctx = leadDocContexts();
+                        $dtyp = leadDocTypes();
+                        foreach ($filed as $d):
+                            $ext = strtolower(pathinfo((string)$d['file_name'], PATHINFO_EXTENSION));
+                            $ico = in_array($ext, ['jpg','jpeg','png','gif','webp'], true) ? 'fa-file-image'
+                                 : ($ext === 'pdf' ? 'fa-file-pdf'
+                                 : (in_array($ext, ['xls','xlsx','csv'], true) ? 'fa-file-excel' : 'fa-file-lines'));
+                        ?>
+                        <div class="ca-doc">
+                            <i class="fa <?= $ico ?> ca-doc-ico"></i>
+                            <span class="ca-doc-main">
+                                <a class="ca-doc-t" style="color:inherit;text-decoration:none"
+                                   href="<?= BASE_URL ?>/modules/crm/document_file.php?id=<?= (int)$d['id'] ?>&amp;view=1"
+                                   target="_blank" rel="noopener"><?= e((string)$d['title']) ?></a>
+                                <span class="ca-doc-n">
+                                    <?= e($dtyp[$d['doc_type']] ?? 'Document') ?>
+                                    · <?= e($dctx[$d['context']][0] ?? 'Other') ?>
+                                    <?php if ($sz = leadDocSize((int)$d['file_size'])): ?> · <?= e($sz) ?><?php endif; ?>
+                                    · <?= e(fmtDate((string)$d['created_at'], 'j M Y')) ?>
+                                    <?php if (!empty($d['client_id'])): ?> · on the client's profile<?php endif; ?>
+                                </span>
+                            </span>
+                            <span class="ca-doc-go d-flex gap-1">
+                                <a href="<?= BASE_URL ?>/modules/crm/document_file.php?id=<?= (int)$d['id'] ?>"
+                                   class="ca-rev" title="Download"><i class="fa fa-download"></i></a>
+                                <?php if (creditCanRecord()): ?>
+                                <form method="POST" class="d-inline"
+                                      onsubmit="return confirm('Remove this document? The file is deleted.')">
+                                    <?= csrfField() ?>
+                                    <input type="hidden" name="action"  value="delete_lead_doc">
+                                    <input type="hidden" name="doc_id"  value="<?= (int)$d['id'] ?>">
+                                    <input type="hidden" name="lead_id" value="<?= (int)$a['lead_id'] ?>">
+                                    <input type="hidden" name="id"      value="<?= (int)$id ?>">
+                                    <button class="ca-rev" title="Remove"><i class="fa fa-trash"></i></button>
+                                </form>
+                                <?php endif; ?>
+                            </span>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (creditCanRecord()): ?>
+                    <!-- The same form the lead page uses, so the accepted types
+                         and the size cap cannot come to differ between them.
+                         The agreement id rides along so the redirect comes back
+                         here rather than relying on the query string. -->
+                    <?php leadDocsAddForm((int)$a['lead_id'], 'credit', ['id' => (int)$id]); ?>
+                    <?php endif; ?>
+                </div>
             </div>
 
             <!-- The trail -->
@@ -522,5 +844,68 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+
+<?php if ($canVoid): ?>
+<div class="modal fade" id="revModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="reverse_payment">
+                <input type="hidden" name="id" value="<?= (int)$id ?>">
+                <input type="hidden" name="payment_id" id="revPay" value="">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title" style="color:var(--fin-critical)">
+                        <i class="fa fa-rotate-left me-2"></i>Reverse this payment
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">You are about to take back:</p>
+                    <p class="fw-bold fs-5 mb-3" id="revWhat"></p>
+                    <div class="fin-note warning mb-3">
+                        <i class="fa fa-triangle-exclamation"></i>
+                        <div>The entry is kept and marked reversed, not deleted, so the trail
+                            still shows it was made. The schedule and every total are worked
+                            out again without it. If a receipt was emailed, it no longer
+                            matches the account.</div>
+                    </div>
+                    <label class="form-label small fw-semibold">
+                        Why is it being reversed? <span style="color:var(--fin-critical)">*</span>
+                    </label>
+                    <textarea name="reason" class="form-control form-control-sm" rows="2" required
+                              placeholder="e.g. entered twice, or the amount was 50,000 not 500,000"></textarea>
+                    <div class="form-text" style="font-size:11px">
+                        This is written onto the account's trail and the audit log.
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="fa fa-rotate-left me-1"></i>Reverse it
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+// One modal, filled from whichever row was clicked. An account with thirty
+// instalments would otherwise carry thirty copies of this markup.
+(function () {
+    var modalEl = document.getElementById('revModal');
+    if (!modalEl) return;
+    var modal = new bootstrap.Modal(modalEl);
+    document.querySelectorAll('.ca-rev[data-pay]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            document.getElementById('revPay').value = b.dataset.pay;
+            document.getElementById('revWhat').textContent =
+                b.dataset.rcpt + ' — ' + b.dataset.amt + ' on ' + b.dataset.on;
+            modal.show();
+        });
+    });
+})();
+</script>
+<?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

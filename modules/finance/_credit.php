@@ -107,7 +107,8 @@ function creditBook(PDO $db, array $f = []): array
                  WHERE ci.agreement_id = a.id AND ci.amount_paid < ci.amount
               ORDER BY ci.seq LIMIT 1)              AS next_amount,
                p.last_paid_on,
-               (SELECT cp.amount FROM credit_payments cp WHERE cp.agreement_id = a.id
+               (SELECT cp.amount FROM credit_payments cp
+                 WHERE cp.agreement_id = a.id AND cp.voided_at IS NULL
               ORDER BY cp.paid_on DESC, cp.id DESC LIMIT 1) AS last_paid_amount,
                (SELECT COUNT(*) FROM credit_notes cn WHERE cn.agreement_id = a.id) AS note_count
           FROM credit_agreements a
@@ -125,7 +126,8 @@ function creditBook(PDO $db, array $f = []): array
                                 THEN due_date END)                            AS oldest_overdue
                   FROM credit_installments GROUP BY agreement_id) x ON x.agreement_id = a.id
      LEFT JOIN (SELECT agreement_id, MAX(paid_on) AS last_paid_on
-                  FROM credit_payments GROUP BY agreement_id) p ON p.agreement_id = a.id
+                  FROM credit_payments WHERE voided_at IS NULL
+                 GROUP BY agreement_id) p ON p.agreement_id = a.id
          WHERE " . implode(' AND ', $where) . "
       ORDER BY (a.status = 'completed'), x.oldest_overdue IS NULL, x.oldest_overdue, x.next_due";
 
@@ -247,7 +249,8 @@ function creditMonth(PDO $db, string $ym): array
     $collected = (float)(finRowsSafe($db, "SELECT COALESCE(SUM(p.amount),0) AS v
                                              FROM credit_payments p
                                              JOIN credit_agreements a ON a.id = p.agreement_id
-                                            WHERE p.paid_on BETWEEN ? AND ?", [$from, $to])[0]['v'] ?? 0);
+                                            WHERE p.voided_at IS NULL
+                                              AND p.paid_on BETWEEN ? AND ?", [$from, $to])[0]['v'] ?? 0);
 
     $payments = finRowsSafe($db, "
         SELECT p.id, p.receipt_number, p.amount, p.paid_on, p.method, p.reference,
@@ -259,7 +262,8 @@ function creditMonth(PDO $db, string $ym): array
      LEFT JOIN clients  cl ON cl.id = COALESCE(a.client_id, l.client_id)
      LEFT JOIN cars     c  ON c.id  = COALESCE(a.car_id, l.pinned_car_id)
      LEFT JOIN users    u  ON u.id  = p.recorded_by
-         WHERE p.paid_on BETWEEN ? AND ?
+         WHERE p.voided_at IS NULL
+           AND p.paid_on BETWEEN ? AND ?
       ORDER BY p.paid_on DESC, p.id DESC", [$from, $to]);
 
     return [
@@ -462,6 +466,94 @@ function creditRecordPayment(PDO $db, int $agreementId, float $amount, string $p
 
     return ['ok' => true, 'error' => '', 'receipt' => $receipt, 'payment_id' => $payId,
             'balance' => (float)$sum['balance'], 'emailed' => $mail['sent'], 'email_note' => $mail['note']];
+}
+
+/**
+ * Who may reverse a payment.
+ *
+ * Deliberately tighter than creditCanRecord(). A cashier takes money in; only
+ * a manager takes an entry back out, because a reversal rewrites a figure that
+ * has already been reported and may already have been emailed to the buyer as
+ * a receipt.
+ */
+function creditCanReverse(): bool
+{
+    $u = authUser();
+    return $u && in_array($u['role'] ?? '', [
+        'super_admin', 'admin', 'general_manager', 'finance_manager',
+    ], true);
+}
+
+/**
+ * Take back a payment entered by mistake.
+ *
+ * The row is kept and marked, never deleted: the trail has to show that the
+ * entry was made, by whom, and who reversed it. Everything that counts money
+ * reads voided_at IS NULL, so the figures correct themselves.
+ *
+ * The schedule is then rebuilt from the payments that remain rather than
+ * having this one's share subtracted, because a payment spills across
+ * instalments and later ones fill in behind it — see creditRebuildAllocation().
+ */
+function creditReversePayment(PDO $db, int $paymentId, string $reason, int $userId): array
+{
+    creditMigrate($db);
+
+    $fail = static fn (string $why) => ['ok' => false, 'error' => $why, 'receipt' => '',
+                                        'agreement_id' => 0, 'amount' => 0.0, 'balance' => 0.0];
+
+    $reason = trim($reason);
+    // A reversal with no stated reason is useless to whoever reads the books
+    // later, which is the only reason the row is kept at all.
+    if ($reason === '') return $fail('Say why this payment is being reversed.');
+
+    try {
+        $st = $db->prepare("SELECT * FROM credit_payments WHERE id = ?");
+        $st->execute([$paymentId]);
+        $p = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (\Throwable $e) { return $fail('That payment could not be read: ' . $e->getMessage()); }
+
+    if (!$p)                      return $fail('That payment does not exist.');
+    if (!empty($p['voided_at']))  return $fail('That payment has already been reversed.');
+
+    $agreementId = (int)$p['agreement_id'];
+    $amount      = (float)$p['amount'];
+    $receipt     = (string)($p['receipt_number'] ?? '');
+
+    try {
+        $db->beginTransaction();
+        $db->prepare("UPDATE credit_payments
+                         SET voided_at = NOW(), voided_by = ?, void_reason = ?
+                       WHERE id = ? AND voided_at IS NULL")
+           ->execute([$userId ?: null, mb_substr($reason, 0, 255), $paymentId]);
+        creditRebuildAllocation($db, $agreementId);
+        $db->commit();
+    } catch (\Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('creditReversePayment: ' . $e->getMessage());
+        return $fail('The reversal could not be completed: ' . $e->getMessage());
+    }
+
+    $sum = creditSummary($db, $agreementId);
+
+    // On the account's own trail, so the next person to open it sees why the
+    // figure moved without having to go to the audit log.
+    try {
+        creditAddNote($db, $agreementId, 'management',
+            'Payment ' . ($receipt ?: '#' . $paymentId) . ' of ' . money($amount)
+            . ' reversed. Reason: ' . $reason, $userId);
+    } catch (\Throwable $e) {}
+
+    try {
+        logActivity('update', 'credit_payments', $paymentId,
+            'Reversed credit payment ' . ($receipt ?: '#' . $paymentId) . ' of ' . money($amount)
+            . '. Balance now ' . money((float)$sum['balance']) . '. Reason: ' . $reason,
+            ['voided_at' => null], ['voided_at' => date('Y-m-d H:i:s'), 'void_reason' => $reason]);
+    } catch (\Throwable $e) {}
+
+    return ['ok' => true, 'error' => '', 'receipt' => $receipt,
+            'agreement_id' => $agreementId, 'amount' => $amount,
+            'balance' => (float)$sum['balance']];
 }
 
 // ── Emails ───────────────────────────────────────────────────────────────────

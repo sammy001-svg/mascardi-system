@@ -102,7 +102,7 @@ $statsSQL = "
                          WHERE d.lead_id = l.id AND d.voided_at IS NULL), 0)
             + COALESCE((SELECT SUM(cp.amount) FROM credit_payments cp
                           JOIN credit_agreements ca ON ca.id = cp.agreement_id
-                         WHERE ca.lead_id = l.id), 0)                        AS paid,
+                         WHERE ca.lead_id = l.id AND cp.voided_at IS NULL), 0) AS paid,
           (SELECT COUNT(*) FROM credit_agreements ca2
             WHERE ca2.lead_id = l.id AND ca2.status <> 'cancelled') > 0      AS on_credit
         FROM crm_leads l
