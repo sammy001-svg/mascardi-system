@@ -90,8 +90,21 @@ function finDealFigures(PDO $db, array $a, array $sum): array
  *
  * These are printed on demand from live data rather than stored, so they are
  * always current and there is nothing to upload. 'available' is false where
- * the deal has not reached that document yet; it is still listed, because
- * "there is no delivery note yet" is itself the answer finance wants.
+ * the deal has not reached that document yet; the button is still drawn,
+ * disabled, carrying 'note' as its tooltip — "there is no delivery note yet"
+ * is itself the answer finance wants, and a button that vanishes reads as a
+ * missing feature.
+ *
+ * 'btn' is the Bootstrap class the lead page already uses for that document,
+ * so the two screens colour the same paperwork the same way: proforma blue,
+ * sales agreement green, credit agreement solid purple, deposit receipt
+ * amber, sales receipt cyan. Statement and delivery note get their own, since
+ * on the lead page they sit in separate cards and never had to be told apart
+ * from the others. 'short' is the toolbar label, where the full name would
+ * not fit.
+ *
+ * A per-payment receipt carries no 'btn': there can be thirty of them, so they
+ * belong against their row in the payments table, not in a toolbar.
  */
 function finIssuedDocs(PDO $db, array $a, array $figures, array $payments): array
 {
@@ -106,36 +119,45 @@ function finIssuedDocs(PDO $db, array $a, array $figures, array $payments): arra
     $docs = [
         ['key' => 'proforma', 'label' => 'Proforma invoice', 'icon' => 'fa-file-invoice',
          'url' => $crm . 'proforma.php' . $q, 'available' => true,
+         'btn' => 'btn-outline-primary', 'short' => 'Proforma',
          'note' => 'Priced from the deal as it stands'],
 
         ['key' => 'sales_agreement', 'label' => 'Sales agreement', 'icon' => 'fa-file-signature',
          'url' => $crm . 'sales_agreement.php' . $q, 'available' => true,
+         'btn' => 'btn-outline-success', 'short' => 'Agreement',
          'note' => 'The sale itself'],
 
+        // Solid purple rather than an outline, exactly as on the lead page: this
+        // is the contract the money is owed under, and it leads the row.
         ['key' => 'credit_agreement', 'label' => 'Credit payment agreement', 'icon' => 'fa-file-contract',
          'url' => $crm . 'credit_payment_agreement.php' . $q, 'available' => $hasCredit,
+         'btn' => 'btn-credit', 'short' => 'Credit Agreement',
          'note' => $hasCredit ? 'The schedule, as signed' : 'No credit agreement on this account'],
 
         ['key' => 'deposit_receipt', 'label' => 'Deposit receipt', 'icon' => 'fa-receipt',
          'url' => $crm . 'deposit_receipt.php' . $q,
          'available' => (float)$figures['deposit'] > 0,
+         'btn' => 'btn-outline-warning', 'short' => 'Deposit Receipt',
          'note' => (float)$figures['deposit'] > 0
                     ? money((float)$figures['deposit']) . ' received up front'
                     : 'No deposit recorded'],
 
         ['key' => 'statement', 'label' => 'Statement of account', 'icon' => 'fa-file-lines',
          'url' => $crm . 'credit_statement.php' . $q, 'available' => $hasCredit,
+         'btn' => 'btn-outline-dark', 'short' => 'Statement',
          'note' => 'Every instalment and payment to date'],
 
         ['key' => 'sales_receipt', 'label' => 'Sales receipt', 'icon' => 'fa-receipt',
          'url' => $crm . 'sales_receipt.php' . $q,
          'available' => (float)$figures['balance'] <= 0.009 && (float)$figures['paid'] > 0,
+         'btn' => 'btn-outline-info', 'short' => 'Sales Receipt',
          'note' => (float)$figures['balance'] <= 0.009 && (float)$figures['paid'] > 0
                     ? 'Paid in full'
                     : 'Issued once the account is settled'],
 
         ['key' => 'delivery_note', 'label' => 'Delivery note', 'icon' => 'fa-truck-ramp-box',
          'url' => $crm . 'delivery_note.php' . $q, 'available' => $delivered,
+         'btn' => 'btn-outline-secondary', 'short' => 'Delivery Note',
          'note' => $delivered ? 'Handover certificate' : 'The car has not been handed over yet'],
     ];
 
@@ -149,12 +171,26 @@ function finIssuedDocs(PDO $db, array $a, array $figures, array $payments): arra
             'icon'      => 'fa-receipt',
             'url'       => $crm . 'credit_receipt.php' . $q . '&payment_id=' . (int)$p['id'],
             'available' => true,
+            // No button: these live against their row in the payments table.
+            'btn'       => '',
+            'short'     => '',
             'note'      => money((float)$p['amount']) . ' on '
                            . fmtDate((string)$p['paid_on'], 'j M Y'),
         ];
     }
 
     return $docs;
+}
+
+/**
+ * Just the documents that get a button, in toolbar order.
+ *
+ * Split out so the page does not filter the list inline and the set the
+ * toolbar draws is the set a test can check.
+ */
+function finDocButtons(array $issued): array
+{
+    return array_values(array_filter($issued, fn ($d) => ($d['btn'] ?? '') !== ''));
 }
 
 /**

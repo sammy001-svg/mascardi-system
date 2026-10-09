@@ -223,26 +223,46 @@ include __DIR__ . '/../../includes/header.php';
 .ca-fig.lead .val{font-size:18px}
 .ca-fig.owing .val{color:var(--fin-critical)}
 
-/* ── Paperwork ──────────────────────────────────────────────────────────────
-   Two lists: what the system prints on demand, and what has been scanned in.
-   They are different things and are labelled as such — a proforma is always
-   available, a signed one either exists or does not. */
+/* ── Signed documents ───────────────────────────────────────────────────────
+   What came back signed and was scanned in. What the system prints is a row of
+   buttons at the top of the page instead, since those always exist and a list
+   of seven permanent links is a worse way to offer them than seven buttons. */
 .ca-docs{display:grid;gap:7px}
 .ca-doc{display:flex;align-items:center;gap:11px;padding:9px 11px;
     border:1px solid var(--fin-ring);border-radius:9px;background:var(--fin-surface);
     font-size:13px;color:var(--fin-ink);text-decoration:none}
 a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
-.ca-doc.off{opacity:.55;cursor:default}
 .ca-doc-ico{width:17px;text-align:center;color:var(--fin-in);flex:0 0 auto}
-.ca-doc.off .ca-doc-ico{color:var(--fin-axis)}
 .ca-doc-main{min-width:0;flex:1}
 .ca-doc-t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ca-doc-n{font-size:11.5px;color:var(--fin-muted);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ca-doc-go{font-size:11px;color:var(--fin-muted);flex:0 0 auto}
-.ca-subhead{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-    color:var(--fin-muted);margin:0 0 9px}
-.ca-subhead + .ca-docs{margin-bottom:4px}
+
+/* ── The document toolbar ───────────────────────────────────────────────────
+   One row of buttons at the top, coloured the way the lead page colours the
+   same paperwork, so somebody moving between the two screens reaches for the
+   same colour. Wraps rather than scrolls: on a phone these become two or
+   three rows, which is readable, where a scrolling strip hides half of them. */
+.ca-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+    padding:0 0 18px}
+.ca-acts .btn{font-size:12.5px}
+/* A disabled document still shows, and its tooltip says what is missing. A
+   button that disappears reads as a missing feature. */
+.ca-acts .btn.disabled{opacity:.45}
+/* The contract the money is owed under, solid purple as on the lead page. */
+.btn-credit{background:#7e22ce;border-color:#7e22ce;color:#fff}
+.btn-credit:hover,.btn-credit:focus{background:#6b1fae;border-color:#6b1fae;color:#fff}
+.btn-credit.disabled{background:#7e22ce;border-color:#7e22ce;color:#fff}
+/* Lifted for the dark surface, and the hover goes darker rather than lighter:
+   #a855f7 put the white label at 3.96:1, under the floor. #8a2bd9 is 6.13:1
+   and still plainly a different shade from the 5.38:1 base. */
+[data-theme="dark"] .btn-credit{background:#9333ea;border-color:#9333ea}
+[data-theme="dark"] .btn-credit:hover,
+[data-theme="dark"] .btn-credit:focus{background:#8a2bd9;border-color:#8a2bd9}
+/* A thin rule under the row, so it reads as a toolbar rather than as part of
+   the figures below it. */
+.ca-acts-wrap{border-bottom:1px solid var(--fin-ring);margin-bottom:18px}
 
 /* A reversed payment stays on the page. Struck through rather than removed,
    because the reason it is still here is to show that it happened. */
@@ -269,11 +289,9 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
                 <?php if (!empty($a['registration_number'])): ?> · <?= e((string)$a['registration_number']) ?><?php endif; ?>
             </div>
         </div>
+        <!-- Navigation only. The documents are a row of their own below, so
+             the Statement button that used to sit here is in the toolbar. -->
         <div class="d-flex gap-2 flex-wrap">
-            <a class="btn btn-outline-secondary btn-sm"
-               href="<?= BASE_URL ?>/modules/crm/credit_statement.php?lead_id=<?= (int)$a['lead_id'] ?>" target="_blank">
-                <i class="fa fa-file-lines me-1"></i>Statement
-            </a>
             <a class="btn btn-outline-secondary btn-sm"
                href="<?= BASE_URL ?>/modules/crm/view_lead.php?id=<?= (int)$a['lead_id'] ?>#credit">
                 <i class="fa fa-user me-1"></i>The lead
@@ -281,6 +299,35 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
             <a class="btn btn-outline-secondary btn-sm" href="<?= BASE_URL ?>/modules/finance/receivables.php">
                 <i class="fa fa-arrow-left me-1"></i>Book
             </a>
+        </div>
+    </div>
+
+    <!-- Everything this account can print, and the one thing it can be sent.
+         Each document keeps the colour the lead page gives it. -->
+    <div class="ca-acts-wrap">
+        <div class="ca-acts">
+            <?php foreach (finDocButtons($issued) as $d): ?>
+                <?php if ($d['available']): ?>
+                <a href="<?= e($d['url']) ?>" target="_blank" rel="noopener"
+                   class="btn btn-sm <?= e($d['btn']) ?>" title="<?= e($d['note']) ?>">
+                    <i class="fa <?= e($d['icon']) ?> me-1"></i><?= e($d['short']) ?>
+                </a>
+                <?php else: ?>
+                <a class="btn btn-sm <?= e($d['btn']) ?> disabled" tabindex="-1"
+                   aria-disabled="true" title="<?= e($d['note']) ?>">
+                    <i class="fa <?= e($d['icon']) ?> me-1"></i><?= e($d['short']) ?>
+                </a>
+                <?php endif; ?>
+            <?php endforeach; ?>
+
+            <?php if (creditCanRecord() && (float)$sum['balance'] > 0.009): ?>
+            <!-- Solid, because it is the one button here that changes something
+                 rather than printing something. -->
+            <button type="button" class="btn btn-sm btn-success"
+                    data-bs-toggle="modal" data-bs-target="#payModal">
+                <i class="fa fa-coins me-1"></i>Record Payment
+            </button>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -537,38 +584,14 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
                  opening the lead in a second tab. -->
             <div class="fin-card" id="paperwork">
                 <header>
-                    <h2>Paperwork</h2>
+                    <h2>Signed documents</h2>
                     <span class="hint"><?= count($filed) ?> on file</span>
                 </header>
                 <div class="fin-body">
-
-                    <p class="ca-subhead">Printed on demand</p>
-                    <div class="ca-docs">
-                        <?php foreach ($issued as $d): ?>
-                            <?php if ($d['available']): ?>
-                            <a class="ca-doc" href="<?= e($d['url']) ?>" target="_blank" rel="noopener">
-                                <i class="fa <?= e($d['icon']) ?> ca-doc-ico"></i>
-                                <span class="ca-doc-main">
-                                    <span class="ca-doc-t"><?= e($d['label']) ?></span>
-                                    <span class="ca-doc-n"><?= e($d['note']) ?></span>
-                                </span>
-                                <span class="ca-doc-go"><i class="fa fa-arrow-up-right-from-square"></i></span>
-                            </a>
-                            <?php else: ?>
-                            <!-- Listed even when it cannot be produced: "there is
-                                 no delivery note yet" is itself the answer. -->
-                            <span class="ca-doc off">
-                                <i class="fa <?= e($d['icon']) ?> ca-doc-ico"></i>
-                                <span class="ca-doc-main">
-                                    <span class="ca-doc-t"><?= e($d['label']) ?></span>
-                                    <span class="ca-doc-n"><?= e($d['note']) ?></span>
-                                </span>
-                            </span>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    </div>
-
-                    <p class="ca-subhead mt-4">Signed and on file</p>
+                    <?php /* What the system prints is a row of buttons at the top of
+                             the page now. What is left here is the other kind: the
+                             paper that comes back signed, which only exists if
+                             somebody put it there. */ ?>
                     <?php if (!$filed): ?>
                     <div class="fin-note mb-3">
                         <i class="fa fa-paperclip"></i>
@@ -670,64 +693,6 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
         </div>
 
         <div class="fin-stack">
-
-            <!-- Take a payment -->
-            <?php if (creditCanRecord() && (float)$sum['balance'] > 0.009): ?>
-            <div class="fin-card">
-                <header><h2>Record a payment</h2></header>
-                <div class="fin-body">
-                    <form method="post">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="action" value="payment">
-                        <input type="hidden" name="id" value="<?= (int)$id ?>">
-                        <div class="mb-2">
-                            <label class="form-label small">Amount received</label>
-                            <input type="text" inputmode="decimal" name="amount" class="form-control" required
-                                   placeholder="<?= e(number_format((float)$sum['next_amount'], 0, '.', '')) ?>">
-                            <div class="form-text">
-                                Goes against the oldest unpaid instalment first.
-                                <?= e(money((float)$sum['balance'])) ?> outstanding.
-                            </div>
-                        </div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-7">
-                                <label class="form-label small">Date received</label>
-                                <input type="date" name="paid_on" class="form-control" value="<?= e($today) ?>">
-                            </div>
-                            <div class="col-5">
-                                <label class="form-label small">Method</label>
-                                <select name="method" class="form-select">
-                                    <?php foreach (['mpesa' => 'M-Pesa', 'bank' => 'Bank', 'cash' => 'Cash',
-                                                    'cheque' => 'Cheque'] as $k => $lbl): ?>
-                                    <option value="<?= e($k) ?>"><?= e($lbl) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small">Reference</label>
-                            <input type="text" name="reference" class="form-control" placeholder="M-Pesa code, slip number">
-                        </div>
-                        <?php $accSel = acctSelect($db, 'account_id', 0, 'form-select'); ?>
-                        <?php if ($accSel !== ''): ?>
-                        <div class="mb-3">
-                            <label class="form-label small">Into which account</label>
-                            <?= $accSel ?>
-                            <div class="form-text">Where the money actually landed, for the statement.</div>
-                        </div>
-                        <?php endif; ?>
-                        <button class="btn btn-primary w-100">
-                            <i class="fa fa-check me-1"></i>Record payment
-                        </button>
-                        <div class="form-text mt-2">
-                            <?= $to['email'] !== '' && $cfg['receipts']
-                                ? 'A confirmation will be emailed to ' . e($to['email']) . '.'
-                                : 'No confirmation email will be sent.' ?>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            <?php endif; ?>
 
             <!-- Chase it -->
             <?php if (creditCanRecord()): ?>
@@ -844,6 +809,81 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
         </div>
     </div>
 </div>
+
+<?php if (creditCanRecord() && (float)$sum['balance'] > 0.009): ?>
+<!-- Taking a payment. The same form as before, now opened from the toolbar
+     rather than taking up a card on a page about what is owed. It still posts
+     action=payment to creditRecordPayment(), so the lead page and this one
+     cannot drift into taking money two different ways. -->
+<div class="modal fade" id="payModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="payment">
+                <input type="hidden" name="id" value="<?= (int)$id ?>">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title" style="color:var(--fin-ink)">
+                        <i class="fa fa-coins me-2" style="color:var(--fin-in)"></i>Record a payment
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small">Amount received</label>
+                        <input type="text" inputmode="decimal" name="amount" class="form-control" required
+                               autocomplete="off"
+                               placeholder="<?= e(number_format((float)$sum['next_amount'], 0, '.', '')) ?>">
+                        <div class="form-text">
+                            Goes against the oldest unpaid instalment first.
+                            <?= e(money((float)$sum['balance'])) ?> outstanding.
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-7">
+                            <label class="form-label small">Date received</label>
+                            <input type="date" name="paid_on" class="form-control" value="<?= e($today) ?>">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small">Method</label>
+                            <select name="method" class="form-select">
+                                <?php foreach (['mpesa' => 'M-Pesa', 'bank' => 'Bank', 'cash' => 'Cash',
+                                                'cheque' => 'Cheque'] as $k => $lbl): ?>
+                                <option value="<?= e($k) ?>"><?= e($lbl) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Reference</label>
+                        <input type="text" name="reference" class="form-control"
+                               placeholder="M-Pesa code, slip number">
+                    </div>
+                    <?php $accSel = acctSelect($db, 'account_id', 0, 'form-select'); ?>
+                    <?php if ($accSel !== ''): ?>
+                    <div class="mb-3">
+                        <label class="form-label small">Into which account</label>
+                        <?= $accSel ?>
+                        <div class="form-text">Where the money actually landed, for the statement.</div>
+                    </div>
+                    <?php endif; ?>
+                    <div class="form-text">
+                        <?= $to['email'] !== '' && $cfg['receipts']
+                            ? 'A confirmation will be emailed to ' . e($to['email']) . '.'
+                            : 'No confirmation email will be sent.' ?>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success btn-sm">
+                        <i class="fa fa-check me-1"></i>Record payment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if ($canVoid): ?>
 <div class="modal fade" id="revModal" tabindex="-1" aria-hidden="true">
