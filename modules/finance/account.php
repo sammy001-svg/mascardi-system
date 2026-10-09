@@ -559,6 +559,7 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
                                 <td class="num">
                                     <?php if (!$void): ?>
                                     <button type="button" class="ca-rev" title="Reverse this entry"
+                                            data-bs-toggle="modal" data-bs-target="#revModal"
                                             data-pay="<?= (int)$p['id'] ?>"
                                             data-rcpt="<?= e((string)$p['receipt_number']) ?>"
                                             data-amt="<?= e(money((float)$p['amount'])) ?>"
@@ -930,19 +931,40 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
     </div>
 </div>
 <script>
-// One modal, filled from whichever row was clicked. An account with thirty
+// One modal, filled from whichever row opened it. An account with thirty
 // instalments would otherwise carry thirty copies of this markup.
+//
+// The button carries data-bs-toggle, so Bootstrap opens the modal itself and
+// nothing here touches the `bootstrap` global. That matters: this script sits
+// in the page body and footer.php loads the bundle after it, so the previous
+// version's `new bootstrap.Modal(...)` ran before Bootstrap existed, threw,
+// and left the click handler unbound — the button did nothing at all.
+//
+// show.bs.modal is a plain DOM event, and relatedTarget is the button that
+// triggered it, so this listener is safe to register at any point.
 (function () {
     var modalEl = document.getElementById('revModal');
     if (!modalEl) return;
-    var modal = new bootstrap.Modal(modalEl);
-    document.querySelectorAll('.ca-rev[data-pay]').forEach(function (b) {
-        b.addEventListener('click', function () {
-            document.getElementById('revPay').value = b.dataset.pay;
-            document.getElementById('revWhat').textContent =
-                b.dataset.rcpt + ' — ' + b.dataset.amt + ' on ' + b.dataset.on;
-            modal.show();
-        });
+
+    modalEl.addEventListener('show.bs.modal', function (ev) {
+        var b = ev.relatedTarget;
+        if (!b || !b.dataset.pay) return;
+        modalEl.querySelector('#revPay').value = b.dataset.pay;
+        modalEl.querySelector('#revWhat').textContent =
+            b.dataset.rcpt + ' \u2014 ' + b.dataset.amt + ' on ' + b.dataset.on;
+        // A reason from a previous open must not be re-submitted against a
+        // different payment.
+        var why = modalEl.querySelector('[name="reason"]');
+        if (why) why.value = '';
+    });
+
+    // Belt and braces: if the payment id did not make it in, the form must not
+    // post. Reversing payment 0 would be refused by the handler anyway, but a
+    // silent no-op is worse than not submitting.
+    modalEl.querySelector('form').addEventListener('submit', function (ev) {
+        if (!modalEl.querySelector('#revPay').value) {
+            ev.preventDefault();
+        }
     });
 })();
 </script>
