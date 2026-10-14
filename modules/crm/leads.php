@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 // it looked fine on an empty list.
 require_once __DIR__ . '/crm_helpers.php';
 require_once __DIR__ . '/_delete.php';
+require_once __DIR__ . '/_leads_query.php';
 requireLogin();
 canAccess('crm') || redirect(BASE_URL . '/index.php');
 
@@ -180,53 +181,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_action'])) {
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN campaign VARCHAR(150) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE crm_leads ADD COLUMN last_notified_date DATE NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 
-$filterStage    = $_GET['stage']    ?? '';
-$filterSource   = $_GET['source']   ?? '';
-$filterCampaign = trim($_GET['campaign'] ?? '');
-$filterUser     = $isCrmAgent ? $uid : (int)($_GET['assigned'] ?? 0);
-$search         = trim($_GET['q'] ?? '');
-$filterFrom     = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_from'] ?? '') ? $_GET['date_from'] : '';
-$filterTo       = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_to']   ?? '') ? $_GET['date_to']   : '';
-$sortBy         = in_array($_GET['sort'] ?? '', ['score_desc','score_asc','updated','overdue']) ? $_GET['sort'] : 'overdue';
+// The filters, remembered between visits. Somebody who filtered to one
+// agent's overdue leads, opened one and came back used to find the whole book
+// again, and filtered a second time; now the set is put back and only Clear
+// empties it. leadsStickyFilters() decides, so the export agrees.
+$leadScope = leadsScope($me, $supLocId);
+$leadF     = leadsStickyFilters($_GET, $leadScope);
 
-$where  = ['1=1'];
-$params = [];
+$filterStage    = $leadF['stage'];
+$filterSource   = $leadF['source'];
+$filterCampaign = $leadF['campaign'];
+$filterUser     = (int)$leadF['assigned'];
+$search         = $leadF['q'];
+$filterFrom     = $leadF['date_from'];
+$filterTo       = $leadF['date_to'];
+$sortBy         = $leadF['sort'];
 
-// CRM agents are always locked to their own leads
-if ($isCrmAgent) {
-    $where[] = 'l.assigned_to = ?';
-    $params[] = $uid;
-}
+// Built by leadsWhere(), including the agent and supervisor scope rules,
+// so the Excel export cannot come out holding rows the screen would not
+// show — the one thing about an export nobody checks until a meeting.
+$leadQ    = leadsWhere($leadF, $leadScope);
+$whereStr = $leadQ['sql'];
+$params   = $leadQ['params'];
 
-// Supervisors see only leads assigned to users at their location
-if ($isSupervisor) {
-    if ($supLocId) {
-        $where[] = 'l.assigned_to IN (SELECT id FROM users WHERE location_id = ?)';
-        $params[] = $supLocId;
-    } else {
-        $where[] = '1 = 0'; // no location assigned — show nothing until admin assigns one
-    }
-}
-
-if ($filterStage)                { $where[] = 'l.stage = ?';       $params[] = $filterStage; }
-if ($filterSource)               { $where[] = 'l.source = ?';      $params[] = $filterSource; }
-if ($filterCampaign)             { $where[] = 'l.campaign = ?';    $params[] = $filterCampaign; }
-if (!$isCrmAgent && $filterUser) { $where[] = 'l.assigned_to = ?'; $params[] = $filterUser; }
-if ($filterFrom)                 { $where[] = 'DATE(l.created_at) >= ?'; $params[] = $filterFrom; }
-if ($filterTo)                   { $where[] = 'DATE(l.created_at) <= ?'; $params[] = $filterTo; }
-if ($search) {
-    $where[]  = '(l.name LIKE ? OR l.phone LIKE ? OR l.email LIKE ? OR l.interested_in LIKE ? OR l.campaign LIKE ?)';
-    $params   = array_merge($params, ["%$search%","%$search%","%$search%","%$search%","%$search%"]);
-}
-
-$whereStr = implode(' AND ', $where);
-
-$orderSQL = match($sortBy) {
-    'score_desc' => 'l.lead_score DESC, l.updated_at DESC',
-    'score_asc'  => 'l.lead_score ASC,  l.updated_at DESC',
-    'updated'    => 'l.updated_at DESC',
-    default      => 'CASE WHEN l.follow_up_date < CURDATE() AND l.stage NOT IN (\'lost\',\'delivered\') THEN 0 ELSE 1 END, l.updated_at DESC',
-};
+$orderSQL = leadsOrder($sortBy);
 
 try {
     $leads = $db->prepare("
@@ -288,14 +266,7 @@ if ($leads) {
     } catch (\Throwable $_) {}
 }
 
-$stages = [
-    'hot'       => ['Hot',       'danger'],
-    'lukewarm'  => ['Lukewarm',  'warning'],
-    'cold'      => ['Cold',      'info'],
-    'lost'      => ['Lost',      'secondary'],
-    'reserved'  => ['Reserved',  'purple'],
-    'delivered' => ['Delivered', 'success'],
-];
+$stages = leadsStages();
 
 // ── Duplicate scan (whoever may delete, once per session) ─────────────────────
 // Gated on who can act on it rather than on its own role list: the whole
@@ -348,12 +319,7 @@ if ($canDeleteLeads && empty($_GET['skip_dup_scan'])) {
     }
 }
 
-$sources = [
-    'walk_in'    => 'Walk-in',    'referral'  => 'Referral',
-    'facebook'   => 'Facebook',   'instagram' => 'Instagram',
-    'website'    => 'Website',    'phone_call'=> 'Phone Call',
-    'whatsapp'   => 'WhatsApp',   'other'     => 'Other',
-];
+$sources = leadsSources();
 
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -369,6 +335,15 @@ include __DIR__ . '/../../includes/header.php';
         <a href="my_dashboard.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-gauge-high me-1"></i>Dashboard</a>
         <?php endif; ?>
         <a href="index.php" class="btn btn-sm btn-outline-secondary"><i class="fa fa-columns me-1"></i>Pipeline</a>
+        <?php /* The filters ride along in the link, so what downloads is what is
+                 on screen even for somebody who bookmarks this. The export reads
+                 the remembered set as well, so a bare href would still be right —
+                 but a visible query string is the honest version of that. */ ?>
+        <a href="export_leads.php<?= e(leadsFilterQuery($leadF, $leadScope)) ?>"
+           class="btn btn-sm btn-outline-success"
+           title="<?= count($leads) ?> lead<?= count($leads) === 1 ? '' : 's' ?>, as an Excel sheet with filters on">
+            <i class="fa fa-file-excel me-1"></i>Export
+        </a>
         <?php if (!empty($staleLeadIds)): ?>
         <a href="my_tasks.php?tab=stale" class="btn btn-sm btn-outline-warning">
             <i class="fa fa-hourglass-half me-1"></i>Going Cold <span class="badge bg-warning text-dark"><?= count($staleLeadIds) ?></span>
@@ -505,7 +480,10 @@ include __DIR__ . '/../../includes/header.php';
             </div>
             <div class="col-auto d-flex gap-2">
                 <button class="btn btn-sm btn-primary"><i class="fa fa-filter me-1"></i>Filter</button>
-                <a href="leads.php" class="btn btn-sm btn-outline-secondary">Clear</a>
+                <!-- ?clear=1, not a bare leads.php: a bare visit is what puts
+                     the remembered filters back, so the old link would have
+                     restored exactly what it was meant to get rid of. -->
+                <a href="leads.php?clear=1" class="btn btn-sm btn-outline-secondary">Clear</a>
             </div>
         </form>
         <?php if ($filterFrom || $filterTo): ?>
