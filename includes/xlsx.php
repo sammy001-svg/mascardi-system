@@ -221,11 +221,27 @@ function xlsxWrite(string $sheetName, array $rows, array $widths, array $defs,
         . '<sheetFormatPr defaultRowHeight="15"/>'
         . ($cols ? '<cols>' . $cols . '</cols>' : '')
         . '<sheetData>' . $body . '</sheetData>'
-        // Order matters in the schema: mergeCells before autoFilter, or Excel repairs it.
+        // Order matters, and it is the other way round from what this used to
+        // say. ECMA-376 CT_Worksheet is a sequence, not a choice, and autoFilter
+        // comes before mergeCells in it:
+        //
+        //   … sheetData, sheetCalcPr, sheetProtection, protectedRanges,
+        //     scenarios, autoFilter, sortState, dataConsolidate,
+        //     customSheetViews, mergeCells, phoneticPr, …
+        //
+        // Emitted the other way, Excel validates the part, fails on the
+        // sequence and throws the whole worksheet away: "Replaced Part:
+        // /xl/worksheets/sheet1.xml part with XML error. Load error", and a
+        // workbook that opens empty. Only a sheet with both a merge and a
+        // filter was affected, which is why it went unnoticed — a template or
+        // a plain list has no merges.
+        //
+        // Well-formedness checks do not catch this. The order is asserted by
+        // the export tests instead.
+        . ($autoFilter ? '<autoFilter ref="A1:' . xlsxCol($nCols - 1) . '1"/>' : '')
         . ($merges ? '<mergeCells count="' . count($merges) . '">'
             . implode('', array_map(fn($m) => '<mergeCell ref="' . $m . '"/>', $merges))
             . '</mergeCells>' : '')
-        . ($autoFilter ? '<autoFilter ref="A1:' . xlsxCol($nCols - 1) . '1"/>' : '')
         . '<pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.3" footer="0.3"/>'
         . '<pageSetup orientation="landscape" paperSize="9" fitToWidth="1"/>'
         . '</worksheet>';
