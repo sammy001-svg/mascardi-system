@@ -258,7 +258,10 @@ function carlCreateReservation(PDO $db, array $user, array $got): array
                   WHERE id = ?"
             )->execute([$carId, $deposit, $note, $leadId]);
 
-            notifyRoles(['super_admin', 'admin'], 'alert',
+            // The same list the lead page uses, so a reservation taken through
+            // Carl reaches the same people as one taken on the form.
+            require_once __DIR__ . '/../reservations/_bootstrap.php';
+            notifyRoles(reservationApproverRoles(), 'alert',
                 'Reservation Approval Needed: ' . $got['lead_name'],
                 'Submitted by ' . $user['name'] . ' through ' . CARL_NAME
                 . '. Deposit: ' . carlMoney($deposit) . ' — review and approve.',

@@ -422,7 +422,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             logActivity('update', 'crm_leads', $id, "Reservation saved by Super Admin. Deposit: " . number_format($depositAmt, 2));
             setFlash('success', 'Reservation saved. Proforma Invoice and Sales Agreement are ready below.');
         } else {
-            // Regular users: reservation is recorded but held for Super Admin approval.
+            // Below approver level: the reservation is recorded but held. See
+            // reservationApproverRoles() for who may release it.
             // The lead stage and the vehicle do NOT change until it is approved.
             $db->prepare("
                 UPDATE crm_leads
@@ -436,18 +437,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     updated_at        = NOW()
                 WHERE id = ?
             ")->execute([$reserveCarId, $depositAmt, $depositDate, $depositNotes, $agreedSalePrice, $dueDate, $id]);
-            notifyRoles(['super_admin','admin'], 'alert',
+            notifyRoles(reservationApproverRoles(), 'alert',
                 "Reservation Approval Needed: {$lead['name']}",
                 "Submitted by {$me['name']}. Deposit: " . money($depositAmt) . " — review and approve.",
                 BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '&dp_open=1'
             );
             logActivity('update', 'crm_leads', $id, "Reservation submitted for approval by {$me['name']}. Deposit: " . number_format($depositAmt, 2));
-            setFlash('success', 'Reservation submitted — awaiting Super Admin approval.');
+            setFlash('success', 'Reservation submitted — awaiting approval.');
         }
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
     }
 
-    if ($action === 'approve_reservation' && $isSuperAdmin) {
+    if ($action === 'approve_reservation' && reservationCanApprove($me)) {
+        // Approving reserves a car and confirms a deposit, and the forms
+        // that post it already carried a token nothing was checking.
+        verifyCsrf();
         if (($lead['reservation_status'] ?? '') !== 'pending_approval') {
             setFlash('warning', 'No pending reservation to approve.');
             redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
@@ -471,7 +475,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         dispatchReservationToClient($db, $lead, $id, $pinnedCarId,
                                     (float)($lead['deposit_amount'] ?? 0));
-        logActivity('update', 'crm_leads', $id, "Reservation approved by Super Admin ({$me['name']}).");
+        logActivity('update', 'crm_leads', $id,
+            "Reservation approved by {$me['name']} (" . str_replace('_', ' ', (string)$me['role']) . ").");
         setFlash('success', 'Reservation approved. The vehicle is now reserved.');
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
     }
@@ -1971,7 +1976,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
             <div class="card-body d-flex align-items-center gap-3 flex-wrap" style="background:#fffbeb">
                 <i class="fa fa-hourglass-half" style="font-size:22px;color:#d97706"></i>
                 <div class="flex-grow-1">
-                    <div class="fw-bold" style="color:#92400e">Reservation awaiting Super Admin approval</div>
+                    <div class="fw-bold" style="color:#92400e">Reservation awaiting approval</div>
                     <div class="small" style="color:#b45309">
                         Deposit: <?= money((float)($lead['deposit_amount'] ?? 0)) ?>
                         <?= $lead['deposit_date'] ? ' received ' . fmtDate($lead['deposit_date'], 'd M Y') : '' ?>
@@ -1979,8 +1984,9 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                         — the vehicle stays available until approved.
                     </div>
                 </div>
-                <?php if ($isSuperAdmin): ?>
+                <?php if (reservationCanApprove($me)): ?>
                 <form method="POST">
+                    <?= csrfField() ?>
                     <input type="hidden" name="action" value="approve_reservation">
                     <button type="submit" class="btn btn-success btn-sm">
                         <i class="fa fa-check me-1"></i>Approve Reservation

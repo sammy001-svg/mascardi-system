@@ -139,6 +139,34 @@ function reservationsCount(PDO $db, ?int $agentId = null): int
 }
 
 /**
+ * Who may approve a reservation, and who is told there is one waiting.
+ *
+ * A reservation taken by anybody below this level is held at
+ * pending_approval: the deposit is recorded but the lead's stage and the
+ * vehicle's status do not move, so the car stays on the floor until somebody
+ * with the authority says otherwise. That makes approval a bottleneck, and
+ * until now the bottleneck was two people — the notification went to
+ * super_admin and admin and the button was drawn for nobody else, so a
+ * reservation taken on a Friday could sit over a weekend with the car still
+ * showing as available to sell.
+ *
+ * The General Manager is on both lists now. One list, used by the button, the
+ * handler and the notification alike: a role that is told to approve something
+ * it cannot approve is worse than not being told.
+ */
+function reservationApproverRoles(): array
+{
+    return ['super_admin', 'admin', 'general_manager'];
+}
+
+/** May this user approve a reservation? */
+function reservationCanApprove(?array $user = null): bool
+{
+    $user = $user ?: authUser();
+    return $user && in_array($user['role'] ?? '', reservationApproverRoles(), true);
+}
+
+/**
  * Who may cancel. Deliberately narrow: this releases a held deposit and a
  * vehicle. isSuperAdmin() is used rather than a strict role comparison — the
  * previous revoke tested $me['role'] === 'admin', which excluded super_admin

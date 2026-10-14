@@ -9,7 +9,11 @@ $me  = authUser();
 $uid = (int)$me['id'];
 $isCrmAgent   = ($me['role'] === 'customer_relations');
 $canFilter    = in_array($me['role'], ['admin','super_admin','general_manager']);
-$canCancelRes = reservationCanCancel();
+$canCancelRes  = reservationCanCancel();
+// Whoever may approve needs somewhere to do it. The pending list on the
+// admin dashboard is behind requireRole('admin'), which the General Manager
+// is not, so the only place they would ever have seen one of these is here.
+$canApproveRes = reservationCanApprove();
 
 reservationsMigrate($db);
 
@@ -755,6 +759,24 @@ include __DIR__ . '/../../includes/header.php';
            class="btn btn-sm btn-outline-info" target="_blank">
             <i class="fa fa-file-invoice-dollar me-1"></i>Sales Rcpt
         </a>
+        <?php endif; ?>
+
+        <?php if ($isPendingRes && $canApproveRes): ?>
+        <?php /* Posted to view_lead.php, which owns the approval: it moves the
+                 lead, reserves the car, opens step 1 of the delivery protocol
+                 and tells the floor. Repeating any of that here would be a
+                 second way to approve, and the two would drift. */ ?>
+        <form method="POST" action="<?= BASE_URL ?>/modules/crm/view_lead.php?id=<?= (int)$r['lead_id'] ?>"
+              class="d-inline"
+              onsubmit="return confirm('Approve this reservation for <?= e(addslashes($r['client_name'] ?: $r['lead_name'])) ?>?
+
+The vehicle becomes reserved and the customer is told.')">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="approve_reservation">
+            <button type="submit" class="btn btn-sm btn-success">
+                <i class="fa fa-check me-1"></i>Approve
+            </button>
+        </form>
         <?php endif; ?>
 
         <?php if ($canCancelRes): ?>
