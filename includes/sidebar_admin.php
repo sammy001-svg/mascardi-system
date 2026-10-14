@@ -92,9 +92,10 @@ $__isSales    = str_contains($__uri, '/modules/admin/sales');
             <i class="fa fa-bookmark"></i><span>Reservations</span>
             <?php
             try {
-                $__resCount = (int)getDB()->query("SELECT COUNT(*) FROM crm_leads WHERE stage='reserved'")->fetchColumn();
+                require_once __DIR__ . '/../modules/reservations/_bootstrap.php';
+                $__resCount = reservationsCount(getDB());
                 if ($__resCount > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#7c3aed;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+            <span class="nav-badge">
                 <?= $__resCount > 99 ? '99+' : $__resCount ?>
             </span>
             <?php endif; } catch (\Throwable $e) {} ?>

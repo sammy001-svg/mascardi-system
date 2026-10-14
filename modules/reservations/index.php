@@ -88,14 +88,11 @@ if (!preg_match('/^\d{4}-\d{2}$/', $filterMonth)) { $filterMonth = ''; }
 // approved. Listing only stage='reserved' therefore hid those completely — the
 // car looked un-reserved even though a deposit had been taken. Include them,
 // flagged as pending, so nothing sits invisible waiting on an approval.
-$hasResStatus = false;
-try {
-    $hasResStatus = (bool)$db->query("SHOW COLUMNS FROM crm_leads LIKE 'reservation_status'")->fetch();
-} catch (\Throwable $_) {}
-
-$where  = [$hasResStatus
-    ? "(l.stage = 'reserved' OR l.reservation_status = 'pending_approval')"
-    : "l.stage = 'reserved'"];
+// From reservationsWhere(), not written out here, because the sidebar badge
+// counts the same thing and the two had drifted: the badge left out the leads
+// waiting on approval and so read one short of the list it links to.
+$hasResStatus = reservationsHasStatus($db);
+$where  = [reservationsWhere($db, 'l')];
 $params = [];
 if ($isCrmAgent)  { $where[] = "l.assigned_to = $uid"; }
 if ($filterMake)  { $where[] = 'c.make = ?';         $params[] = $filterMake; }

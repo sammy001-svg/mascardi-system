@@ -78,6 +78,67 @@ function reservationsMigrate(PDO $db, bool $force = false): void
 }
 
 /**
+ * Does this install hold a reservation_status column?
+ *
+ * Asked once per request. A reservation taken by anybody below Super Admin
+ * waits at reservation_status = 'pending_approval' with the lead's stage
+ * deliberately left alone, so the column is half the answer to "what is a
+ * reservation" — but it arrived in a later migration and is not everywhere.
+ */
+function reservationsHasStatus(PDO $db): bool
+{
+    static $has = null;
+    if ($has !== null) return $has;
+    try {
+        $has = (bool)$db->query("SHOW COLUMNS FROM crm_leads LIKE 'reservation_status'")->fetch();
+    } catch (\Throwable $e) {
+        $has = false;
+    }
+    return $has;
+}
+
+/**
+ * What counts as a reservation, as a WHERE fragment.
+ *
+ * One definition, because there were two: the list on the reservations page
+ * counted the leads waiting on approval and the badge in the sidebar did not,
+ * so the sidebar read 18 against the page's 19 and neither was obviously
+ * wrong. Anything that wants to count reservations asks here.
+ */
+function reservationsWhere(PDO $db, string $alias = 'l'): string
+{
+    $a = $alias !== '' ? $alias . '.' : '';
+    return reservationsHasStatus($db)
+        ? "({$a}stage = 'reserved' OR {$a}reservation_status = 'pending_approval')"
+        : "{$a}stage = 'reserved'";
+}
+
+/**
+ * How many reservations there are, optionally only one agent's.
+ *
+ * What the sidebar badge shows. It has to agree with the number of rows the
+ * reservations page lists, which is why both get their condition from
+ * reservationsWhere() rather than writing it out again.
+ */
+function reservationsCount(PDO $db, ?int $agentId = null): int
+{
+    try {
+        $sql = "SELECT COUNT(*) FROM crm_leads l WHERE " . reservationsWhere($db, 'l');
+        $args = [];
+        if ($agentId !== null && $agentId > 0) {
+            $sql .= " AND l.assigned_to = ?";
+            $args[] = $agentId;
+        }
+        $st = $db->prepare($sql);
+        $st->execute($args);
+        return (int)$st->fetchColumn();
+    } catch (\Throwable $e) {
+        error_log('reservationsCount: ' . $e->getMessage());
+        return 0;
+    }
+}
+
+/**
  * Who may cancel. Deliberately narrow: this releases a held deposit and a
  * vehicle. isSuperAdmin() is used rather than a strict role comparison — the
  * previous revoke tested $me['role'] === 'admin', which excluded super_admin

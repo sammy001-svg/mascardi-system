@@ -183,9 +183,10 @@ $__isDash = str_contains($__uri, '/modules/crm/my_dashboard');
             <?php
             try {
                 $__myUid = (int)(authUser()['id'] ?? 0);
-                $__myResCount = (int)getDB()->query("SELECT COUNT(*) FROM crm_leads WHERE stage='reserved' AND assigned_to={$__myUid}")->fetchColumn();
+                require_once __DIR__ . '/../modules/reservations/_bootstrap.php';
+                $__myResCount = reservationsCount(getDB(), $__myUid);
                 if ($__myResCount > 0): ?>
-            <span style="position:absolute;top:6px;right:8px;background:#7c3aed;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:16px">
+            <span class="nav-badge">
                 <?= $__myResCount > 99 ? '99+' : $__myResCount ?>
             </span>
             <?php endif; } catch (\Throwable $e) {} ?>
