@@ -588,14 +588,30 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
             <div class="fin-card" id="paperwork">
                 <header>
                     <h2>Signed documents</h2>
-                    <span class="hint"><?= count($filed) ?> on file</span>
+                    <span class="hint">
+                        <?= empty($a['lead_id']) ? 'not kept for imported accounts'
+                                                 : count($filed) . ' on file' ?>
+                    </span>
                 </header>
                 <div class="fin-body">
                     <?php /* What the system prints is a row of buttons at the top of
                              the page now. What is left here is the other kind: the
                              paper that comes back signed, which only exists if
                              somebody put it there. */ ?>
-                    <?php if (!$filed): ?>
+                    <?php if (empty($a['lead_id'])): ?>
+                    <!-- Documents are filed against a lead, and this account was
+                         imported from the spreadsheet without one. The form would
+                         take the file and refuse it, which is worse than not
+                         offering it: somebody scans the agreement, uploads it, and
+                         is told nothing about where it should go instead. -->
+                    <div class="fin-note mb-0">
+                        <i class="fa fa-paperclip"></i>
+                        <div><strong>This account came in from the spreadsheet.</strong>
+                            Signed paperwork is filed against a lead, and this one has none,
+                            so there is nowhere here to put it. Open the client's record in
+                            the CRM and attach it there, and it will follow them from then on.</div>
+                    </div>
+                    <?php elseif (!$filed): ?>
                     <div class="fin-note mb-3">
                         <i class="fa fa-paperclip"></i>
                         <div>Nothing has been scanned in for this deal yet. Once the client has
@@ -647,7 +663,7 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
                     </div>
                     <?php endif; ?>
 
-                    <?php if (creditCanRecord()): ?>
+                    <?php if (creditCanRecord() && !empty($a['lead_id'])): ?>
                     <!-- The same form the lead page uses, so the accepted types
                          and the size cap cannot come to differ between them.
                          The agreement id rides along so the redirect comes back

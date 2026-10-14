@@ -18,9 +18,11 @@
  * to find out, and date cells come back as YYYY-MM-DD.
  */
 
+if (!function_exists('xlsxReadFile')) {
+
 /** How many rows will be read before it gives up. A receivables book is not
  *  a hundred thousand rows, and a file that big is a wrong file. */
-const XLSX_MAX_ROWS = 5000;
+if (!defined('XLSX_MAX_ROWS')) define('XLSX_MAX_ROWS', 5000);
 
 /**
  * Rows from the first worksheet of an .xlsx.
@@ -317,3 +319,5 @@ function xlsxSerialToDate(float $serial): ?string
     $d    = gmdate('Y-m-d', $ts);
     return $d !== false ? $d : null;
 }
+
+} // function_exists('xlsxReadFile')
