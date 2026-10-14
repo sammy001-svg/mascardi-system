@@ -217,16 +217,34 @@ function creditMigrate(PDO $db, bool $force = false): void
 }
 
 /**
- * Calculates Reducing Balance EMI and schedule metrics.
+ * Reducing-balance EMI and what the schedule comes to, from an annual rate.
+ *
+ * The rate is per annum, which is what a lender quotes and — importantly —
+ * what this system's own documents have always said: the printed credit
+ * agreement reads "interest on the outstanding balance shall accrue at an
+ * annual rate of X%" and the client statement says "X% per annum". The form
+ * collected a monthly figure, so a 2%-a-month deal went out on paper as an
+ * annual rate of 2%. The figure the client signs for is now the figure that
+ * was entered.
+ *
+ * Converted the way a reducing-balance loan is conventionally quoted: the
+ * annual rate is nominal, compounded monthly, so the periodic rate is simply
+ * r/12. That is what "24% per annum, reducing balance" means to a lender and
+ * to the CBK, and it is not the same as treating 24% as an effective annual
+ * rate — that would give 1.809% a month rather than 2%, and a schedule the
+ * client was not quoted.
+ *
+ * So 24% p.a. is 2% a month, and on 1,000,000 over 12 months the instalment
+ * is 94,559.60.
  */
-function creditCalculateReducingBalance(float $principal, float $monthlyInterestPct, int $months): array
+function creditCalculateReducingBalance(float $principal, float $annualInterestPct, int $months): array
 {
     $months = max(1, $months);
     if ($principal <= 0) {
         return ['monthly_payment' => 0.0, 'total_interest' => 0.0, 'total_repayable' => 0.0];
     }
-    
-    $r = ($monthlyInterestPct / 100);
+
+    $r = ($annualInterestPct / 12 / 100);
     if ($r <= 0) {
         $monthly = round($principal / $months, 2);
         return [
@@ -267,12 +285,24 @@ function creditCalculateReducingBalance(float $principal, float $monthlyInterest
  * Returns ['count','completion_date','total','rows'=>[['seq','due_date','amount'],…]].
  * The last row absorbs the rounding so the schedule totals the principal exactly.
  */
-function creditBuildSchedule(float $principal, float $monthly, string $firstDue): array
+function creditBuildSchedule(float $principal, float $monthly, string $firstDue, int $months = 0): array
 {
     $out = ['count' => 0, 'completion_date' => null, 'total' => 0.0, 'rows' => []];
     if ($principal <= 0 || $monthly <= 0 || !strtotime($firstDue)) return $out;
 
-    $n = (int)ceil(round($principal / $monthly, 6));
+    // The term, when the caller knows it. It usually does: it is a field on the
+    // agreement form, and working it out again by division instead went wrong
+    // on about a third of rate-and-term combinations. The month-by-month
+    // simulation in creditCalculateReducingBalance() rounds each month's
+    // interest to the cent, and over a year or two those roundings leave the
+    // total a few cents above the instalment times the term — enough for the
+    // ceil() below to add a thirteenth payment of eight cents to a twelve-month
+    // deal. The client signs for twelve, and the extra one then sits overdue
+    // and sets the reminder emails off at somebody who has paid in full.
+    //
+    // Left at 0 the term is still derived, which is what the spreadsheet
+    // import needs: its sheet carries a monthly figure and no term.
+    $n = $months > 0 ? $months : (int)ceil(round($principal / $monthly, 6));
     $n = max(1, min($n, 600));   // a 50-year plan is a data-entry error, not a deal
 
     $start = new DateTimeImmutable(date('Y-m-d', strtotime($firstDue)));

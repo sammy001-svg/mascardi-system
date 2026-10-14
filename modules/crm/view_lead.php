@@ -915,7 +915,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         creditMigrate($db);
 
         $principal   = (float)($_POST['principal'] ?? 0);
-        $interest    = (float)($_POST['interest_rate'] ?? 0); // monthly interest %
+        $interest    = (float)($_POST['interest_rate'] ?? 0); // annual interest %, per the form
         $months      = max(1, (int)($_POST['months'] ?? 1));
         $firstDue    = trim($_POST['first_due_date'] ?? '');
         $penaltyType = ($_POST['penalty_type'] ?? 'fixed') === 'percent' ? 'percent' : 'fixed';
@@ -951,7 +951,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
         }
 
-        $sched = creditBuildSchedule($totalRepayable, $monthly, $firstDue);
+        // The term is passed, not inferred: $months is what was asked for, and
+        // dividing the repayable total by the instalment to get it back added a
+        // final payment of a few cents to about a third of agreements.
+        $sched = creditBuildSchedule($totalRepayable, $monthly, $firstDue, $months);
         if (!$sched['count']) {
             setFlash('error', 'Those figures do not produce a payment schedule. Check the amounts.');
             redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
@@ -3527,17 +3530,24 @@ $__showCreditModals = $lead['stage'] === 'reserved'
                             </div>
                         </div>
 
-                        <!-- Monthly Interest Rate (%) -->
+                        <!-- Annual Interest Rate (%) -->
+                        <?php /* Per annum, because that is what the printed agreement and
+                                 the client statement have always said, and what a lender
+                                 quotes. 24 is the default because it is the 2% a month this
+                                 field used to default to, so an agreement written without
+                                 touching it comes out exactly as it did before. */ ?>
                         <div class="col-md-3">
                             <label class="form-label small fw-semibold">
-                                Monthly Interest <span class="text-danger">*</span>
+                                Annual Interest <span class="text-danger">*</span>
                             </label>
                             <div class="input-group">
                                 <input type="number" step="0.01" min="0" max="100" name="interest_rate" id="cdInterestRate"
-                                       class="form-control" value="<?= $__cAgr ? (float)$__cAgr['interest_rate'] : '2' ?>" required>
-                                <span class="input-group-text">%</span>
+                                       class="form-control" value="<?= $__cAgr ? (float)$__cAgr['interest_rate'] : '24' ?>" required>
+                                <span class="input-group-text">% p.a.</span>
                             </div>
-                            <div class="form-text" style="font-size:11px">Monthly interest rate (%)</div>
+                            <div class="form-text" style="font-size:11px">
+                                Per annum, on the reducing balance. 24% p.a. is 2% a month.
+                            </div>
                         </div>
 
                         <!-- Number of Months (Tenor) -->
@@ -3645,7 +3655,7 @@ $__showCreditModals = $lead['stage'] === 'reserved'
                                  style="background:#faf5ff !important;border:1px solid #d8b4fe !important;color:#1e293b !important">
                                 <div class="row text-center g-2">
                                     <div class="col-md-3 col-6">
-                                        <div style="font-size:11px;color:#64748b !important;font-weight:500">Monthly Interest</div>
+                                        <div style="font-size:11px;color:#64748b !important;font-weight:500">First month's interest</div>
                                         <div class="fw-bold" style="font-size:14px;color:#7e22ce !important" id="cdMonthlyIntCharge">—</div>
                                     </div>
                                     <div class="col-md-3 col-6">
@@ -3662,7 +3672,7 @@ $__showCreditModals = $lead['stage'] === 'reserved'
                                     </div>
                                 </div>
                                 <div class="mt-2 pt-2 border-top" style="font-size:11.5px;color:#475569 !important;border-top-color:#e9d5ff !important" id="cdNote">
-                                    Enter Principal, Monthly Interest % and Duration to calculate.
+                                    Enter Principal, Annual Interest % and Duration to calculate.
                                 </div>
                             </div>
                         </div>
@@ -3788,11 +3798,13 @@ $__showCreditModals = $lead['stage'] === 'reserved'
             if (tIntEl) tIntEl.textContent = '—';
             if (tRepEl) tRepEl.textContent = '—';
             if (done) done.textContent = '—';
-            if (note) note.textContent = 'Enter Principal, Monthly Interest % and Duration to calculate.';
+            if (note) note.textContent = 'Enter Principal, Annual Interest % and Duration to calculate.';
             return;
         }
 
-        var r = i / 100;
+        // Annual nominal, compounded monthly: the same conversion that
+        // creditCalculateReducingBalance() makes.
+        var r = i / 12 / 100;
         var calcMonthly = 0;
         if (r <= 0) {
             calcMonthly = p / n;
@@ -3822,7 +3834,7 @@ $__showCreditModals = $lead['stage'] === 'reserved'
             note.style.color = '#334155';
             note.innerHTML = '<strong style="color:#0f172a !important">' + n + '</strong> monthly payment' + (n === 1 ? '' : 's') +
                 ' of <strong style="color:#7e22ce !important">KSh ' + fmt.format(Math.round(mVal)) + '</strong>' +
-                ' <span style="color:#475569 !important">(Reducing balance @ ' + i + '%/mo · Total Interest: <strong style="color:#0f172a !important">KSh ' + fmt.format(Math.round(totalInterest)) + '</strong>)</span>' +
+                ' <span style="color:#475569 !important">(Reducing balance @ ' + i + '% p.a. · Total Interest: <strong style="color:#0f172a !important">KSh ' + fmt.format(Math.round(totalInterest)) + '</strong>)</span>' +
                 (endDate ? ', starting ' + fmtDate(s) + ' to ' + fmtDate(endDate) + '.' : '.');
         }
     }
