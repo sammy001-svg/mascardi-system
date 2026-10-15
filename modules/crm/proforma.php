@@ -99,62 +99,11 @@ $pfCompanyLines = [
 // the company's payment particulars are edited in one place.
 //
 // 'label' is what the operator picks from; 'lines' is what prints, in order.
-$pfBankAccounts = [
-    'm_oriental' => [
-        'label'    => 'M-Oriental Bank (KES)',
-        'currency' => 'KES',
-        'lines'    => [
-            'Bank'         => 'M- Oriental Bank Limited',
-            'Account Name' => 'Mascardi Ventures Limited',
-            'Account No'   => '1007044001797',
-            'Branch'       => 'Westlands Branch, Nairobi',
-            'Branch Code'  => '007',
-            'Swift Code'   => 'MORBKENA',
-        ],
-    ],
-    'ncba' => [
-        'label'    => 'NCBA (KES)',
-        'currency' => 'KES',
-        'lines'    => [
-            'Bank'                 => 'NCBA',
-            'Account Name'         => 'Mascardi Ventures Limited',
-            'Account No'           => '4539920024',
-            'Paybill Business No'  => '880100',
-        ],
-    ],
-    'im' => [
-        'label'    => 'I&M Bank (KES)',
-        'currency' => 'KES',
-        'lines'    => [
-            'Bank'         => 'I&M',
-            'Account Name' => 'Mascardi Ventures Limited',
-            'Account No'   => '03001705641210',
-            'Paybill No'   => '542542',
-        ],
-    ],
-    'absa' => [
-        'label'    => 'ABSA (KES)',
-        'currency' => 'KES',
-        'lines'    => [
-            'Bank'                => 'ABSA',
-            'Account Name'        => 'Mascardi Ventures Limited',
-            'Account No'          => '2051081016',
-            'Paybill Business No' => '303030',
-        ],
-    ],
-    // Flagged as USD in the label and on the document — the invoice totals are
-    // in Kenya Shillings, so paying into this one is a deliberate choice rather
-    // than something to stumble into.
-    'm_oriental_usd' => [
-        'label'    => 'M-Oriental Bank — USD account',
-        'currency' => 'USD',
-        'lines'    => [
-            'Bank'         => 'M Oriental Bank Limited',
-            'Account Name' => 'Mascardi Ventures Limited',
-            'Account No'   => '1007051001949',
-        ],
-    ],
-];
+// Moved to _banks.php: a payment recorded against a lead now says which of
+// these the money came into, and the receipt prints it back, so the list is
+// no longer the invoice's alone.
+require_once __DIR__ . '/_banks.php';
+$pfBankAccounts = leadBankAccounts();
 
 // Remembering the choice on the lead: without it, reopening the invoice would
 // silently revert to the default and the wrong account could be printed.

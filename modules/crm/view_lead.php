@@ -67,6 +67,7 @@ try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN chassis_number VARCHAR(1
 try { $db->exec("ALTER TABLE crm_test_drives ADD COLUMN entry_number VARCHAR(100) NULL"); } catch (\Throwable $_) {}
 require_once __DIR__ . '/crm_helpers.php';
 require_once __DIR__ . '/_delete.php';
+require_once __DIR__ . '/_charges.php';
 $id  = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/crm/leads.php');
 
@@ -552,6 +553,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         setFlash($res['ok'] ? 'success' : 'error',
             $res['ok'] ? 'Document removed.' : $res['error']);
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
+    // ── Ancillary charges: the plates, the registration, the transfer ───────
+    // Saved as a whole list rather than row by row: the form is a list the
+    // operator edits until it is right, so it posts the list and chargesSave()
+    // writes the list. The payments are a separate table and are untouched.
+    if ($action === 'save_charges' && chargesCanWrite()) {
+        verifyCsrf();
+        $r = chargesSave($db, $id,
+            (array)($_POST['charge_item']   ?? []),
+            (array)($_POST['charge_amount'] ?? []),
+            (array)($_POST['charge_note']   ?? []),
+            $uid);
+        if (!$r['ok']) {
+            setFlash('danger', $r['error']);
+        } elseif ($r['count'] === 0) {
+            setFlash('success', 'Ancillary charges cleared.');
+        } else {
+            setFlash('success', $r['count'] . ' charge' . ($r['count'] === 1 ? '' : 's')
+                . ' saved, totalling ' . money($r['total']) . '.');
+        }
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#charges');
+    }
+
+    if ($action === 'charge_payment' && chargesCanWrite()) {
+        verifyCsrf();
+        require_once __DIR__ . '/../finance/_accounts.php';
+        $r = chargeAddPayment($db, $id,
+            (float)str_replace(',', '', (string)($_POST['amount'] ?? 0)),
+            (string)($_POST['paid_on'] ?? ''),
+            (string)($_POST['method'] ?? ''),
+            (string)($_POST['bank_key'] ?? ''),
+            (string)($_POST['reference'] ?? ''),
+            (string)($_POST['notes'] ?? ''),
+            $uid, acctFromRequest($db));
+
+        if (!$r['ok']) {
+            setFlash('danger', $r['error']);
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#charges');
+        }
+        setFlash('success', 'Payment recorded — receipt ' . $r['receipt'] . '. '
+            . ($r['balance'] > 0.009
+                ? money($r['balance']) . ' still owing on the charges.'
+                : 'The charges are settled in full.'));
+        // Straight to the receipt: somebody taking money has a customer in
+        // front of them waiting for it.
+        redirect(BASE_URL . '/modules/crm/charge_receipt.php?id=' . $r['id']);
+    }
+
+    if ($action === 'void_charge_payment') {
+        verifyCsrf();
+        if (!chargesCanVoid($me)) {
+            setFlash('danger', 'Only a manager can reverse a payment.');
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#charges');
+        }
+        $r = chargeVoidPayment($db, (int)($_POST['payment_id'] ?? 0),
+                               (string)($_POST['reason'] ?? ''), $uid);
+        setFlash($r['ok'] ? 'success' : 'danger',
+            $r['ok'] ? 'Payment ' . ($r['receipt'] ?: 'entry') . ' of '
+                       . money($r['amount']) . ' reversed.'
+                     : $r['error']);
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#charges');
     }
 
     if ($action === 'add_deposit' && canWrite('crm')) {
@@ -2245,6 +2308,189 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
             </div>
         </div>
         <?php endif; ?>
+
+        <!-- ══ ANCILLARY CHARGES ═══════════════════════════════════════════════
+             The plates, the registration, the transfer, the insurance — billed
+             on top of the car and not part of it. They are deliberately not
+             folded into the agreed sale price or the deposit: the sale price is
+             what the vehicle was sold for and the deposit is what has been paid
+             towards it, and putting these in either would misstate both.
+
+             Outside any stage gate. These are charged from the moment a deal is
+             being done and are still being collected after delivery, so a card
+             that disappeared at either end would be missing exactly when
+             somebody went looking for it.
+             ═══════════════════════════════════════════════════════════════ -->
+        <?php
+        $acSum   = chargesSummary($db, $id);
+        $acItems = chargesFor($db, $id);
+        $acPays  = chargePayments($db, $id, true);
+        $acBanks = leadBankAccounts();
+        $acMeth  = chargeMethods();
+        $acW     = chargesCanWrite();
+        $acVoid  = chargesCanVoid($me);
+        ?>
+        <div class="card mb-3" id="charges" style="border-color:#0ea5e9;border-width:2px">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2"
+                 style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-bottom-color:#bae6fd">
+                <span style="color:#075985">
+                    <i class="fa fa-receipt me-2"></i>Ancillary Charges
+                    <?php if ($acSum['count']): ?>
+                    <span class="badge bg-info text-dark ms-1"><?= (int)$acSum['count'] ?></span>
+                    <?php endif; ?>
+                </span>
+                <div class="d-flex gap-2 flex-wrap">
+                    <?php if ($acW): ?>
+                    <button type="button" class="btn btn-sm" style="background:#0ea5e9;color:#fff"
+                            data-bs-toggle="modal" data-bs-target="#chargesModal">
+                        <i class="fa fa-list-check me-1"></i><?= $acSum['count'] ? 'Edit Charges' : 'Add Charges' ?>
+                    </button>
+                    <?php endif; ?>
+                    <?php if ($acW && $acSum['balance'] > 0.009): ?>
+                    <button type="button" class="btn btn-sm btn-success"
+                            data-bs-toggle="modal" data-bs-target="#chargePayModal">
+                        <i class="fa fa-coins me-1"></i>Record Payment
+                    </button>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="card-body">
+                <?php if (!$acSum['count']): ?>
+                <p class="text-muted mb-0" style="font-size:13px">
+                    Nothing charged yet. Number plates, registration, transfer of ownership,
+                    insurance and the like go here &mdash; each with its own amount, totalled
+                    for the customer and receipted as it is paid.
+                </p>
+                <?php else: ?>
+
+                <!-- What is charged -->
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm mb-0" style="font-size:13px">
+                        <thead class="table-light">
+                            <tr><th>Item</th><th class="text-end" style="width:140px">Amount</th></tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($acItems as $ci): ?>
+                            <tr>
+                                <td>
+                                    <?= e((string)$ci['item']) ?>
+                                    <?php if (!empty($ci['notes'])): ?>
+                                    <div class="text-muted" style="font-size:11.5px"><?= e((string)$ci['notes']) ?></div>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-end" style="font-variant-numeric:tabular-nums">
+                                    <?= money((float)$ci['amount']) ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                        <tfoot>
+                            <tr class="fw-bold" style="border-top:2px solid #0f172a">
+                                <td>Total charged</td>
+                                <td class="text-end" style="font-variant-numeric:tabular-nums">
+                                    <?= money((float)$acSum['total']) ?>
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Where it stands -->
+                <div class="row g-2 mb-3">
+                    <div class="col-4">
+                        <div class="p-2 rounded-3" style="background:#f0f9ff">
+                            <div style="font-size:10px;font-weight:700;letter-spacing:.05em;
+                                        text-transform:uppercase;color:#64748b">Charged</div>
+                            <div class="fw-bold" style="font-size:15px;color:#075985">
+                                <?= money((float)$acSum['total']) ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 rounded-3" style="background:#f0fdf4">
+                            <div style="font-size:10px;font-weight:700;letter-spacing:.05em;
+                                        text-transform:uppercase;color:#64748b">Paid</div>
+                            <div class="fw-bold" style="font-size:15px;color:#15803d">
+                                <?= money((float)$acSum['paid']) ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 rounded-3" style="background:<?= $acSum['balance'] > 0.009 ? '#fff7ed' : '#f0fdf4' ?>">
+                            <div style="font-size:10px;font-weight:700;letter-spacing:.05em;
+                                        text-transform:uppercase;color:#64748b">Balance</div>
+                            <div class="fw-bold" style="font-size:15px;color:<?= $acSum['balance'] > 0.009 ? '#c2410c' : '#15803d' ?>">
+                                <?= money((float)$acSum['balance']) ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- What has been paid against it -->
+                <?php if ($acPays): ?>
+                <div class="text-muted small fw-semibold mb-1">
+                    <i class="fa fa-coins me-1"></i>Payments
+                    <?php if ((int)$acSum['voided']): ?>
+                    <span class="text-muted fw-normal">&middot; <?= (int)$acSum['voided'] ?> reversed</span>
+                    <?php endif; ?>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0" style="font-size:12.5px">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th><th>Receipt</th><th>Method</th><th>Into</th>
+                                <th class="text-end">Amount</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach (array_reverse($acPays) as $cp):
+                            $cpVoid = !empty($cp['voided_at']); ?>
+                            <tr<?= $cpVoid ? ' class="text-muted"' : '' ?>>
+                                <td><?= e(fmtDate((string)$cp['paid_on'], 'j M Y')) ?></td>
+                                <td>
+                                    <a href="charge_receipt.php?id=<?= (int)$cp['id'] ?>" target="_blank"
+                                       <?= $cpVoid ? 'class="text-muted"' : '' ?>
+                                       style="<?= $cpVoid ? 'text-decoration:line-through' : '' ?>">
+                                        <?= e((string)$cp['receipt_number']) ?>
+                                    </a>
+                                </td>
+                                <td>
+                                    <?= e($acMeth[$cp['method']] ?? ucfirst((string)($cp['method'] ?: '—'))) ?>
+                                    <?php if (!empty($cp['reference'])): ?>
+                                    <div class="text-muted" style="font-size:11px"><?= e((string)$cp['reference']) ?></div>
+                                    <?php endif; ?>
+                                    <?php if ($cpVoid): ?>
+                                    <div style="font-size:11px;color:#b91c1c">
+                                        Reversed <?= e(fmtDate((string)$cp['voided_at'], 'j M Y')) ?><?php
+                                            if (!empty($cp['voided_by_name'])): ?> by <?= e((string)$cp['voided_by_name']) ?><?php endif; ?>
+                                        <?php if (!empty($cp['void_reason'])): ?> &mdash; <?= e((string)$cp['void_reason']) ?><?php endif; ?>
+                                    </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td style="font-size:11.5px"><?= e(leadBankLabel((string)($cp['bank_key'] ?? '')) ?: '—') ?></td>
+                                <td class="text-end" style="font-variant-numeric:tabular-nums;<?= $cpVoid ? 'text-decoration:line-through' : '' ?>">
+                                    <?= money((float)$cp['amount']) ?>
+                                </td>
+                                <td class="text-end">
+                                    <?php if (!$cpVoid && $acVoid): ?>
+                                    <button type="button" class="btn btn-xs btn-outline-danger ac-void-btn"
+                                            title="Reverse this payment"
+                                            data-pay="<?= (int)$cp['id'] ?>"
+                                            data-rcpt="<?= e((string)$cp['receipt_number']) ?>"
+                                            data-amt="<?= e(money((float)$cp['amount'])) ?>">
+                                        <i class="fa fa-rotate-left"></i>
+                                    </button>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </div>
 
         <!-- ══ CREDIT SUMMARY ══════════════════════════════════════════════════
              Sits directly under the Reservation Summary. Before an agreement
@@ -4248,6 +4494,340 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 }());
+</script>
+
+<?php if ($acW): ?>
+<!-- ══ Ancillary charges: the items ════════════════════════════════════════
+     A list the operator edits as a whole. Rows are added and removed in the
+     browser and the lot is posted together, which is why the handler replaces
+     rather than diffs: what is submitted IS the list.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="chargesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" id="acItemsForm">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="save_charges">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title" style="color:#075985">
+                        <i class="fa fa-receipt me-2"></i>Ancillary Charges
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-3" style="font-size:12.5px">
+                        Items charged on top of the car &mdash; plates, registration, transfer,
+                        insurance. Type an item or pick one of the usual ones. A row left blank
+                        is ignored, and emptying every row clears the charges.
+                    </p>
+
+                    <datalist id="acItemList">
+                        <?php foreach (chargesCommonItems() as $ci): ?>
+                        <option value="<?= e($ci) ?>"></option>
+                        <?php endforeach; ?>
+                    </datalist>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-2" style="font-size:13px">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width:180px">Item</th>
+                                    <th style="width:150px">Amount (KES)</th>
+                                    <th style="min-width:150px">Note <span class="text-muted fw-normal">(optional)</span></th>
+                                    <th style="width:44px"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="acRows">
+                            <?php
+                            // Existing rows, then one spare so there is always
+                            // somewhere to type without reaching for Add first.
+                            $acDraw = $acItems;
+                            $acDraw[] = ['item' => '', 'amount' => '', 'notes' => ''];
+                            foreach ($acDraw as $ci): ?>
+                                <tr class="ac-row">
+                                    <td>
+                                        <input type="text" name="charge_item[]" list="acItemList"
+                                               class="form-control form-control-sm"
+                                               placeholder="e.g. Number plates"
+                                               value="<?= e((string)$ci['item']) ?>">
+                                    </td>
+                                    <td>
+                                        <input type="text" inputmode="decimal" name="charge_amount[]"
+                                               class="form-control form-control-sm text-end ac-amt"
+                                               placeholder="0"
+                                               value="<?= $ci['amount'] !== '' ? e(number_format((float)$ci['amount'], 0, '.', '')) : '' ?>">
+                                    </td>
+                                    <td>
+                                        <input type="text" name="charge_note[]"
+                                               class="form-control form-control-sm"
+                                               value="<?= e((string)($ci['notes'] ?? '')) ?>">
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-outline-danger ac-del"
+                                                title="Remove this line" tabindex="-1">
+                                            <i class="fa fa-xmark"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td class="text-end fw-bold">Total</td>
+                                    <td class="text-end fw-bold" id="acTotal"
+                                        style="font-size:15px;color:#075985;font-variant-numeric:tabular-nums">0</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="acAddRow">
+                        <i class="fa fa-plus me-1"></i>Add another item
+                    </button>
+
+                    <?php if ((float)$acSum['paid'] > 0.009): ?>
+                    <div class="alert alert-warning py-2 mt-3 mb-0" style="font-size:12.5px">
+                        <i class="fa fa-circle-info me-1"></i>
+                        <?= money((float)$acSum['paid']) ?> has already been paid against these
+                        charges. Lowering the total below that will leave an overpayment to sort
+                        out; the payments themselves are not changed here.
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff">
+                        <i class="fa fa-check me-1"></i>Save charges
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ══ Ancillary charges: taking a payment ═════════════════════════════════
+     The bank is one of the company's own accounts from _banks.php — the same
+     list the proforma prints — so the receipt can name where the money
+     actually landed, which is what a bank statement is reconciled against.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="chargePayModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="charge_payment">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title" style="color:#15803d">
+                        <i class="fa fa-coins me-2"></i>Record a charges payment
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">
+                            Amount received <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text">KSh</span>
+                            <input type="text" inputmode="decimal" name="amount" required
+                                   autocomplete="off" class="form-control"
+                                   placeholder="<?= e(number_format((float)$acSum['balance'], 0, '.', '')) ?>">
+                        </div>
+                        <div class="form-text" style="font-size:11.5px">
+                            <?= money((float)$acSum['balance']) ?> outstanding of
+                            <?= money((float)$acSum['total']) ?> charged.
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-7">
+                            <label class="form-label small fw-semibold">Date received</label>
+                            <input type="date" name="paid_on" class="form-control"
+                                   value="<?= e((string)$db->query('SELECT CURDATE()')->fetchColumn()) ?>"
+                                   max="<?= e((string)$db->query('SELECT CURDATE()')->fetchColumn()) ?>">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small fw-semibold">Paid by</label>
+                            <select name="method" class="form-select">
+                                <?php foreach ($acMeth as $mk => $ml): ?>
+                                <option value="<?= e($mk) ?>"><?= e($ml) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Which of our accounts did it come into?</label>
+                        <select name="bank_key" class="form-select">
+                            <option value="">Not recorded</option>
+                            <?php foreach ($acBanks as $bk => $ba): ?>
+                            <option value="<?= e($bk) ?>"<?= (string)($lead['proforma_bank'] ?? '') === $bk ? ' selected' : '' ?>>
+                                <?= e((string)$ba['label']) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text" style="font-size:11.5px">
+                            The same accounts the proforma prints. It appears on the receipt, in full,
+                            so the payment can be matched against a bank statement.
+                            <?php if (!empty($lead['proforma_bank'])): ?>
+                            The one quoted on this lead's invoice is pre-selected.
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Reference</label>
+                        <input type="text" name="reference" class="form-control"
+                               placeholder="M-Pesa code, slip or cheque number">
+                    </div>
+                    <?php require_once __DIR__ . '/../finance/_accounts.php';
+                          $acAccSel = acctSelect($db, 'account_id', 0, 'form-select'); ?>
+                    <?php if ($acAccSel !== ''): ?>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Post to which cash account</label>
+                        <?= $acAccSel ?>
+                        <div class="form-text" style="font-size:11.5px">For the account's own statement.</div>
+                    </div>
+                    <?php endif; ?>
+                    <div class="mb-0">
+                        <label class="form-label small fw-semibold">Note <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" name="notes" class="form-control" maxlength="255">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success btn-sm">
+                        <i class="fa fa-check me-1"></i>Record &amp; print receipt
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($acVoid): ?>
+<!-- Reversing one. Kept and marked rather than deleted, so the trail still
+     shows the entry was made and who took it back. -->
+<div class="modal fade" id="acVoidModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="void_charge_payment">
+                <input type="hidden" name="payment_id" id="acVoidId" value="">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title text-danger">
+                        <i class="fa fa-rotate-left me-2"></i>Reverse this payment
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">You are about to take back:</p>
+                    <p class="fw-bold fs-5 mb-3" id="acVoidWhat"></p>
+                    <div class="alert alert-warning py-2 mb-3" style="font-size:12.5px">
+                        <i class="fa fa-triangle-exclamation me-1"></i>
+                        The entry is kept and marked reversed, not deleted, so the trail still
+                        shows it was made. Its receipt will print as reversed. The balance on
+                        the charges goes back up.
+                    </div>
+                    <label class="form-label small fw-semibold">
+                        Why is it being reversed? <span class="text-danger">*</span>
+                    </label>
+                    <textarea name="reason" class="form-control form-control-sm" rows="2" required
+                              placeholder="e.g. entered twice, or the amount was wrong"></textarea>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="fa fa-rotate-left me-1"></i>Reverse it
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<script>
+// Ancillary charges: the rows and the running total.
+//
+// Nothing here touches the `bootstrap` global — the modals are opened by
+// data-bs-toggle and this script runs in the page body, before footer.php
+// loads the bundle. Reaching for bootstrap.Modal here would throw and take
+// the whole file's listeners with it.
+(function () {
+    var rows  = document.getElementById('acRows');
+    var total = document.getElementById('acTotal');
+    if (!rows || !total) return;
+
+    var fmt = new Intl.NumberFormat('en-KE', { maximumFractionDigits: 0 });
+
+    function money(el) {
+        // Commas and spaces are how people type a figure; strip them rather
+        // than refuse the input.
+        var v = parseFloat(String(el.value).replace(/[^0-9.\-]/g, ''));
+        return isNaN(v) ? 0 : v;
+    }
+
+    function recalc() {
+        var sum = 0;
+        rows.querySelectorAll('.ac-amt').forEach(function (el) { sum += money(el); });
+        total.textContent = fmt.format(Math.round(sum));
+    }
+
+    function blankRow() {
+        var tr = rows.querySelector('.ac-row');
+        if (!tr) return null;
+        var copy = tr.cloneNode(true);
+        copy.querySelectorAll('input').forEach(function (i) { i.value = ''; });
+        return copy;
+    }
+
+    document.getElementById('acAddRow').addEventListener('click', function () {
+        var r = blankRow();
+        if (!r) return;
+        rows.appendChild(r);
+        var first = r.querySelector('input');
+        if (first) first.focus();
+        recalc();
+    });
+
+    rows.addEventListener('input', recalc);
+    rows.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('.ac-del');
+        if (!btn) return;
+        // Never remove the last row: the form would have nothing to type into
+        // and clearing the charges would mean deleting rows until it broke.
+        if (rows.querySelectorAll('.ac-row').length > 1) {
+            btn.closest('.ac-row').remove();
+        } else {
+            btn.closest('.ac-row').querySelectorAll('input').forEach(function (i) { i.value = ''; });
+        }
+        recalc();
+    });
+
+    recalc();
+})();
+
+// The reversal modal, filled from whichever row opened it. show.bs.modal is a
+// plain DOM event and relatedTarget is the button, so this needs no bootstrap
+// global either.
+(function () {
+    var m = document.getElementById('acVoidModal');
+    if (!m) return;
+    m.addEventListener('show.bs.modal', function (ev) {
+        var b = ev.relatedTarget;
+        if (!b || !b.dataset.pay) return;
+        m.querySelector('#acVoidId').value = b.dataset.pay;
+        m.querySelector('#acVoidWhat').textContent = b.dataset.rcpt + ' \u2014 ' + b.dataset.amt;
+        var why = m.querySelector('[name="reason"]');
+        if (why) why.value = '';
+    });
+    // The buttons are plain, so they need the toggle wiring the modal expects.
+    document.querySelectorAll('.ac-void-btn').forEach(function (b) {
+        b.setAttribute('data-bs-toggle', 'modal');
+        b.setAttribute('data-bs-target', '#acVoidModal');
+    });
+})();
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
