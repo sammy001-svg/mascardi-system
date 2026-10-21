@@ -6,13 +6,17 @@ $user = authUser();
 
 $locations = $db->query("SELECT id, name FROM locations WHERE status='active' ORDER BY name")->fetchAll();
 $drivers   = $db->query("SELECT id, name FROM drivers WHERE status='active' ORDER BY name")->fetchAll();
+// Colour and year join the chassis, which was already being fetched and
+// never shown. Two Harriers at the same showroom read identically without
+// them, and the wrong one gets moved.
 $cars      = $db->query("
-    SELECT c.id, c.make, c.model, c.registration_number, c.chassis_number,
+    SELECT c.id, c.make, c.model, c.year, c.color,
+           c.registration_number, c.chassis_number,
            l.name AS location_name, l.id AS location_id
     FROM cars c
     LEFT JOIN locations l ON l.id = c.location_id
     WHERE c.status NOT IN ('delivered')
-    ORDER BY c.make, c.model
+    ORDER BY c.make, c.model, c.year, c.color
 ")->fetchAll();
 
 // Pre-select car from query string (e.g. from stock rotation report)
@@ -121,16 +125,39 @@ include __DIR__ . '/../../includes/header.php';
                 <select name="car_id" class="form-select select2" required id="carSelect">
                     <option value="">— Select vehicle —</option>
                     <?php foreach ($cars as $c): ?>
+                    <?php
+                    // Everything that tells one of these apart, in the order
+                    // somebody standing in the yard would use: what it looks
+                    // like first, then the plate, then the chassis.
+                    //
+                    // An unregistered car is said to be unregistered rather
+                    // than simply having nothing there — on an import the
+                    // chassis is the only handle, and a blank reads as a
+                    // display fault.
+                    $bits = [];
+                    $head = trim(($c['year'] ? $c['year'] . ' ' : '')
+                                 . $c['make'] . ' ' . $c['model']);
+                    if ($c['color'])               $bits[] = ucfirst((string)$c['color']);
+                    $bits[] = $c['registration_number']
+                                ? (string)$c['registration_number']
+                                : 'unregistered';
+                    if ($c['chassis_number'])      $bits[] = (string)$c['chassis_number'];
+                    ?>
                     <option value="<?= $c['id'] ?>"
                             data-location="<?= $c['location_id'] ?>"
                             <?= ($d['car_id'] == $c['id']) ? 'selected' : '' ?>>
-                        <?= e($c['make'] . ' ' . $c['model']) ?>
-                        <?= $c['registration_number'] ? ' — ' . e($c['registration_number']) : '' ?>
-                        <?= $c['location_name'] ? ' [' . e($c['location_name']) . ']' : '' ?>
+                        <?= e($head) ?><?= $bits ? ' · ' . e(implode(' · ', $bits)) : '' ?><?php
+                        ?><?= $c['location_name'] ? ' [' . e($c['location_name']) . ']' : '' ?>
                     </option>
                     <?php endforeach; ?>
                 </select>
-                <div class="form-text mt-1"><i class="fa fa-circle-info me-1 text-primary"></i>Current location is shown in brackets. Selecting a car will auto-fill the origin.</div>
+                <div class="form-text mt-1">
+                    <i class="fa fa-circle-info me-1 text-primary"></i>
+                    Each vehicle is listed with its colour, plate and chassis number, so two of
+                    the same model at one showroom can be told apart. The box searches on all of
+                    them &mdash; typing part of a chassis number will find the car. Current
+                    location is in brackets, and selecting a vehicle fills in the origin.
+                </div>
             </div>
         </div>
     </div>

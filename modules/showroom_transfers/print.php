@@ -87,8 +87,14 @@ body { font-family:'Segoe UI',Arial,sans-serif; font-size:13px; color:#1a1a1a; b
         <div class="section-title">Vehicle Details</div>
         <div class="grid-3">
             <div class="field"><label>Make / Model</label><div class="val"><?= e($t['make'] . ' ' . $t['model']) ?> (<?= $t['year'] ?>)</div></div>
+            <?php /* Colour was fetched and never printed. On a slip somebody checks
+                     against a vehicle at a gate it is the fastest field to verify. */ ?>
+            <div class="field"><label>Colour</label><div class="val"><?= e($t['color'] ? ucfirst((string)$t['color']) : '—') ?></div></div>
             <div class="field"><label>Registration</label><div class="val"><?= e($t['registration_number'] ?: '—') ?></div></div>
-            <div class="field"><label>Chassis No.</label><div class="val" style="font-family:monospace"><?= e($t['chassis_number'] ?: '—') ?></div></div>
+            <?php /* Across the row: four fields in a three-column grid leave the
+                     chassis alone on the second line anyway, and it is the longest
+                     value on the slip. */ ?>
+            <div class="field" style="grid-column:1/-1"><label>Chassis No.</label><div class="val" style="font-family:monospace"><?= e($t['chassis_number'] ?: '—') ?></div></div>
         </div>
 
         <!-- Route -->

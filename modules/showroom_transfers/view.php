@@ -151,6 +151,11 @@ include __DIR__ . '/../../includes/header.php';
             <div class="card-header fw-semibold"><i class="fa fa-car me-2 text-primary"></i>Vehicle</div>
             <div class="card-body">
                 <div class="fw-bold fs-6"><?= e($t['make'] . ' ' . $t['model']) ?> <span class="text-muted fw-normal"><?= $t['year'] ?></span></div>
+                <?php /* The colour was being fetched and never shown, which is the
+                         first thing anybody checks against the car in front of them. */ ?>
+                <?php if (!empty($t['color'])): ?>
+                <div class="text-muted small"><?= e(ucfirst((string)$t['color'])) ?></div>
+                <?php endif; ?>
                 <?php if ($t['registration_number']): ?>
                 <div class="mt-1"><span class="badge bg-dark font-monospace"><?= e($t['registration_number']) ?></span></div>
                 <?php endif; ?>

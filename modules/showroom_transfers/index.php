@@ -45,7 +45,8 @@ foreach ([
 
 $transfers = $db->query("
     SELECT st.*,
-           c.make, c.model, c.registration_number,
+           c.make, c.model, c.year, c.color,
+           c.registration_number, c.chassis_number,
            fl.name AS from_name,
            tl.name AS to_name,
            d.name  AS driver_name_rel
@@ -127,9 +128,20 @@ include __DIR__ . '/../../includes/header.php';
                     </td>
                     <td class="text-muted small"><?= fmtDate($t['requested_date'], 'd M Y') ?></td>
                     <td class="fw-medium small">
-                        <?= e($t['make'] . ' ' . $t['model']) ?>
+                        <?= e(trim(($t['year'] ? $t['year'] . ' ' : '')
+                                   . $t['make'] . ' ' . $t['model'])) ?>
+                        <?php if ($t['color']): ?>
+                        <div class="text-muted" style="font-size:11.5px"><?= e(ucfirst((string)$t['color'])) ?></div>
+                        <?php endif; ?>
                         <?php if ($t['registration_number']): ?>
                         <div><span class="badge bg-dark bg-opacity-75 font-monospace"><?= e($t['registration_number']) ?></span></div>
+                        <?php endif; ?>
+                        <?php /* The chassis carries the identification where there is no
+                                 plate, which on an import is most of the time. */ ?>
+                        <?php if ($t['chassis_number']): ?>
+                        <div class="text-muted font-monospace" style="font-size:11px">
+                            <?= e((string)$t['chassis_number']) ?>
+                        </div>
                         <?php endif; ?>
                     </td>
                     <td class="small"><i class="fa fa-location-dot me-1 text-muted"></i><?= e($t['from_name']) ?></td>
