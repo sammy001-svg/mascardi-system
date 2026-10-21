@@ -561,18 +561,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // writes the list. The payments are a separate table and are untouched.
     if ($action === 'save_charges' && chargesCanWrite()) {
         verifyCsrf();
-        $r = chargesSave($db, $id,
-            (array)($_POST['charge_item']   ?? []),
-            (array)($_POST['charge_amount'] ?? []),
-            (array)($_POST['charge_note']   ?? []),
-            $uid);
+        // Written against the vehicle, not the lead. The plates belong to the
+        // Harrier rather than to whoever is buying it, so correcting them here
+        // corrects them in inventory and for any other deal on the same car.
+        $acCarId = leadChargeCarId($db, $id);
+        if ($acCarId <= 0) {
+            setFlash('warning', 'Link a vehicle to this lead first — ancillary charges '
+                . 'belong to the car, so there is nothing to record them against yet.');
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#charges');
+        }
+        [$acI, $acA, $acN] = chargesFromPost($_POST);
+        $r = carChargesSave($db, $acCarId, $acI, $acA, $acN, $uid);
         if (!$r['ok']) {
             setFlash('danger', $r['error']);
         } elseif ($r['count'] === 0) {
-            setFlash('success', 'Ancillary charges cleared.');
+            setFlash('success', 'Ancillary charges cleared for this vehicle.');
         } else {
             setFlash('success', $r['count'] . ' charge' . ($r['count'] === 1 ? '' : 's')
-                . ' saved, totalling ' . money($r['total']) . '.');
+                . ' saved against the vehicle, totalling ' . money($r['total']) . '.');
         }
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#charges');
     }
@@ -2323,7 +2329,8 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
              ═══════════════════════════════════════════════════════════════ -->
         <?php
         $acSum   = chargesSummary($db, $id);
-        $acItems = chargesFor($db, $id);
+        $acCar   = (int)$acSum['car_id'];
+        $acItems = carChargesFor($db, $acCar);
         $acPays  = chargePayments($db, $id, true);
         $acBanks = leadBankAccounts();
         $acMeth  = chargeMethods();
@@ -2340,11 +2347,17 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                     <?php endif; ?>
                 </span>
                 <div class="d-flex gap-2 flex-wrap">
-                    <?php if ($acW): ?>
+                    <?php if ($acW && $acCar): ?>
                     <button type="button" class="btn btn-sm" style="background:#0ea5e9;color:#fff"
                             data-bs-toggle="modal" data-bs-target="#chargesModal">
                         <i class="fa fa-list-check me-1"></i><?= $acSum['count'] ? 'Edit Charges' : 'Add Charges' ?>
                     </button>
+                    <?php endif; ?>
+                    <?php if ($acCar): ?>
+                    <a href="<?= BASE_URL ?>/modules/cars/view.php?id=<?= $acCar ?>#charges"
+                       class="btn btn-sm btn-outline-secondary" title="These charges live on the vehicle">
+                        <i class="fa fa-car me-1"></i>On the vehicle
+                    </a>
                     <?php endif; ?>
                     <?php if ($acW && $acSum['balance'] > 0.009): ?>
                     <button type="button" class="btn btn-sm btn-success"
@@ -2355,11 +2368,22 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                 </div>
             </div>
             <div class="card-body">
-                <?php if (!$acSum['count']): ?>
+                <?php if (!$acCar): ?>
+                <!-- The charges belong to the car, so without one there is nothing
+                     to hang them on. Said plainly rather than shown as a confident
+                     nought. -->
                 <p class="text-muted mb-0" style="font-size:13px">
-                    Nothing charged yet. Number plates, registration, transfer of ownership,
-                    insurance and the like go here &mdash; each with its own amount, totalled
-                    for the customer and receipted as it is paid.
+                    <i class="fa fa-circle-info me-1"></i>
+                    Ancillary charges belong to the vehicle, so link a car to this lead and
+                    they will appear here &mdash; already itemised if they were entered when
+                    the car was booked into inventory.
+                </p>
+                <?php elseif (!$acSum['count']): ?>
+                <p class="text-muted mb-0" style="font-size:13px">
+                    Nothing charged on this vehicle yet. Number plates, registration, transfer
+                    of ownership, insurance and the like go here &mdash; each with its own
+                    amount, totalled for the customer and receipted as it is paid. They are
+                    recorded against the car, so they carry over to whoever buys it.
                 </p>
                 <?php else: ?>
 
@@ -4520,71 +4544,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         insurance. Type an item or pick one of the usual ones. A row left blank
                         is ignored, and emptying every row clears the charges.
                     </p>
-
-                    <datalist id="acItemList">
-                        <?php foreach (chargesCommonItems() as $ci): ?>
-                        <option value="<?= e($ci) ?>"></option>
-                        <?php endforeach; ?>
-                    </datalist>
-
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-2" style="font-size:13px">
-                            <thead class="table-light">
-                                <tr>
-                                    <th style="min-width:180px">Item</th>
-                                    <th style="width:150px">Amount (KES)</th>
-                                    <th style="min-width:150px">Note <span class="text-muted fw-normal">(optional)</span></th>
-                                    <th style="width:44px"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="acRows">
-                            <?php
-                            // Existing rows, then one spare so there is always
-                            // somewhere to type without reaching for Add first.
-                            $acDraw = $acItems;
-                            $acDraw[] = ['item' => '', 'amount' => '', 'notes' => ''];
-                            foreach ($acDraw as $ci): ?>
-                                <tr class="ac-row">
-                                    <td>
-                                        <input type="text" name="charge_item[]" list="acItemList"
-                                               class="form-control form-control-sm"
-                                               placeholder="e.g. Number plates"
-                                               value="<?= e((string)$ci['item']) ?>">
-                                    </td>
-                                    <td>
-                                        <input type="text" inputmode="decimal" name="charge_amount[]"
-                                               class="form-control form-control-sm text-end ac-amt"
-                                               placeholder="0"
-                                               value="<?= $ci['amount'] !== '' ? e(number_format((float)$ci['amount'], 0, '.', '')) : '' ?>">
-                                    </td>
-                                    <td>
-                                        <input type="text" name="charge_note[]"
-                                               class="form-control form-control-sm"
-                                               value="<?= e((string)($ci['notes'] ?? '')) ?>">
-                                    </td>
-                                    <td class="text-center">
-                                        <button type="button" class="btn btn-sm btn-outline-danger ac-del"
-                                                title="Remove this line" tabindex="-1">
-                                            <i class="fa fa-xmark"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <td class="text-end fw-bold">Total</td>
-                                    <td class="text-end fw-bold" id="acTotal"
-                                        style="font-size:15px;color:#075985;font-variant-numeric:tabular-nums">0</td>
-                                    <td colspan="2"></td>
-                                </tr>
-                            </tfoot>
-                        </table>
+                    <div class="alert alert-light border py-2 mb-3" style="font-size:12px">
+                        <i class="fa fa-car me-1 text-muted"></i>
+                        These are saved against the <strong>vehicle</strong>, not this lead, so
+                        they stay with the car and appear on any deal for it. Editing here edits
+                        what inventory holds.
                     </div>
 
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="acAddRow">
-                        <i class="fa fa-plus me-1"></i>Add another item
-                    </button>
+                    <?php chargesRowsTable($acItems); ?>
 
                     <?php if ((float)$acSum['paid'] > 0.009): ?>
                     <div class="alert alert-warning py-2 mt-3 mb-0" style="font-size:12.5px">
@@ -4747,67 +4714,9 @@ document.addEventListener('DOMContentLoaded', function () {
 </div>
 <?php endif; ?>
 
+<?php if ($acW && $acCar) chargesRowsScript(); ?>
+
 <script>
-// Ancillary charges: the rows and the running total.
-//
-// Nothing here touches the `bootstrap` global — the modals are opened by
-// data-bs-toggle and this script runs in the page body, before footer.php
-// loads the bundle. Reaching for bootstrap.Modal here would throw and take
-// the whole file's listeners with it.
-(function () {
-    var rows  = document.getElementById('acRows');
-    var total = document.getElementById('acTotal');
-    if (!rows || !total) return;
-
-    var fmt = new Intl.NumberFormat('en-KE', { maximumFractionDigits: 0 });
-
-    function money(el) {
-        // Commas and spaces are how people type a figure; strip them rather
-        // than refuse the input.
-        var v = parseFloat(String(el.value).replace(/[^0-9.\-]/g, ''));
-        return isNaN(v) ? 0 : v;
-    }
-
-    function recalc() {
-        var sum = 0;
-        rows.querySelectorAll('.ac-amt').forEach(function (el) { sum += money(el); });
-        total.textContent = fmt.format(Math.round(sum));
-    }
-
-    function blankRow() {
-        var tr = rows.querySelector('.ac-row');
-        if (!tr) return null;
-        var copy = tr.cloneNode(true);
-        copy.querySelectorAll('input').forEach(function (i) { i.value = ''; });
-        return copy;
-    }
-
-    document.getElementById('acAddRow').addEventListener('click', function () {
-        var r = blankRow();
-        if (!r) return;
-        rows.appendChild(r);
-        var first = r.querySelector('input');
-        if (first) first.focus();
-        recalc();
-    });
-
-    rows.addEventListener('input', recalc);
-    rows.addEventListener('click', function (ev) {
-        var btn = ev.target.closest('.ac-del');
-        if (!btn) return;
-        // Never remove the last row: the form would have nothing to type into
-        // and clearing the charges would mean deleting rows until it broke.
-        if (rows.querySelectorAll('.ac-row').length > 1) {
-            btn.closest('.ac-row').remove();
-        } else {
-            btn.closest('.ac-row').querySelectorAll('input').forEach(function (i) { i.value = ''; });
-        }
-        recalc();
-    });
-
-    recalc();
-})();
-
 // The reversal modal, filled from whichever row opened it. show.bs.modal is a
 // plain DOM event and relatedTarget is the button, so this needs no bootstrap
 // global either.

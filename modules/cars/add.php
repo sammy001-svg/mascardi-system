@@ -76,7 +76,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $db->prepare("INSERT INTO cars (chassis_number,entry_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,client_id,location_id,body_type,notes,description,features,meta_title,meta_description,meta_image,asking_price,mileage,engine_cc,featured,offer_price,show_on_website) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
             $stmt->execute([$chassis,$entryNo ?: null,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$clientId,$locId,$body,$notes,$description,$features,$metaTitle,$metaDesc,$metaImage,$askingPrice,$mileage,$engineCc,$featured,$offerPrice,$showOnWeb]);
             $carId = $db->lastInsertId();
-            
+
+            // Ancillary charges, if any were listed. Saved here rather than
+            // on the form above because they key on the car's id, which does
+            // not exist until the INSERT has run.
+            require_once __DIR__ . '/../crm/_charges.php';
+            if (chargesPosted($_POST)) {
+                [$acI, $acA, $acN] = chargesFromPost($_POST);
+                carChargesSave($db, (int)$carId, $acI, $acA, $acN, (int)(authUser()['id'] ?? 0));
+            }
+
             logActivity('create', 'cars', $carId, "Added car: $make $model ($chassis)");
             setFlash('success', "Car {$make} {$model} ({$chassis}) added successfully.");
             redirect($returnClientId
@@ -388,12 +397,37 @@ include __DIR__ . '/../../includes/header.php';
                         </label>
                     </div>
                 </div>
+
+                <?php /* ── Ancillary charges ───────────────────────────────────
+                         What the buyer will be billed on top of the price: plates,
+                         registration, transfer, insurance. Recorded against the car
+                         so the figures exist before anybody reserves it, and so they
+                         carry over to whoever does.
+
+                         Deliberately not car_costs, which is the landed-cost sheet —
+                         freight, duty, clearing, workshop — and is what the yard
+                         spent. These are what the customer pays.
+                         ──────────────────────────────────────────────────────── */ ?>
+                <?php require_once __DIR__ . '/../crm/_charges.php'; ?>
+                <?php if (chargesCanWrite()): ?>
+                <hr class="my-4">
+                <div class="mb-2">
+                    <h6 class="fw-bold mb-1" style="color:#075985">
+                        <i class="fa fa-receipt me-2"></i>Ancillary Charges
+                    </h6>
+                    <p class="text-muted mb-3" style="font-size:12.5px">
+                        Billed to the buyer on top of the price, and kept against this vehicle. Leave it empty if there are none yet &mdash; they can be added any time by editing the car, and they appear automatically on a lead once the car is reserved.
+                    </p>
+                    <?php chargesRowsTable([]); ?>
+                </div>
+                <?php endif; ?>
             </div>
             <div class="mt-4 d-flex gap-2">
                 <button type="submit" class="btn btn-primary"><i class="fa fa-save me-1"></i>Save Car</button>
                 <a href="index.php" class="btn btn-outline-secondary">Cancel</a>
             </div>
         </form>
+        <?php if (chargesCanWrite()) chargesRowsScript(); ?>
     </div>
 </div>
 

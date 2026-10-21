@@ -72,6 +72,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $db->prepare("UPDATE cars SET chassis_number=?,entry_number=?,registration_number=?,make=?,model=?,year=?,color=?,engine_number=?,transmission=?,fuel_type=?,car_type=?,owner_name=?,owner_phone=?,location_id=?,client_id=?,body_type=?,status=?,notes=?,description=?,features=?,meta_title=?,meta_description=?,meta_image=?,asking_price=?,mileage=?,engine_cc=?,featured=?,offer_price=?,show_on_website=? WHERE id=?")
                ->execute([...array_values($data), $id]);
+            // The charge rows are only written when the form actually carried
+            // them. Without that check a form rendered without the section —
+            // or an older cached page — would clear a car's charges by
+            // submitting nothing.
+            require_once __DIR__ . '/../crm/_charges.php';
+            if (chargesPosted($_POST)) {
+                [$acI, $acA, $acN] = chargesFromPost($_POST);
+                carChargesSave($db, $id, $acI, $acA, $acN, (int)(authUser()['id'] ?? 0));
+            }
+
             logActivity('update', 'cars', $id, "Updated car: {$data['make']} {$data['model']} ({$data['chassis_number']})");
 
             // Switching a vehicle to Trade-In / Sale on Behalf only changed its
@@ -377,12 +387,37 @@ include __DIR__ . '/../../includes/header.php';
                         </label>
                     </div>
                 </div>
+
+                <?php /* ── Ancillary charges ───────────────────────────────────
+                         What the buyer will be billed on top of the price: plates,
+                         registration, transfer, insurance. Recorded against the car
+                         so the figures exist before anybody reserves it, and so they
+                         carry over to whoever does.
+
+                         Deliberately not car_costs, which is the landed-cost sheet —
+                         freight, duty, clearing, workshop — and is what the yard
+                         spent. These are what the customer pays.
+                         ──────────────────────────────────────────────────────── */ ?>
+                <?php require_once __DIR__ . '/../crm/_charges.php'; ?>
+                <?php if (chargesCanWrite()): ?>
+                <hr class="my-4">
+                <div class="mb-2">
+                    <h6 class="fw-bold mb-1" style="color:#075985">
+                        <i class="fa fa-receipt me-2"></i>Ancillary Charges
+                    </h6>
+                    <p class="text-muted mb-3" style="font-size:12.5px">
+                        Billed to the buyer on top of the price, and kept against this vehicle. They show on any lead this car is reserved against, so correcting one here corrects it there.
+                    </p>
+                    <?php chargesRowsTable(carChargesFor($db, $id)); ?>
+                </div>
+                <?php endif; ?>
             </div>
             <div class="mt-4 d-flex gap-2">
                 <button type="submit" class="btn btn-primary"><i class="fa fa-save me-1"></i>Update Car</button>
                 <a href="view.php?id=<?= $id ?>" class="btn btn-outline-secondary">Cancel</a>
             </div>
         </form>
+        <?php if (chargesCanWrite()) chargesRowsScript(); ?>
     </div>
 </div>
 

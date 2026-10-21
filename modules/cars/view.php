@@ -591,6 +591,95 @@ if (in_array($car['status'], ['delivered','sold']))     $activeStep = 6;
     </div>
 </div>
 <?php
+// ── Ancillary charges ─────────────────────────────────────────────────────────
+// What the buyer will be billed on top of the price. Sits above the import
+// costs on purpose, because the two are easily confused and only one of them
+// is the customer's: Import Costs is what the yard spent, this is what the
+// yard charges.
+require_once __DIR__ . '/../crm/_charges.php';
+$acItems = carChargesFor($db, $id);
+$acTotal = 0.0;
+foreach ($acItems as $__ci) $acTotal += (float)$__ci['amount'];
+?>
+<div class="card mb-3" id="charges">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="fw-semibold" style="color:#075985">
+            <i class="fa fa-receipt me-2"></i>Ancillary Charges
+            <?php if ($acItems): ?>
+            <span class="badge bg-info text-dark ms-1"><?= count($acItems) ?></span>
+            <?php endif; ?>
+        </span>
+        <?php if (chargesCanWrite()): ?>
+        <a href="<?= BASE_URL ?>/modules/cars/edit.php?id=<?= $id ?>"
+           class="btn btn-sm btn-outline-primary">
+            <i class="fa fa-pen me-1"></i><?= $acItems ? 'Edit charges' : 'Add charges' ?>
+        </a>
+        <?php endif; ?>
+    </div>
+    <div class="card-body">
+        <?php if (!$acItems): ?>
+        <p class="text-muted mb-0" style="font-size:13px">
+            Nothing recorded. Number plates, registration, transfer of ownership and the
+            like go here, each with its own amount. They stay with the vehicle and appear
+            on a lead automatically once this car is reserved.
+        </p>
+        <?php else: ?>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0" style="font-size:13px">
+                <thead class="table-light">
+                    <tr><th>Item</th><th class="text-end" style="width:150px">Amount</th></tr>
+                </thead>
+                <tbody>
+                <?php foreach ($acItems as $__ci): ?>
+                    <tr>
+                        <td>
+                            <?= e((string)$__ci['item']) ?>
+                            <?php if (!empty($__ci['notes'])): ?>
+                            <div class="text-muted" style="font-size:11.5px"><?= e((string)$__ci['notes']) ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-end" style="font-variant-numeric:tabular-nums">
+                            <?= money((float)$__ci['amount']) ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr class="fw-bold" style="border-top:2px solid #0f172a">
+                        <td>Total charged to the buyer</td>
+                        <td class="text-end" style="font-variant-numeric:tabular-nums">
+                            <?= money($acTotal) ?>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        <?php
+        // Where this car is reserved, say so — the charges are already on that
+        // deal, and somebody looking at the car should know a buyer is seeing
+        // these figures.
+        $acLeads = [];
+        try {
+            $__st = $db->prepare("SELECT id, name, stage FROM crm_leads
+                                   WHERE pinned_car_id = ?
+                                     AND stage IN ('reserved','delivered')
+                                ORDER BY updated_at DESC LIMIT 4");
+            $__st->execute([$id]);
+            $acLeads = $__st->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable $e) {}
+        ?>
+        <?php if ($acLeads): ?>
+        <div class="mt-3 pt-2 border-top text-muted" style="font-size:12px">
+            <i class="fa fa-arrow-right me-1"></i>Showing on
+            <?php foreach ($acLeads as $__i => $__l): ?><?= $__i ? ', ' : '' ?><a
+                href="<?= BASE_URL ?>/modules/crm/view_lead.php?id=<?= (int)$__l['id'] ?>#charges"><?= e((string)$__l['name']) ?></a><?php endforeach; ?>.
+        </div>
+        <?php endif; ?>
+        <?php endif; ?>
+    </div>
+</div>
+
+<?php
 // ── Car Import Costs ──────────────────────────────────────────────────────────
 if (canAccess('car_costs')):
     try {
