@@ -1125,15 +1125,87 @@ a:hover { text-decoration: underline; }
 [data-theme="dark"] .dropdown-item:hover { background: var(--surface-alt); color: var(--text); }
 [data-theme="dark"] .dropdown-divider { border-color: var(--border); }
 
+/* ── select2 in dark mode ───────────────────────────────────
+   The bootstrap-5 select2 theme hard-codes Bootstrap's light ink onto its own
+   child elements, not onto the container, so colouring the container does not
+   reach them. Its
+
+       .select2-container--bootstrap-5 .select2-selection--single
+       .select2-selection__rendered { color: #212529 }
+
+   is three classes deep and beat the one override that used to live here, which
+   left the chosen value black on a dark box — 1.2:1, invisible. That is what
+   was reported on the transfer module's vehicle picker, and it was true of every
+   searchable select in the system.
+
+   So each rule below repeats the theme's own selector with [data-theme="dark"]
+   in front: the same classes plus one attribute, which always wins, so none of
+   this needs !important. If the theme is ever upgraded, re-read its selectors
+   and keep these in step.
+
+   The two × icons are background SVGs with the fill baked into the data URI,
+   which CSS cannot recolour — and the hover state bakes in pure black. They are
+   inverted instead, which the theme never competes for and needs no copy of the
+   path data.
+   ────────────────────────────────────────────────────────── */
+
+/* The closed box, and the value showing in it. */
 [data-theme="dark"] .select2-container--bootstrap-5 .select2-selection {
-    background: var(--surface-alt); border-color: var(--border); color: var(--text);
+    background-color: var(--surface-alt); border-color: var(--border); color: var(--text);
+}
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+    color: var(--text);
+}
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered .select2-selection__placeholder {
+    color: var(--text-2);
+}
+
+/* Tags, where the box takes more than one value. Nothing uses a multiple
+   select today; these are here so that the first one to do so is not black on
+   black. The theme leaves that search field's own colour unset, and an input
+   does not inherit one, so it needs saying. */
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__rendered .select2-selection__choice {
+    color: var(--text); background-color: var(--surface); border-color: var(--border);
+}
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-selection--multiple .select2-search .select2-search__field {
+    color: var(--text);
+}
+
+/* The menu, and the field typed into to search it. The theme gives that field
+   its own white background, so without this it is a white slab in a dark menu. */
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-dropdown {
+    color: var(--text); background-color: var(--surface); border-color: var(--border);
 }
 [data-theme="dark"] .select2-dropdown { background: var(--surface); border-color: var(--border); }
-[data-theme="dark"] .select2-results__option { color: var(--text); }
-[data-theme="dark"] .select2-results__option--highlighted { background: var(--brand); color: #fff; }
-[data-theme="dark"] .select2-container--bootstrap-5 .select2-search__field {
-    background: var(--surface-alt); border-color: var(--border); color: var(--text);
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-dropdown .select2-search .select2-search__field {
+    color: var(--text); background-color: var(--surface-alt); border-color: var(--border);
 }
+
+/* The rows. Hover gets a raised surface rather than the theme's near-white
+   strip, which in a dark menu reads as a gap rather than as the row under the
+   pointer. The already-chosen row keeps the theme's blue: it is the one place
+   here where the colour carries meaning. */
+[data-theme="dark"] .select2-results__option { color: var(--text); }
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-dropdown .select2-results__options .select2-results__option.select2-results__option--highlighted {
+    color: var(--text); background-color: var(--surface-alt);
+}
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-dropdown .select2-results__options .select2-results__option.select2-results__message,
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-dropdown .select2-results__options .select2-results__option.select2-results__option--disabled,
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-dropdown .select2-results__options .select2-results__option[aria-disabled=true],
+[data-theme="dark"] .select2-container--bootstrap-5 .select2-dropdown .select2-results__options .select2-results__option[role=group] .select2-results__group {
+    color: var(--text-2);
+}
+
+/* A select that cannot be used says so by going flat, not by turning into a
+   pale grey card. */
+[data-theme="dark"] .select2-container--bootstrap-5.select2-container--disabled .select2-selection,
+[data-theme="dark"] .select2-container--bootstrap-5.select2-container--disabled.select2-container--focus .select2-selection {
+    color: var(--text-2); background-color: var(--surface); border-color: var(--border);
+}
+
+/* Clear-all, and remove-one-tag. */
+[data-theme="dark"] .select2-selection__clear,
+[data-theme="dark"] .select2-selection__choice__remove { filter: invert(1); }
 
 [data-theme="dark"] .trend-up   { background: rgba(22,163,74,.15);  color: #4ade80; }
 [data-theme="dark"] .trend-down { background: rgba(220,38,38,.15);  color: #f87171; }
