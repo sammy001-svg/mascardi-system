@@ -389,8 +389,13 @@ if ($__bgSet !== '' && is_file(BASE_PATH . '/assets/images/' . basename($__bgSet
 }
 
 $companyName    = getSetting('company_name', 'Mascardi');
-$companyPhone   = trim((string)getSetting('company_phone', ''));
-$companyEmail   = trim((string)getSetting('company_email', ''));
+// Read through companyContact() rather than getSetting(), so the current
+// details are applied on the first load after a deploy instead of waiting for
+// somebody to open Settings. This is the page a locked-out person reaches, so
+// it is the one that must not be showing a number nobody answers.
+$contact        = companyContact();
+$companyPhone   = trim($contact['phone']);
+$companyEmail   = trim($contact['email']);
 
 // Mokoto nameplate font — self-hosted. Drop the file at assets/fonts/mokoto.woff2
 // (or .woff/.ttf/.otf) and it's picked up automatically, no code change needed.

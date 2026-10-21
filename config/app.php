@@ -145,6 +145,12 @@ if (empty($_SESSION['csrf_token'])) {
 // ── Global error & exception handling ───────────────────────────────────────
 if (!defined('APP_DEBUG')) define('APP_DEBUG', false);
 
+// The company's contact details, pushed to `settings` once per version bump.
+// See companyContact() below for why they are applied rather than defaulted.
+if (!defined('COMPANY_CONTACT_VERSION')) define('COMPANY_CONTACT_VERSION', '2');
+if (!defined('COMPANY_CONTACT_PHONE'))   define('COMPANY_CONTACT_PHONE', '+254 717 277777');
+if (!defined('COMPANY_CONTACT_EMAIL'))   define('COMPANY_CONTACT_EMAIL', 'sales@mascardi.co');
+
 set_error_handler(function(int $errno, string $errstr, string $errfile, int $errline): bool {
     if (!(error_reporting() & $errno)) return false;
     $msg = "PHP Error [{$errno}]: {$errstr} in {$errfile}:{$errline}";
@@ -236,4 +242,41 @@ function companyLogo(): array {
         'file'   => $file,
         'exists' => $exists,
     ];
+}
+
+/**
+ * The company's own phone number and e-mail address.
+ *
+ * These live in `settings`, so changing them in the repository changes nothing
+ * on a site where a value has already been saved -- and every install has one,
+ * because opening the Settings page seeds the keys. The pair below is therefore
+ * applied once, on the first page load after deploy, in the same self-healing
+ * way companyLogo() rewrites a legacy path.
+ *
+ * Once is the whole point. The marker means an administrator who later edits
+ * these in Settings is never overwritten by a deploy; bump the version only to
+ * push a new pair deliberately.
+ *
+ * The healing load must not read through getSetting()'s cache, which was filled
+ * before the UPDATE ran, so the new values are returned directly.
+ */
+function companyContact(): array {
+    $phone = trim(getSetting('company_phone', ''));
+    $email = trim(getSetting('company_email', ''));
+
+    if (getSetting('company_contact_version', '') !== COMPANY_CONTACT_VERSION) {
+        $phone = COMPANY_CONTACT_PHONE;
+        $email = COMPANY_CONTACT_EMAIL;
+        try {
+            $put = getDB()->prepare(
+                "INSERT INTO settings (setting_key, setting_value) VALUES (?,?)
+                 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)"
+            );
+            $put->execute(['company_phone', $phone]);
+            $put->execute(['company_email', $email]);
+            $put->execute(['company_contact_version', COMPANY_CONTACT_VERSION]);
+        } catch (\Throwable $_) {}
+    }
+
+    return ['phone' => $phone, 'email' => $email];
 }
