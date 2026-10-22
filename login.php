@@ -481,20 +481,18 @@ body {
 .auth-tagline{
     color:rgba(255,255,255,.82); font-size:15px; line-height:1.6; margin:0 0 22px; max-width:30em;
 }
+/* The notice stands alone, so the gap that separated the tagline from the list
+   it used to introduce would otherwise hang off the bottom of nothing. */
+.auth-notice{ margin-bottom:0; color:rgba(255,255,255,.92); font-weight:600; letter-spacing:.03em; }
 .auth-points{ list-style:none; padding:0; margin:0; display:grid; gap:11px; }
 .auth-points li{
     display:flex; align-items:flex-start; gap:11px;
     color:rgba(255,255,255,.78); font-size:13.5px; line-height:1.5;
 }
 .auth-points i{ color:#60a5fa; margin-top:2px; width:16px; text-align:center; flex:none; }
-.auth-back{
-    align-self:flex-start; color:rgba(255,255,255,.72); font-size:13px; font-weight:600;
-    text-decoration:none; display:inline-flex; align-items:center; gap:8px;
-    padding:8px 14px; border:1px solid rgba(255,255,255,.2);
-    border-radius:9px; background:rgba(255,255,255,.07); transition:all .15s;
-}
-.auth-back:hover{ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.14); }
-@media (max-width:899px){ .auth-back, .auth-points{ display:none; } }
+/* .auth-points is the customer door's list; it is desktop-only because the
+   picture it sits on is not shown on a narrow screen. */
+@media (max-width:899px){ .auth-points{ display:none; } }
 
 /* ── The form side ── */
 .auth-panel{
@@ -871,22 +869,17 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
         <span class="auth-company"><?= htmlspecialchars($companyName) ?></span>
       </div>
 
-      <?php // What is behind the door, for somebody deciding whether they are
-            // at the right one. The two sides keep different promises, and the
-            // switch on the form side changes which is showing — so both are
-            // rendered and one is hidden, rather than fetching the page again
-            // just to reword a list. ?>
+      <?php // The staff door says who it is for and nothing else. It used to
+            // describe what the system does, which is of no use to the only
+            // people who can get through it -- they already know, and a list
+            // of features on a staff sign-in reads as advertising.
+            //
+            // The customer door below keeps its own wording: it faces people
+            // deciding whether they are in the right place, and this notice
+            // would be wrong for them. The switch on the form side changes
+            // which is showing, so both are rendered and one is hidden. ?>
       <div class="stage-copy" data-door="staff"<?= $clientSide ? ' hidden' : '' ?>>
-        <p class="auth-tagline">
-          The Showroom, its stock and its money &mdash; one system, from the showroom
-          floor to the books.
-        </p>
-        <ul class="auth-points">
-          <li><i class="fa fa-warehouse"></i><span>Stock, reservations and deliveries</span></li>
-          <li><i class="fa fa-screwdriver-wrench"></i><span>The workshop floor and its jobs</span></li>
-          <li><i class="fa fa-coins"></i><span>Payments, expenses and the accounts</span></li>
-          <li><i class="fa fa-chart-line"></i><span>What was sold, by whom, and for how much</span></li>
-        </ul>
+        <p class="auth-tagline auth-notice">Mascardi Family Members Access Only</p>
       </div>
 
       <div class="stage-copy" data-door="client"<?= $clientSide ? '' : ' hidden' ?>>
@@ -902,12 +895,6 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
         </ul>
       </div>
     </div>
-
-    <?php // The way out, kept on the picture side where it cannot be mistaken
-          // for part of the form. ?>
-    <a class="auth-back" href="<?= BASE_URL ?>/showroom/" aria-hidden="true" tabindex="-1">
-      <i class="fa fa-arrow-left"></i> <span>Back to the showroom</span>
-    </a>
   </section>
 
   <!-- The form side -->
