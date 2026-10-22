@@ -490,9 +490,17 @@ body {
     color:rgba(255,255,255,.78); font-size:13.5px; line-height:1.5;
 }
 .auth-points i{ color:#60a5fa; margin-top:2px; width:16px; text-align:center; flex:none; }
-/* .auth-points is the customer door's list; it is desktop-only because the
-   picture it sits on is not shown on a narrow screen. */
-@media (max-width:899px){ .auth-points{ display:none; } }
+.auth-back{
+    align-self:flex-start; color:rgba(255,255,255,.72); font-size:13px; font-weight:600;
+    text-decoration:none; display:inline-flex; align-items:center; gap:8px;
+    padding:8px 14px; border:1px solid rgba(255,255,255,.2);
+    border-radius:9px; background:rgba(255,255,255,.07); transition:all .15s;
+}
+.auth-back:hover{ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.14); }
+/* Both are desktop-only: the list because it reads as clutter on a narrow
+   screen, and the button because below 900px the small link under the form
+   takes over. */
+@media (max-width:899px){ .auth-back, .auth-points{ display:none; } }
 
 /* ── The form side ── */
 .auth-panel{
@@ -895,6 +903,15 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
         </ul>
       </div>
     </div>
+
+    <?php // The way back out to the public site, kept on the picture side where
+          // it cannot be mistaken for part of the form. Decorative here, because
+          // the whole picture side is aria-hidden; the small link under the form
+          // is the one a screen reader reads, and it shows below 900px where this
+          // one does not. ?>
+    <a class="auth-back" href="<?= BASE_URL ?>/showroom/" aria-hidden="true" tabindex="-1">
+      <i class="fa fa-arrow-left"></i> <span>Return to website</span>
+    </a>
   </section>
 
   <!-- The form side -->
@@ -1244,7 +1261,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
           <?php // Repeated for the phone, where the picture side is a band and
                 // the link on it is not shown. ?>
           <a class="auth-backsm" href="<?= BASE_URL ?>/showroom/">
-            <i class="fa fa-store"></i> Browse the showroom
+            <i class="fa fa-arrow-left"></i> Return to website
           </a>
         </footer>
 
