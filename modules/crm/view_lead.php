@@ -105,6 +105,10 @@ $pageTitle = $lead['name'];
 require_once __DIR__ . '/_deposits.php';
 $depSummary        = leadDepositSummary($db, $lead);
 $extraDeposits     = $depSummary['rows'];
+// The reversed ones too. A top-up that simply vanished from the history would
+// look like the system had lost it; struck through with a reason it reads as
+// the correction it is, and is the only trace a reversal leaves on the page.
+$voidedDeposits    = leadVoidedExtraDeposits($db, $id);
 $extraDepositTotal = $depSummary['extra'];
 $totalDeposit      = $depSummary['total'];
 
@@ -657,6 +661,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlash('warning', 'Enter a deposit amount greater than zero.');
         }
         redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id);
+    }
+
+    /* Correcting a top-up after the fact.
+
+       Both are gated on leadDepositCanManage() rather than canWrite('crm'):
+       taking a payment is day-to-day work, but changing one that receipts and a
+       signed agreement have already quoted is not. */
+    if ($action === 'void_deposit') {
+        verifyCsrf();
+        if (!leadDepositCanManage()) {
+            setFlash('danger', 'Only a super admin can reverse a deposit.');
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#deposits');
+        }
+        $r = leadDepositVoid($db, (int)($_POST['deposit_id'] ?? 0), $id,
+                             (string)($_POST['reason'] ?? ''), $uid);
+        setFlash($r['ok'] ? 'success' : 'danger',
+            $r['ok'] ? 'Deposit of ' . money($r['amount']) . ' reversed. The balance '
+                       . 'and every document reprinted from now on read without it.'
+                     : $r['error']);
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#deposits');
+    }
+
+    if ($action === 'edit_deposit') {
+        verifyCsrf();
+        if (!leadDepositCanManage()) {
+            setFlash('danger', 'Only a super admin can edit a deposit.');
+            redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#deposits');
+        }
+        require_once __DIR__ . '/../finance/_accounts.php';
+        $r = leadDepositEdit(
+            $db,
+            (int)($_POST['deposit_id'] ?? 0),
+            $id,
+            (float)($_POST['amount'] ?? 0),
+            trim((string)($_POST['deposit_date'] ?? '')),
+            isset($_POST['notes']) ? (string)$_POST['notes'] : null,
+            acctFromRequest($db),
+            $uid
+        );
+        if (!$r['ok']) {
+            setFlash('danger', $r['error']);
+        } elseif (empty($r['changed'])) {
+            setFlash('info', 'Nothing was changed on that deposit.');
+        } else {
+            setFlash('success', 'Deposit corrected — ' . implode('; ', $r['changes']) . '.');
+        }
+        redirect(BASE_URL . '/modules/crm/view_lead.php?id=' . $id . '#deposits');
     }
 
     // ── Delivery Protocol actions (6-step gated workflow) ────────────────────
@@ -2171,17 +2222,71 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                 </div>
 
                 <!-- Deposit history (initial + additional, each with its date) -->
-                <div class="border-top pt-2 mb-2">
+                <div class="border-top pt-2 mb-2" id="deposits">
                     <div class="text-muted small fw-semibold mb-1"><i class="fa fa-coins me-1"></i>Deposit History</div>
                     <div class="d-flex flex-column gap-1" style="font-size:13px">
-                        <div class="d-flex justify-content-between">
+                        <div class="d-flex justify-content-between align-items-center">
                             <span>Initial deposit<span class="text-muted"> — <?= fmtDate($depDate,'d M Y') ?></span></span>
-                            <strong class="text-success"><?= money($depAmt) ?></strong>
+                            <span class="d-flex align-items-center gap-2">
+                                <strong class="text-success"><?= money($depAmt) ?></strong>
+                                <?php /* The first deposit is a column on the lead rather than a row
+                                         in the top-up table, so it is corrected where it was
+                                         entered: on the reservation itself. */ ?>
+                                <?php if ($isSuperAdmin): ?>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-muted" style="font-size:11px"
+                                        data-bs-toggle="modal" data-bs-target="#reserveModal"
+                                        title="The initial deposit is part of the reservation">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <?php endif; ?>
+                            </span>
                         </div>
                         <?php foreach ($extraDeposits as $xd): ?>
-                        <div class="d-flex justify-content-between">
+                        <div class="d-flex justify-content-between align-items-center">
                             <span>Additional deposit<span class="text-muted"> — <?= fmtDate($xd['deposit_date'],'d M Y') ?><?= $xd['notes'] ? ' · ' . e($xd['notes']) : '' ?><?= $xd['user_name'] ? ' · by ' . e($xd['user_name']) : '' ?></span></span>
-                            <strong class="text-success"><?= money((float)$xd['amount']) ?></strong>
+                            <span class="d-flex align-items-center gap-2">
+                                <strong class="text-success"><?= money((float)$xd['amount']) ?></strong>
+                                <?php if (leadDepositCanManage()): ?>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-primary" style="font-size:11px"
+                                        data-bs-toggle="modal" data-bs-target="#editDepositModal"
+                                        data-dep-id="<?= (int)$xd['id'] ?>"
+                                        data-dep-amount="<?= e((string)$xd['amount']) ?>"
+                                        data-dep-date="<?= e((string)$xd['deposit_date']) ?>"
+                                        data-dep-notes="<?= e((string)($xd['notes'] ?? '')) ?>"
+                                        data-dep-account="<?= e((string)($xd['account_id'] ?? '')) ?>"
+                                        title="Correct this deposit">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-danger" style="font-size:11px"
+                                        data-bs-toggle="modal" data-bs-target="#voidDepositModal"
+                                        data-dep-id="<?= (int)$xd['id'] ?>"
+                                        data-dep-amount="<?= e((string)$xd['amount']) ?>"
+                                        data-dep-date="<?= e((string)$xd['deposit_date']) ?>"
+                                        title="Reverse this deposit">
+                                    <i class="fa fa-rotate-left"></i>
+                                </button>
+                                <?php endif; ?>
+                            </span>
+                        </div>
+                        <?php endforeach; ?>
+
+                        <?php /* Reversed top-ups, kept visible. Every total in the system
+                                 steps over a voided row, so these are a record of what was
+                                 corrected and not a figure that still counts. */ ?>
+                        <?php foreach ($voidedDeposits as $vd): ?>
+                        <div class="d-flex justify-content-between align-items-start text-muted"
+                             style="font-size:12px">
+                            <span>
+                                <s>Additional deposit — <?= fmtDate($vd['deposit_date'],'d M Y') ?></s>
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-1"
+                                      style="font-size:9.5px">Reversed</span>
+                                <div style="font-size:11px">
+                                    <?= e((string)($vd['voided_reason'] ?: 'No reason recorded')) ?><?php
+                                        if ($vd['voided_by_name']): ?> — by <?= e((string)$vd['voided_by_name']) ?><?php endif; ?><?php
+                                        if ($vd['voided_at']): ?> on <?= fmtDate($vd['voided_at'],'d M Y') ?><?php endif; ?>
+                                </div>
+                            </span>
+                            <s><?= money((float)$vd['amount']) ?></s>
                         </div>
                         <?php endforeach; ?>
                     </div>
@@ -4193,6 +4298,119 @@ $__showCreditModals = $lead['stage'] === 'reserved'
         </div>
     </div>
 </div>
+
+<?php /* Correcting a top-up. One dialog serves every row: the figures are
+         carried in on the button that opened it, which is why these are wired
+         through show.bs.modal rather than constructed up front -- the bootstrap
+         bundle is not loaded yet at this point in the page. */ ?>
+<?php if (leadDepositCanManage()): ?>
+<div class="modal fade" id="editDepositModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title fw-bold"><i class="fa fa-pen me-2 text-primary"></i>Correct Deposit</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="edit_deposit">
+                <input type="hidden" name="deposit_id" id="edDepId">
+                <div class="modal-body">
+                    <div class="alert alert-warning py-2 px-3 mb-3" style="font-size:12.5px">
+                        <i class="fa fa-triangle-exclamation me-1"></i>
+                        This figure is already on the proforma, the deposit receipt and any
+                        signed agreement. Correcting it changes the balance due and every
+                        document reprinted from now on.
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Amount (KES) <span class="text-danger">*</span></label>
+                            <input type="number" name="amount" id="edDepAmount" class="form-control"
+                                   min="1" step="any" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Date Received <span class="text-danger">*</span></label>
+                            <input type="date" name="deposit_date" id="edDepDate" class="form-control" required>
+                        </div>
+                        <?php $__edAcc = acctSelect($db, 'account_id', 0, 'form-select'); if ($__edAcc !== ''): ?>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Received into</label>
+                            <?= $__edAcc ?>
+                            <div class="form-text">Moving this moves the deposit on the account statements too.</div>
+                        </div>
+                        <?php endif; ?>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Notes <span class="text-muted fw-normal small">(optional)</span></label>
+                            <input type="text" name="notes" id="edDepNotes" class="form-control"
+                                   placeholder="e.g. M-Pesa ref, bank transfer…">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa fa-check me-1"></i>Save Correction</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="voidDepositModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title fw-bold"><i class="fa fa-rotate-left me-2 text-danger"></i>Reverse Deposit</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="void_deposit">
+                <input type="hidden" name="deposit_id" id="vdDepId">
+                <div class="modal-body">
+                    <p class="mb-3" style="font-size:13.5px">
+                        Reversing <strong id="vdDepLabel"></strong> takes it out of the deposit
+                        total, the balance due and the account it was paid into. The entry stays
+                        on the lead, struck through, so the correction can be seen.
+                    </p>
+                    <label class="form-label fw-semibold">Why is it being reversed? <span class="text-danger">*</span></label>
+                    <input type="text" name="reason" class="form-control" required maxlength="200"
+                           placeholder="e.g. entered twice, wrong lead, amount keyed wrong">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger"><i class="fa fa-rotate-left me-1"></i>Reverse Deposit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Each dialog is filled from the row whose button opened it.
+(function () {
+    var ed = document.getElementById('editDepositModal');
+    if (ed) ed.addEventListener('show.bs.modal', function (ev) {
+        var b = ev.relatedTarget; if (!b) return;
+        document.getElementById('edDepId').value     = b.dataset.depId     || '';
+        document.getElementById('edDepAmount').value = b.dataset.depAmount || '';
+        document.getElementById('edDepDate').value   = b.dataset.depDate   || '';
+        document.getElementById('edDepNotes').value  = b.dataset.depNotes  || '';
+        var acc = ed.querySelector('[name="account_id"]');
+        if (acc) acc.value = b.dataset.depAccount || '';
+    });
+
+    var vd = document.getElementById('voidDepositModal');
+    if (vd) vd.addEventListener('show.bs.modal', function (ev) {
+        var b = ev.relatedTarget; if (!b) return;
+        document.getElementById('vdDepId').value = b.dataset.depId || '';
+        var amt = parseFloat(b.dataset.depAmount || '0');
+        document.getElementById('vdDepLabel').textContent =
+            'KES ' + amt.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            + ' dated ' + (b.dataset.depDate || '');
+    });
+})();
+</script>
+<?php endif; ?>
 
 <!-- Lost Reason Modal -->
 <div class="modal fade" id="lostModal" tabindex="-1">
