@@ -121,6 +121,19 @@ function filled($v): bool { return isset($v) && trim((string)$v) !== ''; }
         /* Signatures */
         .sig-line { border-top: 1px solid #cbd5e1; padding-top: 8px; text-align: center; }
 
+        /* Terms of business.
+
+           Printed on a sheet of its own, which is the "overleaf" the clauses
+           themselves refer to -- several of them point back at the work and the
+           address on the front, so the two belong on two sides of one page.
+           Small and tight because nineteen clauses have to fit, and no clause is
+           allowed to break across a page in the middle. */
+        .terms-page   { page-break-before: always; margin-top: 46px; padding-top: 26px; border-top: 2px solid #e2e8f0; }
+        .terms-title  { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; text-align: center; color: #0f172a; margin-bottom: 12px; }
+        .terms-intro  { font-size: 11px; line-height: 1.55; color: #0f172a; margin-bottom: 12px; }
+        .terms-list   { font-size: 10.5px; line-height: 1.5; color: #1e293b; padding-left: 20px; margin: 0; }
+        .terms-list li { margin-bottom: 6px; page-break-inside: avoid; }
+
         /* Print controls */
         .no-print-bar {
             position: sticky; top: 0; z-index: 100;
@@ -133,6 +146,17 @@ function filled($v): bool { return isset($v) && trim((string)$v) !== ''; }
             .print-wrapper { box-shadow: none; margin: 0; padding: 20px 24px; border-radius: 0; max-width: 100%; }
             .no-print-bar { display: none !important; }
             @page { margin: 15mm 12mm; }
+            /* On paper the page edge is the separator, so the rule goes.
+
+               10.5px, not smaller: the clauses come to about 4,400 characters,
+               which at this size is roughly 860px of an A4 sheet's 1,009 usable
+               ones -- it fits with room to spare, and these are terms a customer
+               is expected to actually read. 12px is where it spills. */
+            .terms-page   { margin-top: 0; padding-top: 0; border-top: 0; }
+            .terms-title  { font-size: 13px; margin-bottom: 11px; }
+            .terms-intro  { font-size: 11px; line-height: 1.5; margin-bottom: 10px; }
+            .terms-list   { font-size: 10.5px; line-height: 1.45; }
+            .terms-list li { margin-bottom: 4px; }
         }
     </style>
 </head>
@@ -347,6 +371,40 @@ function filled($v): bool { return isset($v) && trim((string)$v) !== ''; }
     <!-- ── Footer ───────────────────────────────────────────────────────────── -->
     <div class="text-center mt-5 pt-3" style="border-top:1px solid #f1f5f9;color:#94a3b8;font-size:11px">
         Thank you for choosing <?= e($company['name']) ?> for your vehicle care.
+    </div>
+
+    <!-- ── Terms of business ────────────────────────────────── -->
+    <?php // The company's own wording, reproduced as given. It names the legal
+          // entity rather than the company_name setting, which is a trading
+          // name and would not be the party to these terms. ?>
+    <div class="terms-page">
+        <div class="terms-title">Terms of Business</div>
+        <p class="terms-intro">
+            MASCARDI VENTURES LTD., only accepts vehicles or parts thereof for repair,
+            estimates, testing, garaging, sale, inspection or other purposes on the
+            following terms and conditions.
+        </p>
+        <ol class="terms-list">
+            <li>Estimates are based on the current costs to the company of labour materials spare part. In the event of any increase in such costs, the company reserves the right to charge such increase to the customer. Any such increase exceeding 10% of the original estimate will be notified to the customer.</li>
+            <li>Only the work described overleaf and any work reasonably incidental thereto will be done. Any additional work will be carried out on the express instructions of the customer and will be charged. In addition to the estimate given and on the terms and conditions here set out.</li>
+            <li>The company is entitled to charge its usual garaging fees for any period during which a vehicle is on the company&rsquo;s premises though where a vehicle is collected within 3 days of notice that the vehicle is ready no charge for garaging will be levied.</li>
+            <li>If the company decides it is impractical to carry out any of the work it is entitled to refrain from carrying out or completing the same and the company decision in this respect shall be final and binding on the customer. In such event the customer shall pay for such work as has been done by the company.</li>
+            <li>The company will use its best endeavours to complete work within the time agreed but it is not liable for any loss or damage howsoever arising, occasioned directly or indirectly by delay.</li>
+            <li>All work carried out must be paid for in cash against delivery unless otherwise agreed in writing by the company but the company reserves the right to demand deposit before commencing or continuing any work.</li>
+            <li>The company shall not incur any liability howsoever arising in the event that a vehicle is delivered to a person whom the company reasonably believes is entitled to collect it.</li>
+            <li>The company is not liable for any loss or damage howsoever arising to the vehicle or its contents whilst in the custody of the company.</li>
+            <li>When any servant or agent of the company drives a customer&rsquo;s vehicle then he does so only as agent of the customer and the customer is deemed to have authorised the vehicle to be so driven and in no circumstance is such servant or agent permitted to drive a customer&rsquo;s vehicles otherwise than as his agent.</li>
+            <li>The company assigns to the customer all rights in any warranty given by the manufacturer of any spare parts used and the company is under no further or other obligation to the customer except as set out in these terms and conditions.</li>
+            <li>The company will only sub-contract any work as agent for the customer. The company accepts no liability whatsoever for such sub-contracted work.</li>
+            <li>The company accepts no liability for claims (which must be in writing) made after fourteen days from date of delivery in respect of faults, bad workmanship or defective materials used.</li>
+            <li>The company has a general lien on a vehicle for all monies owing to the company by the customer.</li>
+            <li>The company may cancel all or any part of the work to be done if it is so prevented by reason of strike, riot, accident, fire, earthquake, war, Government restrictions or licences, quotas, exchange control restriction or any other circumstance beyond the control of the company.</li>
+            <li>Any notice by the company to the customer at the address stated overleaf shall be deemed to have been received by the customer in the normal course of post.</li>
+            <li>Any part replaced by the company in the course of repairs shall be wherever possible, be returned at the time of the delivery any case where not claimed by the customer within 14 days after such delivery shall become the company&rsquo;s absolute property and dispose off as scrap material.</li>
+            <li>Under no circumstances whatsoever shall the company be liable for any contingent or consequential liability or loss resulting from or arising out of any defect in material or workmanship or howsoever arising.</li>
+            <li>Unless otherwise agreed in writing by the company these terms and conditions override any other terms and conditions expressed or implied whether in any statute common law or otherwise and such other terms and conditions are hereby excluded and negated.</li>
+            <li>If the customer&rsquo;s indebtedness to the company is not satisfied within the time provided, then the company may, having submitted notice, in writing to the last known address, dispose of the vehicle and its contents as provided for under the terms of the Disposal of Uncollected Goods Act of 1987.</li>
+        </ol>
     </div>
 
 </div><!-- /print-wrapper -->
