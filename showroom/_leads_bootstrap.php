@@ -59,6 +59,18 @@ function showroomLeadsMigrate(PDO $db): void {
     // Added after the tables shipped — no-op on fresh installs.
     try { $db->exec("ALTER TABLE showroom_inquiries ADD COLUMN lead_id INT NULL"); } catch (\Throwable $_) {}
     try { $db->exec("ALTER TABLE contact_messages   ADD COLUMN lead_id INT NULL"); } catch (\Throwable $_) {}
+
+    // A request to come and see the car is an enquiry with a date on it, so it
+    // lives in the same table rather than a parallel one: the inbox, the status
+    // workflow and the route into the CRM already exist here, and a second table
+    // would mean a second inbox nobody remembers to open.
+    foreach ([
+        "ALTER TABLE showroom_inquiries ADD COLUMN request_type VARCHAR(20) NOT NULL DEFAULT 'enquiry'",
+        "ALTER TABLE showroom_inquiries ADD COLUMN preferred_date DATE NULL",
+        "ALTER TABLE showroom_inquiries ADD COLUMN preferred_time VARCHAR(20) NULL",
+        "ALTER TABLE showroom_inquiries ADD COLUMN location_id INT NULL",
+        "ALTER TABLE showroom_inquiries ADD INDEX idx_si_type (request_type, status)",
+    ] as $alter) { try { $db->exec($alter); } catch (\Throwable $_) {} }
 }
 
 /**
@@ -115,6 +127,50 @@ function showroomCreateLead(
     } catch (\Throwable $e) {
         error_log('showroomCreateLead: ' . $e->getMessage());
         return 0;
+    }
+}
+
+/**
+ * The times a customer can ask to come in.
+ *
+ * A list rather than a free-text time, because "afternoon" is what people
+ * actually mean and a précise 14:35 is a promise the yard has not made. The
+ * keys are stored, so adding to this list is safe and renaming a key is not.
+ */
+function showroomViewingSlots(): array
+{
+    return [
+        'morning'   => 'Morning (9am – 12pm)',
+        'afternoon' => 'Afternoon (12pm – 4pm)',
+        'evening'   => 'Late afternoon (4pm – 6pm)',
+        'any'       => 'Any time that suits you',
+    ];
+}
+
+/** The label for a stored slot key, or the key itself if it is no longer offered. */
+function showroomViewingSlotLabel(?string $key): string
+{
+    if ($key === null || $key === '') return '';
+    return showroomViewingSlots()[$key] ?? $key;
+}
+
+/**
+ * Tell the people who have to act on a viewing request.
+ *
+ * Narrower than a general enquiry on purpose: an enquiry is a lead anybody in
+ * sales can pick up, but somebody asking to come in on Thursday needs a person
+ * who can confirm the appointment and have the car ready. super_admin is in the
+ * list because installs exist where that is the only administrator account, and
+ * leaving it out would mean the one person who can always act never hears.
+ */
+function showroomNotifyViewingRequest(string $title, string $message, string $link): void
+{
+    try {
+        require_once __DIR__ . '/../includes/notifications.php';
+        notifyRoles(['super_admin', 'admin', 'customer_relations'],
+                    'warning', $title, $message, $link);
+    } catch (\Throwable $e) {
+        error_log('showroomNotifyViewingRequest: ' . $e->getMessage());
     }
 }
 

@@ -132,6 +132,26 @@ if ($displayPrice) {
 }
 $jsonLd = json_encode($__ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
+// Where the car is actually standing, resolved to a pin if one has been set
+// for that yard (or for its parent compound). Null when the car has no
+// location on record at all.
+require_once __DIR__ . '/../modules/locations/_geo.php';
+// showroomViewingSlots() for the dialog's time list.
+require_once __DIR__ . '/_leads_bootstrap.php';
+$locMap = locationMap($db, isset($car['location_id']) ? (int)$car['location_id'] : null);
+
+// A car still on the water is not anywhere a customer can come to, so it gets
+// neither a map nor a viewing form. The page already refuses to name the yard
+// for the same reason.
+$canVisit = !$inTransit && $locMap !== null;
+
+// Leaflet only on this page, and only when there is something to draw.
+// OpenStreetMap tiles: no API key, no billing account, and the attribution
+// their licence asks for is set on the layer below.
+if ($canVisit && !empty($locMap['mappable'])) {
+    $pageHead = '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">';
+}
+
 include __DIR__ . '/header.php';
 ?>
 
@@ -343,6 +363,47 @@ include __DIR__ . '/header.php';
                     <div class="dv-loc"><i class="fa fa-location-dot"></i>Available at <?= htmlspecialchars($car['location_name']) ?></div>
                     <?php endif; ?>
 
+                    <?php /* ── Where to come and see it ─────────────────────────────
+                             The address alone leaves somebody to work out where that
+                             is; the map answers the question they are actually asking,
+                             which is how far away it is and whether they can get there
+                             today. A yard with no pin still gets its address and a
+                             directions link rather than an empty grey square. */ ?>
+                    <?php if ($canVisit): ?>
+                    <div class="dv-where" style="border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-top:16px">
+                        <?php if (!empty($locMap['mappable'])): ?>
+                        <div id="dvMap" style="height:190px;background:#eef1f4"
+                             data-lat="<?= htmlspecialchars((string)$locMap['lat']) ?>"
+                             data-lng="<?= htmlspecialchars((string)$locMap['lng']) ?>"
+                             data-label="<?= htmlspecialchars($locMap['name']) ?>"></div>
+                        <?php endif; ?>
+                        <div style="padding:14px 16px">
+                            <div class="lx-label" style="color:var(--ink);margin-bottom:6px">
+                                <i class="fa fa-location-dot me-1"></i>Where this vehicle is
+                            </div>
+                            <div style="font-weight:600;font-size:14px"><?= htmlspecialchars($locMap['name']) ?></div>
+                            <?php if (!empty($locMap['address'])): ?>
+                            <div style="font-size:13px;color:var(--ink-2);margin-top:3px;white-space:pre-line"><?= htmlspecialchars($locMap['address']) ?></div>
+                            <?php endif; ?>
+                            <?php $dirUrl = locationDirectionsUrl($locMap); ?>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+                                <?php if ($dirUrl !== ''): ?>
+                                <a href="<?= htmlspecialchars($dirUrl) ?>" target="_blank" rel="noopener"
+                                   class="btn-lx-ghost-dark" style="flex:1 1 auto">
+                                    <i class="fa fa-diamond-turn-right"></i> Get directions
+                                </a>
+                                <?php endif; ?>
+                                <?php if (!empty($locMap['phone'])): ?>
+                                <a href="tel:<?= htmlspecialchars($locMap['phone']) ?>"
+                                   class="btn-lx-ghost-dark" style="flex:1 1 auto">
+                                    <i class="fa fa-phone"></i> <?= htmlspecialchars($locMap['phone']) ?>
+                                </a>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                     <div class="dv-ctas">
                         <?php if ($whatsappPhone): ?>
                         <a href="https://wa.me/<?= $whatsappPhone ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="btn-lx" style="width:100%">
@@ -354,6 +415,15 @@ include __DIR__ . '/header.php';
                         <a href="tel:<?= htmlspecialchars($companyPhone) ?>" class="btn-lx-ghost-dark" style="width:100%">
                             <i class="fa fa-phone"></i> <?= htmlspecialchars($companyPhone) ?>
                         </a>
+                        <?php endif; ?>
+                        <?php /* Booking a viewing is the strongest thing a visitor can do
+                                 on this page, so it sits with the other two ways of
+                                 reaching us rather than at the bottom. Not offered on a
+                                 car that is not here to be seen. */ ?>
+                        <?php if ($canVisit): ?>
+                        <button type="button" class="btn-lx-ghost-dark" style="width:100%" onclick="dvOpenViewing()">
+                            <i class="fa fa-calendar-check"></i> Request a viewing
+                        </button>
                         <?php endif; ?>
                         <button type="button" id="dvSaveBtn" class="btn-lx-ghost-dark" style="width:100%" onclick="dvToggleSave()">
                             <i class="fa-regular fa-heart" id="dvSaveIcon"></i> <span id="dvSaveLabel">Save this vehicle</span>
@@ -997,5 +1067,179 @@ dvSyncSave();
     calc();
 }());
 </script>
+
+<?php /* ── Request a viewing ─────────────────────────────────────────────────
+         Its own dialog rather than more fields on the enquiry form: the two
+         ask different things of the customer and mean different things to the
+         yard. An enquiry is a question; this is somebody saying they will be
+         here on Thursday, and it has to reach a person who can confirm that.
+
+         Plain markup and one fetch, matching the enquiry form above. This page
+         does not load bootstrap's JavaScript, so the dialog is opened and
+         closed by hand. */ ?>
+<?php if ($canVisit): ?>
+<div id="dvViewing" style="display:none;position:fixed;inset:0;z-index:4000;background:rgba(15,23,42,.55);padding:20px;overflow:auto"
+     onclick="if (event.target === this) dvCloseViewing()">
+    <div style="max-width:470px;margin:40px auto;background:#fff;border-radius:var(--r);box-shadow:0 24px 70px rgba(0,0,0,.3)"
+         role="dialog" aria-modal="true" aria-labelledby="dvViewingTitle">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line)">
+            <div class="lx-label" id="dvViewingTitle" style="color:var(--ink)">
+                <i class="fa fa-calendar-check me-1"></i>Request a viewing
+            </div>
+            <button type="button" onclick="dvCloseViewing()" aria-label="Close"
+                    style="border:0;background:none;font-size:20px;line-height:1;color:var(--ink-2);cursor:pointer">&times;</button>
+        </div>
+
+        <div style="padding:22px">
+            <div id="dvViewingSuccess" style="display:none;text-align:center;padding:14px 0">
+                <i class="fa fa-circle-check" style="font-size:28px;color:var(--ink);display:block;margin-bottom:12px"></i>
+                <div style="font-weight:600;font-size:15px">Request received</div>
+                <div style="font-size:13px;color:var(--ink-2);margin-top:6px">
+                    We will call you to confirm the day and time, and have the vehicle ready for you.
+                </div>
+                <button type="button" class="btn-lx-ghost-dark" style="width:100%;margin-top:18px"
+                        onclick="dvCloseViewing()">Close</button>
+            </div>
+
+            <form id="dvViewingForm" novalidate>
+                <input type="hidden" name="car_id" value="<?= $id ?>">
+                <p style="font-size:13px;color:var(--ink-2);margin:0 0 16px">
+                    Tell us when suits you and we will confirm. The
+                    <?= htmlspecialchars($carTitle) ?> is at
+                    <strong><?= htmlspecialchars($locMap['name']) ?></strong>.
+                </p>
+                <div class="dv-field">
+                    <label class="lx-flabel">Full Name *</label>
+                    <input type="text" name="name" required class="lx-input" placeholder="e.g. John Kamau">
+                </div>
+                <div class="dv-field">
+                    <label class="lx-flabel">Phone Number *</label>
+                    <input type="tel" name="phone" required class="lx-input" placeholder="+254 7XX XXX XXX">
+                </div>
+                <div class="dv-field">
+                    <label class="lx-flabel">Email Address</label>
+                    <input type="email" name="email" class="lx-input" placeholder="you@example.com">
+                </div>
+                <div style="display:flex;gap:10px">
+                    <div class="dv-field" style="flex:1">
+                        <label class="lx-flabel">Preferred Day</label>
+                        <?php /* min/max are set from the database's clock, which is the one
+                                 the endpoint checks against. */ ?>
+                        <input type="date" name="preferred_date" class="lx-input"
+                               min="<?= htmlspecialchars((string)$db->query('SELECT CURDATE()')->fetchColumn()) ?>"
+                               max="<?= htmlspecialchars((string)$db->query('SELECT DATE_ADD(CURDATE(), INTERVAL 120 DAY)')->fetchColumn()) ?>">
+                    </div>
+                    <div class="dv-field" style="flex:1">
+                        <label class="lx-flabel">Time</label>
+                        <select name="preferred_time" class="lx-input">
+                            <?php foreach (showroomViewingSlots() as $__k => $__l): ?>
+                            <option value="<?= htmlspecialchars($__k) ?>"><?= htmlspecialchars($__l) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="dv-field">
+                    <label class="lx-flabel">Anything we should know?</label>
+                    <textarea name="message" rows="2" class="lx-input" style="resize:vertical"
+                              placeholder="e.g. I would like to take it for a test drive…"></textarea>
+                </div>
+                <button type="submit" id="dvViewingBtn" class="btn-lx" style="width:100%">
+                    <span id="dvViewingBtnText">Request a viewing</span>
+                    <span id="dvViewingBtnLoad" style="display:none"><i class="fa fa-spinner fa-spin me-2"></i>Sending…</span>
+                </button>
+                <div id="dvViewingError" style="display:none;border:1px solid var(--line);border-left:3px solid var(--ink);border-radius:var(--r);padding:12px;margin-top:10px;font-size:13px;color:var(--ink)"></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<?php if (!empty($locMap['mappable'])): ?>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
+<?php endif; ?>
+<script>
+/* ── The viewing dialog ──────────────────────────────────────────────────── */
+function dvOpenViewing() {
+    var m = document.getElementById('dvViewing');
+    if (!m) return;
+    m.style.display = '';
+    document.body.style.overflow = 'hidden';
+    var f = m.querySelector('input[name="name"]');
+    if (f) { try { f.focus(); } catch (e) {} }
+}
+function dvCloseViewing() {
+    var m = document.getElementById('dvViewing');
+    if (!m) return;
+    m.style.display = 'none';
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') dvCloseViewing();
+});
+
+document.getElementById('dvViewingForm') && document.getElementById('dvViewingForm')
+    .addEventListener('submit', function (e) {
+        e.preventDefault();
+        var form = this;
+        var btn  = document.getElementById('dvViewingBtn');
+        var err  = document.getElementById('dvViewingError');
+        btn.disabled = true;
+        document.getElementById('dvViewingBtnText').style.display = 'none';
+        document.getElementById('dvViewingBtnLoad').style.display = '';
+        err.style.display = 'none';
+
+        fetch('<?= BASE_URL ?>/showroom/viewing.php', { method: 'POST', body: new FormData(form) })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d && d.success) {
+                    form.style.display = 'none';
+                    document.getElementById('dvViewingSuccess').style.display = '';
+                } else {
+                    err.textContent = (d && d.error) || 'Something went wrong. Please try again.';
+                    err.style.display = '';
+                }
+            })
+            .catch(function () {
+                err.textContent = 'We could not send that. Please check your connection and try again.';
+                err.style.display = '';
+            })
+            .finally(function () {
+                btn.disabled = false;
+                document.getElementById('dvViewingBtnText').style.display = '';
+                document.getElementById('dvViewingBtnLoad').style.display = 'none';
+            });
+    });
+
+/* ── The map ─────────────────────────────────────────────────────────────────
+   Drawn only once Leaflet has actually arrived. If the library fails to load
+   the address and the directions link underneath still answer the question, so
+   there is nothing to fall back to and nothing to apologise for. Scroll-wheel
+   zoom is off: this sits in a long page and stealing the scroll to zoom a map
+   the visitor was only passing is the rudest thing a map can do. */
+(function () {
+    var el = document.getElementById('dvMap');
+    if (!el) return;
+
+    function draw() {
+        if (typeof L === 'undefined') return false;
+        var lat = parseFloat(el.dataset.lat), lng = parseFloat(el.dataset.lng);
+        if (!isFinite(lat) || !isFinite(lng)) return true;
+        var map = L.map(el, { scrollWheelZoom: false, zoomControl: true }).setView([lat, lng], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+        }).addTo(map);
+        L.marker([lat, lng]).addTo(map).bindPopup(el.dataset.label || '');
+        return true;
+    }
+
+    if (draw()) return;
+    // The script is deferred, so it may not have run yet.
+    var tries = 0;
+    var t = setInterval(function () {
+        if (draw() || ++tries > 40) clearInterval(t);
+    }, 100);
+}());
+</script>
+<?php endif; ?>
 
 <?php include __DIR__ . '/footer.php'; ?>

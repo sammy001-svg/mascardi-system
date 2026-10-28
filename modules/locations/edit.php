@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/_geo.php';
 requireRole(['admin', 'manager']);
 $db = getDB();
+locationGeoMigrate($db);
 
 $id = (int)($_GET['id'] ?? 0);
 $stmt = $db->prepare("SELECT * FROM locations WHERE id = ?");
@@ -37,6 +39,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone    = trim($_POST['phone']      ?? '');
     $status   = $_POST['status']          ?? 'active';
     $parentId = (int)($_POST['parent_id'] ?? 0) ?: null;
+    // Stored only as a usable pair. Half a coordinate is not a place, and a
+    // blank field arrives as '' rather than null.
+    $lat      = trim((string)($_POST['latitude']  ?? ''));
+    $lng      = trim((string)($_POST['longitude'] ?? ''));
+    $hasGeo   = locationGeoValid($lat, $lng);
+    if (!$hasGeo && ($lat !== '' || $lng !== '')) {
+        $errors[] = 'A map pin needs both a latitude and a longitude, within range and not 0,0. Leave both empty for no pin.';
+    }
 
     if (!$name) {
         $errors[] = 'Location name is required.';
@@ -53,9 +63,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$errors) {
         $db->prepare("
             UPDATE locations
-            SET name=?, type=?, address=?, phone=?, status=?, parent_id=?
+            SET name=?, type=?, address=?, phone=?, status=?, parent_id=?,
+                latitude=?, longitude=?
             WHERE id=?
-        ")->execute([$name, $type, $address, $phone, $status, $parentId, $id]);
+        ")->execute([$name, $type, $address, $phone, $status, $parentId,
+                     $hasGeo ? (float)$lat : null, $hasGeo ? (float)$lng : null, $id]);
 
         logActivity('update', 'locations', $id, 'Updated location: ' . $name);
         setFlash('success', 'Location updated successfully.');
@@ -161,6 +173,31 @@ include __DIR__ . '/../../includes/header.php';
                     <div class="mb-4">
                         <label class="form-label fw-semibold">Address / Description</label>
                         <textarea name="address" class="form-control" rows="3"><?= e($form['address'] ?? '') ?></textarea>
+                    </div>
+
+                    <?php /* A pin, not a geocoded address. The addresses in this table
+                             read like "off Mombasa Road, opposite the Shell", which no
+                             geocoder resolves, and one that could would want an API key
+                             for a figure that changes about once a year. Blank is fine:
+                             the map is simply not drawn, and the address still shows. */ ?>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Map pin <span class="text-muted fw-normal small">(optional)</span></label>
+                        <div class="row g-2">
+                            <div class="col-sm-6">
+                                <input type="number" step="any" name="latitude" class="form-control"
+                                       value="<?= e((string)($form['latitude'] ?? '')) ?>" placeholder="Latitude, e.g. -1.319170">
+                            </div>
+                            <div class="col-sm-6">
+                                <input type="number" step="any" name="longitude" class="form-control"
+                                       value="<?= e((string)($form['longitude'] ?? '')) ?>" placeholder="Longitude, e.g. 36.825100">
+                            </div>
+                        </div>
+                        <div class="form-text">
+                            Shown as a map to customers looking at a vehicle kept here. To find the
+                            numbers: open the place in Google Maps, right-click the exact spot and
+                            click the latitude/longitude it offers, then paste. Leave both empty and
+                            customers are given the address only.
+                        </div>
                     </div>
 
                     <div class="d-flex gap-2">

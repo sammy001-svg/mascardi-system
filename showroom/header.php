@@ -350,6 +350,10 @@ select.lx-input { cursor: pointer; }
     .nav-cta-btn { padding: 10px 14px; }
 }
 </style>
+<?php /* A page that needs its own stylesheet sets $pageHead before including
+         this. Used by the vehicle page for the map library, which no other
+         page loads and which has no business on all of them. */ ?>
+<?= $pageHead ?? '' ?>
 </head>
 <body>
 

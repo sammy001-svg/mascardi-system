@@ -5,6 +5,10 @@ canAccess('showroom') || hasRole(['admin','sales_manager','sales_officer','sales
 $pageTitle = 'Showroom Inquiries';
 $db = getDB();
 
+// The viewing-request columns live with the public forms that write them.
+require_once __DIR__ . '/../../showroom/_leads_bootstrap.php';
+showroomLeadsMigrate($db);
+
 // Inline migrations — ensure columns exist
 try { $db->exec("ALTER TABLE showroom_inquiries ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'new'"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE showroom_inquiries ADD COLUMN notes TEXT NULL DEFAULT NULL"); } catch (\Throwable $_) {}
@@ -33,10 +37,13 @@ $viewId = (int)($_GET['id'] ?? 0);
 $detail = null;
 if ($viewId) {
     $s = $db->prepare("SELECT i.*, c.make, c.model, c.year, c.asking_price,
-                              u.name AS responded_by_name
+                              c.registration_number, c.chassis_number,
+                              u.name AS responded_by_name,
+                              l.name AS location_name
                        FROM showroom_inquiries i
                        JOIN cars c ON c.id = i.car_id
                        LEFT JOIN users u ON u.id = i.responded_by
+                       LEFT JOIN locations l ON l.id = i.location_id
                        WHERE i.id = ?");
     $s->execute([$viewId]);
     $detail = $s->fetch(PDO::FETCH_ASSOC);
@@ -117,6 +124,17 @@ include __DIR__ . '/../../includes/header.php';
                                 <div class="fw-semibold" style="font-size:13.5px"><?= e($iq['inquiry_name']) ?></div>
                                 <?php if ($iq['status'] === 'new'): ?>
                                 <span class="badge bg-danger" style="font-size:10px">New</span>
+                                <?php endif; ?>
+                                <?php /* Somebody who has named a day is not the same as somebody
+                                         asking a question, and the difference decides who picks
+                                         it up first. */ ?>
+                                <?php if (($iq['request_type'] ?? '') === 'viewing'): ?>
+                                <span class="badge bg-warning text-dark" style="font-size:10px">
+                                    <i class="fa fa-calendar-check"></i> Viewing<?php
+                                        if (!empty($iq['preferred_date'])): ?>
+                                        · <?= e(date('j M', strtotime((string)$iq['preferred_date']))) ?><?php
+                                        endif; ?>
+                                </span>
                                 <?php endif; ?>
                             </td>
                             <td class="small text-muted">
@@ -251,5 +269,125 @@ include __DIR__ . '/../../includes/header.php';
     <?php endif; ?>
 
 </div>
+
+<?php /* ── Who it is, in one dialog ──────────────────────────────────────────
+         Reached from the notification a viewing request raises. Somebody is
+         being told "a customer wants to see a car on Thursday"; the only
+         useful next step is the customer's name and number, so that is what
+         opens, rather than leaving them to find the row in a list.
+
+         Rendered only when a record is actually open, and opened by itself
+         when the link said to. */ ?>
+<?php if ($detail): ?>
+<div class="modal fade" id="clientDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title fw-bold">
+                    <?php if (($detail['request_type'] ?? '') === 'viewing'): ?>
+                    <i class="fa fa-calendar-check me-2 text-warning"></i>Viewing Request
+                    <?php else: ?>
+                    <i class="fa fa-envelope-open-text me-2 text-primary"></i>Website Enquiry
+                    <?php endif; ?>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="text-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px">Client</div>
+                    <div class="fw-bold" style="font-size:17px"><?= e($detail['inquiry_name']) ?></div>
+                </div>
+
+                <div class="d-flex flex-column gap-2 mb-3">
+                    <?php if (!empty($detail['inquiry_phone'])): ?>
+                    <a href="tel:<?= e($detail['inquiry_phone']) ?>" class="btn btn-success btn-sm text-start">
+                        <i class="fa fa-phone me-2"></i><?= e($detail['inquiry_phone']) ?>
+                    </a>
+                    <?php endif; ?>
+                    <?php if (!empty($detail['inquiry_email'])): ?>
+                    <a href="mailto:<?= e($detail['inquiry_email']) ?>" class="btn btn-outline-secondary btn-sm text-start">
+                        <i class="fa fa-envelope me-2"></i><?= e($detail['inquiry_email']) ?>
+                    </a>
+                    <?php endif; ?>
+                </div>
+
+                <table class="table table-sm mb-0" style="font-size:13px">
+                    <tr>
+                        <td class="text-muted" style="width:38%">Vehicle</td>
+                        <td class="fw-semibold">
+                            <?= e(trim(($detail['year'] ? $detail['year'] . ' ' : '')
+                                       . $detail['make'] . ' ' . $detail['model'])) ?>
+                            <?php if (!empty($detail['registration_number'])): ?>
+                            <div class="text-muted font-monospace" style="font-size:11.5px"><?= e($detail['registration_number']) ?></div>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php if (($detail['request_type'] ?? '') === 'viewing'): ?>
+                    <tr>
+                        <td class="text-muted">Wants to come</td>
+                        <td class="fw-semibold">
+                            <?php if (!empty($detail['preferred_date'])): ?>
+                                <?= e(date('D j M Y', strtotime((string)$detail['preferred_date']))) ?>
+                            <?php else: ?>
+                                <span class="text-muted fw-normal">No day given</span>
+                            <?php endif; ?>
+                            <?php $slot = showroomViewingSlotLabel($detail['preferred_time'] ?? null);
+                                  if ($slot !== ''): ?>
+                            <div class="text-muted fw-normal" style="font-size:11.5px"><?= e($slot) ?></div>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php if (!empty($detail['location_name'])): ?>
+                    <tr>
+                        <td class="text-muted">At</td>
+                        <td><?= e($detail['location_name']) ?></td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php endif; ?>
+                    <tr>
+                        <td class="text-muted">Received</td>
+                        <td><?= e(date('D j M Y, g:ia', strtotime((string)$detail['created_at']))) ?></td>
+                    </tr>
+                    <?php if (!empty($detail['message'])): ?>
+                    <tr>
+                        <td class="text-muted align-top">They said</td>
+                        <td style="white-space:pre-line"><?= e($detail['message']) ?></td>
+                    </tr>
+                    <?php endif; ?>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <?php if (!empty($detail['lead_id'])): ?>
+                <a href="<?= BASE_URL ?>/modules/crm/view_lead.php?id=<?= (int)$detail['lead_id'] ?>"
+                   class="btn btn-primary btn-sm">
+                    <i class="fa fa-user me-1"></i>Open the lead
+                </a>
+                <?php endif; ?>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                    Work it here
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<?php if (!empty($_GET['popup'])): ?>
+<script>
+// Arrived from the notification, so show who it is without another click.
+// Waited on because the bootstrap bundle loads at the end of the page.
+(function () {
+    var tries = 0;
+    var t = setInterval(function () {
+        var el = document.getElementById('clientDetailModal');
+        if (el && window.bootstrap && bootstrap.Modal) {
+            clearInterval(t);
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        } else if (++tries > 40) {
+            clearInterval(t);
+        }
+    }, 75);
+}());
+</script>
+<?php endif; ?>
+<?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
