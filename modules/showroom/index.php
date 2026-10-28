@@ -1,7 +1,12 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
-canAccess('showroom') || hasRole(['admin','sales_manager','sales_officer','sales_person','general_manager']) || die('Access denied.');
+// customer_relations is here because this is where website enquiries and
+// viewing requests land, and they are the people notified to work them --
+// being sent a request and then refused the page is no use to anybody.
+// Page-scoped on purpose: it is not the whole showroom module.
+canAccess('showroom') || hasRole(['admin','sales_manager','sales_officer','sales_person',
+                                  'general_manager','customer_relations']) || die('Access denied.');
 $pageTitle = 'Showroom Inquiries';
 $db = getDB();
 
@@ -20,8 +25,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     verifyCsrf();
     $iqId = (int)($_POST['inquiry_id'] ?? 0);
     if ($iqId) {
-        if ($_POST['action'] === 'update_status') {
-            $status = in_array($_POST['status'], ['new','contacted','closed']) ? $_POST['status'] : 'new';
+        if ($_POST['action'] === 'confirm_viewing') {
+            // Confirming promises a customer that somebody will be there and
+            // the car will be ready, so it sits with the roles that were told
+            // about the request in the first place.
+            if (!showroomCanConfirmViewing()) {
+                setFlash('danger', 'Only an administrator or customer relations can confirm a viewing.');
+            } else {
+                $r = showroomConfirmViewing(
+                    $db, $iqId,
+                    trim((string)($_POST['confirmed_date'] ?? '')),
+                    trim((string)($_POST['confirmed_time'] ?? '')),
+                    (int)authUser()['id']
+                );
+                if (!$r['ok']) {
+                    setFlash('danger', $r['error']);
+                } else {
+                    // The email is the point of confirming, so whether it went
+                    // is part of the answer rather than a detail in a log.
+                    setFlash($r['emailed'] ? 'success' : 'warning',
+                        ($r['rescheduled'] ? 'Viewing rearranged for ' : 'Viewing confirmed for ')
+                        . $r['when'] . '. ' . $r['email_note']);
+                }
+            }
+        } elseif ($_POST['action'] === 'update_status') {
+            $status = in_array($_POST['status'], ['new','contacted','confirmed','closed']) ? $_POST['status'] : 'new';
             $db->prepare("UPDATE showroom_inquiries SET status=?, responded_by=?, responded_at=NOW() WHERE id=?")
                ->execute([$status, authUser()['id'], $iqId]);
         } elseif ($_POST['action'] === 'save_notes') {
@@ -39,10 +67,12 @@ if ($viewId) {
     $s = $db->prepare("SELECT i.*, c.make, c.model, c.year, c.asking_price,
                               c.registration_number, c.chassis_number,
                               u.name AS responded_by_name,
+                              cb.name AS confirmed_by_name,
                               l.name AS location_name
                        FROM showroom_inquiries i
                        JOIN cars c ON c.id = i.car_id
                        LEFT JOIN users u ON u.id = i.responded_by
+                       LEFT JOIN users cb ON cb.id = i.confirmed_by
                        LEFT JOIN locations l ON l.id = i.location_id
                        WHERE i.id = ?");
     $s->execute([$viewId]);
@@ -85,8 +115,10 @@ include __DIR__ . '/../../includes/header.php';
 <!-- Status tabs -->
 <div class="d-flex gap-2 mb-3 flex-wrap">
     <?php
-    $tabs = [''=>'All', 'new'=>'New', 'contacted'=>'Contacted', 'closed'=>'Closed'];
-    $tabColors = ['new'=>'danger','contacted'=>'primary','closed'=>'secondary'];
+    $tabs = [''=>'All', 'new'=>'New', 'contacted'=>'Contacted',
+             'confirmed'=>'Confirmed', 'closed'=>'Closed'];
+    $tabColors = ['new'=>'danger','contacted'=>'primary',
+                  'confirmed'=>'success','closed'=>'secondary'];
     foreach ($tabs as $val => $label):
         $cnt = $val === '' ? array_sum($counts) : ($counts[$val] ?? 0);
     ?>
@@ -235,6 +267,75 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <?php endif; ?>
 
+                <?php /* ── Confirm the viewing ───────────────────────────────────
+                         A date and a clock time, not the slot the customer asked
+                         for: the point of confirming is to replace a preference
+                         with an appointment they can turn up to. Prefilled from
+                         what they asked for, and editable, because the yard often
+                         has to offer a different hour.
+
+                         Saving sends them the email. Re-saving rearranges it and
+                         sends another, which is what a customer ringing to move
+                         the day actually needs. */ ?>
+                <?php if (($detail['request_type'] ?? '') === 'viewing'): ?>
+                <?php $isConfirmed = !empty($detail['confirmed_at']); ?>
+                <div class="border rounded-3 p-3 mb-3"
+                     style="background:<?= $isConfirmed ? '#f0fdf4' : '#fffbeb' ?>;border-color:<?= $isConfirmed ? '#bbf7d0' : '#fde68a' ?> !important">
+                    <?php if ($isConfirmed): ?>
+                    <div class="fw-bold text-success mb-1" style="font-size:13.5px">
+                        <i class="fa fa-circle-check me-1"></i>Confirmed for
+                        <?= e(date('l j F Y', strtotime((string)$detail['confirmed_date']))) ?>
+                        at <?= e(date('g:ia', strtotime((string)$detail['confirmed_date'] . ' ' . (string)$detail['confirmed_time']))) ?>
+                    </div>
+                    <div class="text-muted mb-2" style="font-size:11.5px">
+                        <?php if (!empty($detail['confirmed_by_name'])): ?>
+                            by <?= e($detail['confirmed_by_name']) ?>
+                        <?php endif; ?>
+                        <?php if (empty($detail['inquiry_email'])): ?>
+                            · no email address on file, so nothing was sent
+                        <?php endif; ?>
+                    </div>
+                    <?php else: ?>
+                    <div class="fw-semibold mb-2" style="font-size:13.5px">
+                        <i class="fa fa-calendar-check me-1 text-warning"></i>Confirm this viewing
+                    </div>
+                    <div class="text-muted mb-2" style="font-size:11.5px">
+                        <?php if (!empty($detail['inquiry_email'])): ?>
+                            Saving emails <?= e($detail['inquiry_email']) ?> the day, the time and how to find us.
+                        <?php else: ?>
+                            They left no email address, so please call them — the appointment is still recorded.
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (showroomCanConfirmViewing()): ?>
+                    <form method="POST" class="d-flex gap-2 flex-wrap align-items-end">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="inquiry_id" value="<?= (int)$detail['id'] ?>">
+                        <input type="hidden" name="action" value="confirm_viewing">
+                        <div>
+                            <label class="form-label small fw-semibold mb-1">Date</label>
+                            <input type="date" name="confirmed_date" class="form-control form-control-sm" required
+                                   style="width:auto"
+                                   min="<?= e((string)$db->query('SELECT CURDATE()')->fetchColumn()) ?>"
+                                   value="<?= e((string)($detail['confirmed_date'] ?: $detail['preferred_date'] ?: $db->query('SELECT CURDATE()')->fetchColumn())) ?>">
+                        </div>
+                        <div>
+                            <label class="form-label small fw-semibold mb-1">Time</label>
+                            <input type="time" name="confirmed_time" class="form-control form-control-sm" required
+                                   style="width:auto"
+                                   value="<?= e($detail['confirmed_time']
+                                       ? substr((string)$detail['confirmed_time'], 0, 5)
+                                       : showroomViewingSlotStart($detail['preferred_time'] ?? null)) ?>">
+                        </div>
+                        <button class="btn btn-sm <?= $isConfirmed ? 'btn-outline-success' : 'btn-success' ?>">
+                            <i class="fa fa-paper-plane me-1"></i><?= $isConfirmed ? 'Rearrange & resend' : 'Confirm & email client' ?>
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+
                 <!-- Status update -->
                 <form method="POST" class="d-flex gap-2 mb-3 flex-wrap align-items-end">
                     <input type="hidden" name="inquiry_id" value="<?= $detail['id'] ?>">
@@ -244,6 +345,7 @@ include __DIR__ . '/../../includes/header.php';
                         <select name="status" class="form-select form-select-sm" style="width:auto">
                             <option value="new"       <?= $detail['status']==='new'       ? 'selected' : '' ?>>New</option>
                             <option value="contacted" <?= $detail['status']==='contacted' ? 'selected' : '' ?>>Contacted</option>
+                            <option value="confirmed" <?= $detail['status']==='confirmed' ? 'selected' : '' ?>>Confirmed</option>
                             <option value="closed"    <?= $detail['status']==='closed'    ? 'selected' : '' ?>>Closed</option>
                         </select>
                     </div>
@@ -343,6 +445,19 @@ include __DIR__ . '/../../includes/header.php';
                         <td><?= e($detail['location_name']) ?></td>
                     </tr>
                     <?php endif; ?>
+                    <tr>
+                        <td class="text-muted">Confirmed</td>
+                        <td>
+                            <?php if (!empty($detail['confirmed_at'])): ?>
+                            <span class="fw-semibold text-success">
+                                <?= e(date('D j M Y', strtotime((string)$detail['confirmed_date']))) ?>
+                                at <?= e(date('g:ia', strtotime((string)$detail['confirmed_date'] . ' ' . (string)$detail['confirmed_time']))) ?>
+                            </span>
+                            <?php else: ?>
+                            <span class="badge bg-warning text-dark">Not yet — confirm it below</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
                     <?php endif; ?>
                     <tr>
                         <td class="text-muted">Received</td>

@@ -70,6 +70,13 @@ function showroomLeadsMigrate(PDO $db): void {
         "ALTER TABLE showroom_inquiries ADD COLUMN preferred_time VARCHAR(20) NULL",
         "ALTER TABLE showroom_inquiries ADD COLUMN location_id INT NULL",
         "ALTER TABLE showroom_inquiries ADD INDEX idx_si_type (request_type, status)",
+        // What the yard actually agreed to, which is not always what was asked
+        // for. Kept apart from preferred_date/preferred_time so the request and
+        // the appointment can be compared later.
+        "ALTER TABLE showroom_inquiries ADD COLUMN confirmed_date DATE NULL",
+        "ALTER TABLE showroom_inquiries ADD COLUMN confirmed_time TIME NULL",
+        "ALTER TABLE showroom_inquiries ADD COLUMN confirmed_by INT NULL",
+        "ALTER TABLE showroom_inquiries ADD COLUMN confirmed_at DATETIME NULL",
     ] as $alter) { try { $db->exec($alter); } catch (\Throwable $_) {} }
 }
 
@@ -172,6 +179,182 @@ function showroomNotifyViewingRequest(string $title, string $message, string $li
     } catch (\Throwable $e) {
         error_log('showroomNotifyViewingRequest: ' . $e->getMessage());
     }
+}
+
+/**
+ * Who may confirm a viewing.
+ *
+ * The same people the request was sent to. Confirming is a promise made to a
+ * customer on the company's behalf -- somebody will be there, and the car will
+ * be clean and out of the back row -- so it belongs with whoever can actually
+ * arrange that.
+ */
+function showroomCanConfirmViewing(): bool
+{
+    return function_exists('hasRole')
+        && hasRole(['super_admin', 'admin', 'customer_relations']);
+}
+
+/**
+ * The hour a slot starts, used to prefill the confirm form.
+ *
+ * A confirmation says "come at 2:30", not "come in the afternoon": the whole
+ * point of confirming is to replace a preference with an appointment. These are
+ * only the starting suggestion, and whoever confirms can type over them.
+ */
+function showroomViewingSlotStart(?string $slot): string
+{
+    switch ((string)$slot) {
+        case 'morning':   return '10:00';
+        case 'afternoon': return '14:00';
+        case 'evening':   return '16:30';
+        default:          return '11:00';
+    }
+}
+
+/**
+ * The email the client gets, with the three things they need to turn up.
+ *
+ * Where to come is read from the car's location now rather than the one stored
+ * on the request: stock moves between yards, and a confirmation that sends
+ * somebody to the showroom the car left last week is worse than none.
+ */
+function showroomViewingEmailBody(array $req, array $loc, string $when): string
+{
+    $carLabel = trim((string)($req['year'] ?? '') . ' ' . ($req['make'] ?? '') . ' ' . ($req['model'] ?? ''));
+    $rows = '';
+    $add  = static function (string $k, string $v) use (&$rows): void {
+        if (trim($v) === '') return;
+        $rows .= '<tr><td style="color:#64748b;font-weight:600;width:34%">' . htmlspecialchars($k)
+               . '</td><td>' . nl2br(htmlspecialchars($v)) . '</td></tr>';
+    };
+    $add('Vehicle', $carLabel);
+    $add('When',    $when);
+    $add('Where',   trim((string)($loc['name'] ?? '')));
+    $add('Address', trim((string)($loc['address'] ?? '')));
+    $add('Phone',   trim((string)($loc['phone'] ?? '')));
+
+    $body  = '<p>Hello ' . htmlspecialchars(explode(' ', trim((string)$req['inquiry_name']))[0] ?: 'there') . ',</p>';
+    $body .= '<p>Your viewing is confirmed. We look forward to seeing you.</p>';
+    $body .= '<table class="data">' . $rows . '</table>';
+
+    $dir = $loc ? locationDirectionsUrl($loc) : '';
+    if ($dir !== '') {
+        $body .= '<p><a class="btn" href="' . htmlspecialchars($dir) . '">Get directions</a></p>';
+    }
+    $body .= '<p style="font-size:13px;color:#64748b">If this time no longer suits you, reply to this '
+           . 'email or call us and we will rearrange it.</p>';
+    return mailTemplate('Your viewing is confirmed', $body);
+}
+
+/**
+ * Confirm a viewing request and tell the client when and where.
+ *
+ * Re-confirming is allowed and deliberate: a customer who rings to move the day
+ * needs the appointment changed and a fresh confirmation, not a second request.
+ *
+ * The email is the point of this, but it is not allowed to be the thing that
+ * stops the appointment being recorded. A client who left no email address, or
+ * an install whose SMTP is not set up, still gets a confirmed viewing -- the
+ * caller is told the email did not go so somebody can phone instead.
+ *
+ * @return array{ok:bool,error:string,when:string,emailed:bool,email_note:string,
+ *                rescheduled:bool}
+ */
+function showroomConfirmViewing(PDO $db, int $id, string $date, string $time, int $uid): array
+{
+    $out = ['ok' => false, 'error' => '', 'when' => '', 'emailed' => false,
+            'email_note' => '', 'rescheduled' => false];
+
+    showroomLeadsMigrate($db);
+
+    $st = $db->prepare("SELECT i.*, c.make, c.model, c.year, c.location_id AS car_location_id
+                          FROM showroom_inquiries i
+                     LEFT JOIN cars c ON c.id = i.car_id
+                         WHERE i.id = ?");
+    $st->execute([$id]);
+    $req = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$req) { $out['error'] = 'That request no longer exists.'; return $out; }
+    if (($req['request_type'] ?? '') !== 'viewing') {
+        $out['error'] = 'That is an enquiry, not a viewing request, so there is nothing to confirm.';
+        return $out;
+    }
+
+    $d = DateTime::createFromFormat('Y-m-d', $date);
+    if (!$d || $d->format('Y-m-d') !== $date) { $out['error'] = 'Choose a valid date.'; return $out; }
+    if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $time)) {
+        $out['error'] = 'Choose a valid time, as HH:MM.';
+        return $out;
+    }
+    // Against the database's clock: this application runs on UTC and MySQL on
+    // EAT, so PHP's idea of "today" is wrong for the first three hours of it.
+    try {
+        $chk = $db->prepare('SELECT ? < CURDATE()');
+        $chk->execute([$date]);
+        if ((int)$chk->fetchColumn() === 1) {
+            $out['error'] = 'That date has already passed. Pick the day the client is coming.';
+            return $out;
+        }
+    } catch (\Throwable $_) {}
+
+    $out['rescheduled'] = !empty($req['confirmed_at']);
+
+    try {
+        $db->prepare("UPDATE showroom_inquiries
+                         SET status = 'confirmed', confirmed_date = ?, confirmed_time = ?,
+                             confirmed_by = ?, confirmed_at = NOW(),
+                             responded_by = ?, responded_at = NOW()
+                       WHERE id = ?")
+           ->execute([$date, $time, $uid ?: null, $uid ?: null, $id]);
+    } catch (\Throwable $e) {
+        error_log('showroomConfirmViewing: ' . $e->getMessage());
+        $out['error'] = 'The confirmation could not be saved.';
+        return $out;
+    }
+
+    $when = date('l j F Y', strtotime($date)) . ' at ' . date('g:ia', strtotime($date . ' ' . $time));
+    $out['when'] = $when;
+
+    // Where the car is now, not where it was when they asked.
+    require_once __DIR__ . '/../modules/locations/_geo.php';
+    $loc = locationMap($db, (int)($req['car_location_id'] ?: $req['location_id'] ?: 0)) ?? [];
+
+    // On the lead's timeline, so the appointment is visible to whoever opens it.
+    if (!empty($req['lead_id'])) {
+        try {
+            $db->prepare("INSERT INTO crm_activities (lead_id, type, summary, created_at)
+                          VALUES (?, 'note', ?, NOW())")
+               ->execute([(int)$req['lead_id'],
+                          mb_substr(($out['rescheduled'] ? 'Viewing rearranged for ' : 'Viewing confirmed for ')
+                              . $when . (!empty($loc['name']) ? ' at ' . $loc['name'] : ''), 0, 300)]);
+        } catch (\Throwable $_) {}
+    }
+
+    $email = trim((string)($req['inquiry_email'] ?? ''));
+    if ($email === '') {
+        $out['ok'] = true;
+        $out['email_note'] = 'No email address was given, so nothing could be sent — please call them.';
+        return $out;
+    }
+
+    try {
+        require_once __DIR__ . '/../includes/mailer.php';
+        $carLabel = trim((string)$req['year'] . ' ' . $req['make'] . ' ' . $req['model']);
+        $res = sendMail($email, (string)$req['inquiry_name'],
+                        'Viewing confirmed: ' . $carLabel . ' — ' . date('j M Y', strtotime($date)),
+                        showroomViewingEmailBody($req, $loc, $when),
+                        'viewing', $id);
+        $out['emailed']    = !empty($res['ok']);
+        $out['email_note'] = !empty($res['ok'])
+            ? 'Confirmation emailed to ' . $email . '.'
+            : 'The confirmation email did not go: ' . (string)($res['error'] ?? 'unknown error');
+    } catch (\Throwable $e) {
+        error_log('showroomConfirmViewing email: ' . $e->getMessage());
+        $out['email_note'] = 'The confirmation email could not be sent.';
+    }
+
+    $out['ok'] = true;
+    return $out;
 }
 
 /** Notify the sales/CRM roles that handle inbound web leads. */
