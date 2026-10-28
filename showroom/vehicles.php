@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
 
 // ── Active filters ────────────────────────────────────────────────────────────
@@ -321,7 +322,7 @@ include __DIR__ . '/header.php';
             <div class="sv-card<?= $isReserved ? ' sv-card-reserved' : '' ?>" data-car-id="<?= $car['id'] ?>" data-car-name="<?= htmlspecialchars($car['year'].' '.$car['make'].' '.$car['model']) ?>">
 
                 <!-- Image -->
-                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="sv-card-img">
+                <a href="<?= htmlspecialchars(carUrl($db, $car)) ?>" class="sv-card-img">
                     <?php if ($isReserved): ?>
                     <span class="sv-chip-avail sv-chip-dark">Reserved</span>
                     <?php elseif ($car['featured']): ?>
@@ -347,7 +348,7 @@ include __DIR__ . '/header.php';
                 <!-- Body -->
                 <div class="sv-card-body">
                     <h3 class="sv-card-title">
-                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>">
+                        <a href="<?= htmlspecialchars(carUrl($db, $car)) ?>">
                             <?= htmlspecialchars($car['make'] . ' ' . $car['model']) ?>
                         </a>
                     </h3>
@@ -391,7 +392,7 @@ include __DIR__ . '/header.php';
 
                     <!-- CTAs -->
                     <div class="sv-card-actions">
-                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" class="sv-btn-main">View Details</a>
+                        <a href="<?= htmlspecialchars(carUrl($db, $car)) ?>" class="sv-btn-main">View Details</a>
                         <?php if (!$isReserved && $__waClean): ?>
                         <a href="https://wa.me/<?= $__waClean ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="sv-btn-sq" title="Enquire on WhatsApp">
                             <i class="fa-brands fa-whatsapp"></i>

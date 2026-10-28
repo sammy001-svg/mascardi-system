@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
 
 $ids = array_map('intval', (array)($_GET['ids'] ?? []));
@@ -72,7 +73,7 @@ include __DIR__ . '/header.php';
             ?>
             <div style="background:#fff;padding:20px">
                 <?php if ($img): ?>
-                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>">
+                <a href="<?= htmlspecialchars(carUrl($db, $car)) ?>">
                     <img src="<?= e($img) ?>" alt="<?= e($car['make'].' '.$car['model']) ?>"
                          style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:12px;display:block" loading="lazy">
                 </a>
@@ -86,7 +87,7 @@ include __DIR__ . '/header.php';
                         <?= $car['year'] ?><?php if ($car['body_type']): ?> &bull; <?= e($car['body_type']) ?><?php endif; ?>
                     </div>
                     <div style="font-size:17px;font-weight:800;color:#0f172a;letter-spacing:-.3px;margin-bottom:6px">
-                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>" style="color:inherit;text-decoration:none">
+                        <a href="<?= htmlspecialchars(carUrl($db, $car)) ?>" style="color:inherit;text-decoration:none">
                             <?= e($car['make'].' '.$car['model']) ?>
                         </a>
                     </div>
@@ -104,7 +105,7 @@ include __DIR__ . '/header.php';
                         <?php endif; ?>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
-                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $car['id'] ?>"
+                        <a href="<?= htmlspecialchars(carUrl($db, $car)) ?>"
                            style="flex:1;background:#0f172a;color:#fff;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">
                             View Details
                         </a>

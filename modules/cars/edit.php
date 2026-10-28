@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/_slug.php';
 requireWrite('cars');
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/cars/index.php');
@@ -450,7 +451,7 @@ document.getElementById('client_id').addEventListener('change', function() {
         metaDesc:  document.getElementById('metaDescInput'),
     };
     var companyName = <?= json_encode(getSetting('company_name', 'Mascardi Showroom')) ?>;
-    var pageUrl      = <?= json_encode(rtrim(BASE_URL, '/') . '/showroom/view.php?id=' . (int)$id) ?>;
+    var pageUrl      = <?= json_encode(carUrl($db, (int)$id)) ?>;
 
     function slugify(s) {
         return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -472,7 +473,9 @@ document.getElementById('client_id').addEventListener('change', function() {
         document.getElementById('metaTitleCount').textContent = f.metaTitle.value.length;
         document.getElementById('metaDescCount').textContent  = f.metaDesc.value.length;
         document.getElementById('serpSite').textContent = companyName;
-        document.getElementById('serpUrl').textContent  = pageUrl + (f.make.value || f.model.value ? ' › ' + slugify(f.make.value + '-' + f.model.value) : '');
+        // The address is the readable one now, so it needs no breadcrumb
+        // tacked on: it already reads as the words somebody searched for.
+        document.getElementById('serpUrl').textContent  = pageUrl;
         document.getElementById('serpTitle').textContent = title.length > 60 ? title.slice(0, 57) + '…' : title;
         document.getElementById('serpDesc').textContent  = desc.length > 160 ? desc.slice(0, 157) + '…' : desc;
     }

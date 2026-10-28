@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
 
 // Inline migrations — silent no-op if columns already exist
@@ -149,7 +150,7 @@ include __DIR__ . '/header.php';
                 ?>
                 <div class="fcar-slide">
                     <div class="lx-feature">
-                        <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fb['id'] ?>" class="lx-feature-img">
+                        <a href="<?= htmlspecialchars(carUrl($db, $fb)) ?>" class="lx-feature-img">
                             <img src="<?= htmlspecialchars($fbImg) ?>" alt="<?= htmlspecialchars($fb['make'].' '.$fb['model']) ?>" loading="lazy" decoding="async">
                         </a>
                         <div class="lx-feature-body">
@@ -181,7 +182,7 @@ include __DIR__ . '/header.php';
                                 <?php endif; ?>
                             </div>
                             <div style="display:flex;gap:12px;flex-wrap:wrap">
-                                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $fb['id'] ?>" class="btn-lx">View Details</a>
+                                <a href="<?= htmlspecialchars(carUrl($db, $fb)) ?>" class="btn-lx">View Details</a>
                                 <?php if ($__waClean): ?>
                                 <a href="https://wa.me/<?= $__waClean ?>?text=<?= $fbWa ?>" target="_blank" rel="noopener" class="btn-lx-ghost-dark">Enquire</a>
                                 <?php endif; ?>

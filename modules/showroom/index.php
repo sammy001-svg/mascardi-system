@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../modules/cars/_slug.php';
 requireLogin();
 // customer_relations is here because this is where website enquiries and
 // viewing requests land, and they are the people notified to work them --
@@ -213,7 +214,7 @@ include __DIR__ . '/../../includes/header.php';
                     <?php if ($detail['asking_price']): ?>
                     <div class="text-primary fw-semibold">KES <?= number_format((float)$detail['asking_price']) ?></div>
                     <?php endif; ?>
-                    <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $detail['car_id'] ?>" target="_blank" class="small text-muted">
+                    <a href="<?= htmlspecialchars(carUrl($db, (int)$detail['car_id'])) ?>" target="_blank" class="small text-muted">
                         <i class="fa fa-external-link me-1"></i>View in showroom
                     </a>
                     &nbsp;&bull;&nbsp;

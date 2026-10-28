@@ -472,7 +472,10 @@ include __DIR__ . '/../../includes/header.php';
         metaDesc:  document.getElementById('metaDescInput'),
     };
     var companyName = <?= json_encode(getSetting('company_name', 'Mascardi Showroom')) ?>;
-    var baseUrl      = <?= json_encode(rtrim(BASE_URL, '/') . '/showroom/view.php?id=') ?>;
+    // The car has no address until it is saved, so this previews the one it
+    // will be given: the site root plus the model, which is how carSlugBuild()
+    // names it unless another car has already taken that.
+    var baseUrl      = <?= json_encode(rtrim(BASE_URL, '/') . '/') ?>;
 
     function slugify(s) {
         return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -494,7 +497,8 @@ include __DIR__ . '/../../includes/header.php';
         document.getElementById('metaTitleCount').textContent = f.metaTitle.value.length;
         document.getElementById('metaDescCount').textContent  = f.metaDesc.value.length;
         document.getElementById('serpSite').textContent = companyName;
-        document.getElementById('serpUrl').textContent  = baseUrl + 'NEW' + (f.make.value || f.model.value ? ' › ' + slugify(f.make.value + '-' + f.model.value) : '');
+        document.getElementById('serpUrl').textContent  =
+            baseUrl + (slugify(f.model.value) || slugify(f.make.value) || 'vehicle');
         document.getElementById('serpTitle').textContent = title.length > 60 ? title.slice(0, 57) + '…' : title;
         document.getElementById('serpDesc').textContent  = desc.length > 160 ? desc.slice(0, 157) + '…' : desc;
     }

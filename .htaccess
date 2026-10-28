@@ -1,0 +1,39 @@
+# Mascardi — public URL rewriting.
+#
+# One job: turn /range-rover-evoque into /showroom/view.php?slug=range-rover-evoque
+# so a vehicle has an address that carries the words people search for, instead
+# of /showroom/view.php?id=290 which says nothing and counts the stock out loud.
+#
+# Everything that exists on disk is served first, so this cannot shadow a real
+# page, directory, image or upload. Only a request that matches nothing is
+# treated as a possible vehicle, and if no vehicle claims it the page sends the
+# visitor to the showroom rather than showing an error.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Tell PHP that this file is being read and mod_rewrite is on.
+    #
+    # Not decoration: without it the application cannot know whether a pretty
+    # address would resolve. A host with AllowOverride off ignores this file
+    # entirely, and a site that had started redirecting /showroom/view.php?id=290
+    # to /range-rover-evoque on that host would send every vehicle page to a 404.
+    # So the redirect, and the links, wait until this variable proves the rewrite
+    # is live. Apache exposes it to PHP as REDIRECT_MASCARDI_PRETTY once a rule
+    # has fired, which is why both names are checked.
+    RewriteRule ^ - [E=MASCARDI_PRETTY:1]
+
+    # Real files and directories win, always. This is what keeps /login.php,
+    # /assets/..., /modules/..., /showroom/... and the uploads working.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # One segment, letters, digits and hyphens: a vehicle address.
+    # Deliberately narrow -- no slashes, no dots -- so nothing with a path or an
+    # extension is ever mistaken for a car.
+    RewriteRule ^([A-Za-z0-9][A-Za-z0-9_-]{0,188})/?$ showroom/view.php?slug=$1 [L,QSA]
+</IfModule>
+
+# Without mod_rewrite nothing here applies, the variable above is never set, and
+# the site carries on serving /showroom/view.php?id=N exactly as before.

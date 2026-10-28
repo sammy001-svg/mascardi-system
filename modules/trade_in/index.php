@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../modules/cars/_slug.php';
 require_once __DIR__ . '/_bootstrap.php';
 requireLogin();
 canAccess('trade_in') || redirect(BASE_URL . '/index.php');
@@ -717,7 +718,7 @@ include __DIR__ . '/../../includes/header.php';
             </a>
             <?php endif; ?>
             <?php if ($tab === 'sale_on_behalf' && $r['status'] === 'active' && $r['show_on_website']): ?>
-            <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= (int)$r['car_id'] ?>" target="_blank"
+            <a href="<?= htmlspecialchars(carUrl($db, (int)$r['car_id'])) ?>" target="_blank"
                class="btn btn-sm btn-outline-success ms-auto" title="View public listing">
                 <i class="fa fa-globe"></i>
             </a>

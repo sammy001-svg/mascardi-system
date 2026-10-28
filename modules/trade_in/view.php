@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../modules/cars/_slug.php';
 require_once __DIR__ . '/_bootstrap.php';
 requireLogin();
 canAccess('trade_in') || redirect(BASE_URL . '/index.php');
@@ -385,7 +386,7 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <div class="d-flex gap-2">
                     <?php if ($c['show_on_website']): ?>
-                    <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= (int)$c['car_id'] ?>" target="_blank"
+                    <a href="<?= htmlspecialchars(carUrl($db, (int)$c['car_id'])) ?>" target="_blank"
                        class="btn btn-sm btn-outline-success"><i class="fa fa-up-right-from-square"></i></a>
                     <?php endif; ?>
                     <form method="POST" class="d-inline">

@@ -13,6 +13,7 @@
  * shipment listing cannot arrive through a search engine either.
  */
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
 
 $companyName   = getSetting('company_name',  'Mascardi Showroom');
@@ -136,7 +137,7 @@ include __DIR__ . '/header.php';
                     . ". Could you share the expected arrival and reservation terms?"
                 );
             ?>
-            <?php $detailUrl = BASE_URL . '/showroom/view.php?id=' . (int)$c['id']; ?>
+            <?php $detailUrl = carUrl($db, $c); ?>
             <article class="ish-card">
                 <a href="<?= htmlspecialchars($detailUrl) ?>" class="ish-img"
                    aria-label="View details for <?= htmlspecialchars($title) ?>">

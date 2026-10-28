@@ -7,6 +7,7 @@
 ob_start();
 require_once __DIR__ . '/config/app.php';
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/modules/cars/_slug.php';
 ob_end_clean();
 
 header('Content-Type: application/xml; charset=utf-8');
@@ -27,7 +28,7 @@ $staticPages = [
 
 try {
     $cars = $db->query("
-        SELECT id, updated_at
+        SELECT id, updated_at, slug, make, model, year
         FROM cars
         WHERE car_type IN ('inventory','sale_on_behalf') AND show_on_website = 1
           AND (status IS NULL OR status NOT IN ('delivered','sold','in_transit'))
@@ -68,7 +69,9 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 <?php endforeach; ?>
 <?php foreach ($cars as $c): ?>
     <url>
-        <loc><?= htmlspecialchars($base . '/showroom/view.php?id=' . (int)$c['id']) ?></loc>
+        <?php /* The readable address, which is the one that should be indexed.
+                 A car with no slug yet gets one the first time it is listed here. */ ?>
+        <loc><?= htmlspecialchars(carUrl($db, $c)) ?></loc>
         <?php if (!empty($c['updated_at'])): ?>
         <lastmod><?= date('Y-m-d', strtotime($c['updated_at'])) ?></lastmod>
         <?php endif; ?>

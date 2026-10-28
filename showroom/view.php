@@ -7,7 +7,41 @@ $db = getDB();
 try { $db->exec("ALTER TABLE cars ADD COLUMN offer_price DECIMAL(15,2) NULL DEFAULT NULL"); } catch (\Throwable $_) {}
 try { $db->exec("ALTER TABLE cars ADD COLUMN show_on_website TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $_) {}
 
-$id = (int)($_GET['id'] ?? 0);
+require_once __DIR__ . '/../modules/cars/_slug.php';
+carSlugMigrate($db);
+
+/* How this page is reached.
+   The address of a car is /range-rover-evoque. Apache rewrites that to here
+   with ?slug=, and ?id= is kept working because links to it are out in the
+   world -- in WhatsApp threads, in a customer's email, in Google's index.
+
+   An ?id= arrival is answered with a 301 rather than served. Two addresses for
+   one page is duplicate content, and a permanent redirect is what tells a
+   search engine to carry the old address's standing over to the new one
+   instead of splitting it between them. */
+$slugParam = trim((string)($_GET['slug'] ?? ''));
+$id        = (int)($_GET['id'] ?? 0);
+
+if ($slugParam !== '') {
+    $hit = carSlugResolve($db, $slugParam);
+    if (!$hit) { header('Location: ' . BASE_URL . '/showroom/', true, 302); exit; }
+    $id = $hit['id'];
+    // Typed by hand as /RangeRoverEvoque, or with odd punctuation: serve the
+    // one canonical spelling so only that form is ever indexed.
+    if ($slugParam !== $hit['slug']) {
+        header('Location: ' . rtrim(BASE_URL, '/') . '/' . $hit['slug'], true, 301);
+        exit;
+    }
+} elseif ($id && carPrettyUrls()) {
+    // Only once the rewrite has proved itself. Redirecting to an address this
+    // host cannot serve would take every vehicle page down at once.
+    $slugNow = carEnsureSlug($db, $id);
+    if ($slugNow !== '') {
+        header('Location: ' . rtrim(BASE_URL, '/') . '/' . $slugNow, true, 301);
+        exit;
+    }
+}
+
 if (!$id) { header('Location: ' . BASE_URL . '/showroom/'); exit; }
 
 $stmt = $db->prepare("
@@ -63,15 +97,19 @@ $saveAmt  = ($hasOffer && $hasPrice && $car['asking_price'] > $car['offer_price'
           ? (float)$car['asking_price'] - (float)$car['offer_price'] : 0;
 
 $carTitle = $car['year'] . ' ' . $car['make'] . ' ' . $car['model'];
+// What a customer pastes into a chat, so it has to be the readable address.
+$carPublicUrl = carUrl($db, $car + ['id' => $id]);
 $waMsg    = $inTransit
     ? urlencode("Hi, I'm interested in the {$carTitle} that is currently in shipment"
         . ($displayPrice ? " ({$priceStr})" : '')
         . ". Could you share the expected arrival and reservation terms? "
-        . BASE_URL . "/showroom/view.php?id={$id}")
-    : urlencode("Hi, I'm interested in the {$carTitle}" . ($displayPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? " . BASE_URL . "/showroom/view.php?id={$id}");
+        . $carPublicUrl)
+    : urlencode("Hi, I'm interested in the {$carTitle}" . ($displayPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? " . $carPublicUrl);
 
 // ── SEO: per-car overrides, falling back to auto-generated values ──────────
-$canonicalUrl = rtrim(BASE_URL, '/') . '/showroom/view.php?id=' . $id;
+// The canonical is the pretty address, which is the whole point: it is what
+// search engines index and what everything else on the page should quote.
+$canonicalUrl = carUrl($db, $car + ['id' => $id]);
 $fullTitle    = trim((string)($car['meta_title'] ?? '')) !== ''
               ? $car['meta_title']
               : "{$carTitle} for Sale in Kenya | {$companyName}";
@@ -528,7 +566,7 @@ include __DIR__ . '/header.php';
                         <span class="lx-label">Share</span>
                         <div style="display:flex;gap:8px">
                             <?php if ($whatsappPhone): ?>
-                            <a href="https://wa.me/?text=<?= urlencode("Check out this {$carTitle} at {$companyName} " . BASE_URL . "/showroom/view.php?id={$id}") ?>"
+                            <a href="https://wa.me/?text=<?= urlencode("Check out this {$carTitle} at {$companyName} " . $carPublicUrl) ?>"
                                target="_blank" rel="noopener" class="dv-share-btn" title="Share on WhatsApp">
                                 <i class="fa-brands fa-whatsapp"></i>
                             </a>
@@ -536,7 +574,7 @@ include __DIR__ . '/header.php';
                             <button onclick="copyLink()" class="dv-share-btn" title="Copy link" id="copyBtn">
                                 <i class="fa fa-link"></i>
                             </button>
-                            <a href="mailto:?subject=<?= urlencode("Check out this {$carTitle}") ?>&body=<?= urlencode("I found this vehicle at {$companyName}: " . BASE_URL . "/showroom/view.php?id={$id}") ?>"
+                            <a href="mailto:?subject=<?= urlencode("Check out this {$carTitle}") ?>&body=<?= urlencode("I found this vehicle at {$companyName}: " . $carPublicUrl) ?>"
                                class="dv-share-btn" title="Share by Email">
                                 <i class="fa fa-envelope"></i>
                             </a>
@@ -564,7 +602,7 @@ include __DIR__ . '/header.php';
                     $svOffer = !empty($sv['offer_price']) && $sv['offer_price'] > 0;
                     $svPrice = $svOffer ? (float)$sv['offer_price'] : (float)($sv['asking_price'] ?? 0);
                 ?>
-                <a href="<?= BASE_URL ?>/showroom/view.php?id=<?= $sv['id'] ?>" class="dv-sim-card">
+                <a href="<?= htmlspecialchars(carUrl($db, $sv)) ?>" class="dv-sim-card">
                     <div class="img">
                         <?php if ($svImg): ?>
                         <img src="<?= htmlspecialchars($svImg) ?>" alt="<?= htmlspecialchars($sv['make'].' '.$sv['model']) ?>" loading="lazy" decoding="async">
