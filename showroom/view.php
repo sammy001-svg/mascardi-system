@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/images.php';
 
 $db = getDB();
 
@@ -70,7 +71,11 @@ if ($inTransit) $noIndex = true;
 $images = $db->prepare("SELECT * FROM car_images WHERE car_id=? ORDER BY is_primary DESC, id ASC");
 $images->execute([$id]);
 $images = $images->fetchAll(PDO::FETCH_ASSOC);
-$primaryImg = $images ? thumbUrl('cars', $images[0]['file_path']) : null;
+// Was thumbUrl(), which is the 480x360 thumbnail. This frame renders
+// 800x500, so on a 2x screen that was a thumbnail enlarged three and a third
+// times -- the pixelation this fixes. A middle derivative is the src, and the
+// srcset below lets the browser take the size it actually wants.
+$primaryImg = $images ? imgFallbackUrl('cars', $images[0]['file_path'], 960) : null;
 
 // Similar vehicles (same make or body type, excluding this car)
 $similar = $db->prepare("
@@ -123,7 +128,12 @@ if (!empty($car['description'])) $autoDesc = trim($car['description']) . ' ' . $
 $metaDesc     = trim((string)($car['meta_description'] ?? '')) !== ''
               ? $car['meta_description']
               : mb_substr($autoDesc, 0, 300);
-$ogImage      = trim((string)($car['meta_image'] ?? '')) !== '' ? $car['meta_image'] : ($primaryImg ?: null);
+// The link preview in WhatsApp and on Facebook wants 1200px or more on the
+// long edge. It used to inherit whatever the gallery was showing, which was a
+// 480px thumbnail -- a blurred card next to a shared link.
+$ogImage      = trim((string)($car['meta_image'] ?? '')) !== ''
+              ? $car['meta_image']
+              : ($images ? imgBestUrl('cars', $images[0]['file_path']) : null);
 $ogType       = 'product';
 
 // ── Structured data (schema.org Car + Offer + Breadcrumb) ──────────────────
@@ -210,8 +220,16 @@ include __DIR__ . '/header.php';
                 <?php if ($images): ?>
                 <div class="dv-gallery">
                     <div class="dv-main" id="vgMain" onclick="openLightbox(currentIdx)">
+                        <?php /* 800px beside the 420px panel, full width once the layout
+                                 stacks under 1080px. Saying so stops the browser assuming
+                                 100vw and fetching more than it can show. */ ?>
                         <img id="vgMainImg"
                              src="<?= htmlspecialchars($primaryImg) ?>"
+                             <?php $__ss = imgSrcset('cars', $images[0]['file_path'] ?? '');
+                                   if ($__ss !== ''): ?>
+                             srcset="<?= htmlspecialchars($__ss) ?>"
+                             sizes="(max-width: 1080px) 100vw, 800px"
+                             <?php endif; ?>
                              alt="<?= htmlspecialchars($carTitle) ?>"
                              fetchpriority="high" decoding="async">
                         <?php if ($inTransit): ?>
@@ -598,7 +616,8 @@ include __DIR__ . '/header.php';
             </div>
             <div class="dv-sim-grid">
                 <?php foreach ($similar as $sv):
-                    $svImg = $sv['primary_image'] ? thumbUrl('cars', $sv['primary_image']) : null;
+                    // 290px cards, so a 480 or 960 derivative, not a thumbnail.
+                    $svImg = $sv['primary_image'] ? imgFallbackUrl('cars', $sv['primary_image'], 480) : null;
                     $svOffer = !empty($sv['offer_price']) && $sv['offer_price'] > 0;
                     $svPrice = $svOffer ? (float)$sv['offer_price'] : (float)($sv['asking_price'] ?? 0);
                 ?>
@@ -897,6 +916,10 @@ include __DIR__ . '/header.php';
 ══════════════════════════════════════════════════════════════ -->
 <script>
 var photos = <?= json_encode(array_map(fn($img) => BASE_URL . '/uploads/cars/' . $img['file_path'], $images ?: [])) ?>;
+// The same photographs as sets of widths. Swapping the main image swaps this
+// too, or every photo after the first is served at the width chosen for the
+// first -- which on a wide screen means a small file enlarged.
+var photoSets = <?= json_encode(array_map(fn($img) => imgSrcset('cars', $img['file_path']), $images ?: [])) ?>;
 var currentIdx = 0;
 
 function selectPhoto(idx) {
@@ -907,6 +930,13 @@ function selectPhoto(idx) {
     if (mainImg) {
         mainImg.style.opacity = '0';
         setTimeout(function () {
+            // srcset first, then src: setting src alone would leave the
+            // browser choosing from the previous photo's widths.
+            if (photoSets && photoSets[idx]) {
+                mainImg.srcset = photoSets[idx];
+            } else {
+                mainImg.removeAttribute('srcset');
+            }
             mainImg.src = photos[idx];
             mainImg.style.opacity = '1';
         }, 120);

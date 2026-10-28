@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/images.php';
 require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
 
@@ -66,7 +67,7 @@ include __DIR__ . '/header.php';
             </div>
 
             <?php foreach ($cars as $car):
-                $img = $car['primary_image'] ? thumbUrl('cars', $car['primary_image']) : null;
+                $img = $car['primary_image'] ? imgFallbackUrl('cars', $car['primary_image'], 480) : null;
                 $hasOffer = !empty($car['offer_price']) && $car['offer_price'] > 0;
                 $hasPrice = !empty($car['asking_price']) && $car['asking_price'] > 0;
                 $displayPrice = $hasOffer ? $car['offer_price'] : ($hasPrice ? $car['asking_price'] : null);

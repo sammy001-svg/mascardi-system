@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/images.php';
 require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
 
@@ -303,7 +304,9 @@ include __DIR__ . '/header.php';
 
         <div class="sv-grid">
             <?php foreach ($filteredCars as $car):
-                $img = $car['primary_image'] ? thumbUrl('cars', $car['primary_image']) : null;
+                // Was thumbUrl(), the 480x360 thumbnail, in a card that renders
+                // 403px wide -- soft at 1x and plainly enlarged at 2x.
+                $img = $car['primary_image'] ? imgFallbackUrl('cars', $car['primary_image'], 480) : null;
                 $waMsg = urlencode("Hi, I'm interested in the {$car['year']} {$car['make']} {$car['model']} (KES " . number_format((float)$car['asking_price']) . ") listed on your showroom.");
                 $isNew      = strtotime($car['created_at']) > strtotime('-30 days');
                 $isReserved = ($car['status'] ?? '') === 'reserved';
@@ -338,7 +341,15 @@ include __DIR__ . '/header.php';
                     <?php if ($img): ?>
                     <?php // Explicit dimensions reserve the box before the image loads (Core Web Vitals / CLS).
                           // 480x300 == the 16:10 ratio of .sv-card-img; CSS still controls rendered size. ?>
-                    <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($car['make'].' '.$car['model']) ?>"
+                    <?php /* Three across inside 1264px is a 403px card, two across
+                             below 1100px, one below 640px. */ ?>
+                    <img src="<?= htmlspecialchars($img) ?>"
+                         <?php $__ss = imgSrcset('cars', $car['primary_image'] ?? '');
+                               if ($__ss !== ''): ?>
+                         srcset="<?= htmlspecialchars($__ss) ?>"
+                         sizes="(max-width: 640px) 100vw, (max-width: 1100px) 46vw, 403px"
+                         <?php endif; ?>
+                         alt="<?= htmlspecialchars($car['make'].' '.$car['model']) ?>"
                          width="480" height="300" loading="lazy" decoding="async">
                     <?php else: ?>
                     <div class="lx-noimg"><i class="fa fa-car-side"></i></div>

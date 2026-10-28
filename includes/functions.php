@@ -253,8 +253,18 @@ function handleUpload(array $file, string $targetDir, array $allowedTypes = ['jp
 
 /**
  * Compress/resize an uploaded image and generate a thumbnail.
- * Full image:  max 1920×1200, quality 82 (JPEG) — typically reduces 5–15 MB → 200–600 KB
- * Thumbnail:   max 480×360,   quality 75        — stored in targetDir/thumbs/
+ *
+ * Two grades, because the two jobs are different:
+ *
+ *   car photos   max 2560×1600, quality 88, plus the derivative ladder in
+ *                includes/images.php. These are looked at closely -- the
+ *                lightbox on a 2x laptop asks for about 2700 pixels across --
+ *                and 1920 at quality 82 is what made them look pixelated.
+ *   everything   max 1920×1200, quality 82, unchanged. A scan of a logbook or
+ *   else         a profile picture gains nothing from being larger, and
+ *                enlarging all of them would cost disk for no benefit.
+ *
+ * Thumbnail:   max 480×360, quality 78 — stored in targetDir/thumbs/
  * Silently skips if GD is unavailable or the image cannot be read.
  */
 function _imgProcess(string $filePath, string $ext, string $targetDir): void {
@@ -266,13 +276,22 @@ function _imgProcess(string $filePath, string $ext, string $targetDir): void {
         $ow = imagesx($src);
         $oh = imagesy($src);
 
-        // ── Full image: resize to max 1920×1200, preserve aspect ────────
-        [$nw, $nh] = _imgFit($ow, $oh, 1920, 1200);
+        // Is this a vehicle photograph or a document?
+        $isPhoto = basename(rtrim($targetDir, '/\\')) === 'cars';
+        [$boxW, $boxH, $q] = $isPhoto ? [2560, 1600, 88] : [1920, 1200, 82];
+
+        // ── Full image: resize to fit the box, preserve aspect ──────────
+        [$nw, $nh] = _imgFit($ow, $oh, $boxW, $boxH);
         if ($nw < $ow || $nh < $oh) {
             $dst = imagecreatetruecolor($nw, $nh);
             _imgAlpha($dst, $ext);
             imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $ow, $oh);
-            _imgSave($dst, $filePath, $ext, 82);
+            // Resampling softens a photograph; without this it reads as flat.
+            // Mild, so chrome and badges do not ring.
+            if ($isPhoto) {
+                @imageconvolution($dst, [[0, -0.45, 0], [-0.45, 2.8, -0.45], [0, -0.45, 0]], 1, 0);
+            }
+            _imgSave($dst, $filePath, $ext, $q);
             imagedestroy($dst);
         }
 
@@ -288,12 +307,20 @@ function _imgProcess(string $filePath, string $ext, string $targetDir): void {
             $tdst = imagecreatetruecolor($tw, $th);
             _imgAlpha($tdst, $ext);
             imagecopyresampled($tdst, $src2, 0, 0, 0, 0, $tw, $th, imagesx($src2), imagesy($src2));
-            _imgSave($tdst, $thumbPath, $ext, 75);
+            _imgSave($tdst, $thumbPath, $ext, 78);
             imagedestroy($tdst);
             imagedestroy($src2);
         }
 
         imagedestroy($src);
+
+        // The sizes a browser actually wants, built from the master now that it
+        // is final. Only for vehicle photographs: nothing else is shown with a
+        // srcset, so derivatives of a logbook scan would be dead weight.
+        if ($isPhoto) {
+            require_once __DIR__ . '/images.php';
+            imgDerive('cars', basename($filePath));
+        }
     } catch (\Throwable $e) {
         // Never fail an upload due to image processing errors
         error_log('[imgProcess] ' . $e->getMessage());

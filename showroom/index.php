@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/images.php';
 require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
 
@@ -143,7 +144,9 @@ include __DIR__ . '/header.php';
         <div class="fcar-viewport" id="fcarViewport">
             <div class="fcar-track" id="fcarTrack">
                 <?php foreach ($carouselCars as $fb):
-                    $fbImg   = thumbUrl('cars', $fb['primary_image']);
+                    // A 16:9 feature panel, the biggest picture on the site, and it
+                    // was being filled with a 480px thumbnail.
+                    $fbImg   = imgFallbackUrl('cars', $fb['primary_image'], 960);
                     $fbPrice = (!empty($fb['offer_price']) && $fb['offer_price'] > 0) ? (float)$fb['offer_price'] : (float)($fb['asking_price'] ?? 0);
                     $fbIsOffer = !empty($fb['offer_price']) && $fb['offer_price'] > 0;
                     $fbWa    = urlencode("Hi, I'm interested in the {$fb['year']} {$fb['make']} {$fb['model']}.");

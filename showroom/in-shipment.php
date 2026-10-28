@@ -13,6 +13,7 @@
  * shipment listing cannot arrive through a search engine either.
  */
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/images.php';
 require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
 
@@ -142,7 +143,7 @@ include __DIR__ . '/header.php';
                 <a href="<?= htmlspecialchars($detailUrl) ?>" class="ish-img"
                    aria-label="View details for <?= htmlspecialchars($title) ?>">
                     <?php if ($c['primary_image']): ?>
-                    <img src="<?= htmlspecialchars(thumbUrl('cars', $c['primary_image'])) ?>"
+                    <img src="<?= htmlspecialchars(imgFallbackUrl('cars', $c['primary_image'], 480)) ?>"
                          alt="<?= htmlspecialchars($title) ?>" loading="lazy" decoding="async">
                     <?php else: ?>
                     <div class="lx-noimg"><i class="fa fa-car-side"></i></div>
