@@ -8,9 +8,16 @@
  * rather than the whole of a finance day, and a menu that long is one nobody
  * reads to the bottom of.
  *
- * It is now seven: the dashboard, and the six things this portal is for.
- * Receivables, the month's collection, the payment plans, payments, invoices,
- * quotations. Nothing else.
+ * It is now nine: the dashboard, the six things this portal is for --
+ * receivables, the month's collection, the payment plans, payments, invoices,
+ * quotations -- and the vehicle stock with its cost sheet.
+ *
+ * Stock earned its place back. Finance is asked what the yard is holding and
+ * what each unit cost often enough that routing them through somebody else's
+ * screen, or a bookmark, was the wrong answer. The permission was never the
+ * problem: these roles have had 'cars' all along, and the list applies no
+ * location filter to anybody but a supervisor, so it has always shown every
+ * vehicle in every yard. Only the way in was missing.
  *
  * What left the menu did not leave the system. Expenses, suppliers, purchase
  * orders, payroll, vehicle costs, the full reports, company accounts and
@@ -36,6 +43,12 @@ $__badge = function (string $sql): int {
 $__pendingPay = $__badge("SELECT COUNT(*) FROM payments WHERE status = 'pending'");
 $__unpaidInv  = $__badge("SELECT COUNT(*) FROM invoices WHERE status IN ('unpaid','partial')");
 $__openQuote  = $__badge("SELECT COUNT(*) FROM quotations WHERE status IN ('draft','sent')");
+
+// What the yard is holding: inventory that has not been sold or handed over.
+// Deliberately the same rule the cars page counts its own Inventory tab by, so
+// the badge and the page can never disagree.
+$__inStock = $__badge("SELECT COUNT(*) FROM cars WHERE car_type = 'inventory'
+                         AND (status IS NULL OR status NOT IN ('delivered','sold'))");
 
 // Credit accounts with something overdue. Counted through the same definition
 // the book uses, so the badge and the page cannot disagree about "overdue".
@@ -70,7 +83,7 @@ $__arrears    = $__badge("SELECT COUNT(*) FROM sale_installments
         </div>
     </div>
 
-    <?php // Seven items and one heading. The accordion is switched off: with a
+    <?php // Nine items and two headings. The accordion is switched off: with a
           // menu this short, collapsing it would hide more than it tidies. ?>
     <nav class="sidebar-nav" data-accordion="off">
 
@@ -137,6 +150,31 @@ $__arrears    = $__badge("SELECT COUNT(*) FROM sale_installments
             <span class="nav-badge"><?= $__openQuote ?></span>
             <?php endif; ?>
         </a>
+        <?php endif; ?>
+
+        <?php /* Read-only from here: finance_manager has no 'cars' write grant, so
+                 the page hides its Add and Edit controls by itself. Nothing had to
+                 be relaxed to put this link in. */ ?>
+        <?php if (canAccess('cars')): ?>
+        <div class="nav-section">The stock</div>
+
+        <a href="<?= BASE_URL ?>/modules/cars/index.php"
+           class="nav-item <?= $__is('/cars/') ?>" data-label="Vehicle stock"
+           style="position:relative">
+            <i class="fa fa-car-side"></i><span>Vehicle stock</span>
+            <?php if ($__inStock): ?>
+            <span class="nav-badge"><?= $__inStock ?></span>
+            <?php endif; ?>
+        </a>
+
+        <?php /* Costs sit beside the stock because the question is almost always
+                 asked in the same breath as "what is it worth". */ ?>
+        <?php if (canAccess('car_costs')): ?>
+        <a href="<?= BASE_URL ?>/modules/car_costs/index.php"
+           class="nav-item <?= $__is('/car_costs/') ?>" data-label="Vehicle costs">
+            <i class="fa fa-screwdriver-wrench"></i><span>Vehicle costs</span>
+        </a>
+        <?php endif; ?>
         <?php endif; ?>
 
         <?php // Profile and sign-out are in the user menu at the top right of
