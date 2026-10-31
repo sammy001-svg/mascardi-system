@@ -58,6 +58,20 @@ if ($role === 'supervisor') {
     exit;
 }
 
+// The finance portal has its own dashboard, and the first item on its menu
+// points at it. Landing these roles here gave them two: the one they arrived
+// on after signing in, and a different one behind the Dashboard link. Of the
+// two this was the wrong one -- it answers for the whole company, where the
+// finance dashboard answers the question they actually arrive with, which is
+// who owes us money and what came in.
+//
+// All three share that sidebar and all three pass the finance dashboard's own
+// gate, so none of them is being sent somewhere it will be refused.
+if (in_array($role, ['finance_manager', 'accountant', 'cashier'], true)) {
+    header('Location: ' . BASE_URL . '/modules/finance/index.php');
+    exit;
+}
+
 // ── Role-specific stats ───────────────────────────────────────────────────
 $stats = [];
 if ($role === 'mechanic') {
