@@ -323,6 +323,16 @@ function creditNotes(PDO $db, int $agreementId): array
                            ORDER BY n.created_at DESC, n.id DESC", [$agreementId]);
 }
 
+/**
+ * How money arrives. Was a literal inside the payment form on account.php;
+ * it is here so that the form offering a method and the code accepting one
+ * cannot drift apart.
+ */
+function creditPaymentMethods(): array
+{
+    return ['mpesa' => 'M-Pesa', 'bank' => 'Bank', 'cash' => 'Cash', 'cheque' => 'Cheque'];
+}
+
 function creditNoteKinds(): array
 {
     return [
@@ -487,6 +497,242 @@ function creditCanReverse(): bool
     return $u && in_array($u['role'] ?? '', [
         'super_admin', 'admin', 'general_manager', 'finance_manager',
     ], true);
+}
+
+/**
+ * Who may correct an account's figures.
+ *
+ * The same people who may reverse a payment, and for the same reason: both
+ * rewrite a number that has been reported, printed and very likely quoted to
+ * the customer on the phone.
+ *
+ * This matters most for the accounts that came in from the spreadsheet. Those
+ * were typed by hand into a workbook over years, and the first thing anybody
+ * does after an import is find the rows that were wrong in the workbook. Until
+ * now there was nothing to do about it but delete the account and import again.
+ */
+function creditCanAmend(): bool
+{
+    return creditCanReverse();
+}
+
+/**
+ * Change what an account is for, and rebuild everything that follows from it.
+ *
+ * The figures are not independent. The schedule is derived from the principal,
+ * the instalment and the first due date, and the allocation of every payment is
+ * derived from the schedule -- so changing one number and leaving the rest is
+ * how an account comes to show a balance that its own instalment rows disagree
+ * with. The schedule is therefore rebuilt and the surviving payments re-applied
+ * oldest first, which is the same path a reversal already takes.
+ *
+ * What it will not do is let an account owe less than has already been paid
+ * into it. That is not a correction, it is two mistakes, and the second one is
+ * silent: the balance goes negative and the account reports itself as complete.
+ *
+ * @return array{ok:bool,error:string,changes:array,balance:float}
+ */
+function creditEditTerms(PDO $db, int $agreementId, array $in, int $userId): array
+{
+    creditMigrate($db);
+    $fail = static fn (string $why) => ['ok' => false, 'error' => $why,
+                                        'changes' => [], 'balance' => 0.0];
+
+    $a = creditAccount($db, $agreementId);
+    if (!$a) return $fail('That account no longer exists.');
+
+    $principal  = isset($in['principal'])      ? (float)$in['principal']      : (float)$a['principal'];
+    $monthly    = isset($in['monthly_payment'])? (float)$in['monthly_payment']: (float)$a['monthly_payment'];
+    $instal     = isset($in['installments'])   ? (int)$in['installments']     : (int)$a['installments'];
+    $firstDue   = trim((string)($in['first_due_date'] ?? $a['first_due_date']));
+    $rate       = isset($in['interest_rate'])  ? (float)$in['interest_rate']  : (float)$a['interest_rate'];
+    $repayable  = isset($in['total_repayable']) && $in['total_repayable'] !== ''
+                ? (float)$in['total_repayable'] : null;
+    $agrDate    = trim((string)($in['agreement_date'] ?? $a['agreement_date']));
+
+    if ($principal <= 0) return $fail('The amount on credit has to be more than zero.');
+    if ($monthly   <= 0) return $fail('The monthly instalment has to be more than zero.');
+    if ($instal    <= 0 || $instal > 600) return $fail('The number of instalments looks wrong.');
+    if ($rate < 0 || $rate > 200) return $fail('That interest rate looks wrong.');
+    foreach (['first_due_date' => $firstDue, 'agreement_date' => $agrDate] as $lbl => $d) {
+        $dt = DateTime::createFromFormat('Y-m-d', $d);
+        if (!$dt || $dt->format('Y-m-d') !== $d) {
+            return $fail('The ' . str_replace('_', ' ', $lbl) . ' is not a valid date.');
+        }
+    }
+
+    // What has actually been paid in, ignoring anything already reversed.
+    $paid = 0.0;
+    foreach (creditPayments($db, $agreementId) as $p) $paid += (float)$p['amount'];
+
+    // Repayable defaults to the schedule the instalments describe, which is what
+    // the importer assumed for a spreadsheet row with no interest column.
+    if ($repayable === null || $repayable <= 0) {
+        $repayable = $rate > 0
+            ? (creditCalculateReducingBalance($principal, $rate, $instal)['total'] ?? $principal)
+            : round($monthly * $instal, 2);
+    }
+    if ($repayable + 0.009 < $paid) {
+        return $fail('That would make the account owe ' . money($repayable)
+            . ' when ' . money($paid) . ' has already been paid into it. '
+            . 'Reverse the payments that should not be there first.');
+    }
+
+    // What changed, in words, while the old row is still readable.
+    $changes = [];
+    $note = static function (string $label, $was, $now, bool $isMoney = true) use (&$changes): void {
+        if ($isMoney ? abs((float)$was - (float)$now) < 0.009 : (string)$was === (string)$now) return;
+        $changes[] = $label . ' ' . ($isMoney ? money((float)$was) : (string)$was)
+                   . ' to ' . ($isMoney ? money((float)$now) : (string)$now);
+    };
+    $note('amount on credit', $a['principal'],       $principal);
+    $note('monthly',          $a['monthly_payment'], $monthly);
+    $note('instalments',      $a['installments'],    $instal, false);
+    $note('first due',        $a['first_due_date'],  $firstDue, false);
+    $note('interest',         $a['interest_rate'],   $rate, false);
+    $note('total repayable',  $a['total_repayable'], $repayable);
+    $note('agreement date',   $a['agreement_date'],  $agrDate, false);
+    if (!$changes) {
+        return ['ok' => true, 'error' => '', 'changes' => [],
+                'balance' => max(0, $repayable - $paid)];
+    }
+
+    try {
+        $db->beginTransaction();
+        $db->prepare("UPDATE credit_agreements
+                         SET principal = ?, monthly_payment = ?, installments = ?,
+                             first_due_date = ?, interest_rate = ?, total_repayable = ?,
+                             agreement_date = ?, updated_at = NOW()
+                       WHERE id = ?")
+           ->execute([$principal, $monthly, $instal, $firstDue, $rate, $repayable,
+                      $agrDate, $agreementId]);
+
+        // Rebuild the schedule from the new figures, then re-apply what has been
+        // paid. Term is passed explicitly: deriving it by division is what used
+        // to leave a thirteenth instalment of a few cents on the end.
+        creditWriteSchedule($db, $agreementId,
+            creditBuildSchedule($repayable, $monthly, $firstDue, $instal));
+        $db->commit();
+    } catch (\Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('creditEditTerms: ' . $e->getMessage());
+        return $fail('That could not be saved.');
+    }
+
+    // Outside the transaction: it writes its own, and DDL-free as it is, it is
+    // safe to re-run if it fails.
+    creditRebuildAllocation($db, $agreementId);
+
+    if (function_exists('logActivity')) {
+        logActivity('update', 'credit_agreements', $agreementId,
+            'Credit terms amended: ' . implode('; ', $changes));
+    }
+    creditAddNote($db, $agreementId, 'management',
+    'Terms amended - ' . implode('; ', $changes), $userId);
+
+    return ['ok' => true, 'error' => '', 'changes' => $changes,
+            'balance' => max(0, $repayable - $paid)];
+}
+
+/**
+ * Correct a payment that was entered wrongly.
+ *
+ * Reversing and re-entering gets to the same place and leaves a clearer trail,
+ * so that remains the right move for a payment that should not have been taken
+ * at all. This is for the other case, which the spreadsheet import creates by
+ * the hundred: an opening balance that was keyed a digit out. Reversing it and
+ * re-entering would leave every imported account carrying a cancelled line
+ * nobody can explain to an auditor.
+ *
+ * A reversed payment is not editable -- it has been taken out of every figure
+ * already, and the way back is to enter the payment again.
+ */
+function creditEditPayment(PDO $db, int $paymentId, array $in, int $userId): array
+{
+    creditMigrate($db);
+    $fail = static fn (string $why) => ['ok' => false, 'error' => $why,
+                                        'changes' => [], 'agreement_id' => 0];
+
+    try {
+        $st = $db->prepare("SELECT * FROM credit_payments WHERE id = ?");
+        $st->execute([$paymentId]);
+        $p = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (\Throwable $e) {
+        error_log('creditEditPayment: ' . $e->getMessage());
+        return $fail('That payment could not be read.');
+    }
+    if (!$p) return $fail('That payment no longer exists.');
+    if (!empty($p['voided_at'])) {
+        return $fail('That payment has been reversed. Enter the payment again rather than editing it.');
+    }
+
+    $agrId  = (int)$p['agreement_id'];
+    $amount = isset($in['amount']) ? (float)$in['amount'] : (float)$p['amount'];
+    $paidOn = trim((string)($in['paid_on'] ?? $p['paid_on']));
+    $method = trim((string)($in['method'] ?? $p['method']));
+    $ref    = array_key_exists('reference', $in) ? trim((string)$in['reference'])
+                                                 : (string)($p['reference'] ?? '');
+
+    if ($amount <= 0) return $fail('A payment has to be more than zero.');
+    $dt = DateTime::createFromFormat('Y-m-d', $paidOn);
+    if (!$dt || $dt->format('Y-m-d') !== $paidOn) return $fail('That is not a valid date.');
+    // Against the database's clock: this application runs on UTC and MySQL on
+    // EAT, so PHP's idea of today is wrong for the first three hours of it.
+    try {
+        $chk = $db->prepare('SELECT ? > CURDATE()');
+        $chk->execute([$paidOn]);
+        if ((int)$chk->fetchColumn() === 1) return $fail('A payment cannot be dated in the future.');
+    } catch (\Throwable $_) {}
+
+    $methods = array_keys(creditPaymentMethods());
+    if ($method !== '' && !in_array($method, $methods, true)) $method = (string)$p['method'];
+
+    // The account must not end up owing less than nothing.
+    $a = creditAccount($db, $agrId);
+    if ($a) {
+        $others = 0.0;
+        foreach (creditPayments($db, $agrId) as $q) {
+            if ((int)$q['id'] !== $paymentId) $others += (float)$q['amount'];
+        }
+        if ($others + $amount > (float)$a['total_repayable'] + 0.009) {
+            return $fail('That would pay in ' . money($others + $amount) . ' against a total of '
+                . money((float)$a['total_repayable']) . '. Amend the account first if the total is wrong.');
+        }
+    }
+
+    $changes = [];
+    if (abs((float)$p['amount'] - $amount) > 0.009) {
+        $changes[] = 'amount ' . money((float)$p['amount']) . ' to ' . money($amount);
+    }
+    if ((string)$p['paid_on'] !== $paidOn)             $changes[] = 'date ' . $p['paid_on'] . ' to ' . $paidOn;
+    if ((string)$p['method'] !== $method)              $changes[] = 'method ' . $p['method'] . ' to ' . $method;
+    if ((string)($p['reference'] ?? '') !== $ref)      $changes[] = 'reference changed';
+    if (!$changes) return ['ok' => true, 'error' => '', 'changes' => [], 'agreement_id' => $agrId];
+
+    try {
+        $db->prepare("UPDATE credit_payments
+                         SET amount = ?, paid_on = ?, method = ?, reference = ?
+                       WHERE id = ? AND voided_at IS NULL")
+           ->execute([$amount, $paidOn, $method, $ref !== '' ? $ref : null, $paymentId]);
+    } catch (\Throwable $e) {
+        error_log('creditEditPayment: ' . $e->getMessage());
+        return $fail('That could not be saved.');
+    }
+
+    // Every payment is re-applied from scratch, because one payment spills
+    // across several instalments and its share cannot simply be adjusted.
+    creditRebuildAllocation($db, $agrId);
+
+    if (function_exists('logActivity')) {
+        logActivity('update', 'credit_agreements', $agrId,
+            'Payment ' . (string)($p['receipt_number'] ?? $paymentId)
+            . ' corrected: ' . implode('; ', $changes));
+    }
+    creditAddNote($db, $agrId, 'management',
+    'Payment ' . (string)($p['receipt_number'] ?? '')
+    . ' corrected - ' . implode('; ', $changes), $userId);
+
+    return ['ok' => true, 'error' => '', 'changes' => $changes, 'agreement_id' => $agrId];
 }
 
 /**

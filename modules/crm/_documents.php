@@ -88,6 +88,18 @@ function leadDocsSchema(PDO $db): void
             INDEX idx_client (client_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch (\Throwable $e) { /* already there */ }
+
+    /* A document belongs to a lead or to a credit account, and the accounts
+       imported from the spreadsheet have no lead. lead_id therefore stops being
+       mandatory and agreement_id joins it; a row carries one or the other.
+
+       Nothing already filed is touched: every existing row keeps its lead_id
+       and a null agreement_id, and every existing query filters on lead_id. */
+    foreach ([
+        "ALTER TABLE crm_lead_documents MODIFY lead_id INT NULL DEFAULT NULL",
+        "ALTER TABLE crm_lead_documents ADD COLUMN agreement_id INT NULL DEFAULT NULL",
+        "ALTER TABLE crm_lead_documents ADD INDEX idx_agreement (agreement_id)",
+    ] as $alter) { try { $db->exec($alter); } catch (\Throwable $_) {} }
 }
 
 /** Where the files live. Outside the web root is not an option on this host,
@@ -180,11 +192,16 @@ function leadDocsCounts(PDO $db, int $leadId): array
  * remember two sets of rules about what it can attach and how big.
  */
 function leadDocsStore(PDO $db, int $leadId, string $context, string $docType,
-                       string $title, string $notes, array $file, int $userId): array
+                       string $title, string $notes, array $file, int $userId,
+                       int $agreementId = 0): array
 {
     leadDocsSchema($db);
 
-    if ($leadId <= 0)                           return ['ok' => false, 'error' => 'No lead to attach this to.'];
+    // One owner or the other. The parameter is last and optional, so every
+    // existing caller keeps working unchanged.
+    if ($leadId <= 0 && $agreementId <= 0) {
+        return ['ok' => false, 'error' => 'No lead or account to attach this to.'];
+    }
     if (!array_key_exists($context, leadDocContexts())) $context = 'other';
     if (!array_key_exists($docType, leadDocTypes()))    $docType = 'other';
 
@@ -234,10 +251,11 @@ function leadDocsStore(PDO $db, int $leadId, string $context, string $docType,
 
     try {
         $db->prepare("INSERT INTO crm_lead_documents
-                          (lead_id, client_id, context, doc_type, title, file_path, file_name,
-                           file_size, mime_type, notes, uploaded_by)
-                      VALUES (?,?,?,?,?,?,?,?,?,?,?)")
-           ->execute([$leadId, $clientId, $context, $docType, $title, $stored, $orig,
+                          (lead_id, agreement_id, client_id, context, doc_type, title,
+                           file_path, file_name, file_size, mime_type, notes, uploaded_by)
+                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+           ->execute([$leadId ?: null, $agreementId ?: null, $clientId, $context, $docType,
+                      $title, $stored, $orig,
                       (int)$file['size'], (@mime_content_type($dir . $stored) ?: null),
                       trim($notes) ?: null, $userId ?: null]);
     } catch (\Throwable $e) {
@@ -316,6 +334,61 @@ function clientDocsFor(PDO $db, int $clientId): array
     } catch (\Throwable $e) {
         error_log('clientDocsFor: ' . $e->getMessage());
         return [];
+    }
+}
+
+/**
+ * The paperwork filed against a credit account rather than a lead.
+ *
+ * Only ever the account's own: the agreement is part of the lookup, so a
+ * forged id in a posted form finds nothing instead of somebody else's scans.
+ */
+function creditDocsFor(PDO $db, int $agreementId): array
+{
+    if ($agreementId <= 0) return [];
+    leadDocsSchema($db);
+    try {
+        $st = $db->prepare(
+            "SELECT d.*, u.name AS by_name
+               FROM crm_lead_documents d
+          LEFT JOIN users u ON u.id = d.uploaded_by
+              WHERE d.agreement_id = ?
+           ORDER BY d.created_at DESC, d.id DESC"
+        );
+        $st->execute([$agreementId]);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
+    } catch (\Throwable $e) {
+        error_log('creditDocsFor: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Remove one of an account's documents, file and row together.
+ *
+ * Scoped to the agreement for the same reason as the read above.
+ */
+function creditDocsDelete(PDO $db, int $docId, int $agreementId): array
+{
+    if ($docId <= 0 || $agreementId <= 0) return ['ok' => false, 'error' => 'Nothing to remove.'];
+    leadDocsSchema($db);
+    try {
+        $st = $db->prepare("SELECT file_path FROM crm_lead_documents
+                             WHERE id = ? AND agreement_id = ?");
+        $st->execute([$docId, $agreementId]);
+        $path = $st->fetchColumn();
+        if ($path === false) return ['ok' => false, 'error' => 'That document is not on this account.'];
+
+        $db->prepare("DELETE FROM crm_lead_documents WHERE id = ? AND agreement_id = ?")
+           ->execute([$docId, $agreementId]);
+        // The row goes first: a file left on disk is tidy-up, a row pointing at
+        // a file that is gone is a broken link on the page.
+        $full = leadDocsDir() . basename((string)$path);
+        if (is_file($full)) @unlink($full);
+        return ['ok' => true, 'error' => ''];
+    } catch (\Throwable $e) {
+        error_log('creditDocsDelete: ' . $e->getMessage());
+        return ['ok' => false, 'error' => 'That could not be removed.'];
     }
 }
 

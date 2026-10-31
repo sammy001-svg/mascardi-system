@@ -135,6 +135,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect($back);
     }
 
+    /* Amending the figures, and correcting a payment.
+
+       Both exist for the accounts that came in from the spreadsheet. Those were
+       typed by hand into a workbook over years, and the first job after an
+       import is fixing the rows that were already wrong in the workbook. Until
+       now the only way was to delete the account and import it again. */
+    if ($action === 'amend_terms') {
+        if (!creditCanAmend()) {
+            setFlash('danger', 'Only a manager can amend an account.');
+            redirect($back);
+        }
+        $r = creditEditTerms($db, $id, [
+            'principal'       => $_POST['principal']       ?? null,
+            'monthly_payment' => $_POST['monthly_payment'] ?? null,
+            'installments'    => $_POST['installments']    ?? null,
+            'first_due_date'  => $_POST['first_due_date']  ?? null,
+            'interest_rate'   => $_POST['interest_rate']   ?? null,
+            'total_repayable' => $_POST['total_repayable'] ?? null,
+            'agreement_date'  => $_POST['agreement_date']  ?? null,
+        ], $uid);
+        if (!$r['ok']) {
+            setFlash('danger', $r['error']);
+        } elseif (!$r['changes']) {
+            setFlash('info', 'Nothing was changed on that account.');
+        } else {
+            setFlash('success', 'Account amended — ' . implode('; ', $r['changes'])
+                . '. The schedule has been rebuilt and the payments re-applied.');
+        }
+        redirect($back);
+    }
+
+    if ($action === 'edit_payment') {
+        if (!creditCanAmend()) {
+            setFlash('danger', 'Only a manager can correct a payment.');
+            redirect($back);
+        }
+        $r = creditEditPayment($db, (int)($_POST['payment_id'] ?? 0), [
+            'amount'    => $_POST['amount']    ?? null,
+            'paid_on'   => $_POST['paid_on']   ?? null,
+            'method'    => $_POST['method']    ?? null,
+            'reference' => $_POST['reference'] ?? '',
+        ], $uid);
+        setFlash($r['ok'] ? ($r['changes'] ? 'success' : 'info') : 'danger',
+            $r['ok'] ? ($r['changes']
+                ? 'Payment corrected — ' . implode('; ', $r['changes']) . '.'
+                : 'Nothing was changed on that payment.')
+            : $r['error']);
+        redirect($back);
+    }
+
+    /* Signed paperwork on an account with no lead. The documents table takes
+       either owner now, so an imported account holds its own agreement instead
+       of being told to go and find a lead that does not exist. */
+    if ($action === 'upload_account_doc') {
+        if (!creditCanRecord()) {
+            setFlash('danger', 'You cannot file documents on this account.');
+            redirect($back . '#paperwork');
+        }
+        $r = leadDocsStore($db, 0, 'credit',
+            (string)($_POST['doc_type'] ?? 'other'),
+            trim((string)($_POST['title'] ?? '')),
+            trim((string)($_POST['notes'] ?? '')),
+            $_FILES['document'] ?? [], $uid, $id);
+        setFlash($r['ok'] ? 'success' : 'danger',
+            $r['ok'] ? 'Document filed against this account.' : $r['error']);
+        redirect($back . '#paperwork');
+    }
+
+    if ($action === 'delete_account_doc') {
+        /* Not creditCanRecord(). That is canWrite('installments'), which a
+           cashier holds because taking payments is their work -- and filing a
+           scan on that authority is fine. Destroying a signed credit agreement
+           is not: it is the document the money is owed under. So removal sits
+           with the same people who may amend the account. */
+        if (!creditCanAmend()) {
+            setFlash('danger', 'Only a manager can remove paperwork from an account.');
+            redirect($back . '#paperwork');
+        }
+        $r = creditDocsDelete($db, (int)($_POST['doc_id'] ?? 0), $id);
+        setFlash($r['ok'] ? 'success' : 'danger',
+            $r['ok'] ? 'Document removed.' : $r['error']);
+        redirect($back . '#paperwork');
+    }
+
     if ($action === 'settings') {
         try {
             $status = in_array($_POST['status'] ?? '', array_keys(creditStatuses()), true)
@@ -177,6 +261,10 @@ $deal     = finDealFigures($db, $a, $sum);
 $issued   = finIssuedDocs($db, $a, $deal, $payments);
 $filed    = finFiledDocs($db, $a);
 $canVoid  = creditCanReverse();
+$canAmend = creditCanAmend();
+// Paperwork filed against the account itself rather than a lead. Only ever
+// populated for an imported account; a lead-backed one keeps using $filed.
+$acctDocs = creditDocsFor($db, $id);
 
 $standing = $a['standing'] ?? creditStanding($a + ['balance' => $sum['balance']], $today, $cfg['before']);
 $paidPct  = $sum['due'] > 0 ? min(100, round($sum['paid'] / $sum['due'] * 100)) : 0;
@@ -385,6 +473,14 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
     <div class="fin-card mb-4">
         <header>
             <h2>The deal</h2>
+            <?php /* The way into the figures. On the card that shows them, because
+                     that is where somebody notices one is wrong. */ ?>
+            <?php if ($canAmend): ?>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+                    data-bs-toggle="modal" data-bs-target="#amendModal">
+                <i class="fa fa-pen me-1"></i>Amend
+            </button>
+            <?php endif; ?>
             <span class="hint">
                 <?php if (!empty($a['car'])): ?><?= e((string)$a['car']) ?><?php endif; ?>
                 <?php if (!empty($a['registration_number'])): ?>
@@ -560,6 +656,23 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
                                 <?php if ($canVoid): ?>
                                 <td class="num">
                                     <?php if (!$void): ?>
+                                    <?php /* Correct, or reverse. Reversing is right when the payment
+                                             should not have been taken at all; correcting is for the
+                                             imported opening balance keyed a digit out, where a
+                                             cancelled line beside it would explain nothing to an
+                                             auditor. */ ?>
+                                    <?php if ($canAmend): ?>
+                                    <button type="button" class="ca-rev" title="Correct this entry"
+                                            data-bs-toggle="modal" data-bs-target="#payEditModal"
+                                            data-pay="<?= (int)$p['id'] ?>"
+                                            data-rcpt="<?= e((string)$p['receipt_number']) ?>"
+                                            data-amt="<?= e((string)$p['amount']) ?>"
+                                            data-on="<?= e((string)$p['paid_on']) ?>"
+                                            data-method="<?= e((string)$p['method']) ?>"
+                                            data-ref="<?= e((string)($p['reference'] ?? '')) ?>">
+                                        <i class="fa fa-pen"></i>
+                                    </button>
+                                    <?php endif; ?>
                                     <button type="button" class="ca-rev" title="Reverse this entry"
                                             data-bs-toggle="modal" data-bs-target="#revModal"
                                             data-pay="<?= (int)$p['id'] ?>"
@@ -589,7 +702,7 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
                 <header>
                     <h2>Signed documents</h2>
                     <span class="hint">
-                        <?= empty($a['lead_id']) ? 'not kept for imported accounts'
+                        <?= empty($a['lead_id']) ? count($acctDocs) . ' on file'
                                                  : count($filed) . ' on file' ?>
                     </span>
                 </header>
@@ -599,18 +712,82 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
                              paper that comes back signed, which only exists if
                              somebody put it there. */ ?>
                     <?php if (empty($a['lead_id'])): ?>
-                    <!-- Documents are filed against a lead, and this account was
-                         imported from the spreadsheet without one. The form would
-                         take the file and refuse it, which is worse than not
-                         offering it: somebody scans the agreement, uploads it, and
-                         is told nothing about where it should go instead. -->
-                    <div class="fin-note mb-0">
-                        <i class="fa fa-paperclip"></i>
-                        <div><strong>This account came in from the spreadsheet.</strong>
-                            Signed paperwork is filed against a lead, and this one has none,
-                            so there is nowhere here to put it. Open the client's record in
-                            the CRM and attach it there, and it will follow them from then on.</div>
+                    <!-- An imported account has no lead, and a document used to be
+                         filed against a lead only, so this card explained there was
+                         nowhere to put the agreement. A document now belongs to a
+                         lead or to an account, so the scan goes here and stays with
+                         the account it belongs to. -->
+                    <?php if ($acctDocs): ?>
+                    <div class="ca-docs mb-3">
+                        <?php foreach ($acctDocs as $d): ?>
+                        <div class="ca-doc">
+                            <span class="ca-doc-ico"><i class="fa fa-file-lines"></i></span>
+                            <span class="ca-doc-main">
+                                <span class="ca-doc-t"><?= e((string)$d['title']) ?></span>
+                                <span class="ca-doc-n">
+                                    <?= e(leadDocTypes()[$d['doc_type']] ?? (string)$d['doc_type']) ?>
+                                    · <?= e(leadDocSize($d['file_size'] !== null ? (int)$d['file_size'] : null)) ?>
+                                    · <?= e(fmtDate((string)$d['created_at'], 'j M Y')) ?><?php
+                                        if (!empty($d['by_name'])): ?>, <?= e((string)$d['by_name']) ?><?php endif; ?>
+                                </span>
+                            </span>
+                            <a href="<?= BASE_URL ?>/modules/crm/document_file.php?id=<?= (int)$d['id'] ?>"
+                               class="ca-rev" title="Download"><i class="fa fa-download"></i></a>
+                            <?php if ($canAmend): ?>
+                            <form method="post" class="d-inline"
+                                  onsubmit="return confirm('Remove this document from the account?')">
+                                <?= csrfField() ?>
+                                <input type="hidden" name="action" value="delete_account_doc">
+                                <input type="hidden" name="id" value="<?= (int)$id ?>">
+                                <input type="hidden" name="doc_id" value="<?= (int)$d['id'] ?>">
+                                <button class="ca-rev" title="Remove"><i class="fa fa-trash"></i></button>
+                            </form>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
                     </div>
+                    <?php else: ?>
+                    <div class="fin-note mb-3">
+                        <i class="fa fa-paperclip"></i>
+                        <div><strong>Nothing filed yet.</strong>
+                            This account came in from the spreadsheet. Attach the signed
+                            sales agreement, the credit agreement and whatever else came
+                            back signed, and it stays with the account.</div>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (creditCanRecord()): ?>
+                    <form method="post" enctype="multipart/form-data" class="row g-2 align-items-end">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="upload_account_doc">
+                        <input type="hidden" name="id" value="<?= (int)$id ?>">
+                        <div class="col-sm-5">
+                            <label class="form-label small fw-semibold mb-1">What is it?</label>
+                            <select name="doc_type" class="form-select form-select-sm">
+                                <?php foreach (['sales_agreement', 'credit_agreement', 'payment_schedule',
+                                                'id_copy', 'logbook_transfer', 'deposit_receipt',
+                                                'other'] as $__t): ?>
+                                <option value="<?= e($__t) ?>"><?= e(leadDocTypes()[$__t] ?? $__t) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-sm-7">
+                            <label class="form-label small fw-semibold mb-1">
+                                Title <span class="text-muted fw-normal">(optional)</span>
+                            </label>
+                            <input type="text" name="title" class="form-control form-control-sm"
+                                   placeholder="e.g. Signed credit agreement, Mar 2024">
+                        </div>
+                        <div class="col-sm-8">
+                            <input type="file" name="document" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-sm-4">
+                            <button class="btn btn-sm btn-primary w-100">
+                                <i class="fa fa-upload me-1"></i>File it
+                            </button>
+                        </div>
+                    </form>
+                    <?php endif; ?>
                     <?php elseif (!$filed): ?>
                     <div class="fin-note mb-3">
                         <i class="fa fa-paperclip"></i>
@@ -866,8 +1043,7 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
                         <div class="col-5">
                             <label class="form-label small">Method</label>
                             <select name="method" class="form-select">
-                                <?php foreach (['mpesa' => 'M-Pesa', 'bank' => 'Bank', 'cash' => 'Cash',
-                                                'cheque' => 'Cheque'] as $k => $lbl): ?>
+                                <?php foreach (creditPaymentMethods() as $k => $lbl): ?>
                                 <option value="<?= e($k) ?>"><?= e($lbl) ?></option>
                                 <?php endforeach; ?>
                             </select>
@@ -905,6 +1081,160 @@ a.ca-doc:hover{border-color:var(--fin-in);background:var(--fin-plane)}
 <?php endif; ?>
 
 <?php if ($canVoid): ?>
+<?php /* Amending the figures. The schedule and every payment's allocation are
+         derived from these, so saving rebuilds both -- which is why this is one
+         dialog rather than seven editable cells. */ ?>
+<?php if ($canAmend): ?>
+<div class="modal fade" id="amendModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <form method="post">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="amend_terms">
+                <input type="hidden" name="id" value="<?= (int)$id ?>">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title"><i class="fa fa-pen me-2"></i>Amend this account</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="fin-note mb-3">
+                        <i class="fa fa-triangle-exclamation"></i>
+                        <div>Saving rebuilds the instalment schedule and re-applies every
+                            payment on the account from the first one. Figures already
+                            reported, and any statement already sent, will change.</div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold">Amount on credit</label>
+                            <input type="number" step="any" min="1" name="principal" class="form-control"
+                                   value="<?= e((string)$a['principal']) ?>" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold">Monthly instalment</label>
+                            <input type="number" step="any" min="1" name="monthly_payment" class="form-control"
+                                   value="<?= e((string)$a['monthly_payment']) ?>" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold">Instalments</label>
+                            <input type="number" min="1" max="600" name="installments" class="form-control"
+                                   value="<?= e((string)$a['installments']) ?>" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold">First due date</label>
+                            <input type="date" name="first_due_date" class="form-control"
+                                   value="<?= e((string)$a['first_due_date']) ?>" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold">Agreement date</label>
+                            <input type="date" name="agreement_date" class="form-control"
+                                   value="<?= e((string)$a['agreement_date']) ?>" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold">Interest % a year</label>
+                            <input type="number" step="any" min="0" max="200" name="interest_rate"
+                                   class="form-control" value="<?= e((string)$a['interest_rate']) ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">
+                                Total repayable
+                                <span class="text-muted fw-normal">— leave blank to recalculate</span>
+                            </label>
+                            <input type="number" step="any" min="0" name="total_repayable" class="form-control"
+                                   value="<?= e((string)$a['total_repayable']) ?>">
+                            <div class="form-text">
+                                Blank works it out from the instalment and the term, or from the
+                                interest rate if one is set. It can never be less than what has
+                                already been paid in.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary"><i class="fa fa-check me-1"></i>Save and rebuild</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<?php /* Correcting one payment. Reversing it and entering it again reaches the
+         same figures and leaves a clearer trail, so that stays the right move
+         for a payment that should not have been taken at all. This is for the
+         imported opening balance that was keyed wrongly, where a cancelled line
+         beside it would explain nothing to an auditor. */ ?>
+<div class="modal fade" id="payEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="edit_payment">
+                <input type="hidden" name="id" value="<?= (int)$id ?>">
+                <input type="hidden" name="payment_id" id="peId" value="">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title"><i class="fa fa-pen me-2"></i>Correct payment
+                        <span id="peRcpt" class="rcpt"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Amount</label>
+                            <input type="number" step="any" min="1" name="amount" id="peAmt"
+                                   class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Paid on</label>
+                            <input type="date" name="paid_on" id="peOn" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Method</label>
+                            <select name="method" id="peMethod" class="form-select">
+                                <?php foreach (creditPaymentMethods() as $__k => $__l): ?>
+                                <option value="<?= e($__k) ?>"><?= e($__l) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Reference</label>
+                            <input type="text" name="reference" id="peRef" class="form-control"
+                                   placeholder="M-Pesa code, slip number—">
+                        </div>
+                    </div>
+                    <div class="form-text mt-2">
+                        Every payment is re-applied from the first one afterwards, so the
+                        instalments and the balance follow the corrected figure.
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary"><i class="fa fa-check me-1"></i>Save correction</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Filled from the row that opened it. Wired on show rather than constructed up
+// front, because the bootstrap bundle loads at the end of the page.
+(function () {
+    var m = document.getElementById('payEditModal');
+    if (!m) return;
+    m.addEventListener('show.bs.modal', function (ev) {
+        var b = ev.relatedTarget; if (!b) return;
+        document.getElementById('peId').value  = b.dataset.pay  || '';
+        document.getElementById('peAmt').value = b.dataset.amt  || '';
+        document.getElementById('peOn').value  = b.dataset.on   || '';
+        document.getElementById('peRef').value = b.dataset.ref  || '';
+        document.getElementById('peRcpt').textContent = b.dataset.rcpt || '';
+        var sel = document.getElementById('peMethod');
+        if (sel && b.dataset.method) sel.value = b.dataset.method;
+    });
+}());
+</script>
+<?php endif; ?>
+
 <div class="modal fade" id="revModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
