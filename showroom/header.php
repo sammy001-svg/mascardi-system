@@ -58,6 +58,14 @@ try {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- Google Tag (GTM-WBLZVZJD) -->
+<script async src="https://www.googletagmanager.com/gtm.js?id=GTM-WBLZVZJD"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title><?= htmlspecialchars($__pageTitle) ?></title>
@@ -96,7 +104,7 @@ try {
 <script type="application/ld+json"><?= $jsonLd ?></script>
 <?php endif; ?>
 
-<?php if ($__gaId): ?>
+<?php if ($__gaId && strtoupper(trim($__gaId)) !== 'GTM-WBLZVZJD'): ?>
 <!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=<?= urlencode($__gaId) ?>"></script>
 <script>

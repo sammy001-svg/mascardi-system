@@ -65,6 +65,14 @@ if (!$car) {
     ?><!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- Google Tag (GTM-WBLZVZJD) -->
+<script async src="https://www.googletagmanager.com/gtm.js?id=GTM-WBLZVZJD"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+</script>
 <meta charset="UTF-8">
 <meta name="robots" content="noindex">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -128,6 +136,14 @@ $publicDesc    = trim($car['description'] ?? '') ?: trim($car['notes'] ?? '');
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- Google Tag (GTM-WBLZVZJD) -->
+<script async src="https://www.googletagmanager.com/gtm.js?id=GTM-WBLZVZJD"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">

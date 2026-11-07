@@ -16,6 +16,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/images.php';
 require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
+carSlugMigrate($db);
 
 $companyName   = getSetting('company_name',  'Mascardi Showroom');
 $companyPhone  = getSetting('company_phone', '');
@@ -29,7 +30,7 @@ if ($filterMake) { $where[] = 'c.make = ?'; $params[] = $filterMake; }
 
 try {
     $stmt = $db->prepare("
-        SELECT c.id, c.make, c.model, c.year, c.color, c.body_type,
+        SELECT c.id, c.product_id, c.make, c.model, c.year, c.color, c.body_type,
                c.transmission, c.fuel_type, c.asking_price, c.offer_price,
                c.mileage, c.engine_cc, c.description,
                (SELECT file_path FROM car_images WHERE car_id = c.id AND is_primary = 1 LIMIT 1) AS primary_image
@@ -127,6 +128,7 @@ include __DIR__ . '/header.php';
                        ? (float)$c['offer_price']
                        : ((!empty($c['asking_price']) && $c['asking_price'] > 0) ? (float)$c['asking_price'] : null);
                 $bits = array_filter([
+                    !empty($c['product_id']) ? $c['product_id'] : null,
                     $c['body_type'] ?: null,
                     $c['transmission'] ? ucfirst($c['transmission']) : null,
                     $c['fuel_type'] ? ucfirst($c['fuel_type']) : null,

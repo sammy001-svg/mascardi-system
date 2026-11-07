@@ -51,6 +51,8 @@ if ($db && is_file(__DIR__ . '/modules/cars/_slug.php')) {
  * published the current version rather than an older one.
  */
 $expected = [
+    'Showroom — Google Tag (GTM)'     => [
+        'showroom/header.php', 'GTM-WBLZVZJD'],
     'Showroom — Product ID URLs'      => [
         'modules/cars/_slug.php', 'carEnsureProductId'],
     'Showroom — Renamed CTA buttons'  => [

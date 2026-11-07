@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/images.php';
 require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
+carSlugMigrate($db);
 
 $ids = array_map('intval', (array)($_GET['ids'] ?? []));
 $ids = array_values(array_unique(array_filter($ids)));
@@ -125,6 +126,7 @@ include __DIR__ . '/header.php';
         <!-- Spec rows -->
         <?php
         $specs = [
+            ['Product ID',   'product_id',   fn($v) => $v ?: '—'],
             ['Year',         'year',         fn($v) => $v ?: '—'],
             ['Make',         'make',         fn($v) => $v ?: '—'],
             ['Model',        'model',        fn($v) => $v ?: '—'],
