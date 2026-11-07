@@ -199,7 +199,7 @@ include __DIR__ . '/header.php';
                 $contactCards = [];
                 if ($__companyPhone) {
                     $contactCards[] = ['fa-phone', '#2563eb', '#eff6ff', 'Phone', $__companyPhone,
-                        'tel:' . e($__companyPhone), 'Call us now', null];
+                        'tel:' . e($__companyPhone), 'Call Us', null];
                 }
                 if ($__companyEmail) {
                     $contactCards[] = ['fa-envelope', '#7c3aed', '#f3e8ff', 'Email', $__companyEmail,

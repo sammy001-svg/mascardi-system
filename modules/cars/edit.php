@@ -473,8 +473,8 @@ document.getElementById('client_id').addEventListener('change', function() {
         document.getElementById('metaTitleCount').textContent = f.metaTitle.value.length;
         document.getElementById('metaDescCount').textContent  = f.metaDesc.value.length;
         document.getElementById('serpSite').textContent = companyName;
-        // The address is the readable one now, so it needs no breadcrumb
-        // tacked on: it already reads as the words somebody searched for.
+        // The address is the car's Product ID (e.g. /MSC-1042), which does not
+        // change when the model is edited, so it needs no breadcrumb.
         document.getElementById('serpUrl').textContent  = pageUrl;
         document.getElementById('serpTitle').textContent = title.length > 60 ? title.slice(0, 57) + '…' : title;
         document.getElementById('serpDesc').textContent  = desc.length > 160 ? desc.slice(0, 157) + '…' : desc;

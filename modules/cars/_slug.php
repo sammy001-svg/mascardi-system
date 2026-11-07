@@ -56,6 +56,9 @@ function carSlugMigrate(PDO $db): bool
         // Unique so two cars can never claim one address, and indexed because
         // every pretty URL is a lookup on it.
         "ALTER TABLE cars ADD UNIQUE INDEX idx_cars_slug (slug)",
+        // The Product ID (MSC-1042). Unique so two cars can never share one.
+        "ALTER TABLE cars ADD COLUMN product_id VARCHAR(20) NULL",
+        "ALTER TABLE cars ADD UNIQUE INDEX idx_cars_product_id (product_id)",
     ] as $alter) {
         try { $db->exec($alter); } catch (\Throwable $_) { /* already there */ }
     }
@@ -141,6 +144,9 @@ function carSlugBuild(PDO $db, array $car, int $ignoreId = 0): string
 
     $taken = static function (string $slug) use ($db, $ignoreId): bool {
         if (in_array($slug, carSlugReserved(), true)) return true;
+        // Looks like a Product ID (msc-1042): that address belongs to the
+        // Product ID, so a word-based slug must never claim it.
+        if (preg_match('/^msc-?\d+$/', $slug)) return true;
         try {
             $st = $db->prepare("SELECT COUNT(*) FROM cars WHERE slug = ? AND id <> ?");
             $st->execute([$slug, $ignoreId]);
@@ -241,30 +247,157 @@ function carSlugBackfill(PDO $db): int
     return $n;
 }
 
-/**
- * The public address of a car.
+/* ── Product ID ──────────────────────────────────────────────────────────────
  *
- * One place builds this, so the pretty form arrives everywhere at once and
- * there is one thing to change if it ever moves again. Falls back to the old
- * query-string form when a car has no slug, which keeps a link working rather
- * than handing somebody a URL to the site root.
+ * The public address of a car is its Product ID: mascardi.co.ke/MSC-1042.
+ *
+ * Unlike the word-based slug, it is short, easy to read out over the phone or
+ * quote on WhatsApp, and never depends on how the model happens to be spelled.
+ * It is issued once, in sequence from MSC-1001, and never changes or gets
+ * reused. The old word-based addresses keep working: they redirect (301) here.
+ */
+
+/** Prefix of every Product ID. */
+if (!defined('CAR_PRODUCT_ID_PREFIX')) define('CAR_PRODUCT_ID_PREFIX', 'MSC-');
+
+/**
+ * Reduce whatever somebody typed to canonical form, or null if it is not a
+ * Product ID at all. `msc1042`, `MSC 1042` and `msc-1042` all become MSC-1042.
+ */
+function carProductIdNormalize(string $text): ?string
+{
+    if (preg_match('/^\s*msc[-_\s]?0*(\d{1,9})\s*\/?$/i', $text, $m)) {
+        return CAR_PRODUCT_ID_PREFIX . (int)$m[1];
+    }
+    return null;
+}
+
+/** The number the next Product ID will carry. Reserves nothing. */
+function carProductIdNextNumber(PDO $db): int
+{
+    carSlugMigrate($db);
+    try {
+        $max = (int)$db->query(
+            "SELECT MAX(CAST(SUBSTRING(product_id, " . (strlen(CAR_PRODUCT_ID_PREFIX) + 1) . ") AS UNSIGNED))
+               FROM cars WHERE product_id LIKE '" . CAR_PRODUCT_ID_PREFIX . "%'"
+        )->fetchColumn();
+    } catch (\Throwable $e) {
+        error_log('carProductIdNextNumber: ' . $e->getMessage());
+        $max = 0;
+    }
+    return max(1000, $max) + 1;
+}
+
+/**
+ * The car's Product ID, issuing one if it has none.
+ *
+ * Only fills an empty column, so an issued ID is never changed. Accepts a car
+ * row or a bare id. Results are cached for the request, because a listing page
+ * asks for the same car's address several times.
+ */
+function carEnsureProductId(PDO $db, $car): string
+{
+    static $cache = [];
+    carSlugMigrate($db);
+
+    $id = is_array($car) ? (int)($car['id'] ?? 0) : (int)$car;
+    if ($id <= 0) return '';
+    if (isset($cache[$id])) return $cache[$id];
+
+    // A row that already carries the ID is trusted. One selected without the
+    // column is re-read, as with the slug, rather than assumed to have none.
+    if (is_array($car) && !empty($car['product_id'])) {
+        return $cache[$id] = (string)$car['product_id'];
+    }
+
+    $read = static function (PDO $db, int $id): ?string {
+        try {
+            $st = $db->prepare("SELECT product_id FROM cars WHERE id = ?");
+            $st->execute([$id]);
+            $v = $st->fetchColumn();
+            return $v === false ? null : trim((string)$v);
+        } catch (\Throwable $e) {
+            error_log('carEnsureProductId read: ' . $e->getMessage());
+            return null;
+        }
+    };
+
+    $existing = $read($db, $id);
+    if ($existing === null) return '';           // no such car
+    if ($existing !== '') return $cache[$id] = $existing;
+
+    // Another request may take the same number between reading and writing;
+    // the unique index rejects the loser, which simply tries the next one.
+    for ($try = 0; $try < 8; $try++) {
+        $pid = CAR_PRODUCT_ID_PREFIX . (carProductIdNextNumber($db) + $try);
+        try {
+            $up = $db->prepare("UPDATE cars SET product_id = ?
+                                 WHERE id = ? AND (product_id IS NULL OR product_id = '')");
+            $up->execute([$pid, $id]);
+            $now = $read($db, $id);
+            if ($now !== null && $now !== '') return $cache[$id] = $now;
+        } catch (\Throwable $e) {
+            // Duplicate: loop and take the next number.
+        }
+    }
+    error_log('carEnsureProductId: could not issue an ID for car ' . $id);
+    return '';
+}
+
+/** Give every car a Product ID, oldest first. Returns how many were issued. */
+function carProductIdBackfill(PDO $db): int
+{
+    carSlugMigrate($db);
+    try {
+        $ids = $db->query("SELECT id FROM cars WHERE product_id IS NULL OR product_id = ''
+                           ORDER BY id ASC")->fetchAll(PDO::FETCH_COLUMN);
+    } catch (\Throwable $e) {
+        error_log('carProductIdBackfill: ' . $e->getMessage());
+        return 0;
+    }
+    $n = 0;
+    foreach ($ids as $id) {
+        if (carEnsureProductId($db, (int)$id) !== '') $n++;
+    }
+    return $n;
+}
+
+/**
+ * Find the car a Product ID is asking for.
+ *
+ * @return array{id:int,product_id:string}|null
+ */
+function carProductIdResolve(PDO $db, string $text): ?array
+{
+    $pid = carProductIdNormalize($text);
+    if ($pid === null) return null;
+    carSlugMigrate($db);
+    try {
+        $st = $db->prepare("SELECT id, product_id FROM cars WHERE product_id = ? LIMIT 1");
+        $st->execute([$pid]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        return $r ? ['id' => (int)$r['id'], 'product_id' => (string)$r['product_id']] : null;
+    } catch (\Throwable $e) {
+        error_log('carProductIdResolve: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * The public address of a car: the site root plus its Product ID.
+ *
+ * One place builds this, so the address arrives everywhere at once. Falls back
+ * to the query-string form when pretty addresses cannot be served on this host
+ * (or no ID could be issued), which keeps a link working rather than handing
+ * somebody a URL to the site root.
  */
 function carUrl(PDO $db, $car): string
 {
     $base = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
-    $slug = '';
-    $id   = 0;
+    $id   = is_array($car) ? (int)($car['id'] ?? 0) : (int)$car;
+    $pid  = $id > 0 ? carEnsureProductId($db, $car) : '';
 
-    if (is_array($car)) {
-        $id   = (int)($car['id'] ?? 0);
-        $slug = trim((string)($car['slug'] ?? ''));
-        if ($slug === '' && $id > 0) $slug = carEnsureSlug($db, $car);
-    } else {
-        $id   = (int)$car;
-        $slug = carEnsureSlug($db, $id);
-    }
-
-    if ($slug !== '' && carPrettyUrls()) return $base . '/' . $slug;
+    if ($pid !== '' && carPrettyUrls()) return $base . '/' . $pid;
     return $base . '/showroom/view.php?id=' . $id;
 }
 

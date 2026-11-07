@@ -12,9 +12,10 @@ require_once __DIR__ . '/../modules/cars/_slug.php';
 carSlugMigrate($db);
 
 /* How this page is reached.
-   The address of a car is /range-rover-evoque. Apache rewrites that to here
-   with ?slug=, and ?id= is kept working because links to it are out in the
-   world -- in WhatsApp threads, in a customer's email, in Google's index.
+   The address of a car is its Product ID, /MSC-1042. Apache rewrites that to here
+   with ?slug=. The old word-based address and ?id= are kept working because links
+   to them are out in the world -- in WhatsApp threads, in a customer's email, in
+   Google's index.
 
    An ?id= arrival is answered with a 301 rather than served. Two addresses for
    one page is duplicate content, and a permanent redirect is what tells a
@@ -24,25 +25,38 @@ $slugParam = trim((string)($_GET['slug'] ?? ''));
 $id        = (int)($_GET['id'] ?? 0);
 
 if ($slugParam !== '') {
-    $hit = carSlugResolve($db, $slugParam);
-    if (!$hit) { header('Location: ' . BASE_URL . '/showroom/', true, 302); exit; }
-    $id = $hit['id'];
-    // Typed by hand as /RangeRoverEvoque, or with odd punctuation: serve the
-    // one canonical spelling so only that form is ever indexed.
-    if ($slugParam !== $hit['slug']) {
-        header('Location: ' . rtrim(BASE_URL, '/') . '/' . $hit['slug'], true, 301);
-        exit;
+    $base = rtrim(BASE_URL, '/');
+    if (carProductIdNormalize($slugParam) !== null) {
+        // The car's address: /MSC-1042.
+        $hit = carProductIdResolve($db, $slugParam);
+        if (!$hit) { header('Location: ' . BASE_URL . '/showroom/', true, 302); exit; }
+        $id = $hit['id'];
+        // Typed as msc1042 or MSC 1042: serve the one canonical spelling.
+        if ($slugParam !== $hit['product_id']) {
+            header('Location: ' . $base . '/' . $hit['product_id'], true, 301);
+            exit;
+        }
+    } else {
+        // An old word-based address (/x3-m-sport-package) from a link already
+        // out in the world. Sent permanently to the Product ID address.
+        $hit = carSlugResolve($db, $slugParam);
+        if (!$hit) { header('Location: ' . BASE_URL . '/showroom/', true, 302); exit; }
+        $id = $hit['id'];
+        $pidNow = carEnsureProductId($db, $id);
+        if ($pidNow !== '') {
+            header('Location: ' . $base . '/' . $pidNow, true, 301);
+            exit;
+        }
     }
 } elseif ($id && carPrettyUrls()) {
     // Only once the rewrite has proved itself. Redirecting to an address this
     // host cannot serve would take every vehicle page down at once.
-    $slugNow = carEnsureSlug($db, $id);
-    if ($slugNow !== '') {
-        header('Location: ' . rtrim(BASE_URL, '/') . '/' . $slugNow, true, 301);
+    $pidNow = carEnsureProductId($db, $id);
+    if ($pidNow !== '') {
+        header('Location: ' . rtrim(BASE_URL, '/') . '/' . $pidNow, true, 301);
         exit;
     }
 }
-
 if (!$id) { header('Location: ' . BASE_URL . '/showroom/'); exit; }
 
 $stmt = $db->prepare("
@@ -446,7 +460,7 @@ include __DIR__ . '/header.php';
                                 <?php if ($dirUrl !== ''): ?>
                                 <a href="<?= htmlspecialchars($dirUrl) ?>" target="_blank" rel="noopener"
                                    class="btn-lx-ghost-dark" style="flex:1 1 auto">
-                                    <i class="fa fa-diamond-turn-right"></i> Get directions
+                                    <i class="fa fa-diamond-turn-right"></i> Get Directions
                                 </a>
                                 <?php endif; ?>
                                 <?php if (!empty($locMap['phone'])): ?>
@@ -464,12 +478,12 @@ include __DIR__ . '/header.php';
                         <?php if ($whatsappPhone): ?>
                         <a href="https://wa.me/<?= $whatsappPhone ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="btn-lx" style="width:100%">
                             <i class="fa-brands fa-whatsapp"></i>
-                            <?= $inTransit ? 'Reserve this unit' : ($isReserved ? 'Join Waitlist' : 'Enquire on WhatsApp') ?>
+                            <?= $inTransit ? 'Reserve this unit' : ($isReserved ? 'Join Waitlist' : 'WhatsApp Us') ?>
                         </a>
                         <?php endif; ?>
                         <?php if ($companyPhone): ?>
                         <a href="tel:<?= htmlspecialchars($companyPhone) ?>" class="btn-lx-ghost-dark" style="width:100%">
-                            <i class="fa fa-phone"></i> <?= htmlspecialchars($companyPhone) ?>
+                            <i class="fa fa-phone"></i> Call Us
                         </a>
                         <?php endif; ?>
                         <?php /* Booking a viewing is the strongest thing a visitor can do
@@ -478,11 +492,11 @@ include __DIR__ . '/header.php';
                                  car that is not here to be seen. */ ?>
                         <?php if ($canVisit): ?>
                         <button type="button" class="btn-lx-ghost-dark" style="width:100%" onclick="dvOpenViewing()">
-                            <i class="fa fa-calendar-check"></i> Request a viewing
+                            <i class="fa fa-calendar-check"></i> Book a Viewing
                         </button>
                         <?php endif; ?>
                         <button type="button" id="dvSaveBtn" class="btn-lx-ghost-dark" style="width:100%" onclick="dvToggleSave()">
-                            <i class="fa-regular fa-heart" id="dvSaveIcon"></i> <span id="dvSaveLabel">Save this vehicle</span>
+                            <i class="fa-regular fa-heart" id="dvSaveIcon"></i> <span id="dvSaveLabel">Save vehicle</span>
                         </button>
                     </div>
 
@@ -537,7 +551,7 @@ include __DIR__ . '/header.php';
                         <?php if ($whatsappPhone): ?>
                         <a href="#" id="finWaBtn" target="_blank" rel="noopener"
                            class="btn-lx-ghost-dark" style="width:100%;margin-top:4px">
-                            <i class="fa-brands fa-whatsapp"></i> Discuss this plan
+                            <i class="fa-brands fa-whatsapp"></i> Finance vehicle
                         </a>
                         <?php endif; ?>
                     </div>
@@ -581,7 +595,7 @@ include __DIR__ . '/header.php';
 
                     <!-- Share -->
                     <div class="dv-share">
-                        <span class="lx-label">Share</span>
+                        <span class="lx-label">Share vehicle</span>
                         <div style="display:flex;gap:8px">
                             <?php if ($whatsappPhone): ?>
                             <a href="https://wa.me/?text=<?= urlencode("Check out this {$carTitle} at {$companyName} " . $carPublicUrl) ?>"
@@ -1065,7 +1079,7 @@ function dvSyncSave() {
     var icon  = document.getElementById('dvSaveIcon');
     var label = document.getElementById('dvSaveLabel');
     if (icon)  icon.className  = saved ? 'fa fa-heart' : 'fa-regular fa-heart';
-    if (label) label.textContent = saved ? 'Saved' : 'Save this vehicle';
+    if (label) label.textContent = saved ? 'Saved' : 'Save vehicle';
 }
 
 function dvToggleSave() {
@@ -1152,7 +1166,7 @@ dvSyncSave();
          role="dialog" aria-modal="true" aria-labelledby="dvViewingTitle">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line)">
             <div class="lx-label" id="dvViewingTitle" style="color:var(--ink)">
-                <i class="fa fa-calendar-check me-1"></i>Request a viewing
+                <i class="fa fa-calendar-check me-1"></i>Book a Viewing
             </div>
             <button type="button" onclick="dvCloseViewing()" aria-label="Close"
                     style="border:0;background:none;font-size:20px;line-height:1;color:var(--ink-2);cursor:pointer">&times;</button>
@@ -1212,7 +1226,7 @@ dvSyncSave();
                               placeholder="e.g. I would like to take it for a test drive…"></textarea>
                 </div>
                 <button type="submit" id="dvViewingBtn" class="btn-lx" style="width:100%">
-                    <span id="dvViewingBtnText">Request a viewing</span>
+                    <span id="dvViewingBtnText">Book a Viewing</span>
                     <span id="dvViewingBtnLoad" style="display:none"><i class="fa fa-spinner fa-spin me-2"></i>Sending…</span>
                 </button>
                 <div id="dvViewingError" style="display:none;border:1px solid var(--line);border-left:3px solid var(--ink);border-radius:var(--r);padding:12px;margin-top:10px;font-size:13px;color:var(--ink)"></div>

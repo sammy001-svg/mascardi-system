@@ -177,7 +177,7 @@ include __DIR__ . '/header.php';
                         <a href="<?= BASE_URL ?>/showroom/contact.php" class="ish-btn">Enquire</a>
                         <?php endif; ?>
                         <?php if ($companyPhone): ?>
-                        <a href="tel:<?= htmlspecialchars($companyPhone) ?>" class="ish-btn-sq" title="Call us">
+                        <a href="tel:<?= htmlspecialchars($companyPhone) ?>" class="ish-btn-sq" title="Call Us">
                             <i class="fa fa-phone"></i>
                         </a>
                         <?php endif; ?>

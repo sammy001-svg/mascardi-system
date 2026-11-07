@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $clientId = $_POST['client_id'] ? (int)$_POST['client_id'] : null;
             $stmt = $db->prepare("INSERT INTO cars (chassis_number,entry_number,registration_number,make,model,year,color,engine_number,transmission,fuel_type,car_type,owner_name,owner_phone,client_id,location_id,body_type,notes,description,features,meta_title,meta_description,meta_image,asking_price,mileage,engine_cc,featured,offer_price,show_on_website) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
             $stmt->execute([$chassis,$entryNo ?: null,$reg,$make,$model,$year,$color,$engine,$trans,$fuel,$carType,$ownerName,$ownerPhone,$clientId,$locId,$body,$notes,$description,$features,$metaTitle,$metaDesc,$metaImage,$askingPrice,$mileage,$engineCc,$featured,$offerPrice,$showOnWeb]);
-            $carId = $db->lastInsertId();
+            $carId = $db->lastInsertId(); require_once __DIR__ . '/_slug.php'; carEnsureProductId($db, (int)$carId); // issue the Product ID now
 
             // Ancillary charges, if any were listed. Saved here rather than
             // on the form above because they key on the car's id, which does
@@ -473,9 +473,9 @@ include __DIR__ . '/../../includes/header.php';
     };
     var companyName = <?= json_encode(getSetting('company_name', 'Mascardi Showroom')) ?>;
     // The car has no address until it is saved, so this previews the one it
-    // will be given: the site root plus the model, which is how carSlugBuild()
-    // names it unless another car has already taken that.
-    var baseUrl      = <?= json_encode(rtrim(BASE_URL, '/') . '/') ?>;
+    // will be given: the site root plus the next Product ID in sequence.
+    // (Product ID is issued when the car is saved; this is the one it will get.)
+    var baseUrl      = <?= json_encode(rtrim(BASE_URL, '/') . '/') ?>; <?php require_once __DIR__ . '/_slug.php'; ?>var nextPid = <?= json_encode(CAR_PRODUCT_ID_PREFIX . carProductIdNextNumber($db)) ?>;
 
     function slugify(s) {
         return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -498,7 +498,7 @@ include __DIR__ . '/../../includes/header.php';
         document.getElementById('metaDescCount').textContent  = f.metaDesc.value.length;
         document.getElementById('serpSite').textContent = companyName;
         document.getElementById('serpUrl').textContent  =
-            baseUrl + (slugify(f.model.value) || slugify(f.make.value) || 'vehicle');
+            baseUrl + nextPid;
         document.getElementById('serpTitle').textContent = title.length > 60 ? title.slice(0, 57) + '…' : title;
         document.getElementById('serpDesc').textContent  = desc.length > 160 ? desc.slice(0, 157) + '…' : desc;
     }

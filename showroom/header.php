@@ -418,7 +418,7 @@ select.lx-input { cursor: pointer; }
             <?php if ($__waClean): ?>
             <a href="https://wa.me/<?= $__waClean ?>?text=<?= urlencode('Hi, I\'d like to enquire about a vehicle.') ?>"
                target="_blank" rel="noopener" class="nav-cta-btn">
-                <i class="fa-brands fa-whatsapp"></i><span>Enquire</span>
+                <i class="fa-brands fa-whatsapp"></i><span>WhatsApp Us</span>
             </a>
             <?php endif; ?>
             <a href="<?= BASE_URL ?>/login.php" class="nav-staff" title="Staff Login" aria-label="Staff Login">
