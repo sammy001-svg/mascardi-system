@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/images.php';
 require_once __DIR__ . '/../modules/cars/_slug.php';
 $db = getDB();
+carSlugMigrate($db);
 
 // ── Active filters ────────────────────────────────────────────────────────────
 $filterMake    = trim($_GET['make']     ?? '');
@@ -52,8 +53,9 @@ if ($filterYearMin) { $where[] = 'c.year >= ?'; $params[] = $filterYearMin; }
 if ($filterYearMax) { $where[] = 'c.year <= ?'; $params[] = $filterYearMax; }
 if ($filterMileMax) { $where[] = 'c.mileage IS NOT NULL AND c.mileage <= ?'; $params[] = $filterMileMax; }
 if ($search) {
-    $where[] = '(c.make LIKE ? OR c.model LIKE ? OR c.body_type LIKE ? OR c.color LIKE ?)';
-    $params  = array_merge($params, ["%$search%", "%$search%", "%$search%", "%$search%"]);
+    $pidNorm = carProductIdNormalize($search);
+    $where[] = '(c.make LIKE ? OR c.model LIKE ? OR c.body_type LIKE ? OR c.color LIKE ? OR c.product_id LIKE ?' . ($pidNorm !== null ? ' OR c.product_id = ?' : '') . ')';
+    $params  = array_merge($params, ["%$search%", "%$search%", "%$search%", "%$search%", "%$search%"], $pidNorm !== null ? [$pidNorm] : []);
 }
 
 // "Saved" filter. Favourites live in the visitor's localStorage, so the ids are
@@ -96,7 +98,7 @@ if ($page > $totalPages) $page = $totalPages;
 $offset     = ($page - 1) * $perPage;
 
 $stmt = $db->prepare("
-    SELECT c.id, c.make, c.model, c.year, c.color, c.body_type,
+    SELECT c.id, c.product_id, c.make, c.model, c.year, c.color, c.body_type,
            c.transmission, c.fuel_type, c.asking_price, c.offer_price, c.mileage,
            c.engine_cc, c.featured, c.notes, c.created_at, c.status,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image,
@@ -320,6 +322,7 @@ include __DIR__ . '/header.php';
                     $car['year'] ?: null,
                     $car['color'] ? htmlspecialchars($car['color']) : null,
                     $car['fuel_type'] ? ucfirst($car['fuel_type']) : null,
+                    !empty($car['product_id']) ? htmlspecialchars($car['product_id']) : null,
                 ]);
             ?>
             <div class="sv-card<?= $isReserved ? ' sv-card-reserved' : '' ?>" data-car-id="<?= $car['id'] ?>" data-car-name="<?= htmlspecialchars($car['year'].' '.$car['make'].' '.$car['model']) ?>">

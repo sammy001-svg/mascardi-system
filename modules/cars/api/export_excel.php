@@ -5,6 +5,7 @@
  * Respects the same make / location filters as the inventory DataTable.
  */
 require_once __DIR__ . '/../../../includes/functions.php';
+require_once __DIR__ . '/../_slug.php';
 requireLogin();
 
 if (!canAccess('cars')) {
@@ -13,6 +14,7 @@ if (!canAccess('cars')) {
 }
 
 $db = getDB();
+carSlugMigrate($db);
 
 // ── Filters (same as list.php) ───────────────────────────────────────────────
 $filterMake     = trim($_GET['filter_make']     ?? '');
@@ -42,6 +44,7 @@ $fullWhere = $baseWhere . $filterWhere;
 $sql = "
     SELECT
         c.id,
+        c.product_id,
         c.make,
         c.model,
         c.year,
@@ -96,6 +99,7 @@ fwrite($out, "\xEF\xBB\xBF");
 // ── Header row ───────────────────────────────────────────────────────────────
 fputcsv($out, [
     '#',
+    'Product ID',
     'Make',
     'Model',
     'Year',
@@ -118,6 +122,7 @@ $i = 1;
 foreach ($rows as $car) {
     fputcsv($out, [
         $i++,
+        $car['product_id'] ?? '',
         $car['make'],
         $car['model'],
         $car['year'],

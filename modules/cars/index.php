@@ -157,7 +157,7 @@ $extraJs = '<script>
         dom        : \'<"d-flex justify-content-between align-items-center mb-3"lf>t<"d-flex justify-content-between align-items-center mt-3"ip>\',
         language   : {
             search            : \'\',
-            searchPlaceholder : \'Search make, chassis, reg…\',
+            searchPlaceholder : \'Search ID, make, chassis, reg…\',
             emptyTable        : \'No vehicles found.\',
             zeroRecords       : \'No vehicles matched your search.\',
             processing        : \'<div class="text-center py-3 text-muted"><i class="fa fa-spinner fa-spin me-2"></i>Loading…</div>\',

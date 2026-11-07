@@ -30,12 +30,31 @@ if (!isSuperAdmin() && authRole() !== 'admin') {
 $db = null;
 try { $db = getDB(); } catch (\Throwable $e) { /* reported below */ }
 
+// Flush PHP OPcache whenever this page runs so stale bytecode never hides a deploy.
+$opcacheFlushed = false;
+if (function_exists('opcache_reset')) {
+    $opcacheFlushed = @opcache_reset();
+}
+
+// Trigger Product ID migration + backfill if the updated helper is present.
+$pidBackfilled = null;
+if ($db && is_file(__DIR__ . '/modules/cars/_slug.php')) {
+    require_once __DIR__ . '/modules/cars/_slug.php';
+    if (function_exists('carProductIdBackfill')) {
+        $pidBackfilled = carProductIdBackfill($db);
+    }
+}
+
 /**
  * Files that only exist in recent work, with a string that must appear inside
  * them. Presence of the file proves the deploy ran; the marker proves it
  * published the current version rather than an older one.
  */
 $expected = [
+    'Showroom — Product ID URLs'      => [
+        'modules/cars/_slug.php', 'carEnsureProductId'],
+    'Showroom — Renamed CTA buttons'  => [
+        'showroom/view.php', 'Book a Viewing'],
     'Visitors book — officer chooser' => [
         'visitorbook/assign.php', 'Who will attend to'],
     'Visitors book — rotation'        => [
@@ -80,7 +99,7 @@ $tables = ['visitors', 'visitor_kiosk_sessions', 'reservation_cancellations',
 $columns = [
     'visitors' => ['location_id', 'checked_out_at', 'assigned_to'],
     'users'    => ['profile_image', 'location_id'],
-    'cars'     => ['entry_number'],
+    'cars'     => ['entry_number', 'product_id'],
 ];
 
 function badge(bool $ok, string $good = 'OK', string $bad = 'MISSING'): string {
@@ -239,6 +258,7 @@ $stale = $ocOn && (!$validate || $freq > 60);
 <div class="box"><table>
     <tr><td>OPcache running</td><td style="text-align:right"><?= badge(true, $ocOn ? 'YES' : 'NO', '') ?></td></tr>
     <?php if ($ocOn): ?>
+    <tr><td>OPcache flushed on this check</td><td style="text-align:right"><?= badge($opcacheFlushed, 'FLUSHED NOW', 'COULD NOT FLUSH') ?></td></tr>
     <tr><td>Notices changed files
         <div class="m">opcache.validate_timestamps</div></td>
         <td style="text-align:right"><?= badge($validate, 'YES', 'NO — new code is ignored') ?></td></tr>
@@ -326,6 +346,14 @@ foreach ($columns as $tbl => $cols) {
         echo '<tr><td>column <span class="m">' . htmlspecialchars($tbl . '.' . $c) . '</span></td>'
            . '<td style="text-align:right">' . badge($ok) . '</td></tr>';
     }
+}
+if ($pidBackfilled !== null) {
+    $pidTotal = 0;
+    try { $pidTotal = (int)$db->query("SELECT COUNT(*) FROM cars WHERE product_id IS NOT NULL AND product_id <> ''")->fetchColumn(); }
+    catch (\Throwable $_) {}
+    echo '<tr><td>Product IDs assigned<div class="m">' . $pidTotal . ' vehicle(s) carry an MSC-xxxx ID'
+       . ($pidBackfilled > 0 ? ' (' . $pidBackfilled . ' newly assigned just now)' : '') . '</div></td>'
+       . '<td style="text-align:right">' . badge(true, (string)$pidTotal) . '</td></tr>';
 }
 ?>
 </table>

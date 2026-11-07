@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/_bootstrap.php';
+require_once __DIR__ . '/_slug.php';
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) redirect(BASE_URL . '/modules/cars/index.php');
 $db = getDB();
@@ -80,13 +81,32 @@ if (canAccess('car_documents')) {
     } catch (\Throwable $_) {}
 }
 
-$pageTitle = $car['make'] . ' ' . $car['model'];
+$carProductId = carEnsureProductId($db, $car);
+$publicCarUrl = carUrl($db, $car);
+$pageTitle = $car['make'] . ' ' . $car['model'] . ($carProductId !== '' ? ' (' . $carProductId . ')' : '');
 include __DIR__ . '/../../includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0"><?= e($car['make'].' '.$car['model']) ?> <code class="ms-2"><?= e($car['chassis_number']) ?></code></h5>
+    <h5 class="mb-0">
+        <?= e($car['make'].' '.$car['model']) ?>
+        <?php if ($carProductId !== ''): ?><span class="badge bg-dark ms-2"><?= e($carProductId) ?></span><?php endif; ?>
+        <code class="ms-2"><?= e($car['chassis_number']) ?></code>
+    </h5>
     <div class="d-flex gap-2 flex-wrap">
         <a href="media.php?id=<?= $id ?>" class="btn btn-sm btn-outline-primary"><i class="fa fa-camera me-1"></i>Photos (<?= count($images) ?>)</a>
+        <?php if ($car['car_type'] !== 'client' && $carProductId !== ''): ?>
+        <button type="button" class="btn btn-sm btn-outline-dark" id="copyWebUrlBtn"
+                title="<?= e($publicCarUrl) ?>"
+                onclick="(function(b){
+                    var u='<?= addslashes($publicCarUrl) ?>';
+                    navigator.clipboard ? navigator.clipboard.writeText(u).then(function(){
+                        b.innerHTML='<i class=\'fa fa-check me-1\'></i>Copied!';
+                        setTimeout(function(){b.innerHTML='<i class=\'fa fa-globe me-1\'></i><?= addslashes($carProductId) ?> link';},2000);
+                    }) : (function(){var t=document.createElement('textarea');t.value=u;document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);b.innerHTML='<i class=\'fa fa-check me-1\'></i>Copied!';setTimeout(function(){b.innerHTML='<i class=\'fa fa-globe me-1\'></i><?= addslashes($carProductId) ?> link';},2000);})();
+                })(this)">
+            <i class="fa fa-globe me-1"></i><?= e($carProductId) ?> link
+        </button>
+        <?php endif; ?>
         <?php
         // Public share link — points to the no-login car page. A token rather
         // than the row id, so the client cannot count through the rest of the
@@ -405,6 +425,10 @@ if (in_array($car['status'], ['delivered','sold']))     $activeStep = 6;
             <div class="card-header"><i class="fa fa-car me-2"></i>Vehicle Details</div>
             <div class="card-body">
                 <dl class="row mb-0" style="font-size:13.5px">
+                    <?php if ($carProductId !== ''): ?>
+                    <dt class="col-5 text-muted">Product ID</dt>
+                    <dd class="col-7"><code><?= e($carProductId) ?></code></dd>
+                    <?php endif; ?>
                     <dt class="col-5 text-muted">Vehicle Type</dt>
                     <dd class="col-7">
                         <?php if ($car['car_type'] === 'client'): ?>

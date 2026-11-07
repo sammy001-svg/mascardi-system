@@ -62,7 +62,15 @@ function carSlugMigrate(PDO $db): bool
     ] as $alter) {
         try { $db->exec($alter); } catch (\Throwable $_) { /* already there */ }
     }
-    return $done = true;
+    $done = true;
+    // Ensure any car still missing a Product ID (existing stock or rows inserted
+    // via imports, trade-ins, or intake) receives one in id order.
+    try {
+        if ($db->query("SELECT 1 FROM cars WHERE product_id IS NULL OR product_id = '' LIMIT 1")->fetchColumn()) {
+            carProductIdBackfill($db);
+        }
+    } catch (\Throwable $_) {}
+    return true;
 }
 
 /**

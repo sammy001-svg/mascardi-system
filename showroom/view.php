@@ -115,15 +115,17 @@ $priceStr = $displayPrice ? 'KES ' . number_format((float)$displayPrice) : 'Cont
 $saveAmt  = ($hasOffer && $hasPrice && $car['asking_price'] > $car['offer_price'])
           ? (float)$car['asking_price'] - (float)$car['offer_price'] : 0;
 
-$carTitle = $car['year'] . ' ' . $car['make'] . ' ' . $car['model'];
-// What a customer pastes into a chat, so it has to be the readable address.
+$carTitle     = $car['year'] . ' ' . $car['make'] . ' ' . $car['model'];
+$carProductId = carEnsureProductId($db, $car + ['id' => $id]);
+$pidTag       = $carProductId !== '' ? " ({$carProductId})" : '';
+// What a customer pastes into a chat, so it has to be the Product ID address.
 $carPublicUrl = carUrl($db, $car + ['id' => $id]);
 $waMsg    = $inTransit
-    ? urlencode("Hi, I'm interested in the {$carTitle} that is currently in shipment"
+    ? urlencode("Hi, I'm interested in the {$carTitle}{$pidTag} that is currently in shipment"
         . ($displayPrice ? " ({$priceStr})" : '')
         . ". Could you share the expected arrival and reservation terms? "
         . $carPublicUrl)
-    : urlencode("Hi, I'm interested in the {$carTitle}" . ($displayPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? " . $carPublicUrl);
+    : urlencode("Hi, I'm interested in the {$carTitle}{$pidTag}" . ($displayPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? " . $carPublicUrl);
 
 // ── SEO: per-car overrides, falling back to auto-generated values ──────────
 // The canonical is the pretty address, which is the whole point: it is what
@@ -175,6 +177,7 @@ $__ld = [
     ],
 ];
 if ($ogImage) $__ld['@graph'][0]['image'] = $ogImage;
+if ($carProductId !== '')         $__ld['@graph'][0]['sku'] = $carProductId;
 if (!empty($car['color']))        $__ld['@graph'][0]['color'] = $car['color'];
 if (!empty($car['mileage']))      $__ld['@graph'][0]['mileageFromOdometer'] = ['@type' => 'QuantitativeValue', 'value' => (int)$car['mileage'], 'unitCode' => 'KMT'];
 if (!empty($car['fuel_type']))    $__ld['@graph'][0]['fuelType'] = ucfirst($car['fuel_type']);
@@ -314,6 +317,7 @@ include __DIR__ . '/header.php';
                         <div class="dv-acc-body">
                             <?php
                             $specRows = [
+                                ['Product ID',    $carProductId ?: null],
                                 ['Make',          $car['make']],
                                 ['Model',         $car['model']],
                                 ['Year',          $car['year']],
@@ -398,7 +402,7 @@ include __DIR__ . '/header.php';
 
                     <h1 class="dv-title"><?= htmlspecialchars($car['make'] . ' ' . $car['model']) ?></h1>
                     <div class="dv-sub">
-                        <?= $car['year'] ?><?= $car['color'] ? ' · ' . htmlspecialchars($car['color']) : '' ?><?= $car['body_type'] ? ' · ' . htmlspecialchars($car['body_type']) : '' ?>
+                        <?= $car['year'] ?><?= $car['color'] ? ' · ' . htmlspecialchars($car['color']) : '' ?><?= $car['body_type'] ? ' · ' . htmlspecialchars($car['body_type']) : '' ?><?= $carProductId !== '' ? ' · ' . htmlspecialchars($carProductId) : '' ?>
                     </div>
 
                     <div class="dv-price">

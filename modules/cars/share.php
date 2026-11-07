@@ -102,6 +102,8 @@ $saveAmt    = ($hasOffer && $hasPrice && $car['asking_price'] > $car['offer_pric
             ? (float)$car['asking_price'] - (float)$car['offer_price'] : 0;
 $priceStr   = $dispPrice ? 'KES ' . number_format($dispPrice) : 'Contact for price';
 
+require_once __DIR__ . '/_slug.php';
+$carProductId  = carEnsureProductId($db, $car + ['id' => $id]);
 $carTitle      = trim($car['year'] . ' ' . $car['make'] . ' ' . $car['model']);
 $companyName   = getSetting('company_name',   'Mascardi Luxury Cars');
 $companyPhone  = getSetting('company_phone',  '');
@@ -563,6 +565,7 @@ a{color:inherit;text-decoration:none}
             <?= htmlspecialchars($car['year']) ?>
             <?= $car['color']     ? ' · ' . htmlspecialchars($car['color'])     : '' ?>
             <?= $car['body_type'] ? ' · ' . htmlspecialchars($car['body_type']) : '' ?>
+            <?= $carProductId !== '' ? ' · ' . htmlspecialchars($carProductId)  : '' ?>
           </div>
 
           <div class="sp-price-box">

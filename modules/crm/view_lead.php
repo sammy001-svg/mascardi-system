@@ -1808,7 +1808,7 @@ document.getElementById('deleteLeadBtn').addEventListener('click', function () {
                                     var info = document.createElement('div');
                                     info.style.flex = '1';
                                     var title = [c.year, c.make, c.model].filter(Boolean).join(' ');
-                                    var sub   = c.reg || '';
+                                    var sub   = [c.product_id, c.reg].filter(Boolean).join(' · ');
                                     var specs = [c.transmission, c.fuel_type].filter(Boolean).join(' · ');
                                     var priceStr = c.price ? '<span style="color:#198754;font-weight:600">KES ' + Number(c.price).toLocaleString() + '</span>' : '';
                                     // Flag consignment stock — the commercial terms differ

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../../includes/functions.php';
+require_once __DIR__ . '/../../cars/_slug.php';
 header('Content-Type: application/json');
 
 if (!isLoggedIn()) { echo json_encode(['cars' => []]); exit; }
@@ -10,11 +11,14 @@ if (strlen($q) < 2) { echo json_encode(['cars' => []]); exit; }
 
 try {
     $db   = getDB();
+    carSlugMigrate($db);
     $like = "%{$q}%";
+    $pidNorm = carProductIdNormalize($q);
 
     $stmt = $db->prepare("
         SELECT
             c.id,
+            c.product_id,
             c.registration_number                               AS reg,
             c.make,
             c.model,
@@ -39,16 +43,20 @@ try {
         WHERE c.car_type IN ('inventory','trade_in','sale_on_behalf')
           AND (c.status IS NULL OR c.status NOT IN ('delivered','sold'))
           AND (
-                c.make                LIKE ?
+                c.product_id          LIKE ?
+             OR c.make                LIKE ?
              OR c.model               LIKE ?
              OR c.registration_number LIKE ?
              OR c.chassis_number      LIKE ?
-             OR CONCAT(COALESCE(c.year,''), ' ', c.make, ' ', c.model) LIKE ?
+             OR CONCAT(COALESCE(c.year,''), ' ', c.make, ' ', c.model) LIKE ?"
+             . ($pidNorm !== null ? " OR c.product_id = ?" : "") . "
               )
         ORDER BY c.make, c.model
         LIMIT 15
     ");
-    $stmt->execute([$like, $like, $like, $like, $like]);
+    $execParams = [$like, $like, $like, $like, $like, $like];
+    if ($pidNorm !== null) $execParams[] = $pidNorm;
+    $stmt->execute($execParams);
     echo json_encode(['cars' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
 
 } catch (\Throwable $e) {

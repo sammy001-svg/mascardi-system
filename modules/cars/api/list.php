@@ -4,6 +4,7 @@
  * Returns paginated, sorted, filtered JSON for modules/cars/index.php
  */
 require_once __DIR__ . '/../../../includes/functions.php';
+require_once __DIR__ . '/../_slug.php';
 requireLogin();
 
 if (!canAccess('cars')) {
@@ -15,6 +16,7 @@ if (!canAccess('cars')) {
 header('Content-Type: application/json; charset=utf-8');
 
 $db = getDB();
+carSlugMigrate($db);
 
 // ── Add indexes silently on first run (no-op if they already exist) ──────────
 try { $db->exec("ALTER TABLE cars ADD INDEX idx_cars_type   (car_type)"); }      catch (\Throwable $_) {}
@@ -78,10 +80,13 @@ if ($section === 'workshop') {
 $searchWhere  = '';
 $searchParams = [];
 if ($search !== '') {
-    $searchWhere = " AND (c.make LIKE ? OR c.model LIKE ? OR c.chassis_number LIKE ?
-                        OR c.registration_number LIKE ? OR c.owner_name LIKE ? OR c.color LIKE ?)";
+    $pidNorm = carProductIdNormalize($search);
+    $searchWhere = " AND (c.product_id LIKE ? OR c.make LIKE ? OR c.model LIKE ? OR c.chassis_number LIKE ?
+                        OR c.registration_number LIKE ? OR c.owner_name LIKE ? OR c.color LIKE ?"
+                 . ($pidNorm !== null ? " OR c.product_id = ?" : "") . ")";
     $s = "%{$search}%";
-    $searchParams = [$s, $s, $s, $s, $s, $s];
+    $searchParams = [$s, $s, $s, $s, $s, $s, $s];
+    if ($pidNorm !== null) $searchParams[] = $pidNorm;
 }
 
 // ── Inventory dropdown filters ────────────────────────────────────────────────
@@ -119,7 +124,7 @@ if ($allFilterParams) {
 // and LEFT JOIN for location. Only fetches columns actually needed.
 if ($usesInventoryLayout) {
     $sql = "
-        SELECT c.id,
+        SELECT c.id, c.product_id,
                c.make, c.model, c.year, c.color,
                c.registration_number, c.chassis_number,
                c.mileage,
@@ -137,7 +142,7 @@ if ($usesInventoryLayout) {
     ";
 } else {
     $sql = "
-        SELECT c.id,
+        SELECT c.id, c.product_id,
                c.make, c.model, c.year, c.color,
                c.registration_number, c.chassis_number,
                c.owner_name, c.owner_phone,
@@ -174,11 +179,14 @@ foreach ($rows as $car) {
         $img = '<div class="bg-light rounded border d-flex align-items-center'
              . ' justify-content-center text-muted" style="width:50px;height:40px;font-size:10px">NO IMG</div>';
     }
+    $pidBadge = !empty($car['product_id'])
+              ? ' &bull; <span class="badge bg-light text-dark border" style="font-size:10.5px">' . e($car['product_id']) . '</span>'
+              : '';
     $vehicle = '<div class="d-flex align-items-center gap-2">' . $img
              . '<div>'
              . '<div class="fw-bold">'   . e($car['make'] . ' ' . $car['model']) . '</div>'
              . '<div class="text-muted small">' . e((string)$car['year']) . ' &bull; '
-             . e($car['registration_number'] ?: 'No Reg') . '</div>'
+             . e($car['registration_number'] ?: 'No Reg') . $pidBadge . '</div>'
              . '</div></div>';
 
     // Chassis

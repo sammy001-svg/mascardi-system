@@ -15,6 +15,7 @@ header('Cache-Control: public, max-age=3600');
 
 $base = rtrim(BASE_URL, '/');
 $db   = getDB();
+carSlugMigrate($db);
 
 $staticPages = [
     ['loc' => $base . '/showroom/',                  'priority' => '1.0', 'changefreq' => 'daily'],
@@ -28,7 +29,7 @@ $staticPages = [
 
 try {
     $cars = $db->query("
-        SELECT id, updated_at, slug, make, model, year
+        SELECT id, product_id, updated_at, slug, make, model, year
         FROM cars
         WHERE car_type IN ('inventory','sale_on_behalf') AND show_on_website = 1
           AND (status IS NULL OR status NOT IN ('delivered','sold','in_transit'))

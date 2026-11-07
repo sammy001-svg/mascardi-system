@@ -45,6 +45,10 @@ deployment:
         --exclude='config/database.local.php'
         ./ $DEPLOYPATH/
 
+    # Force fresh mtimes on PHP files so OPcache notices newly deployed code
+    # immediately even when rsync -a preserved older file timestamps.
+    - /usr/bin/find $DEPLOYPATH -name '*.php' | xargs touch 2>/dev/null || true
+
     # Runtime directories the app writes to. Created only if absent; never reset.
     - /bin/mkdir -p $DEPLOYPATH/uploads $DEPLOYPATH/uploads/hr_documents $DEPLOYPATH/sessions $DEPLOYPATH/tmp
     - /bin/chmod 755 $DEPLOYPATH/uploads $DEPLOYPATH/sessions $DEPLOYPATH/tmp
