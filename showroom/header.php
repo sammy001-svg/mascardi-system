@@ -58,8 +58,9 @@ try {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Google Tag (GTM-WBLZVZJD) -->
+<!-- Google Tag Manager (GTM-WBLZVZJD) & Google Analytics (GTM-M3LZ3RNH) -->
 <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-WBLZVZJD"></script>
+<script async src="https://www.googletagmanager.com/gtm.js?id=GTM-M3LZ3RNH"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
@@ -104,7 +105,7 @@ try {
 <script type="application/ld+json"><?= $jsonLd ?></script>
 <?php endif; ?>
 
-<?php if ($__gaId && strtoupper(trim($__gaId)) !== 'GTM-WBLZVZJD'): ?>
+<?php if ($__gaId && !in_array(strtoupper(trim($__gaId)), ['GTM-WBLZVZJD', 'GTM-M3LZ3RNH'], true)): ?>
 <!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=<?= urlencode($__gaId) ?>"></script>
 <script>

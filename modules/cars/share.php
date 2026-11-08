@@ -65,8 +65,9 @@ if (!$car) {
     ?><!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Google Tag (GTM-WBLZVZJD) -->
+<!-- Google Tag Manager (GTM-WBLZVZJD) & Google Analytics (GTM-M3LZ3RNH) -->
 <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-WBLZVZJD"></script>
+<script async src="https://www.googletagmanager.com/gtm.js?id=GTM-M3LZ3RNH"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
@@ -136,8 +137,9 @@ $publicDesc    = trim($car['description'] ?? '') ?: trim($car['notes'] ?? '');
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Google Tag (GTM-WBLZVZJD) -->
+<!-- Google Tag Manager (GTM-WBLZVZJD) & Google Analytics (GTM-M3LZ3RNH) -->
 <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-WBLZVZJD"></script>
+<script async src="https://www.googletagmanager.com/gtm.js?id=GTM-M3LZ3RNH"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
