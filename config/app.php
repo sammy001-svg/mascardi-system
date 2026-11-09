@@ -147,7 +147,10 @@ if (!defined('APP_DEBUG')) define('APP_DEBUG', false);
 
 // The company's contact details, pushed to `settings` once per version bump.
 // See companyContact() below for why they are applied rather than defaulted.
-if (!defined('COMPANY_CONTACT_VERSION')) define('COMPANY_CONTACT_VERSION', '2');
+// 3: the WhatsApp override is cleared as well. Version 2 set company_phone
+// and has already run on the live site, so a new number is needed for this
+// to fire at all.
+if (!defined('COMPANY_CONTACT_VERSION')) define('COMPANY_CONTACT_VERSION', '3');
 if (!defined('COMPANY_CONTACT_PHONE'))   define('COMPANY_CONTACT_PHONE', '+254 717 277777');
 if (!defined('COMPANY_CONTACT_EMAIL'))   define('COMPANY_CONTACT_EMAIL', 'sales@mascardi.co');
 
@@ -274,6 +277,24 @@ function companyContact(): array {
             );
             $put->execute(['company_phone', $phone]);
             $put->execute(['company_email', $email]);
+            /* The public pages read whatsapp_number first and fall back to
+               company_phone, so a number left here is a second company phone
+               nobody remembers setting -- and it was one the office had stopped
+               using.
+
+               Deleted, not blanked. getSetting() hands back whatever is stored
+               and only uses its default when the key is absent, so an empty row
+               yields an empty string: $whatsappPhone would be '', the button is
+               wrapped in if ($whatsappPhone), and WHATSAPP US would vanish from
+               every page on the site. Removing the row is what makes the
+               fallback to company_phone actually happen.
+
+               If the yard does get a WhatsApp line of its own, putting it back
+               in Settings is all that is needed: this runs once. */
+            try {
+                getDB()->prepare("DELETE FROM settings WHERE setting_key = 'whatsapp_number'")
+                       ->execute();
+            } catch (\Throwable $_) {}
             $put->execute(['company_contact_version', COMPANY_CONTACT_VERSION]);
         } catch (\Throwable $_) {}
     }

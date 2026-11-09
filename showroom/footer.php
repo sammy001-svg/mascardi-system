@@ -170,8 +170,8 @@
 </style>
 
 <a href="https://wa.me/<?= $__waClean ?>?text=<?= urlencode('Hi, I\'d like to enquire about a vehicle from your showroom.') ?>"
-   class="fab-wa" target="_blank" rel="noopener" aria-label="WhatsApp Us">
-    <span class="fab-wa-tooltip">WhatsApp Us</span>
+   class="fab-wa" target="_blank" rel="noopener" aria-label="WHATSAPP US">
+    <span class="fab-wa-tooltip">WHATSAPP US</span>
     <i class="fa-brands fa-whatsapp"></i>
 </a>
 <?php endif; ?>

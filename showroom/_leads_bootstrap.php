@@ -240,7 +240,7 @@ function showroomViewingEmailBody(array $req, array $loc, string $when): string
 
     $dir = $loc ? locationDirectionsUrl($loc) : '';
     if ($dir !== '') {
-        $body .= '<p><a class="btn" href="' . htmlspecialchars($dir) . '">Get Directions</a></p>';
+        $body .= '<p><a class="btn" href="' . htmlspecialchars($dir) . '">GET DIRECTIONS</a></p>';
     }
     $body .= '<p style="font-size:13px;color:#64748b">If this time no longer suits you, reply to this '
            . 'email or call us and we will rearrange it.</p>';

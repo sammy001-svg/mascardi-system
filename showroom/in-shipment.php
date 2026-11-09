@@ -173,13 +173,13 @@ include __DIR__ . '/header.php';
                     <div class="ish-actions">
                         <?php if ($whatsappPhone): ?>
                         <a href="https://wa.me/<?= $whatsappPhone ?>?text=<?= $wa ?>" target="_blank" rel="noopener" class="ish-btn">
-                            <i class="fa-brands fa-whatsapp"></i> Reserve this unit
+                            <i class="fa-brands fa-whatsapp"></i> WHATSAPP US
                         </a>
                         <?php else: ?>
                         <a href="<?= BASE_URL ?>/showroom/contact.php" class="ish-btn">Enquire</a>
                         <?php endif; ?>
                         <?php if ($companyPhone): ?>
-                        <a href="tel:<?= htmlspecialchars($companyPhone) ?>" class="ish-btn-sq" title="Call Us">
+                        <a href="tel:<?= htmlspecialchars($companyPhone) ?>" class="ish-btn-sq" title="CALL US">
                             <i class="fa fa-phone"></i>
                         </a>
                         <?php endif; ?>

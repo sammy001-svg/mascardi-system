@@ -150,7 +150,7 @@ include __DIR__ . '/header.php';
                     <a href="https://wa.me/<?= $__waClean ?>" target="_blank" rel="noopener"
                        style="display:inline-flex;align-items:center;gap:8px;background:#25d366;border-radius:50px;padding:9px 18px;color:#fff;text-decoration:none;font-size:13.5px;font-weight:700;transition:background .15s"
                        onmouseover="this.style.background='#128c7e'" onmouseout="this.style.background='#25d366'">
-                        <i class="fa-brands fa-whatsapp" style="font-size:16px"></i>WhatsApp Us
+                        <i class="fa-brands fa-whatsapp" style="font-size:16px"></i>WHATSAPP US
                     </a>
                     <?php endif; ?>
                 </div>
@@ -199,7 +199,7 @@ include __DIR__ . '/header.php';
                 $contactCards = [];
                 if ($__companyPhone) {
                     $contactCards[] = ['fa-phone', '#2563eb', '#eff6ff', 'Phone', $__companyPhone,
-                        'tel:' . e($__companyPhone), 'Call Us', null];
+                        'tel:' . e($__companyPhone), 'CALL US', null];
                 }
                 if ($__companyEmail) {
                     $contactCards[] = ['fa-envelope', '#7c3aed', '#f3e8ff', 'Email', $__companyEmail,

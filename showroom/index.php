@@ -93,7 +93,7 @@ include __DIR__ . '/header.php';
                class="btn-lx-light">Explore Mascardi Lifestyle</a>
             <?php if ($__waClean): ?>
             <a href="https://wa.me/<?= $__waClean ?>?text=<?= urlencode('Hi, I\'d like to book a viewing.') ?>"
-               target="_blank" rel="noopener" class="btn-lx-ghost">Book a Viewing</a>
+               target="_blank" rel="noopener" class="btn-lx-ghost">BOOK A VIEWING</a>
             <?php endif; ?>
         </div>
     </div>
@@ -187,7 +187,7 @@ include __DIR__ . '/header.php';
                             <div style="display:flex;gap:12px;flex-wrap:wrap">
                                 <a href="<?= htmlspecialchars(carUrl($db, $fb)) ?>" class="btn-lx">View Details</a>
                                 <?php if ($__waClean): ?>
-                                <a href="https://wa.me/<?= $__waClean ?>?text=<?= $fbWa ?>" target="_blank" rel="noopener" class="btn-lx-ghost-dark">WhatsApp Us</a>
+                                <a href="https://wa.me/<?= $__waClean ?>?text=<?= $fbWa ?>" target="_blank" rel="noopener" class="btn-lx-ghost-dark">WHATSAPP US</a>
                                 <?php endif; ?>
                             </div>
                         </div>

@@ -88,7 +88,7 @@ if (!$car) {
        Whoever sent this to you will know what else is in.</p>
     <?php $__ph = getSetting('company_phone', ''); if ($__ph !== ''): ?>
     <a href="tel:<?= htmlspecialchars($__ph) ?>" class="btn btn-dark">
-        <i class="fa fa-phone me-2"></i>Call Us
+        <i class="fa fa-phone me-2"></i>CALL US
     </a>
     <?php endif; ?>
 </div>
@@ -619,12 +619,12 @@ a{color:inherit;text-decoration:none}
           <a href="https://wa.me/<?= $whatsappNum ?>?text=<?= $waMsg ?>"
              target="_blank" rel="noopener" class="sp-btn sp-btn-wa">
             <i class="fa-brands fa-whatsapp"></i>
-            <?= $inTransit ? 'Reserve on WhatsApp' : ($isReserved ? 'Join Waitlist' : 'WhatsApp Us') ?>
+            WHATSAPP US
           </a>
           <?php endif; ?>
           <?php if ($companyPhone): ?>
           <a href="tel:<?= htmlspecialchars($companyPhone) ?>" class="sp-btn sp-btn-ph">
-            <i class="fa fa-phone"></i> Call Us
+            <i class="fa fa-phone"></i> CALL US
           </a>
           <?php endif; ?>
           <?php // A yard with an address but no phone would otherwise show a
@@ -653,7 +653,7 @@ a{color:inherit;text-decoration:none}
 
           <!-- Share row -->
           <div class="sp-share">
-            <span class="sp-share-label">Share vehicle</span>
+            <span class="sp-share-label">SHARE VEHICLE</span>
             <?php if ($whatsappNum): ?>
             <a href="https://wa.me/?text=<?= urlencode("Check out this {$carTitle} at {$companyName}: {$shareUrl}") ?>"
                target="_blank" rel="noopener" class="sp-share-btn" title="WhatsApp">
@@ -684,11 +684,12 @@ a{color:inherit;text-decoration:none}
 $barHref = $barText = $barCls = $barIcon = '';
 if ($whatsappNum) {
     $barHref = 'https://wa.me/' . $whatsappNum . '?text=' . $waMsg;
-    $barText = $inTransit ? 'Reserve' : ($isReserved ? 'Waitlist' : 'WhatsApp Us');
+    // One name, whatever the car's status, as on the vehicle page.
+    $barText = 'WHATSAPP US';
     $barIcon = 'fa-brands fa-whatsapp';
 } elseif ($companyPhone) {
     $barHref = 'tel:' . $companyPhone;
-    $barText = 'Call Us';
+    $barText = 'CALL US';
     $barIcon = 'fa fa-phone';
     $barCls  = ' is-phone';
 } elseif ($sellEmail = getSetting('company_email', '')) {

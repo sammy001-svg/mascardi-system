@@ -460,34 +460,37 @@ include __DIR__ . '/header.php';
                             <div style="font-size:13px;color:var(--ink-2);margin-top:3px;white-space:pre-line"><?= htmlspecialchars($locMap['address']) ?></div>
                             <?php endif; ?>
                             <?php $dirUrl = locationDirectionsUrl($locMap); ?>
+                            <?php /* Only GET DIRECTIONS here. There used to be a second
+                                     telephone button beside it whose label was the yard's own
+                                     phone number, which printed a bare number as a button and
+                                     did the same job as CALL US a few inches below. One number,
+                                     one place to change it, one button. */ ?>
+                            <?php if ($dirUrl !== ''): ?>
                             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-                                <?php if ($dirUrl !== ''): ?>
                                 <a href="<?= htmlspecialchars($dirUrl) ?>" target="_blank" rel="noopener"
                                    class="btn-lx-ghost-dark" style="flex:1 1 auto">
-                                    <i class="fa fa-diamond-turn-right"></i> Get Directions
+                                    <i class="fa fa-diamond-turn-right"></i> GET DIRECTIONS
                                 </a>
-                                <?php endif; ?>
-                                <?php if (!empty($locMap['phone'])): ?>
-                                <a href="tel:<?= htmlspecialchars($locMap['phone']) ?>"
-                                   class="btn-lx-ghost-dark" style="flex:1 1 auto">
-                                    <i class="fa fa-phone"></i> <?= htmlspecialchars($locMap['phone']) ?>
-                                </a>
-                                <?php endif; ?>
                             </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <?php endif; ?>
 
                     <div class="dv-ctas">
                         <?php if ($whatsappPhone): ?>
+                        <?php /* One name, whatever the car's status. It used to read
+                                 "Reserve this unit" on an incoming unit and "Join Waitlist" on
+                                 a reserved one, so the same button had three names and none of
+                                 them was the one on the list. The message it opens with still
+                                 changes -- that is what tells us which conversation it is. */ ?>
                         <a href="https://wa.me/<?= $whatsappPhone ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="btn-lx" style="width:100%">
-                            <i class="fa-brands fa-whatsapp"></i>
-                            <?= $inTransit ? 'Reserve this unit' : ($isReserved ? 'Join Waitlist' : 'WhatsApp Us') ?>
+                            <i class="fa-brands fa-whatsapp"></i> WHATSAPP US
                         </a>
                         <?php endif; ?>
                         <?php if ($companyPhone): ?>
                         <a href="tel:<?= htmlspecialchars($companyPhone) ?>" class="btn-lx-ghost-dark" style="width:100%">
-                            <i class="fa fa-phone"></i> Call Us
+                            <i class="fa fa-phone"></i> CALL US
                         </a>
                         <?php endif; ?>
                         <?php /* Booking a viewing is the strongest thing a visitor can do
@@ -496,11 +499,11 @@ include __DIR__ . '/header.php';
                                  car that is not here to be seen. */ ?>
                         <?php if ($canVisit): ?>
                         <button type="button" class="btn-lx-ghost-dark" style="width:100%" onclick="dvOpenViewing()">
-                            <i class="fa fa-calendar-check"></i> Book a Viewing
+                            <i class="fa fa-calendar-check"></i> BOOK A VIEWING
                         </button>
                         <?php endif; ?>
                         <button type="button" id="dvSaveBtn" class="btn-lx-ghost-dark" style="width:100%" onclick="dvToggleSave()">
-                            <i class="fa-regular fa-heart" id="dvSaveIcon"></i> <span id="dvSaveLabel">Save vehicle</span>
+                            <i class="fa-regular fa-heart" id="dvSaveIcon"></i> <span id="dvSaveLabel">SAVE VEHICLE</span>
                         </button>
                     </div>
 
@@ -552,12 +555,10 @@ include __DIR__ . '/header.php';
                             Final terms depend on the lender and your credit assessment.
                         </p>
 
-                        <?php if ($whatsappPhone): ?>
-                        <a href="#" id="finWaBtn" target="_blank" rel="noopener"
-                           class="btn-lx-ghost-dark" style="width:100%;margin-top:4px">
-                            <i class="fa-brands fa-whatsapp"></i> Finance vehicle
-                        </a>
-                        <?php endif; ?>
+                        <?php /* The estimator used to carry its own WhatsApp button. It is
+                                 not on the approved list, and it opened the same conversation
+                                 WHATSAPP US opens a few inches above. The figures stay; the
+                                 seventh button goes. */ ?>
                     </div>
                     <?php endif; ?>
 
@@ -597,24 +598,19 @@ include __DIR__ . '/header.php';
                         </form>
                     </div>
 
-                    <!-- Share -->
+                    <?php /* One named button where there were three unlabelled icons.
+                             The browser's own share sheet offers WhatsApp, mail and
+                             everything else the visitor actually has, which is more than
+                             three icons could; where there is no share sheet the link is
+                             copied instead and the button says so. */ ?>
                     <div class="dv-share">
-                        <span class="lx-label">Share vehicle</span>
-                        <div style="display:flex;gap:8px">
-                            <?php if ($whatsappPhone): ?>
-                            <a href="https://wa.me/?text=<?= urlencode("Check out this {$carTitle} at {$companyName} " . $carPublicUrl) ?>"
-                               target="_blank" rel="noopener" class="dv-share-btn" title="Share on WhatsApp">
-                                <i class="fa-brands fa-whatsapp"></i>
-                            </a>
-                            <?php endif; ?>
-                            <button onclick="copyLink()" class="dv-share-btn" title="Copy link" id="copyBtn">
-                                <i class="fa fa-link"></i>
-                            </button>
-                            <a href="mailto:?subject=<?= urlencode("Check out this {$carTitle}") ?>&body=<?= urlencode("I found this vehicle at {$companyName}: " . $carPublicUrl) ?>"
-                               class="dv-share-btn" title="Share by Email">
-                                <i class="fa fa-envelope"></i>
-                            </a>
-                        </div>
+                        <button type="button" id="dvShareBtn" class="btn-lx-ghost-dark" style="width:100%"
+                                data-title="<?= htmlspecialchars($carTitle) ?>"
+                                data-text="<?= htmlspecialchars("Check out this {$carTitle} at {$companyName}") ?>"
+                                data-url="<?= htmlspecialchars($carPublicUrl) ?>"
+                                onclick="dvShare(this)">
+                            <i class="fa fa-share-nodes"></i> <span id="dvShareLabel">SHARE VEHICLE</span>
+                        </button>
                     </div>
 
                 </div>
@@ -895,14 +891,9 @@ include __DIR__ . '/header.php';
 .dv-fin-breakdown strong { color: var(--ink-2); font-weight: 600; }
 .dv-fin-note { font-size: 11px; color: var(--ink-3); line-height: 1.6; margin: 12px 0 14px; }
 .dv-field { margin-bottom: 14px; }
-.dv-share { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
-.dv-share-btn {
-    width: 38px; height: 38px; border: 1px solid var(--line); border-radius: var(--r);
-    display: inline-flex; align-items: center; justify-content: center;
-    color: var(--ink-2); font-size: 14px; background: none; cursor: pointer;
-    transition: all .25s var(--ease);
-}
-.dv-share-btn:hover { border-color: var(--ink); color: var(--ink); }
+/* One full-width button, not a label beside a row of icons, so neither the
+   row layout nor the icon styling is needed any more. */
+.dv-share { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
 
 /* ── Similar vehicles ─────────────────────────────────────── */
 .dv-similar { margin-top: 88px; padding-top: 56px; border-top: 1px solid var(--line); }
@@ -1016,16 +1007,37 @@ document.addEventListener('keydown', function (e) {
 }());
 
 // Share — copy link
-function copyLink() {
-    navigator.clipboard.writeText(window.location.href).then(function () {
-        var btn = document.getElementById('copyBtn');
-        if (!btn) return;
-        btn.innerHTML = '<i class="fa fa-check"></i>';
-        setTimeout(function () {
-            btn.innerHTML = '<i class="fa fa-link"></i>';
-        }, 2000);
-    });
+/* SHARE VEHICLE.
+
+   The share sheet where the browser has one -- every phone does, and it offers
+   whatever the visitor actually uses. Where it does not, or where they dismiss
+   it, the link is copied and the button says so for a moment. The canonical
+   address is shared rather than window.location.href, so a link arriving from
+   the old ?id= form is passed on in its readable form. */
+function dvShare(btn) {
+    var url  = (btn && btn.dataset.url)  || window.location.href;
+    var text = (btn && btn.dataset.text) || document.title;
+    if (navigator.share) {
+        navigator.share({ title: btn.dataset.title || document.title, text: text, url: url })
+            .catch(function () { /* dismissed, which is not an error */ });
+        return;
+    }
+    dvCopyShareLink(url);
 }
+
+function dvCopyShareLink(url) {
+    var label = document.getElementById('dvShareLabel');
+    var said  = function (t) { if (label) label.textContent = t; };
+    var back  = function () { setTimeout(function () { said('SHARE VEHICLE'); }, 1800); };
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(function () { said('LINK COPIED'); back(); },
+                                                function () { said('COPY FAILED'); back(); });
+    } else {
+        said('COPY FAILED');
+        back();
+    }
+}
+
 
 // Inquiry form
 document.getElementById('inquiryForm') && document.getElementById('inquiryForm').addEventListener('submit', function (e) {
@@ -1083,7 +1095,10 @@ function dvSyncSave() {
     var icon  = document.getElementById('dvSaveIcon');
     var label = document.getElementById('dvSaveLabel');
     if (icon)  icon.className  = saved ? 'fa fa-heart' : 'fa-regular fa-heart';
-    if (label) label.textContent = saved ? 'Saved' : 'Save vehicle';
+    // Both halves are named, or the button renames itself the moment it is
+    // used. "SAVED" rather than the full label because by then it is a state,
+    // not an invitation.
+    if (label) label.textContent = saved ? 'SAVED' : 'SAVE VEHICLE';
 }
 
 function dvToggleSave() {
@@ -1110,7 +1125,8 @@ dvSyncSave();
         monthly:  document.getElementById('finMonthly'),
         depAmt:   document.getElementById('finDepAmt'),
         loanAmt:  document.getElementById('finLoanAmt'),
-        wa:       document.getElementById('finWaBtn')
+        // The estimator's own WhatsApp button is gone; WHATSAPP US above is the
+        // one way to start that conversation.
     };
 
     function kes(n) { return 'KES ' + Math.round(n).toLocaleString(); }
@@ -1136,15 +1152,6 @@ dvSyncSave();
         els.depAmt.textContent  = kes(deposit);
         els.loanAmt.textContent = kes(loan);
 
-        if (els.wa && box.dataset.wa) {
-            var msg = "Hi, I'd like to discuss financing for the " + box.dataset.vehicle + ".\n"
-                    + 'Price: ' + kes(price) + '\n'
-                    + 'Deposit: ' + depPct + '% (' + kes(deposit) + ')\n'
-                    + 'Period: ' + months + ' months\n'
-                    + 'Est. monthly: ' + kes(monthly) + '\n'
-                    + box.dataset.url;
-            els.wa.href = 'https://wa.me/' + box.dataset.wa + '?text=' + encodeURIComponent(msg);
-        }
     }
 
     ['dep', 'term', 'rate'].forEach(function (k) {
@@ -1170,7 +1177,7 @@ dvSyncSave();
          role="dialog" aria-modal="true" aria-labelledby="dvViewingTitle">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line)">
             <div class="lx-label" id="dvViewingTitle" style="color:var(--ink)">
-                <i class="fa fa-calendar-check me-1"></i>Book a Viewing
+                <i class="fa fa-calendar-check me-1"></i>BOOK A VIEWING
             </div>
             <button type="button" onclick="dvCloseViewing()" aria-label="Close"
                     style="border:0;background:none;font-size:20px;line-height:1;color:var(--ink-2);cursor:pointer">&times;</button>
@@ -1230,7 +1237,7 @@ dvSyncSave();
                               placeholder="e.g. I would like to take it for a test drive…"></textarea>
                 </div>
                 <button type="submit" id="dvViewingBtn" class="btn-lx" style="width:100%">
-                    <span id="dvViewingBtnText">Book a Viewing</span>
+                    <span id="dvViewingBtnText">BOOK A VIEWING</span>
                     <span id="dvViewingBtnLoad" style="display:none"><i class="fa fa-spinner fa-spin me-2"></i>Sending…</span>
                 </button>
                 <div id="dvViewingError" style="display:none;border:1px solid var(--line);border-left:3px solid var(--ink);border-radius:var(--r);padding:12px;margin-top:10px;font-size:13px;color:var(--ink)"></div>

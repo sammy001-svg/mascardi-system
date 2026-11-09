@@ -409,7 +409,7 @@ select.lx-input { cursor: pointer; }
                             <a class="drop-link" href="<?= BASE_URL ?>/showroom/contact.php">Contact Us</a>
                             <div class="drop-cta">
                                 <?php if ($__waClean): ?>
-                                <a href="https://wa.me/<?= $__waClean ?>" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> WhatsApp Us</a>
+                                <a href="https://wa.me/<?= $__waClean ?>" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> WHATSAPP US</a>
                                 <?php endif; ?>
                                 <?php if ($__companyPhone): ?>
                                 <a href="tel:<?= htmlspecialchars($__companyPhone) ?>"><i class="fa fa-phone" style="font-size:10px"></i> <?= htmlspecialchars($__companyPhone) ?></a>
@@ -427,7 +427,7 @@ select.lx-input { cursor: pointer; }
             <?php if ($__waClean): ?>
             <a href="https://wa.me/<?= $__waClean ?>?text=<?= urlencode('Hi, I\'d like to enquire about a vehicle.') ?>"
                target="_blank" rel="noopener" class="nav-cta-btn">
-                <i class="fa-brands fa-whatsapp"></i><span>WhatsApp Us</span>
+                <i class="fa-brands fa-whatsapp"></i><span>WHATSAPP US</span>
             </a>
             <?php endif; ?>
             <a href="<?= BASE_URL ?>/login.php" class="nav-staff" title="Staff Login" aria-label="Staff Login">

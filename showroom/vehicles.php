@@ -408,12 +408,12 @@ include __DIR__ . '/header.php';
                     <div class="sv-card-actions">
                         <a href="<?= htmlspecialchars(carUrl($db, $car)) ?>" class="sv-btn-main">View Details</a>
                         <?php if (!$isReserved && $__waClean): ?>
-                        <a href="https://wa.me/<?= $__waClean ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="sv-btn-sq" title="WhatsApp Us">
+                        <a href="https://wa.me/<?= $__waClean ?>?text=<?= $waMsg ?>" target="_blank" rel="noopener" class="sv-btn-sq" title="WHATSAPP US">
                             <i class="fa-brands fa-whatsapp"></i>
                         </a>
                         <?php endif; ?>
                         <button class="fav-btn sv-btn-sq" data-id="<?= $car['id'] ?>"
-                                onclick="toggleFav(<?= $car['id'] ?>,this)" title="Save vehicle">
+                                onclick="toggleFav(<?= $car['id'] ?>,this)" title="SAVE VEHICLE">
                             <i class="fa-regular fa-heart"></i>
                         </button>
                         <button class="cmp-btn sv-btn-sq" data-id="<?= $car['id'] ?>"
