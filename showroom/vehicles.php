@@ -387,11 +387,9 @@ include __DIR__ . '/header.php';
 
                     <!-- Icon stat row (Lucid: Range / Power / Drive) -->
                     <div class="sv-card-stats">
-                        <div>
-                            <i class="fa fa-road"></i>
-                            <div class="v"><?= $car['engine_cc'] ? number_format($car['engine_cc']) . ' cc' : '—' ?></div>
-                            <div class="l">Engine</div>
-                        </div>
+                        <?php /* Engine, Drive, Fuel -- the same three figures, in the same order,
+                                 as the vehicle page. Mileage used to lead this row and is no
+                                 longer published. */ ?>
                         <div>
                             <i class="fa fa-bolt"></i>
                             <div class="v"><?= $car['engine_cc'] ? number_format($car['engine_cc']) . ' cc' : '—' ?></div>
@@ -401,6 +399,11 @@ include __DIR__ . '/header.php';
                             <i class="fa fa-gears"></i>
                             <div class="v"><?= $car['transmission'] ? ucfirst($car['transmission']) : '—' ?></div>
                             <div class="l">Drive</div>
+                        </div>
+                        <div>
+                            <i class="fa fa-gas-pump"></i>
+                            <div class="v"><?= $car['fuel_type'] ? ucfirst($car['fuel_type']) : '—' ?></div>
+                            <div class="l">Fuel</div>
                         </div>
                     </div>
 
@@ -596,13 +599,14 @@ include __DIR__ . '/header.php';
 .sv-card-price .sub { display: block; font-size: 12px; color: var(--ink-3); margin-top: 3px; }
 .sv-card-price .sub del { color: var(--ink-3); }
 
+/* Columns from the content, not a fixed three. */
 .sv-card-stats {
-    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
     border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
     padding: 16px 0; margin-bottom: 20px; margin-top: auto;
 }
-.sv-card-stats > div { text-align: center; border-right: 1px solid var(--line); padding: 0 8px; }
-.sv-card-stats > div:last-child { border-right: none; }
+.sv-card-stats > div { text-align: center; border-left: 1px solid var(--line); padding: 0 8px; }
+.sv-card-stats > div:first-child { border-left: none; }
 .sv-card-stats i { font-size: 15px; color: var(--ink); display: block; margin-bottom: 8px; }
 .sv-card-stats .v { font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; }
 .sv-card-stats .l { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-3); margin-top: 3px; }

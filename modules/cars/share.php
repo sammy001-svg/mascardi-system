@@ -270,19 +270,22 @@ a{color:inherit;text-decoration:none}
 .sp-noimg div{font-size:14px;color:var(--ink-3);font-weight:500}
 
 /* ── Stats strip ── */
+/* Columns from the content. This was a fixed four with its dividers drawn by
+   :last-child and :nth-child(), so taking one tile out left an empty column,
+   a stray border, and a hole in the last row on a phone. */
 .sp-stats{
-  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));
   border:1px solid var(--line);border-radius:var(--r);margin-top:20px;background:var(--white);
 }
-.sp-stats>div{text-align:center;padding:20px 10px;border-right:1px solid var(--line)}
-.sp-stats>div:last-child{border-right:none}
+.sp-stats>div{text-align:center;padding:20px 10px;border-left:1px solid var(--line)}
+.sp-stats>div:first-child{border-left:none}
 .sp-stats i{font-size:16px;color:var(--ink);display:block;margin-bottom:10px}
 .sp-stats .v{font-size:18px;font-weight:300;letter-spacing:-.01em;color:var(--ink)}
 .sp-stats .l{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-3);margin-top:4px}
 @media(max-width:560px){
-  .sp-stats{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-  .sp-stats>div:nth-child(2){border-right:none}
-  .sp-stats>div:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .sp-stats{grid-template-columns:minmax(0,1fr)}
+  .sp-stats>div{border-left:none;border-top:1px solid var(--line)}
+  .sp-stats>div:first-child{border-top:none}
 }
 
 /* ── Accordion specs ── */
@@ -488,26 +491,23 @@ a{color:inherit;text-decoration:none}
       <div class="sp-detail">
         <!-- Stats strip -->
         <div class="sp-stats">
-          <div>
-            <i class="fa fa-road"></i>
-            <div class="v"><?= $car['engine_cc'] ? number_format((int)$car['engine_cc']) : '—' ?></div>
-            <div class="l"><?= $car['engine_cc'] ? 'cc · Engine' : 'Engine' ?></div>
-          </div>
-          <div>
-            <i class="fa fa-bolt"></i>
-            <div class="v"><?= $car['engine_cc'] ? number_format((int)$car['engine_cc']) : '—' ?></div>
-            <div class="l"><?= $car['engine_cc'] ? 'cc · Engine' : 'Engine' ?></div>
-          </div>
-          <div>
-            <i class="fa fa-gears"></i>
-            <div class="v"><?= $car['transmission'] ? ucfirst($car['transmission']) : '—' ?></div>
-            <div class="l">Drive</div>
-          </div>
-          <div>
-            <i class="fa fa-gas-pump"></i>
-            <div class="v"><?= $car['fuel_type'] ? ucfirst($car['fuel_type']) : '—' ?></div>
-            <div class="l">Fuel</div>
-          </div>
+            <?php /* Engine, Drive, Fuel, as on the vehicle page. Mileage used to lead
+                     this row and is no longer published. */ ?>
+            <div>
+              <i class="fa fa-bolt"></i>
+              <div class="v"><?= $car['engine_cc'] ? number_format((int)$car['engine_cc']) : '—' ?></div>
+              <div class="l"><?= $car['engine_cc'] ? 'cc · Engine' : 'Engine' ?></div>
+            </div>
+            <div>
+              <i class="fa fa-gears"></i>
+              <div class="v"><?= $car['transmission'] ? ucfirst($car['transmission']) : '—' ?></div>
+              <div class="l">Drive</div>
+            </div>
+            <div>
+              <i class="fa fa-gas-pump"></i>
+              <div class="v"><?= $car['fuel_type'] ? ucfirst($car['fuel_type']) : '—' ?></div>
+              <div class="l">Fuel</div>
+            </div>
         </div>
 
         <!-- Accordions -->

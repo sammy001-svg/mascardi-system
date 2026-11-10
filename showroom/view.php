@@ -295,7 +295,6 @@ include __DIR__ . '/header.php';
                 <div class="dv-stats">
                     <?php /* Mileage is a back-office figure and is not published, so this
                              strip starts at the engine. */ ?>
-                    </div>
                     <div>
                         <i class="fa fa-bolt"></i>
                         <div class="v"><?= $car['engine_cc'] ? number_format($car['engine_cc']) : '—' ?></div>
@@ -773,20 +772,30 @@ include __DIR__ . '/header.php';
 .dv-noimg p   { font-size: 13px; color: var(--ink-3); margin: 0; }
 
 /* ── Icon stat strip ──────────────────────────────────────── */
+/* The column count follows the content. This was repeat(4, 1fr) with the
+   dividers drawn by :last-child and :nth-child(), which meant removing a tile
+   left an empty column and a stray border -- so the strip broke the first time
+   its contents changed. auto-fit spreads however many tiles there are across
+   one row, and a left border on all but the first draws the dividers correctly
+   for any number of them. */
 .dv-stats {
-    display: grid; grid-template-columns: repeat(4, 1fr);
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
     border: 1px solid var(--line); border-radius: var(--r);
-    margin-top: 28px; background: var(--white);
+    margin-top: 28px; background: var(--white); overflow: hidden;
 }
-.dv-stats > div { text-align: center; padding: 26px 12px; border-right: 1px solid var(--line); }
-.dv-stats > div:last-child { border-right: none; }
+.dv-stats > div { text-align: center; padding: 26px 12px; border-left: 1px solid var(--line); }
+.dv-stats > div:first-child { border-left: none; }
 .dv-stats i { font-size: 17px; color: var(--ink); display: block; margin-bottom: 12px; }
 .dv-stats .v { font-size: 21px; font-weight: 300; letter-spacing: -.01em; color: var(--ink); }
 .dv-stats .l { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-3); margin-top: 4px; }
 @media (max-width: 640px) {
-    .dv-stats { grid-template-columns: 1fr 1fr; }
-    .dv-stats > div:nth-child(2) { border-right: none; }
-    .dv-stats > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+    /* One column on a phone. A two-wide grid needs to know how many tiles there
+       are to draw its dividers and to avoid a hole in the last row; stacking
+       them has no arithmetic to get wrong, and three spec figures read better
+       in a column than in a grid with a gap in it. */
+    .dv-stats { grid-template-columns: 1fr; }
+    .dv-stats > div { border-left: none; border-top: 1px solid var(--line); padding: 20px 12px; }
+    .dv-stats > div:first-child { border-top: none; }
 }
 
 /* ── Accordions ───────────────────────────────────────────── */
