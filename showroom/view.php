@@ -179,7 +179,9 @@ $__ld = [
 if ($ogImage) $__ld['@graph'][0]['image'] = $ogImage;
 if ($carProductId !== '')         $__ld['@graph'][0]['sku'] = $carProductId;
 if (!empty($car['color']))        $__ld['@graph'][0]['color'] = $car['color'];
-if (!empty($car['mileage']))      $__ld['@graph'][0]['mileageFromOdometer'] = ['@type' => 'QuantitativeValue', 'value' => (int)$car['mileage'], 'unitCode' => 'KMT'];
+// No mileageFromOdometer. The structured data is the one place a figure
+// can stay public after every visible trace of it has gone, because
+// Google may show it in a result.
 if (!empty($car['fuel_type']))    $__ld['@graph'][0]['fuelType'] = ucfirst($car['fuel_type']);
 if (!empty($car['transmission'])) $__ld['@graph'][0]['vehicleTransmission'] = ucfirst($car['transmission']);
 if (!empty($car['body_type']))    $__ld['@graph'][0]['bodyType'] = $car['body_type'];
@@ -209,6 +211,10 @@ $locMap = locationMap($db, isset($car['location_id']) ? (int)$car['location_id']
 // neither a map nor a viewing form. The page already refuses to name the yard
 // for the same reason.
 $canVisit = !$inTransit && $locMap !== null;
+
+// Worked out here rather than inside the location card, because GET DIRECTIONS
+// now stands with the other buttons further down the page and both need it.
+$dirUrl   = $locMap ? locationDirectionsUrl($locMap) : '';
 
 // Leaflet only on this page, and only when there is something to draw.
 // OpenStreetMap tiles: no API key, no billing account, and the attribution
@@ -287,10 +293,8 @@ include __DIR__ . '/header.php';
 
                 <!-- Icon spec strip (Lucid: Range / Power / 0-60 / Drive) -->
                 <div class="dv-stats">
-                    <div>
-                        <i class="fa fa-road"></i>
-                        <div class="v"><?= $car['mileage'] ? number_format($car['mileage']) : '—' ?></div>
-                        <div class="l"><?= $car['mileage'] ? 'km · Mileage' : 'Mileage' ?></div>
+                    <?php /* Mileage is a back-office figure and is not published, so this
+                             strip starts at the engine. */ ?>
                     </div>
                     <div>
                         <i class="fa fa-bolt"></i>
@@ -326,7 +330,6 @@ include __DIR__ . '/header.php';
                                 ['Fuel Type',     $car['fuel_type'] ? ucfirst($car['fuel_type']) : null],
                                 ['Transmission',  $car['transmission'] ? ucfirst($car['transmission']) : null],
                                 ['Engine',        $car['engine_cc'] ? number_format($car['engine_cc']) . ' cc' : null],
-                                ['Mileage',       $car['mileage'] ? number_format($car['mileage']) . ' km' : null],
                                 ['Reg. Number',   $car['registration_number']],
                                 ['Location',      $car['location_name'] ?? null],
                             ];
@@ -459,20 +462,9 @@ include __DIR__ . '/header.php';
                             <?php if (!empty($locMap['address'])): ?>
                             <div style="font-size:13px;color:var(--ink-2);margin-top:3px;white-space:pre-line"><?= htmlspecialchars($locMap['address']) ?></div>
                             <?php endif; ?>
-                            <?php $dirUrl = locationDirectionsUrl($locMap); ?>
-                            <?php /* Only GET DIRECTIONS here. There used to be a second
-                                     telephone button beside it whose label was the yard's own
-                                     phone number, which printed a bare number as a button and
-                                     did the same job as CALL US a few inches below. One number,
-                                     one place to change it, one button. */ ?>
-                            <?php if ($dirUrl !== ''): ?>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-                                <a href="<?= htmlspecialchars($dirUrl) ?>" target="_blank" rel="noopener"
-                                   class="btn-lx-ghost-dark" style="flex:1 1 auto">
-                                    <i class="fa fa-diamond-turn-right"></i> GET DIRECTIONS
-                                </a>
-                            </div>
-                            <?php endif; ?>
+                            <?php /* The map, the name and the address. GET DIRECTIONS used
+                                     to close this card; it now stands third among the
+                                     buttons below, where the order was asked for. */ ?>
                         </div>
                     </div>
                     <?php endif; ?>
@@ -493,15 +485,35 @@ include __DIR__ . '/header.php';
                             <i class="fa fa-phone"></i> CALL US
                         </a>
                         <?php endif; ?>
-                        <?php /* Booking a viewing is the strongest thing a visitor can do
-                                 on this page, so it sits with the other two ways of
-                                 reaching us rather than at the bottom. Not offered on a
-                                 car that is not here to be seen. */ ?>
+                        <?php /* 3. GET DIRECTIONS. Only for a car somebody can actually
+                                 come to, and only where the yard has a pin or an address
+                                 to search on. */ ?>
+                        <?php if ($canVisit && $dirUrl !== ''): ?>
+                        <a href="<?= htmlspecialchars($dirUrl) ?>" target="_blank" rel="noopener"
+                           class="btn-lx-ghost-dark" style="width:100%">
+                            <i class="fa fa-diamond-turn-right"></i> GET DIRECTIONS
+                        </a>
+                        <?php endif; ?>
+
+                        <?php /* 4. BOOK A VIEWING. Not offered on a car that is not here
+                                 to be seen. */ ?>
                         <?php if ($canVisit): ?>
                         <button type="button" class="btn-lx-ghost-dark" style="width:100%" onclick="dvOpenViewing()">
                             <i class="fa fa-calendar-check"></i> BOOK A VIEWING
                         </button>
                         <?php endif; ?>
+
+                        <?php /* 5. SHARE VEHICLE. The browser's own share sheet where there
+                                 is one, the link copied where there is not. */ ?>
+                        <button type="button" id="dvShareBtn" class="btn-lx-ghost-dark" style="width:100%"
+                                data-title="<?= htmlspecialchars($carTitle) ?>"
+                                data-text="<?= htmlspecialchars("Check out this {$carTitle} at {$companyName}") ?>"
+                                data-url="<?= htmlspecialchars($carPublicUrl) ?>"
+                                onclick="dvShare(this)">
+                            <i class="fa fa-share-nodes"></i> <span id="dvShareLabel">SHARE VEHICLE</span>
+                        </button>
+
+                        <?php /* 6. SAVE VEHICLE, last. */ ?>
                         <button type="button" id="dvSaveBtn" class="btn-lx-ghost-dark" style="width:100%" onclick="dvToggleSave()">
                             <i class="fa-regular fa-heart" id="dvSaveIcon"></i> <span id="dvSaveLabel">SAVE VEHICLE</span>
                         </button>
@@ -598,20 +610,6 @@ include __DIR__ . '/header.php';
                         </form>
                     </div>
 
-                    <?php /* One named button where there were three unlabelled icons.
-                             The browser's own share sheet offers WhatsApp, mail and
-                             everything else the visitor actually has, which is more than
-                             three icons could; where there is no share sheet the link is
-                             copied instead and the button says so. */ ?>
-                    <div class="dv-share">
-                        <button type="button" id="dvShareBtn" class="btn-lx-ghost-dark" style="width:100%"
-                                data-title="<?= htmlspecialchars($carTitle) ?>"
-                                data-text="<?= htmlspecialchars("Check out this {$carTitle} at {$companyName}") ?>"
-                                data-url="<?= htmlspecialchars($carPublicUrl) ?>"
-                                onclick="dvShare(this)">
-                            <i class="fa fa-share-nodes"></i> <span id="dvShareLabel">SHARE VEHICLE</span>
-                        </button>
-                    </div>
 
                 </div>
             </div>
@@ -891,9 +889,6 @@ include __DIR__ . '/header.php';
 .dv-fin-breakdown strong { color: var(--ink-2); font-weight: 600; }
 .dv-fin-note { font-size: 11px; color: var(--ink-3); line-height: 1.6; margin: 12px 0 14px; }
 .dv-field { margin-bottom: 14px; }
-/* One full-width button, not a label beside a row of icons, so neither the
-   row layout nor the icon styling is needed any more. */
-.dv-share { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
 
 /* ── Similar vehicles ─────────────────────────────────────── */
 .dv-similar { margin-top: 88px; padding-top: 56px; border-top: 1px solid var(--line); }

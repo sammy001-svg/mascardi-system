@@ -133,7 +133,6 @@ include __DIR__ . '/header.php';
             ['Body Type',    'body_type',    fn($v) => $v ?: '—'],
             ['Transmission', 'transmission', fn($v) => $v ? ucfirst($v) : '—'],
             ['Fuel Type',    'fuel_type',    fn($v) => $v ? ucfirst($v) : '—'],
-            ['Mileage',      'mileage',      fn($v) => $v ? number_format((int)$v).' km' : '—'],
             ['Engine',       'engine_cc',    fn($v) => $v ? number_format((int)$v).' cc' : '—'],
             ['Color',        'color',        fn($v) => $v ?: '—'],
             ['Location',     'location_name',fn($v) => $v ?: '—'],

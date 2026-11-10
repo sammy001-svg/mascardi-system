@@ -490,8 +490,8 @@ a{color:inherit;text-decoration:none}
         <div class="sp-stats">
           <div>
             <i class="fa fa-road"></i>
-            <div class="v"><?= $car['mileage'] ? number_format((int)$car['mileage']) : '—' ?></div>
-            <div class="l"><?= $car['mileage'] ? 'km · Mileage' : 'Mileage' ?></div>
+            <div class="v"><?= $car['engine_cc'] ? number_format((int)$car['engine_cc']) : '—' ?></div>
+            <div class="l"><?= $car['engine_cc'] ? 'cc · Engine' : 'Engine' ?></div>
           </div>
           <div>
             <i class="fa fa-bolt"></i>
@@ -526,7 +526,6 @@ a{color:inherit;text-decoration:none}
                 ['Fuel Type',      $car['fuel_type']   ? ucfirst($car['fuel_type'])   : null],
                 ['Transmission',   $car['transmission']? ucfirst($car['transmission']): null],
                 ['Engine',         $car['engine_cc']   ? number_format((int)$car['engine_cc']) . ' cc' : null],
-                ['Mileage',        $car['mileage']     ? number_format((int)$car['mileage']) . ' km'   : null],
                 ['Registration',   $car['registration_number'] ?: null],
                 ['Location',       $car['location_name'] ?? null],
               ];

@@ -14,7 +14,6 @@ $filterMin     = (int)($_GET['min']    ?? 0);
 $filterMax     = (int)($_GET['max']    ?? 0);
 $filterYearMin = (int)($_GET['year_min'] ?? 0);
 $filterYearMax = (int)($_GET['year_max'] ?? 0);
-$filterMileMax = (int)($_GET['mile_max'] ?? 0);
 $sort          = $_GET['sort'] ?? 'featured';
 $search        = trim($_GET['q']        ?? '');
 
@@ -51,7 +50,8 @@ if ($filterMin)     { $where[] = 'c.asking_price IS NOT NULL AND c.asking_price 
 if ($filterMax)     { $where[] = 'c.asking_price IS NOT NULL AND c.asking_price <= ?'; $params[] = $filterMax; }
 if ($filterYearMin) { $where[] = 'c.year >= ?'; $params[] = $filterYearMin; }
 if ($filterYearMax) { $where[] = 'c.year <= ?'; $params[] = $filterYearMax; }
-if ($filterMileMax) { $where[] = 'c.mileage IS NOT NULL AND c.mileage <= ?'; $params[] = $filterMileMax; }
+// No mileage filter. Narrowing ?mile_max= one bound at a time would tell
+// somebody a car's mileage without the page ever printing it.
 if ($search) {
     $pidNorm = carProductIdNormalize($search);
     $where[] = '(c.make LIKE ? OR c.model LIKE ? OR c.body_type LIKE ? OR c.color LIKE ? OR c.product_id LIKE ?' . ($pidNorm !== null ? ' OR c.product_id = ?' : '') . ')';
@@ -120,7 +120,7 @@ function sv_page_url(int $p): string {
 }
 
 $isFiltered = $filterMake || $filterBody || $filterFuel || $filterTrans || $filterMin || $filterMax
-           || $filterYearMin || $filterYearMax || $filterMileMax || $search;
+           || $filterYearMin || $filterYearMax || $search;
 $companyName = getSetting('company_name', 'Mascardi Showroom');
 $__waClean   = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSetting('company_phone', '')));
 $pageTitle   = $filterMake ? $filterMake . ' Vehicles for Sale' : 'Available Vehicles';
@@ -152,9 +152,8 @@ if ($filterMin || $filterMax) {
 if ($filterYearMin || $filterYearMax) {
     $chips[] = ['Year ' . ($filterYearMin ?: 'any') . ' – ' . ($filterYearMax ?: 'any'),    ['year_min','year_max']];
 }
-if ($filterMileMax) $chips[] = ['≤ ' . number_format($filterMileMax) . ' km',               ['mile_max']];
 
-$moreFiltersActive = $filterMin || $filterMax || $filterYearMin || $filterYearMax || $filterMileMax;
+$moreFiltersActive = $filterMin || $filterMax || $filterYearMin || $filterYearMax;
 
 include __DIR__ . '/header.php';
 ?>
@@ -249,8 +248,9 @@ include __DIR__ . '/header.php';
                         </div>
                     </div>
                     <div>
-                        <label class="lx-flabel">Max Mileage (km)</label>
-                        <input type="number" name="mile_max" value="<?= $filterMileMax ?: '' ?>" placeholder="e.g. 80000" min="0" class="lx-input">
+                        <?php /* The Max Mileage field was here. Mileage is not published, and a
+                                 filter on a figure nobody can see is a way of reading it one
+                                 bound at a time. */ ?>
                     </div>
                     <div style="display:flex;align-items:flex-end">
                         <button type="submit" class="btn-lx" style="width:100%;padding:12px 20px">Apply</button>
@@ -389,8 +389,8 @@ include __DIR__ . '/header.php';
                     <div class="sv-card-stats">
                         <div>
                             <i class="fa fa-road"></i>
-                            <div class="v"><?= $car['mileage'] ? number_format($car['mileage']) . ' km' : '—' ?></div>
-                            <div class="l">Mileage</div>
+                            <div class="v"><?= $car['engine_cc'] ? number_format($car['engine_cc']) . ' cc' : '—' ?></div>
+                            <div class="l">Engine</div>
                         </div>
                         <div>
                             <i class="fa fa-bolt"></i>

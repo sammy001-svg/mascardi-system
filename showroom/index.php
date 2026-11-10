@@ -171,9 +171,6 @@ include __DIR__ . '/header.php';
                                 <?php endif; ?>
                             </div>
                             <div class="lx-feature-specs">
-                                <?php if ($fb['mileage']): ?>
-                                <div><div class="sv"><?= number_format($fb['mileage']) ?></div><div class="sl">km</div></div>
-                                <?php endif; ?>
                                 <?php if ($fb['engine_cc']): ?>
                                 <div><div class="sv"><?= number_format($fb['engine_cc']) ?></div><div class="sl">cc</div></div>
                                 <?php endif; ?>
