@@ -28,6 +28,20 @@ $stmt = $db->prepare("
 $stmt->execute(array_merge($ids, $ids));
 $cars = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// SELECT c.* hands back every column, including the registration and chassis
+// numbers and, for a vehicle sold on behalf, the owner's contact details. The
+// comparison table prints from an explicit list of fields and so publishes
+// none of it today, but the columns are in scope on a public page. Dropping
+// them keeps it that way whoever edits the list next.
+foreach ($cars as $__i => $__c) {
+    foreach (['owner_name', 'owner_phone', 'owner_email', 'chassis_number',
+              'engine_number', 'registration_number', 'entry_number', 'mileage',
+              'rotation_notes', 'last_rotated_at', 'client_id', 'service_client_id',
+              'share_token'] as $__backOffice) {
+        unset($cars[$__i][$__backOffice]);
+    }
+}
+
 if (count($cars) < 2) {
     header('Location: ' . BASE_URL . '/showroom/');
     exit;

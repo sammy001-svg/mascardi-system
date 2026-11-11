@@ -38,10 +38,12 @@ if ($token !== '' && preg_match('/^[a-f0-9]{16,32}$/', $token)) {
     $id = (int)($st->fetchColumn() ?: 0);
 }
 
-// Pull the car — inventory stock only, not sold/delivered.
+// Pull the car — inventory stock only, not sold/delivered. Neither the
+// registration number nor the mileage is selected: both are back-office figures
+// that are not published, and a column that is never fetched cannot be printed.
 $stmt = $db->prepare("
     SELECT c.make, c.model, c.year, c.color, c.body_type, c.fuel_type, c.transmission,
-           c.engine_cc, c.mileage, c.registration_number, c.asking_price, c.offer_price,
+           c.engine_cc, c.asking_price, c.offer_price,
            c.description, c.notes, c.features, c.status, c.car_type,
            IFNULL(pl.name, l.name) AS location_name
     FROM cars c
@@ -526,7 +528,7 @@ a{color:inherit;text-decoration:none}
                 ['Fuel Type',      $car['fuel_type']   ? ucfirst($car['fuel_type'])   : null],
                 ['Transmission',   $car['transmission']? ucfirst($car['transmission']): null],
                 ['Engine',         $car['engine_cc']   ? number_format((int)$car['engine_cc']) . ' cc' : null],
-                ['Registration',   $car['registration_number'] ?: null],
+                // No registration number. It is confidential and is not published.
                 ['Location',       $car['location_name'] ?? null],
               ];
               foreach ($specs as [$lbl, $val]):

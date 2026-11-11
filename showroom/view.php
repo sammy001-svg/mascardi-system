@@ -71,6 +71,20 @@ $stmt->execute([$id]);
 $car = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$car) { header('Location: ' . BASE_URL . '/showroom/'); exit; }
 
+// The query above is SELECT c.*, so $car arrives holding every column on the
+// row: the registration and chassis numbers, the engine number, the entry
+// number, and -- for a vehicle sold on behalf -- the owner's name, phone and
+// email. None of it belongs on a public page. Taking out the one row that
+// printed the registration would leave the rest in scope, one careless echo
+// away from publication, so they are dropped here instead. The page reads
+// none of them; what is not in the array cannot be printed by mistake.
+foreach (['owner_name', 'owner_phone', 'owner_email', 'chassis_number',
+          'engine_number', 'registration_number', 'entry_number', 'mileage',
+          'rotation_notes', 'last_rotated_at', 'client_id', 'service_client_id',
+          'share_token'] as $__backOffice) {
+    unset($car[$__backOffice]);
+}
+
 // Vehicles still in shipment get the full detail page, reached from the cards on
 // in-shipment.php. What must not happen is this stock entering the normal
 // browsing flow, so the original rule still holds everywhere it matters: the
@@ -329,7 +343,8 @@ include __DIR__ . '/header.php';
                                 ['Fuel Type',     $car['fuel_type'] ? ucfirst($car['fuel_type']) : null],
                                 ['Transmission',  $car['transmission'] ? ucfirst($car['transmission']) : null],
                                 ['Engine',        $car['engine_cc'] ? number_format($car['engine_cc']) . ' cc' : null],
-                                ['Reg. Number',   $car['registration_number']],
+                                // No registration number. It is confidential and is not
+                                // published; it stays in the back office.
                                 ['Location',      $car['location_name'] ?? null],
                             ];
                             foreach ($specRows as [$lbl, $val]):
