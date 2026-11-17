@@ -13,54 +13,6 @@ img[loading="lazy"].img-loaded{background:none;animation:none}
 @media(prefers-reduced-motion:reduce){img[loading="lazy"]{animation:none;background:#f3f4f6}}
 </style>
 
-<!-- ── Floating WhatsApp ──────────────────────────────────────── -->
-<?php
-$__wa = preg_replace('/[^0-9]/', '', getSetting('whatsapp_number', getSetting('company_phone', '')));
-if ($__wa): ?>
-<style>
-.fab-wa{position:fixed;bottom:28px;right:28px;width:56px;height:56px;background:#25d366;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:27px;box-shadow:0 4px 20px rgba(37,211,102,.45);z-index:9000;text-decoration:none;transition:transform .2s,box-shadow .2s}
-.fab-wa::before{content:'';position:absolute;inset:-6px;border-radius:50%;background:rgba(37,211,102,.2);animation:waPing 2s ease-out infinite}
-@keyframes waPing{0%{transform:scale(1);opacity:.6}70%,100%{transform:scale(1.5);opacity:0}}
-.fab-wa:hover{transform:scale(1.12);box-shadow:0 8px 32px rgba(37,211,102,.65);color:#fff;text-decoration:none}
-.fab-wa-tip{position:absolute;right:calc(100% + 12px);top:50%;transform:translateY(-50%) translateX(6px);background:#0f172a;color:#fff;font-size:12.5px;font-weight:700;white-space:nowrap;padding:6px 12px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
-.fab-wa-tip::after{content:'';position:absolute;left:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-left-color:#0f172a}
-.fab-wa:hover .fab-wa-tip{opacity:1;transform:translateY(-50%) translateX(0)}
-@media(max-width:576px){.fab-wa{bottom:80px;right:16px;width:50px;height:50px;font-size:24px}.fab-wa-tip{display:none}}
-</style>
-<a href="https://wa.me/<?= $__wa ?>?text=<?= urlencode('Hi, I have a question about the Mascardi Showroom system.') ?>"
-   class="fab-wa" target="_blank" rel="noopener" aria-label="WhatsApp">
-    <span class="fab-wa-tip">WhatsApp Us</span>
-    <i class="fa-brands fa-whatsapp"></i>
-</a>
-<?php endif; ?>
-
-<!-- ── Floating Chat Button ───────────────────────────────────────────── -->
-<?php if (canAccess('chat') && !str_contains($_SERVER['REQUEST_URI'], '/modules/chat/')): ?>
-<style>
-.fab-chat{position:fixed;bottom:90px;right:28px;width:52px;height:52px;background:#128c7e;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 18px rgba(18,140,126,.5);z-index:8900;text-decoration:none;transition:transform .2s,box-shadow .2s}
-.fab-chat:hover{transform:scale(1.1);box-shadow:0 8px 28px rgba(18,140,126,.7);color:#fff;text-decoration:none}
-.fab-chat-badge{position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;border-radius:50%;font-size:10px;font-weight:700;min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 3px;border:2px solid #fff;display:none}
-@media(max-width:576px){.fab-chat{bottom:140px;right:16px;width:46px;height:46px;font-size:20px}}
-</style>
-<a href="<?= BASE_URL ?>/modules/chat/index.php" class="fab-chat" id="fabChat" title="Team Chat">
-    <i class="fa fa-comments"></i>
-    <span class="fab-chat-badge" id="fabChatBadge"></span>
-</a>
-<script>
-(function(){
-    var badge = document.getElementById('fabChatBadge');
-    if (!badge) return;
-    // Shares the header's single unread poller instead of fetching the same
-    // endpoint again on its own 20-second timer.
-    function render(n){
-        if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
-        else { badge.style.display = 'none'; }
-    }
-    if (window.mscChatUnread) window.mscChatUnread.subscribe(render);
-}());
-</script>
-<?php endif; ?>
-
 <!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <!-- Bootstrap 5 -->

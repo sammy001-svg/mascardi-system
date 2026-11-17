@@ -153,7 +153,7 @@ include __DIR__ . '/../../includes/header.php';
     html { background:#fff !important; color-scheme:light !important; }
     .d-print-none { display:none !important; }
     .app-sidebar,.topbar,.sidebar-overlay,.app-topbar,header.app-topbar,
-    #sidebarBackdrop,.fab-wa,.fab-chat,#pwaOverlay,#toastStack { display:none !important; }
+    #sidebarBackdrop,#pwaOverlay,#toastStack { display:none !important; }
     .main-wrap,.main-content,.page-body { margin:0 !important; padding:0 !important; }
     body { background:#fff !important; margin:0 !important; color:#000 !important; }
     #cpaDoc { max-width:none !important; box-shadow:none !important; border:none !important;

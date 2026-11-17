@@ -113,69 +113,6 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <?php if (isset($extraJs)) echo $extraJs; ?>
 
-<!-- ── Floating WhatsApp Button ──────────────────────────────── -->
-<?php if ($__waClean): ?>
-<style>
-.fab-wa {
-    position: fixed;
-    bottom: 28px;
-    right: 28px;
-    width: 56px;
-    height: 56px;
-    background: var(--black);
-    color: #fff;
-    border: 1px solid rgba(255,255,255,.15);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 26px;
-    box-shadow: 0 8px 28px rgba(0,0,0,.35);
-    z-index: 9997;
-    text-decoration: none;
-    transition: transform .25s var(--ease), background .25s var(--ease);
-}
-.fab-wa:hover {
-    transform: scale(1.08);
-    background: #25d366;
-    color: #fff;
-    text-decoration: none;
-}
-.fab-wa-tooltip {
-    position: absolute;
-    right: calc(100% + 12px);
-    top: 50%;
-    background: var(--black);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    padding: 8px 14px;
-    border-radius: var(--r);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .25s var(--ease), transform .25s var(--ease);
-    transform: translateY(-50%) translateX(6px);
-}
-.fab-wa:hover .fab-wa-tooltip {
-    opacity: 1;
-    transform: translateY(-50%) translateX(0);
-}
-@media (max-width: 576px) {
-    .fab-wa { bottom: 20px; right: 20px; width: 52px; height: 52px; font-size: 24px; }
-    .fab-wa-tooltip { display: none; }
-}
-</style>
-
-<a href="https://wa.me/<?= $__waClean ?>?text=<?= urlencode('Hi, I\'d like to enquire about a vehicle from your showroom.') ?>"
-   class="fab-wa" target="_blank" rel="noopener" aria-label="WHATSAPP US">
-    <span class="fab-wa-tooltip">WHATSAPP US</span>
-    <i class="fa-brands fa-whatsapp"></i>
-</a>
-<?php endif; ?>
-
 <!-- ── PWA Install Banner ─────────────────────────────────────── -->
 <div id="pwaInstallBanner" style="
     display:none;

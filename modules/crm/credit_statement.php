@@ -53,7 +53,7 @@ include __DIR__ . '/../../includes/header.php';
 @media print {
     html { background:#fff !important; color-scheme:light !important; }
     .d-print-none { display:none !important; }
-    .app-sidebar,.app-topbar,.fab-wa,.fab-chat,#pwaOverlay,#toastStack { display:none !important; }
+    .app-sidebar,.app-topbar,#pwaOverlay,#toastStack { display:none !important; }
     .main-wrap,.main-content,.page-body { margin:0 !important; padding:0 !important; }
     body { background:#fff !important; }
     #stDoc { border:none !important; box-shadow:none !important; }

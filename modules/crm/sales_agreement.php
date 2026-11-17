@@ -140,7 +140,7 @@ include __DIR__ . '/../../includes/header.php';
     html { background:#fff !important; color-scheme:light !important; }
     .d-print-none { display:none !important; }
     .app-sidebar,.topbar,.sidebar-overlay,.app-topbar,
-    header.app-topbar,#sidebarBackdrop,.fab-wa,.fab-chat,
+    header.app-topbar,#sidebarBackdrop,
     #pwaOverlay,#toastStack { display:none !important; }
     .main-wrap,.main-content,.page-body { margin:0 !important; padding:0 !important; }
     body { background:#fff !important; }
