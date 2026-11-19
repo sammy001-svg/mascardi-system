@@ -37,6 +37,52 @@ function waAck(): void
 
 $secret = trim((string)getSetting('wa_webhook_secret', ''));
 
+/**
+ * Meta's verification handshake.
+ *
+ * The official API will not deliver anything until it has called this
+ * address once with a challenge and had the challenge echoed back as plain
+ * text. It is answered above the ?k= gate below, for two reasons: the verify
+ * token is the only credential this particular request carries, and doing it
+ * here means the callback verifies whether or not somebody remembered to
+ * leave the secret on the end of the address they pasted into Meta.
+ *
+ * PHP rewrites the dots in hub.mode to underscores, so both spellings are
+ * read rather than trusting which one arrives.
+ *
+ * The other provider never sends these parameters, so nothing about the
+ * existing connection changes.
+ */
+$hubMode      = (string)($_GET['hub_mode']         ?? $_GET['hub.mode']         ?? '');
+$hubToken     = (string)($_GET['hub_verify_token'] ?? $_GET['hub.verify_token'] ?? '');
+$hubChallenge = (string)($_GET['hub_challenge']    ?? $_GET['hub.challenge']    ?? '');
+
+if ($hubMode !== '' || $hubChallenge !== '') {
+    if ($secret !== '' && $hubMode === 'subscribe' && hash_equals($secret, $hubToken)) {
+        // The raw challenge and nothing else. Meta compares the body byte for
+        // byte, so a JSON wrapper or a stray newline fails the check.
+        header('Content-Type: text/plain; charset=utf-8');
+        echo $hubChallenge;
+        // Recorded so the setup page can say the callback is verified instead
+        // of leaving somebody to wonder whether it took.
+        try {
+            getDB()->prepare("INSERT INTO settings (setting_key, setting_value)
+                              VALUES ('wa_cloud_verified_at', ?)
+                              ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)")
+                   ->execute([date('Y-m-d H:i:s')]);
+        } catch (\Throwable $_) {}
+        exit;
+    }
+    // 403 rather than the 404 used below. This path is reached only by a
+    // request already announcing itself as Meta's, so there is nothing to
+    // conceal, and the dashboard shows the reason -- which is the difference
+    // between fixing a mistyped token and guessing at a silent failure.
+    http_response_code(403);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'verify token mismatch';
+    exit;
+}
+
 $given = (string)($_GET['k'] ?? '');
 if ($given === '') {
     $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');

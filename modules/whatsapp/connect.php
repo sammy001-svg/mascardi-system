@@ -49,6 +49,11 @@ if ($hookSecret === '') {
 $plainHook  = rtrim(BASE_URL, '/') . '/modules/whatsapp/api/receive.php';
 $webhookUrl = $plainHook . '?k=' . $hookSecret;
 
+// Written by the webhook itself the moment Meta's challenge is answered, so
+// the panel below can state plainly whether the callback took rather than
+// leaving somebody to read it off the dashboard in another tab.
+$cloudVerifiedAt = trim((string)getSetting('wa_cloud_verified_at', ''));
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $action = $_POST['action'] ?? '';
@@ -271,6 +276,18 @@ include __DIR__ . '/../../includes/header.php';
 .wc-opt input{margin-right:7px}
 
 .wc-hook{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.wc-copy-label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:var(--text)}
+.wc-step-note{background:var(--surface-alt);border:1px solid var(--border);border-radius:8px;
+    padding:11px 13px;font-size:12.5px;color:var(--text-2);line-height:1.6}
+.wc-h3{font-size:13px;font-weight:700;color:var(--text);margin:20px 0 8px}
+.wc-steps{margin:0;padding-left:18px;font-size:12.5px;color:var(--text-2);line-height:1.7}
+.wc-steps li{margin-bottom:7px}
+.wc-steps code{font-size:11.5px;background:var(--surface-alt);padding:1px 5px;border-radius:4px}
+.wc-verify{display:flex;gap:9px;align-items:flex-start;border-radius:8px;padding:10px 12px;
+    font-size:12.5px;line-height:1.6}
+.wc-verify.ok{background:rgba(37,211,102,.10);border:1px solid rgba(37,211,102,.35);color:var(--text)}
+.wc-verify.wait{background:rgba(234,179,8,.10);border:1px solid rgba(234,179,8,.35);color:var(--text)}
+.wc-verify i{margin-top:2px}
 .wc-hook code{flex:1;min-width:240px;background:var(--surface-alt);border:1px solid var(--border);
     border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text);word-break:break-all}
 
@@ -411,6 +428,94 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+<?php /* The official API needs two values that do not come from Meta: they come
+         from here. Nothing on screen used to show them, which left the callback
+         impossible to fill in without guessing. Shown only for the official API,
+         so the existing connection's page is unchanged. */ ?>
+<div class="wc-card" id="paneCloudSetup" style="<?= $provider === 'cloud' ? '' : 'display:none' ?>">
+    <header><h2><i class="fa fa-plug-circle-check" style="color:#25d366"></i>Connecting this to Meta</h2></header>
+    <div class="wc-body">
+
+        <div class="wc-step-note">
+            <strong>These two are produced here, not in Meta.</strong>
+            Meta's <em>Configure Webhooks</em> box asks for a callback address and a
+            verify token. Copy them from this panel and paste them there &mdash; there
+            is nothing to look up and nothing to invent.
+        </div>
+
+        <div style="margin-top:16px">
+            <label class="wc-copy-label">1. Callback URL</label>
+            <div class="wc-hook">
+                <code id="waCbUrl"><?= e($webhookUrl) ?></code>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="waCopy(this,'waCbUrl')"><i class="fa fa-copy me-1"></i>Copy</button>
+            </div>
+            <div class="hint">Paste it whole. The <code>?k=</code> on the end is what proves a
+                caller really is Meta; without it the messages that arrive later are refused.</div>
+        </div>
+
+        <div style="margin-top:14px">
+            <label class="wc-copy-label">2. Verify token</label>
+            <div class="wc-hook">
+                <code id="waCbTok"><?= e($hookSecret) ?></code>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="waCopy(this,'waCbTok')"><i class="fa fa-copy me-1"></i>Copy</button>
+            </div>
+            <div class="hint">Meta sends this back once to prove the address belongs to you.
+                It is the same secret as the one in the address above, so there is only ever
+                one thing to keep safe.</div>
+        </div>
+
+        <div class="wc-verify <?= $cloudVerifiedAt !== '' ? 'ok' : 'wait' ?>" style="margin-top:14px">
+            <i class="fa <?= $cloudVerifiedAt !== '' ? 'fa-circle-check' : 'fa-circle-half-stroke' ?>"></i>
+            <span>
+            <?php if ($cloudVerifiedAt !== ''): ?>
+                Meta verified this callback on <strong><?= e(date('j M Y, H:i', strtotime($cloudVerifiedAt))) ?></strong>.
+            <?php else: ?>
+                Meta has not called this address yet. Press <strong>Verify and save</strong> in the
+                app dashboard &mdash; this line changes by itself once it goes through.
+            <?php endif; ?>
+            </span>
+        </div>
+
+        <h3 class="wc-h3">Then, in the Meta app dashboard</h3>
+        <ol class="wc-steps">
+            <li><strong>WhatsApp &rarr; Configuration &rarr; Webhooks &rarr; Edit.</strong>
+                Paste the two values above and press <em>Verify and save</em>.</li>
+            <li><strong>Still on Configuration, press <em>Manage</em> and tick
+                <code>messages</code>.</strong> This is the step that is usually missed:
+                a verified callback that is not subscribed to anything is called for
+                nothing, which looks connected and behaves exactly like broken.</li>
+            <li><strong>Publish the app.</strong> While it is unpublished Meta delivers
+                only test messages sent from the dashboard &mdash; no real customer
+                message reaches here, including from your own staff.</li>
+        </ol>
+
+        <h3 class="wc-h3">Where the three credentials above come from</h3>
+        <ol class="wc-steps">
+            <li><strong>Phone number ID</strong> &mdash; WhatsApp &rarr; API setup, under
+                <em>From</em>. It is the long number beneath the phone number, not the
+                phone number itself.</li>
+            <li><strong>Business account ID</strong> &mdash; on that same API setup page,
+                labelled <em>WhatsApp Business Account ID</em>.</li>
+            <li><strong>Permanent access token</strong> &mdash; Business settings &rarr;
+                Users &rarr; <em>System users</em>. Add a system user, give it the
+                WhatsApp account under <em>Add assets</em>, then <em>Generate new token</em>
+                against this app with <code>whatsapp_business_messaging</code> and
+                <code>whatsapp_business_management</code> ticked. The token on the API
+                setup page expires after 24 hours and will stop the system overnight.</li>
+        </ol>
+        <div class="hint" style="margin-top:10px">
+            The number has to be one Meta can take over. If it is signed in to the
+            ordinary WhatsApp app anywhere, delete that account first, or Meta will
+            refuse to verify it.
+        </div>
+
+        <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener"
+           class="btn btn-sm btn-outline-secondary" style="margin-top:14px">
+            <i class="fa fa-arrow-up-right-from-square me-1"></i>Open the Meta app dashboard</a>
+    </div>
+</div>
 <form method="post">
     <?= csrfField() ?>
     <input type="hidden" name="action" value="save">
@@ -463,19 +568,19 @@ include __DIR__ . '/../../includes/header.php';
                         <label>Phone number ID</label>
                         <input type="text" name="cloud_phone_id" class="form-control"
                                value="<?= e($cfg['phone_id'] ?? '') ?>">
-                        <div class="hint">From Meta → WhatsApp → API setup.</div>
+                        <div class="hint">Meta → WhatsApp → API setup, under <em>From</em> — the long number <em>beneath</em> the phone number.</div>
                     </div>
                     <div class="col-md-4 wc-field">
                         <label>Permanent access token</label>
                         <input type="password" name="cloud_token" class="form-control" autocomplete="new-password"
                                placeholder="<?= ($cfg['token'] ?? '') !== '' ? 'Saved — leave blank to keep it' : 'Paste the token' ?>">
-                        <div class="hint">Use a system-user token, not the temporary one.</div>
+                        <div class="hint">A <em>system user</em> token from Business settings. The one on the API setup page expires in 24 hours and stops the system overnight.</div>
                     </div>
                     <div class="col-md-4 wc-field">
                         <label>Business account ID</label>
                         <input type="text" name="cloud_waba_id" class="form-control"
                                value="<?= e($cfg['waba_id'] ?? '') ?>">
-                        <div class="hint">Optional — used for message templates.</div>
+                        <div class="hint">On the same API setup page, as <em>WhatsApp Business Account ID</em>. Optional — used for message templates.</div>
                     </div>
                 </div>
             </div>
@@ -731,9 +836,26 @@ var WA_CSRF = '<?= csrfToken() ?>';
         var green = document.querySelector('input[name=provider][value=green]').checked;
         document.getElementById('paneGreen').style.display = green ? '' : 'none';
         document.getElementById('paneCloud').style.display = green ? 'none' : '';
+        // The Meta panel belongs to the same choice, so it appears the moment
+        // the official API is picked rather than only after a save.
+        var cs = document.getElementById('paneCloudSetup');
+        if (cs) cs.style.display = green ? 'none' : '';
         g.classList.toggle('on', green); c.classList.toggle('on', !green);
     }
     [g, c].forEach(function (el) { el && el.addEventListener('change', sync); });
+
+    // Copy any of the boxes on the page. waCopyHook below is the older,
+    // single-purpose version and is left alone: it is wired to a button in
+    // the panel above this one.
+    window.waCopy = function (btn, id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        navigator.clipboard.writeText(el.textContent.trim()).then(function () {
+            var o = btn.innerHTML;
+            btn.innerHTML = '<i class="fa fa-check me-1"></i>Copied';
+            setTimeout(function () { btn.innerHTML = o; }, 1600);
+        });
+    };
 
     window.waCopyHook = function (btn) {
         var t = document.getElementById('waHook').textContent.trim();
