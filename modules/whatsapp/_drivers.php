@@ -525,6 +525,58 @@ function waDriverLogout(): array
 /**
  * @return array{ok:bool, id:string, error:string}
  */
+/**
+ * What Meta's refusal means, in a sentence someone can act on.
+ *
+ * The one that will come up most is 131047. The official API only carries a
+ * free-form message to somebody who has written within the last 24 hours;
+ * outside that it takes only a template Meta approved in advance. Every
+ * message this system sends by itself is addressed to somebody who has not
+ * necessarily written at all, so that limit is not an edge case here -- it is
+ * the normal case, and it is worth naming rather than leaving a number in the
+ * thread.
+ *
+ * Anything not listed keeps Meta's own wording. A house message in place of
+ * the real one is how a fault that nobody has seen before becomes impossible
+ * to look up.
+ */
+function waCloudSendError(array $r): string
+{
+    $code = (int)($r['data']['error']['code'] ?? 0);
+    $said = trim((string)($r['data']['error']['message'] ?? $r['error']));
+
+    switch ($code) {
+        case 131047:
+            return 'WhatsApp will not deliver this: the customer has not written in the '
+                 . 'last 24 hours, and outside that window the official API carries only '
+                 . 'a message template approved by Meta in advance. Either wait for them '
+                 . 'to reply, or send this as an approved template.';
+        case 131026:
+            return 'That number cannot receive WhatsApp from this account. Usually it is '
+                 . 'not a WhatsApp number at all, or it is a landline that was typed in '
+                 . 'by mistake.';
+        case 132000:
+        case 132001:
+        case 132005:
+            return 'That message template is not usable: it does not exist under this '
+                 . 'business account, has not been approved yet, or was sent with the '
+                 . 'wrong number of filled-in values. ' . ($said !== '' ? $said : '');
+        case 133010:
+            return 'This phone number is not registered with the official API yet. Finish '
+                 . 'verifying it in the Meta dashboard before sending.';
+        case 190:
+            return 'Meta has stopped accepting the access token. A token taken from the '
+                 . 'API setup page lasts 24 hours; connecting properly needs a permanent '
+                 . 'system-user token, set under WhatsApp Setup.';
+        case 80007:
+        case 130429:
+            return 'Meta is rate limiting this account. The message was not sent; try '
+                 . 'again shortly.';
+    }
+
+    return $said !== '' ? $said : 'WhatsApp refused the message and gave no reason.';
+}
+
 function waDriverSendText(string $chatId, string $text): array
 {
     if (!waConfigured()) return ['ok' => false, 'id' => '', 'error' => 'WhatsApp is not connected.'];
@@ -537,8 +589,18 @@ function waDriverSendText(string $chatId, string $text): array
             'json'    => ['messaging_product' => 'whatsapp', 'to' => $chatId,
                           'type' => 'text', 'text' => ['preview_url' => true, 'body' => $text]],
         ]);
-        return ['ok' => $r['ok'], 'error' => $r['error'],
-                'id' => (string)($r['data']['messages'][0]['id'] ?? '')];
+        if (!$r['ok']) return ['ok' => false, 'id' => '', 'error' => waCloudSendError($r)];
+
+        // Same rule as the bridge: an acceptance carrying no message id is not a
+        // send, and recording it as one puts a tick against a message that never
+        // existed.
+        $id = (string)($r['data']['messages'][0]['id'] ?? '');
+        if ($id === '') {
+            return ['ok' => false, 'id' => '',
+                    'error' => 'Meta accepted the request but returned no message id, '
+                             . 'so there is no evidence it was sent.'];
+        }
+        return ['ok' => true, 'error' => '', 'id' => $id];
     }
 
     $r  = waHttp('POST', waGreenUrl('sendMessage'), [
@@ -606,8 +668,18 @@ function waDriverSendFile(string $chatId, string $path, string $fileName, string
                                                       'caption' => $caption])],
             'timeout' => 60,
         ]);
-        return ['ok' => $r['ok'], 'error' => $r['error'],
-                'id' => (string)($r['data']['messages'][0]['id'] ?? '')];
+        if (!$r['ok']) return ['ok' => false, 'id' => '', 'error' => waCloudSendError($r)];
+
+        // Same rule as the bridge: an acceptance carrying no message id is not a
+        // send, and recording it as one puts a tick against a message that never
+        // existed.
+        $id = (string)($r['data']['messages'][0]['id'] ?? '');
+        if ($id === '') {
+            return ['ok' => false, 'id' => '',
+                    'error' => 'Meta accepted the request but returned no message id, '
+                             . 'so there is no evidence it was sent.'];
+        }
+        return ['ok' => true, 'error' => '', 'id' => $id];
     }
 
     $r = waHttp('POST', waGreenUrl('sendFileByUpload'), [
