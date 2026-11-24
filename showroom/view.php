@@ -22,20 +22,40 @@ carSlugMigrate($db);
    search engine to carry the old address's standing over to the new one
    instead of splitting it between them. */
 $slugParam = trim((string)($_GET['slug'] ?? ''));
+$makeParam = trim((string)($_GET['mk'] ?? ''));
 $id        = (int)($_GET['id'] ?? 0);
 
 if ($slugParam !== '') {
     $base = rtrim(BASE_URL, '/');
     if (carProductIdNormalize($slugParam) !== null) {
-        // The car's address: /MSC-1042.
+        // A car: /mercedes/MSC-1042, or the bare /MSC-1042 it used to be.
         $hit = carProductIdResolve($db, $slugParam);
         if (!$hit) { header('Location: ' . BASE_URL . '/showroom/', true, 302); exit; }
         $id = $hit['id'];
-        // Typed as msc1042 or MSC 1042: serve the one canonical spelling.
-        if ($slugParam !== $hit['product_id']) {
-            header('Location: ' . $base . '/' . $hit['product_id'], true, 301);
-            exit;
-        }
+
+        /* One canonical address, and a 301 from anything else that reaches the
+           same car: the bare Product ID this used to be, a stale make from
+           before the vehicle was re-entered, or msc1042 typed by hand. The ID
+           is what identifies the car, so a wrong make in front of it is a
+           redirect rather than a dead end. */
+        $want = carUrl($db, $id);
+        $have = $base . ($makeParam !== '' ? '/' . $makeParam : '') . '/' . $slugParam;
+        if ($have !== $want) { header('Location: ' . $want, true, 301); exit; }
+
+    } elseif (($__make = carMakeResolve($db, $slugParam)) !== null && $makeParam === '') {
+        /* A make, not a car: /audi. This is served here rather than redirected
+           to vehicles.php?make=Audi, because the short address is the whole
+           point -- a redirect would put the long one back in the address bar.
+
+           Checked before the old word addresses below, so a make always wins
+           the segment it names. A car whose word slug happened to be a bare
+           make name is still reachable at its own Product ID address, which is
+           the one published everywhere. */
+        $_GET['make'] = $__make;
+        if (!defined('MASCARDI_ROUTED')) define('MASCARDI_ROUTED', true);
+        require __DIR__ . '/vehicles.php';
+        exit;
+
     } else {
         // An old word-based address (/x3-m-sport-package) from a link already
         // out in the world. Sent permanently to the Product ID address.
@@ -44,7 +64,7 @@ if ($slugParam !== '') {
         $id = $hit['id'];
         $pidNow = carEnsureProductId($db, $id);
         if ($pidNow !== '') {
-            header('Location: ' . $base . '/' . $pidNow, true, 301);
+            header('Location: ' . carUrl($db, $id), true, 301);
             exit;
         }
     }
@@ -53,7 +73,7 @@ if ($slugParam !== '') {
     // host cannot serve would take every vehicle page down at once.
     $pidNow = carEnsureProductId($db, $id);
     if ($pidNow !== '') {
-        header('Location: ' . rtrim(BASE_URL, '/') . '/' . $pidNow, true, 301);
+        header('Location: ' . carUrl($db, $id), true, 301);
         exit;
     }
 }

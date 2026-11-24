@@ -7,6 +7,22 @@ carSlugMigrate($db);
 
 // ── Active filters ────────────────────────────────────────────────────────────
 $filterMake    = trim($_GET['make']     ?? '');
+
+/* /audi, not /showroom/vehicles.php?make=Audi.
+   A request that arrives with the old query string is sent on permanently, so
+   the short address is the only one indexed. MASCARDI_ROUTED means we are
+   already being served AT the short address -- redirecting then would be a
+   loop. Only a make-only filter can be shortened; with a price or a body type
+   alongside it there is no short form to send them to. */
+if (!defined('MASCARDI_ROUTED') && $filterMake !== '' && carPrettyUrls()
+    && count(array_diff(array_keys($_GET), ['make'])) === 0) {
+    $__short = carMakeUrl($filterMake);
+    $__here  = rtrim(BASE_URL, '/') . '/showroom/vehicles.php?make=' . urlencode($filterMake);
+    if ($__short !== '' && $__short !== $__here) {
+        header('Location: ' . $__short, true, 301);
+        exit;
+    }
+}
 $filterBody    = trim($_GET['body']     ?? '');
 $filterFuel    = trim($_GET['fuel']     ?? '');
 $filterTrans   = trim($_GET['trans']   ?? '');
@@ -129,7 +145,9 @@ $metaDesc    = $filterMake
              : "Browse {$totalStock} quality vehicles at {$companyName}. Transparent pricing, flexible financing.";
 // Filter combinations collapse to a clean canonical (base, or the make-only variant)
 // to avoid duplicate-content across the many possible filter permutations.
-$canonicalUrl = rtrim(BASE_URL, '/') . '/showroom/vehicles.php' . ($filterMake ? '?make=' . urlencode($filterMake) : '');
+$canonicalUrl = $filterMake
+    ? carMakeUrl($filterMake)
+    : rtrim(BASE_URL, '/') . '/showroom/vehicles.php';
 
 // URL for the current query minus the given params (used by filter chips)
 function sv_url_without(array $drop): string {

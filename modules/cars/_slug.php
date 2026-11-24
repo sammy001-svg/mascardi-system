@@ -392,7 +392,61 @@ function carProductIdResolve(PDO $db, string $text): ?array
 }
 
 /**
- * The public address of a car: the site root plus its Product ID.
+ * A make as it appears in an address: Land Rover becomes land-rover.
+ *
+ * Returns an empty string for a make that would collide with something the
+ * site already answers at the root, so a dealer who types "Showroom" into the
+ * make field cannot take over /showroom.
+ */
+function carMakeSlug(string $make): string
+{
+    $slug = carSlugify($make);
+    if ($slug === '' || in_array($slug, carSlugReserved(), true)) return '';
+    return $slug;
+}
+
+/** The public address of a make: /audi. Empty if it cannot have one. */
+function carMakeUrl(string $make): string
+{
+    $slug = carMakeSlug($make);
+    $base = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+    if ($slug === '' || !carPrettyUrls()) {
+        return $base . '/showroom/vehicles.php' . ($make !== '' ? '?make=' . urlencode($make) : '');
+    }
+    return $base . '/' . $slug;
+}
+
+/**
+ * The make a one-segment address is asking for, or null.
+ *
+ * Only makes that actually have a vehicle on the website can be addressed, so
+ * /audi is a page that exists rather than an empty listing for a marque the
+ * yard has never stocked. Compared on the slug rather than the stored spelling
+ * so "Land Rover", "land rover" and "LAND ROVER" all answer at /land-rover.
+ */
+function carMakeResolve(PDO $db, string $slug): ?string
+{
+    $slug = carSlugify(trim($slug, " \t\n\r/"));
+    if ($slug === '' || in_array($slug, carSlugReserved(), true)) return null;
+
+    try {
+        $rows = $db->query("SELECT DISTINCT make FROM cars
+                             WHERE make <> '' AND show_on_website = 1
+                               AND car_type IN ('inventory','sale_on_behalf')
+                               AND (status IS NULL OR status NOT IN ('delivered','sold'))")
+                   ->fetchAll(PDO::FETCH_COLUMN);
+    } catch (\Throwable $e) {
+        error_log('carMakeResolve: ' . $e->getMessage());
+        return null;
+    }
+    foreach ($rows as $make) {
+        if (carMakeSlug((string)$make) === $slug) return (string)$make;
+    }
+    return null;
+}
+
+/**
+ * The public address of a car: the make, then its Product ID.
  *
  * One place builds this, so the address arrives everywhere at once. Falls back
  * to the query-string form when pretty addresses cannot be served on this host
@@ -405,8 +459,22 @@ function carUrl(PDO $db, $car): string
     $id   = is_array($car) ? (int)($car['id'] ?? 0) : (int)$car;
     $pid  = $id > 0 ? carEnsureProductId($db, $car) : '';
 
-    if ($pid !== '' && carPrettyUrls()) return $base . '/' . $pid;
-    return $base . '/showroom/view.php?id=' . $id;
+    if ($pid === '' || !carPrettyUrls()) return $base . '/showroom/view.php?id=' . $id;
+
+    // The make goes in front of the ID. A Product ID alone is a stock number:
+    // unambiguous, but it tells neither a person nor a search engine what the
+    // page is about. Where the make is missing or cannot be addressed, the ID
+    // still stands on its own and the page answers at either address.
+    $make = is_array($car) ? (string)($car['make'] ?? '') : '';
+    if ($make === '' && $id > 0) {
+        try {
+            $st = $db->prepare("SELECT make FROM cars WHERE id = ? LIMIT 1");
+            $st->execute([$id]);
+            $make = (string)$st->fetchColumn();
+        } catch (\Throwable $e) { $make = ''; }
+    }
+    $mk = carMakeSlug($make);
+    return $mk === '' ? $base . '/' . $pid : $base . '/' . $mk . '/' . $pid;
 }
 
 /**

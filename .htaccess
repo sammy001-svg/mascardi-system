@@ -29,9 +29,16 @@
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # One segment, letters, digits and hyphens: a vehicle address.
+    # Two segments, /mercedes/MSC-1200: a make and a vehicle's Product ID.
+    # The make is there for the reader and for search; the ID is what actually
+    # identifies the car, so a wrong or renamed make still finds it and is sent
+    # on to the right address rather than failing.
+    RewriteRule ^([A-Za-z0-9][A-Za-z0-9_-]{0,60})/([A-Za-z0-9][A-Za-z0-9_-]{0,188})/?$ showroom/view.php?mk=$1&slug=$2 [L,QSA]
+
+    # One segment: a make (/audi), a bare Product ID or an old word address.
+    # Which of the three it is cannot be told apart here, so the page decides.
     # Deliberately narrow -- no slashes, no dots -- so nothing with a path or an
-    # extension is ever mistaken for a car.
+    # extension is ever mistaken for either.
     RewriteRule ^([A-Za-z0-9][A-Za-z0-9_-]{0,188})/?$ showroom/view.php?slug=$1 [L,QSA]
 </IfModule>
 
