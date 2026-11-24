@@ -73,8 +73,32 @@ include __DIR__ . '/header.php';
             </a>
         </div>
 
+<?php /* This page had no narrow-screen rules at all, and laid every row out as
+         a fixed 200px label column beside one column per vehicle -- which with
+         three cars cannot fit a phone, and a grid does not scroll by itself, so
+         the last vehicle was off the screen with no way to reach it.
+
+         Stacking is the wrong answer here: reading the figures side by side is
+         the whole purpose of the page. So the rows keep their shape and scroll
+         together as one piece, and the label column gives up enough width on a
+         phone to leave room for two vehicles beside it. */ ?>
+<style>
+:root { --cmp-label: 200px; --cmp-col: 0px; }
+.cmp-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 820px) {
+    :root { --cmp-label: 104px; --cmp-col: 132px; }
+    /* Scrolled sideways, the rounded corners and shadow belong to the strip
+       rather than to the window it is seen through. */
+    .cmp-scroll { padding-bottom: 6px; }
+    .cmp-hint { display: block; }
+}
+.cmp-hint { display: none; font-size: 12px; color: #64748b; margin: 0 0 10px; }
+</style>
+<p class="cmp-hint"><i class="fa fa-arrows-left-right" style="margin-right:6px"></i>Swipe the table sideways to see every vehicle.</p>
+<div class="cmp-scroll">
+
         <!-- Car photos row -->
-        <div style="display:grid;grid-template-columns:200px repeat(<?= count($cars) ?>,1fr);gap:1px;background:#e2e8f0;border-radius:20px;overflow:hidden;margin-bottom:2px;box-shadow:0 4px 20px rgba(0,0,0,.07)">
+        <div style="display:grid;grid-template-columns:var(--cmp-label) repeat(<?= count($cars) ?>,minmax(var(--cmp-col),1fr));gap:1px;background:#e2e8f0;border-radius:20px;overflow:hidden;margin-bottom:2px;box-shadow:0 4px 20px rgba(0,0,0,.07)">
 
             <!-- Label cell -->
             <div style="background:#fff;padding:20px 18px;display:flex;align-items:center">
@@ -158,7 +182,7 @@ include __DIR__ . '/header.php';
             $allSame = count(array_unique($values)) === 1;
             $rowBg   = $i % 2 === 0 ? '#fff' : '#f8fafc';
         ?>
-        <div style="display:grid;grid-template-columns:200px repeat(<?= count($cars) ?>,1fr);gap:1px;background:#e2e8f0;margin-top:1px">
+        <div style="display:grid;grid-template-columns:var(--cmp-label) repeat(<?= count($cars) ?>,minmax(var(--cmp-col),1fr));gap:1px;background:#e2e8f0;margin-top:1px">
 
             <div style="background:<?= $rowBg ?>;padding:14px 18px;display:flex;align-items:center">
                 <span style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px"><?= $label ?></span>
@@ -183,7 +207,7 @@ include __DIR__ . '/header.php';
                  which the edit form promises are not shown to customers. It prints
                  the description now, which is the field that row always claimed. */ ?>
         <?php $hasNotes = array_filter($cars, fn($c) => !empty($c['description'])); if ($hasNotes): ?>
-        <div style="display:grid;grid-template-columns:200px repeat(<?= count($cars) ?>,1fr);gap:1px;background:#e2e8f0;margin-top:1px;border-radius:0 0 20px 20px;overflow:hidden">
+        <div style="display:grid;grid-template-columns:var(--cmp-label) repeat(<?= count($cars) ?>,minmax(var(--cmp-col),1fr));gap:1px;background:#e2e8f0;margin-top:1px;border-radius:0 0 20px 20px;overflow:hidden">
             <div style="background:#fff;padding:14px 18px;display:flex;align-items:flex-start;padding-top:18px">
                 <span style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Description</span>
             </div>
@@ -196,6 +220,7 @@ include __DIR__ . '/header.php';
         <?php else: ?>
         <div style="background:#e2e8f0;margin-top:1px;height:1px;border-radius:0 0 20px 20px"></div>
         <?php endif; ?>
+</div><!-- /cmp-scroll -->
 
         <!-- Compare more -->
         <div style="text-align:center;margin-top:40px">

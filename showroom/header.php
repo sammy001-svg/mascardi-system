@@ -213,6 +213,13 @@ h1,h2,h3,h4,h5,h6 { font-weight: 400; letter-spacing: -.01em; }
 
 /* Shared layout + form primitives */
 .lx-wrap { max-width: 1320px; margin: 0 auto; padding: 0 28px; }
+/* 28px each side is a desktop margin. On a 360px phone it spends a sixth of
+   the screen before anything is drawn, which is most of why the pages read as
+   cramped; 16px is the usual gutter at this width and gives the content back.
+   Every public page lays out inside this, so it is the one rule that reaches
+   all of them. */
+@media (max-width: 640px) { .lx-wrap { padding: 0 16px; } }
+@media (max-width: 380px) { .lx-wrap { padding: 0 13px; } }
 .lx-flabel { display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .16em; color: var(--ink-3); margin-bottom: 8px; }
 .lx-input {
     width: 100%; border: 1px solid var(--line); border-radius: var(--r);

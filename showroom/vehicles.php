@@ -563,6 +563,20 @@ include __DIR__ . '/header.php';
 @media (max-width: 1100px) { .sv-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px)  { .sv-grid { grid-template-columns: 1fr; } }
 
+/* The card's own padding never came down on a phone, so inside the page
+   gutters its text was left about 250px of a 360px screen. The homepage's
+   feature cards already do this; these did not. The figures underneath shrink
+   with it -- three of them share one row, so at this width they are what runs
+   out of space first. */
+@media (max-width: 640px) {
+    .sv-card-body { padding: 18px 17px 20px; }
+    .sv-card-title { font-size: 18px; }
+    .sv-card-price .p { font-size: 19px; }
+    .sv-card-price { margin-bottom: 16px; }
+    .sv-card-stats > div { padding: 0 4px; }
+    .sv-grid { gap: 18px; }
+}
+
 .sv-card {
     background: var(--white); border: 1px solid var(--line); border-radius: var(--r);
     overflow: hidden; display: flex; flex-direction: column;
