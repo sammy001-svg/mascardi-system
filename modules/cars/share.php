@@ -44,7 +44,7 @@ if ($token !== '' && preg_match('/^[a-f0-9]{16,32}$/', $token)) {
 $stmt = $db->prepare("
     SELECT c.make, c.model, c.year, c.color, c.body_type, c.fuel_type, c.transmission,
            c.engine_cc, c.asking_price, c.offer_price,
-           c.description, c.notes, c.features, c.status, c.car_type,
+           c.description, c.features, c.status, c.car_type,
            IFNULL(pl.name, l.name) AS location_name
     FROM cars c
     LEFT JOIN locations l  ON l.id  = c.location_id
@@ -134,7 +134,9 @@ $shareUrl      = rtrim(BASE_URL, '/') . '/modules/cars/share.php?'
 $waMsg         = urlencode("Hi, I'm interested in the {$carTitle}" . ($dispPrice ? " priced at {$priceStr}" : '') . ". Could you share more details? {$shareUrl}");
 
 $featureList   = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string)($car['features'] ?? '')))));
-$publicDesc    = trim($car['description'] ?? '') ?: trim($car['notes'] ?? '');
+// The description alone. The internal notes used to stand in for it, and the
+// edit form promises those are not shown to customers.
+$publicDesc    = trim($car['description'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="en">

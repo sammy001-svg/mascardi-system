@@ -879,6 +879,7 @@ if (canAccess('car_documents')):
                 <form method="POST" action="<?= BASE_URL ?>/modules/car_documents/delete.php"
                       class="d-inline"
                       onsubmit="return confirm('Delete this document?')">
+                    <?= csrfField() ?>
                     <input type="hidden" name="id" value="<?= $doc['id'] ?>">
                     <input type="hidden" name="redirect"
                            value="<?= e(BASE_URL . '/modules/cars/view.php?id=' . $id . '#documents') ?>">

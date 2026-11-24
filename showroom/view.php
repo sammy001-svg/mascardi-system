@@ -78,7 +78,7 @@ if (!$car) { header('Location: ' . BASE_URL . '/showroom/'); exit; }
 // printed the registration would leave the rest in scope, one careless echo
 // away from publication, so they are dropped here instead. The page reads
 // none of them; what is not in the array cannot be printed by mistake.
-foreach (['owner_name', 'owner_phone', 'owner_email', 'chassis_number',
+foreach (['notes', 'owner_name', 'owner_phone', 'owner_email', 'chassis_number',
           'engine_number', 'registration_number', 'entry_number', 'mileage',
           'rotation_notes', 'last_rotated_at', 'client_id', 'service_client_id',
           'share_token'] as $__backOffice) {
@@ -358,7 +358,10 @@ include __DIR__ . '/header.php';
                         </div>
                     </details>
 
-                    <?php $publicDescription = trim($car['description'] ?? '') ?: trim($car['notes'] ?? ''); ?>
+                    <?php /* The description, and only the description. This used to fall
+                             back to the internal notes, which the edit form promises are
+                             not shown to customers. */ ?>
+                    <?php $publicDescription = trim($car['description'] ?? ''); ?>
                     <?php if (!empty($publicDescription)): ?>
                     <details class="dv-acc" open>
                         <summary>About This Vehicle <i class="fa fa-plus"></i></summary>

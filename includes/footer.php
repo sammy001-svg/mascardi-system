@@ -13,6 +13,68 @@ img[loading="lazy"].img-loaded{background:none;animation:none}
 @media(prefers-reduced-motion:reduce){img[loading="lazy"]{animation:none;background:#f3f4f6}}
 </style>
 
+<!-- The CSRF token, before anything that can be slow.
+
+     This used to sit below jQuery, Bootstrap, DataTables and Select2, so until
+     all four had come down from their CDNs every form on the page carried no
+     token -- while the page itself was rendered, filled in and clickable. A
+     slow link or a blocked CDN therefore turned Save into "Security Check
+     Failed". Here the body above is already parsed, so every form is reachable,
+     and nothing this needs comes over the network. -->
+<script>
+(function () {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (!meta) return;
+    var tokenValue = meta.getAttribute('content');
+
+    function stamp(form) {
+        if (!form || form.querySelector('input[name="csrf_token"]')) return;
+        var input = document.createElement('input');
+        input.type  = 'hidden';
+        input.name  = 'csrf_token';
+        input.value = tokenValue;
+        form.appendChild(input);
+    }
+    // form.method is normalised by the browser, so this catches method="Post"
+    // and the rest, which the old attribute selector did not.
+    function isPost(f) { return f && f.tagName === 'FORM' && (f.method || '').toLowerCase() === 'post'; }
+
+    document.querySelectorAll('form').forEach(function (f) { if (isPost(f)) stamp(f); });
+
+    // Stamping once cannot cover a form a script builds later -- a modal, a row
+    // the table renders -- and those failed in exactly the same way. Doing it
+    // again as the form is submitted costs nothing and catches the ones that
+    // did not exist yet.
+    document.addEventListener('submit', function (e) {
+        if (isPost(e.target)) stamp(e.target);
+    }, true);
+
+    // Also set header for fetch/XMLHttpRequest
+    var origFetch = window.fetch;
+    window.fetch = function (url, opts) {
+        opts = opts || {};
+        if (opts.method && opts.method.toUpperCase() === 'POST') {
+            opts.headers = Object.assign({ 'X-CSRF-Token': tokenValue }, opts.headers || {});
+        }
+        return origFetch(url, opts);
+    };
+    if (window.XMLHttpRequest) {
+        var origOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function (method) {
+            this._method = method;
+            return origOpen.apply(this, arguments);
+        };
+        var origSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function (body) {
+            if (this._method && this._method.toUpperCase() === 'POST') {
+                this.setRequestHeader('X-CSRF-Token', tokenValue);
+            }
+            return origSend.apply(this, arguments);
+        };
+    }
+}());
+</script>
+
 <!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <!-- Bootstrap 5 -->
@@ -26,46 +88,6 @@ img[loading="lazy"].img-loaded{background:none;animation:none}
 <script src="<?= BASE_URL ?>/assets/js/main.js?v=<?= @filemtime(BASE_PATH . '/assets/js/main.js') ?: time() ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/install-prompt.js?v=10" defer></script>
 <?php if (isset($extraJs)) echo $extraJs; ?>
-<script>
-// Auto-inject CSRF token into all HTML forms that POST to this site
-(function() {
-    var token = document.querySelector('meta[name="csrf-token"]');
-    if (!token) return;
-    var tokenValue = token.getAttribute('content');
-    document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function(form) {
-        if (!form.querySelector('input[name="csrf_token"]')) {
-            var input = document.createElement('input');
-            input.type  = 'hidden';
-            input.name  = 'csrf_token';
-            input.value = tokenValue;
-            form.appendChild(input);
-        }
-    });
-    // Also set header for fetch/XMLHttpRequest
-    var origFetch = window.fetch;
-    window.fetch = function(url, opts) {
-        opts = opts || {};
-        if (opts.method && opts.method.toUpperCase() === 'POST') {
-            opts.headers = Object.assign({ 'X-CSRF-Token': tokenValue }, opts.headers || {});
-        }
-        return origFetch(url, opts);
-    };
-    if (window.XMLHttpRequest) {
-        var origOpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method) {
-            this._method = method;
-            return origOpen.apply(this, arguments);
-        };
-        var origSend = XMLHttpRequest.prototype.send;
-        XMLHttpRequest.prototype.send = function(body) {
-            if (this._method && this._method.toUpperCase() === 'POST') {
-                this.setRequestHeader('X-CSRF-Token', tokenValue);
-            }
-            return origSend.apply(this, arguments);
-        };
-    }
-}());
-</script>
 <?php if (isset($extraModal)) echo $extraModal; ?>
 
 <!-- ══════════════════════════════════════════════════════════════

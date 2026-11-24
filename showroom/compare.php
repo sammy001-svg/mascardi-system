@@ -34,7 +34,7 @@ $cars = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // none of it today, but the columns are in scope on a public page. Dropping
 // them keeps it that way whoever edits the list next.
 foreach ($cars as $__i => $__c) {
-    foreach (['owner_name', 'owner_phone', 'owner_email', 'chassis_number',
+    foreach (['notes', 'owner_name', 'owner_phone', 'owner_email', 'chassis_number',
               'engine_number', 'registration_number', 'entry_number', 'mileage',
               'rotation_notes', 'last_rotated_at', 'client_id', 'service_client_id',
               'share_token'] as $__backOffice) {
@@ -178,15 +178,18 @@ include __DIR__ . '/header.php';
         </div>
         <?php endforeach; ?>
 
-        <!-- Notes/description -->
-        <?php $hasNotes = array_filter($cars, fn($c) => !empty($c['notes'])); if ($hasNotes): ?>
+        <!-- Description -->
+        <?php /* This row is headed Description and was printing the internal notes,
+                 which the edit form promises are not shown to customers. It prints
+                 the description now, which is the field that row always claimed. */ ?>
+        <?php $hasNotes = array_filter($cars, fn($c) => !empty($c['description'])); if ($hasNotes): ?>
         <div style="display:grid;grid-template-columns:200px repeat(<?= count($cars) ?>,1fr);gap:1px;background:#e2e8f0;margin-top:1px;border-radius:0 0 20px 20px;overflow:hidden">
             <div style="background:#fff;padding:14px 18px;display:flex;align-items:flex-start;padding-top:18px">
                 <span style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Description</span>
             </div>
             <?php foreach ($cars as $car): ?>
             <div style="background:#fff;padding:14px 16px">
-                <p style="font-size:13px;color:#64748b;line-height:1.6;margin:0"><?= nl2br(e($car['notes'] ?: '—')) ?></p>
+                <p style="font-size:13px;color:#64748b;line-height:1.6;margin:0"><?= nl2br(e($car['description'] ?: '—')) ?></p>
             </div>
             <?php endforeach; ?>
         </div>

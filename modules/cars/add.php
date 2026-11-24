@@ -188,6 +188,7 @@ include __DIR__ . '/../../includes/header.php';
 <div class="card">
     <div class="card-body">
         <form method="POST">
+            <?= csrfField() ?>
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">Chassis Number <span class="text-danger">*</span></label>

@@ -12,23 +12,74 @@ function csrfField(): string {
     return '<input type="hidden" name="csrf_token" value="' . csrfToken() . '">';
 }
 
+/**
+ * The page both refusals end on.
+ */
+function _csrfStop(string $heading, string $message, string $hint = ''): void {
+    http_response_code(403);
+    $h = htmlspecialchars($heading, ENT_QUOTES, 'UTF-8');
+    $m = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+    $x = $hint === '' ? '' : '<p class="text-muted small">'
+       . htmlspecialchars($hint, ENT_QUOTES, 'UTF-8') . '</p>';
+    die('<!DOCTYPE html><html><head><title>Request Rejected</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8fafc}
+    .card{max-width:470px;width:100%;padding:2rem;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.1);text-align:center}</style>
+    </head><body><div class="card">
+    <h4>' . $h . '</h4>
+    <p class="text-muted">' . $m . '</p>' . $x . '
+    <a href="javascript:history.back()" class="btn btn-primary">Go Back</a>
+    </div></body></html>');
+}
+
+/** Shorthand like 25M as a number of bytes. */
+function iniBytes(string $v): int {
+    $v = trim($v);
+    if ($v === '') return 0;
+    $n = (float)$v;
+    switch (strtolower(substr($v, -1))) {
+        case 'g': $n *= 1024; // fall through
+        case 'm': $n *= 1024; // fall through
+        case 'k': $n *= 1024;
+    }
+    return (int)$n;
+}
+
 function verifyCsrf(): void {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+
+    /*
+     * A request larger than post_max_size is answered by PHP throwing the
+     * whole body away -- $_POST and $_FILES both -- and saying nothing. The
+     * token goes with it, so an upload that was simply too big used to arrive
+     * here indistinguishable from a forged request, and the person was told
+     * their session had expired. They would sign in again and try the same
+     * upload, because nothing had told them the size was the problem.
+     *
+     * A POST that declares a length but arrives with nothing in it is that
+     * case and no other: a genuine empty POST declares no length, and a
+     * forged one still carries its fields.
+     */
+    $len = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+    if ($len > 0 && empty($_POST) && empty($_FILES)) {
+        $max = (string)ini_get('post_max_size');
+        _csrfStop(
+            'That upload was too large',
+            'The server takes up to ' . $max . 'B in one request and this was about '
+            . number_format($len / 1048576, 1) . ' MB, so none of it arrived.',
+            'You are still signed in and nothing was saved. Send the photos in smaller '
+            . 'batches and they will go through.'
+        );
+    }
+
     $token = $_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
     if (!$token || !hash_equals(csrfToken(), $token)) {
-        http_response_code(403);
-        die('<!DOCTYPE html><html><head><title>Request Rejected</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8fafc}
-        .card{max-width:450px;width:100%;padding:2rem;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.1);text-align:center}</style>
-        </head><body><div class="card">
-        <i class="fa fa-shield-halved" style="font-size:3rem;color:#dc2626;margin-bottom:1rem"></i>
-        <h4>Security Check Failed</h4>
-        <p class="text-muted">Your session may have expired. Please go back and try again.</p>
-        <a href="javascript:history.back()" class="btn btn-primary">Go Back</a>
-        </div></body></html>');
+        _csrfStop('Security Check Failed',
+            'Your session may have expired. Please go back and try again.');
     }
 }
+
 
 // ── Sanitize output ──────────────────────────────────────
 /**

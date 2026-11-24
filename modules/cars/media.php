@@ -117,8 +117,27 @@ include __DIR__ . '/../../includes/header.php';
         <div class="card h-100">
             <div class="card-header"><i class="fa fa-upload me-2"></i>Upload Photos</div>
             <div class="card-body">
-                <?php $__maxFiles = (int)ini_get('max_file_uploads') ?: 20; ?>
+                <?php
+                /* The limit that actually bites is on the whole request, not on each
+                   file. This read 20 MB each and up to 20 files -- 400 MB -- against a
+                   post_max_size of 25M, and PHP answers an oversized request by
+                   discarding the entire body, the security token with it, so the
+                   upload came back as a session error. These come from the server. */
+                $__maxFiles = (int)ini_get('max_file_uploads') ?: 20;
+                $__postMax  = iniBytes((string)ini_get('post_max_size'));
+                $__fileMax  = iniBytes((string)ini_get('upload_max_filesize'));
+                if ($__postMax > 0 && ($__fileMax === 0 || $__fileMax > $__postMax)) {
+                    $__fileMax = $__postMax;
+                }
+                // A little headroom for the caption and the token, so a selection that
+                // only just fits is not refused after the wait.
+                $__totalMax = $__postMax > 0 ? (int)($__postMax * 0.95) : 0;
+                $__mb = static function (int $b): string {
+                    return rtrim(rtrim(number_format($b / 1048576, 1), '0'), '.') . ' MB';
+                };
+                ?>
                 <form method="POST" enctype="multipart/form-data" id="photoUploadForm">
+                    <?= csrfField() ?>
                     <div class="mb-3">
                         <label class="form-label">Select Images</label>
                         <input type="file" name="photos[]" id="photoInput" class="form-control"
@@ -126,7 +145,7 @@ include __DIR__ . '/../../includes/header.php';
                         <div class="form-text text-muted">
                             Select several at once — hold <strong>Ctrl</strong> (or <strong>Cmd</strong>) while clicking,
                             or drag a selection.<br>
-                            Max 20&nbsp;MB each, up to <?= $__maxFiles ?> files per upload. JPG, PNG or WEBP.
+                            Up to <strong><?= $__mb($__totalMax) ?></strong> in one upload (<?= $__mb($__fileMax) ?> per file), at most <?= $__maxFiles ?> files. JPG, PNG or WEBP.
                         </div>
                         <div id="photoPickSummary" class="small mt-2" style="display:none"></div>
                     </div>
@@ -199,8 +218,10 @@ include __DIR__ . '/../../includes/header.php';
     var label   = document.getElementById('photoUploadLabel');
     if (!input || !form) return;
 
-    var MAX_FILES = <?= (int)($__maxFiles ?? 20) ?>;
-    var MAX_BYTES = 20 * 1024 * 1024;
+    var MAX_FILES = <?= (int)$__maxFiles ?>;
+    var MAX_BYTES = <?= (int)$__fileMax ?>;
+    // The one that was missing, and the one that was breaking the upload.
+    var MAX_TOTAL = <?= (int)$__totalMax ?>;
 
     input.addEventListener('change', function () {
         var files = Array.prototype.slice.call(input.files || []);
@@ -220,8 +241,18 @@ include __DIR__ . '/../../includes/header.php';
         }
         if (big.length) {
             notes.push('<div class="text-danger"><i class="fa fa-triangle-exclamation me-1"></i>'
-                     + big.length + ' file(s) exceed 20 MB and will be skipped: '
+                     + big.length + ' file(s) are over ' + mb(MAX_BYTES) + ' and will be skipped: '
                      + big.map(function (f) { return f.name; }).join(', ') + '</div>');
+        }
+        // Over the request limit the server never sees the upload at all: it
+        // discards the body and the browser is told nothing, so this has to be
+        // caught here or not at all.
+        var tooMuch = MAX_TOTAL > 0 && total > MAX_TOTAL;
+        if (tooMuch) {
+            notes.push('<div class="text-danger"><i class="fa fa-triangle-exclamation me-1"></i>'
+                     + 'That is ' + mb(total) + ' in one upload and the server takes '
+                     + mb(MAX_TOTAL) + '. Send them in two or three batches and all of them '
+                     + 'will go through.</div>');
         }
 
         summary.innerHTML = '<span class="text-muted"><i class="fa fa-images me-1"></i>'
@@ -229,6 +260,8 @@ include __DIR__ . '/../../includes/header.php';
                           + notes.join('');
         summary.style.display = '';
         label.textContent = files.length > 1 ? 'Upload ' + files.length + ' Photos' : 'Upload Now';
+        // Nothing is gained by letting it be sent.
+        if (btn) btn.disabled = tooMuch || files.length > MAX_FILES;
     });
 
     // Large batches take a while; make it obvious the upload is running so the
