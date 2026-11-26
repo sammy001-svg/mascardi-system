@@ -50,7 +50,7 @@
                 <div class="ft-head">Ownership</div>
                 <?php foreach ([
                     ['Book a Service',  BASE_URL . '/showroom/book-service.php'],
-                    ['Vehicle Inquiry', BASE_URL . '/showroom/inquiry.php'],
+                    ['Vehicle Inquiry', BASE_URL . '/showroom/contact.php'],
                     ['Client Portal',   BASE_URL . '/client/login.php'],
                     ['Contact Us',      BASE_URL . '/showroom/contact.php'],
                     ['Staff Login',     BASE_URL . '/login.php'],
@@ -112,6 +112,118 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <?php if (isset($extraJs)) echo $extraJs; ?>
+
+<?php
+/* ── The bottom tab bar ──────────────────────────────────────────────────
+   Phones only. Four destinations, which is as many as stays legible at this
+   width, and all four are places rather than actions -- the buttons that act
+   on a vehicle belong on that vehicle's page.
+
+   $__tab marks the current one so the bar says where you are, which is most of
+   what makes a tab bar feel like an app rather than a row of links. */
+$__here = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';
+$__isSaved = !empty($_GET['fav']);
+/* A page may name its own tab. A vehicle's address is /make/MSC-1200,
+   which carries nothing to recognise it by, so guessing from the path
+   put the bar on Home while looking at a car. */
+$__tab = $showroomTab ?? 'home';
+if ($__tab === 'home') {
+if (str_contains($__here, '/vehicles.php') || str_contains($__here, '/in-shipment.php')) {
+    $__tab = $__isSaved ? 'saved' : 'cars';
+} elseif (str_contains($__here, '/contact.php') || str_contains($__here, '/book-service.php')
+          || str_contains($__here, '/inquiry.php')) {
+    $__tab = 'contact';
+} elseif (str_contains($__here, '/compare.php') || str_contains($__here, '/view.php')) {
+    $__tab = 'cars';
+}
+}
+$__vehicles = rtrim(BASE_URL, '/') . '/showroom/vehicles.php';
+?>
+<nav class="mtab" id="mTabBar" aria-label="Quick navigation">
+    <a class="mtab-i<?= $__tab === 'home' ? ' on' : '' ?>" href="<?= rtrim(BASE_URL, '/') ?>/showroom/">
+        <i class="fa fa-house"></i><span>Home</span>
+    </a>
+    <a class="mtab-i<?= $__tab === 'cars' ? ' on' : '' ?>" href="<?= e($__vehicles) ?>">
+        <i class="fa fa-car-side"></i><span>Vehicles</span>
+    </a>
+    <a class="mtab-i<?= $__tab === 'saved' ? ' on' : '' ?>" href="<?= e($__vehicles) ?>" id="mTabSaved">
+        <i class="fa fa-heart"></i><span>Saved</span>
+        <b class="mtab-n" id="mTabSavedCount" hidden>0</b>
+    </a>
+    <a class="mtab-i<?= $__tab === 'contact' ? ' on' : '' ?>" href="<?= rtrim(BASE_URL, '/') ?>/showroom/contact.php">
+        <i class="fa fa-comment-dots"></i><span>Contact</span>
+    </a>
+</nav>
+<style>
+/* The bar reserves its own height on the body, so nothing is hidden behind it
+   and the page does not jump when it appears. */
+.mtab { display: none; }
+@media (max-width: 768px) {
+    body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+    .mtab {
+        display: grid; grid-template-columns: repeat(4, 1fr);
+        position: fixed; left: 0; right: 0; bottom: 0;
+        /* Below the mobile menu (999), so opening the menu covers this rather
+           than leaving two navigations on screen at once. */
+        z-index: 900;
+        background: rgba(255,255,255,.96);
+        -webkit-backdrop-filter: saturate(180%) blur(12px);
+        backdrop-filter: saturate(180%) blur(12px);
+        border-top: 1px solid var(--line);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .mtab-i {
+        position: relative;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 4px; height: 56px;                 /* past the 44px a thumb needs */
+        text-decoration: none; color: var(--ink-3);
+        -webkit-tap-highlight-color: transparent;
+        transition: color .18s var(--ease);
+    }
+    .mtab-i i    { font-size: 17px; line-height: 1; }
+    .mtab-i span { font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+    .mtab-i.on   { color: var(--ink); }
+    /* The marker along the top edge, which is what says "you are here" without
+       another colour fighting the icon. */
+    .mtab-i.on::before {
+        content: ''; position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
+        width: 26px; height: 2px; background: var(--ink); border-radius: 0 0 2px 2px;
+    }
+    .mtab-i:active { color: var(--ink); }
+    .mtab-n {
+        position: absolute; top: 6px; left: 50%; margin-left: 4px;
+        min-width: 15px; height: 15px; padding: 0 4px;
+        background: var(--ink); color: #fff;
+        border-radius: 8px; font-size: 9px; font-weight: 700; line-height: 15px;
+        text-align: center;
+    }
+    @media (prefers-reduced-motion: reduce) { .mtab-i { transition: none; } }
+
+    /* The install banner is pinned to bottom:0 as well, and higher in the
+       stack, so it would sit on top of the bar and bury it. It is lifted to
+       rest on the bar instead. !important because that banner carries its
+       position in a style attribute, which a stylesheet cannot otherwise
+       outrank. */
+    #pwaInstallBanner { bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+</style>
+<script>
+(function () {
+    /* Saved lives in the visitor's own browser, and the listing filters on
+       ?fav=<ids>, so the link cannot be finished on the server. The count goes
+       on the tab as well -- a number you can see without opening it is most of
+       why the tab is worth having. */
+    var tab = document.getElementById('mTabSaved');
+    if (!tab) return;
+    var ids = [];
+    try { ids = JSON.parse(localStorage.getItem('msc_favs') || '[]') || []; } catch (e) { ids = []; }
+    if (ids.length) {
+        tab.href += (tab.href.indexOf('?') === -1 ? '?' : '&') + 'fav=' + ids.join(',');
+        var n = document.getElementById('mTabSavedCount');
+        if (n) { n.textContent = ids.length > 99 ? '99+' : ids.length; n.hidden = false; }
+    }
+}());
+</script>
 
 <!-- ── PWA Install Banner ─────────────────────────────────────── -->
 <div id="pwaInstallBanner" style="

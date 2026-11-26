@@ -411,7 +411,7 @@ select.lx-input { cursor: pointer; }
                         <div class="nav-drop-grid">
                             <div class="drop-head">Service &amp; Support</div>
                             <a class="drop-link" href="<?= BASE_URL ?>/showroom/book-service.php">Book a Service</a>
-                            <a class="drop-link" href="<?= BASE_URL ?>/showroom/inquiry.php">Vehicle Inquiry</a>
+                            <a class="drop-link" href="<?= BASE_URL ?>/showroom/contact.php">Vehicle Inquiry</a>
                             <a class="drop-link" href="<?= BASE_URL ?>/client/login.php">Client Portal</a>
                             <a class="drop-link" href="<?= BASE_URL ?>/showroom/contact.php">Contact Us</a>
                             <div class="drop-cta">
@@ -461,7 +461,7 @@ select.lx-input { cursor: pointer; }
     <div class="m-group">
         <div class="m-head">Ownership</div>
         <a href="<?= BASE_URL ?>/showroom/book-service.php">Book a Service</a>
-        <a href="<?= BASE_URL ?>/showroom/inquiry.php">Vehicle Inquiry</a>
+        <a href="<?= BASE_URL ?>/showroom/contact.php">Vehicle Inquiry</a>
         <a href="<?= BASE_URL ?>/client/login.php">Client Portal</a>
         <a href="<?= BASE_URL ?>/showroom/contact.php">Contact Us</a>
     </div>

@@ -1377,4 +1377,7 @@ document.getElementById('dvViewingForm') && document.getElementById('dvViewingFo
 </script>
 <?php endif; ?>
 
-<?php include __DIR__ . '/footer.php'; ?>
+<?php /* The bar cannot tell a vehicle from its address -- /make/MSC-1200
+         names neither -- so the page says which tab it belongs to. */
+$showroomTab = 'cars';
+include __DIR__ . '/footer.php'; ?>
