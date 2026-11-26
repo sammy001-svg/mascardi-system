@@ -132,7 +132,7 @@ include __DIR__ . '/header.php';
      3D SHOWCASE CAROUSEL — flagship vehicles (photos only)
 ═══════════════════════════════════════════════════════════════ -->
 <?php if ($carouselCars): ?>
-<section style="background:var(--paper);padding:96px 0;overflow:hidden">
+<section style="background:var(--paper);padding:min(96px, 13vw) 0;overflow:hidden">
     <div class="lx-wrap">
         <div class="rv" style="text-align:center;margin-bottom:56px">
             <div class="lx-label" style="margin-bottom:14px">Featured</div>
@@ -210,7 +210,7 @@ include __DIR__ . '/header.php';
 <!-- ═══════════════════════════════════════════════════════════
      BRAND STATEMENT
 ═══════════════════════════════════════════════════════════════ -->
-<section id="story" style="background:var(--white);padding:110px 0;text-align:center">
+<section id="story" style="background:var(--white);padding:min(110px, 13vw) 0;text-align:center">
     <div class="lx-wrap" style="max-width:900px">
         <h2 class="lx-h2 rv" style="font-size:clamp(30px,4.6vw,54px)">
             Sourced worldwide.<br>
@@ -262,7 +262,7 @@ include __DIR__ . '/header.php';
 <!-- ═══════════════════════════════════════════════════════════
      WHY MASCARDI
 ═══════════════════════════════════════════════════════════════ -->
-<section style="background:var(--white);padding:100px 0">
+<section style="background:var(--white);padding:min(100px, 13vw) 0">
     <div class="lx-wrap">
         <div class="rv" style="text-align:center;margin-bottom:64px">
             <div class="lx-label" style="margin-bottom:14px">Our Commitment</div>
@@ -290,7 +290,7 @@ include __DIR__ . '/header.php';
 <!-- ═══════════════════════════════════════════════════════════
      BOOK A SERVICE
 ═══════════════════════════════════════════════════════════════ -->
-<section id="book-service" style="background:var(--paper);padding:96px 0;border-top:1px solid var(--line)">
+<section id="book-service" style="background:var(--paper);padding:min(96px, 13vw) 0;border-top:1px solid var(--line)">
     <div class="lx-wrap">
         <div class="row g-5 align-items-center">
             <div class="col-lg-5 rv">
@@ -307,12 +307,12 @@ include __DIR__ . '/header.php';
                 </div>
             </div>
             <div class="col-lg-7 rv rv-d1">
-                <div style="background:var(--white);border:1px solid var(--line);border-radius:var(--r);padding:40px 36px">
+                <div class="lx-panel">
                     <div class="lx-label" style="margin-bottom:6px">Quick Booking</div>
                     <p style="font-size:13px;color:var(--ink-3);margin:0 0 26px">Fill in your details and we'll get back to you right away.</p>
 
                     <form method="GET" action="<?= BASE_URL ?>/showroom/book-service.php" style="display:grid;gap:18px">
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+                        <div class="lx-fgrid">
                             <div>
                                 <label class="lx-flabel">Full Name *</label>
                                 <input type="text" name="name" placeholder="Your full name" required class="lx-input">
@@ -322,7 +322,7 @@ include __DIR__ . '/header.php';
                                 <input type="tel" name="phone" placeholder="e.g. 0712 345 678" required class="lx-input">
                             </div>
                         </div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+                        <div class="lx-fgrid">
                             <div>
                                 <label class="lx-flabel">Service Needed *</label>
                                 <select name="service" required class="lx-input">
@@ -356,7 +356,7 @@ include __DIR__ . '/header.php';
 <!-- ═══════════════════════════════════════════════════════════
      CTA BAND
 ═══════════════════════════════════════════════════════════════ -->
-<section style="background:var(--black);padding:88px 0;text-align:center">
+<section style="background:var(--black);padding:min(88px, 13vw) 0;text-align:center">
     <div class="lx-wrap">
         <h2 class="rv" style="font-size:clamp(26px,3.6vw,44px);font-weight:300;color:#fff;margin:0 0 14px">Ready to find your car?</h2>
         <p class="rv rv-d1" style="font-size:15px;color:rgba(255,255,255,.55);margin:0 0 36px">Talk to our team today. We're here to help.</p>
@@ -527,9 +527,61 @@ include __DIR__ . '/header.php';
 .lx-service-list div { font-size: 13.5px; color: var(--ink); padding: 13px 4px; border-bottom: 1px solid var(--line); }
 
 @media (max-width: 768px) {
-    .lx-hero-content { padding-bottom: 80px; }
     .lx-feature-body { padding: 26px 24px 30px; }
     .lx-feature-specs > div { padding: 0 16px; }
+
+    /* ── The two films, given a shape that fits a phone ──────────────────
+       A 16:9 film cannot cover a 9:19.5 screen without being enlarged until
+       almost none of it is left. Covering the 844px-tall hero on a 390px
+       phone meant a frame 1,726px wide, of which the phone showed 398 --
+       23% of the picture, cropped so close that the car in it was not
+       recognisable, behind 1,400px of near-empty black.
+
+       So on a phone each film is given its own 16:9 band and the words sit
+       underneath it. The whole frame is on screen, the hero is as tall as
+       what is in it rather than a fixed 100vh that mobile browsers resize
+       under your feet, and the first screen now carries the headline and
+       both buttons instead of a black void. */
+    .lx-hero, .lx-film {
+        display: block; height: auto; min-height: 0; align-items: initial;
+    }
+    .lx-video-cover {
+        position: relative; inset: auto;
+        width: 100%; aspect-ratio: 16 / 9;
+    }
+    .lx-video-cover iframe {
+        top: 0; left: 0; width: 100%; height: 100%;
+        min-width: 0; min-height: 0;
+        /* Enough overscan to push YouTube's own furniture -- the watermark,
+           the share arrow, the title that appears if autoplay is refused --
+           past the edges, and no more: 89% of the frame is on screen against
+           the 23% the old full-bleed crop left. */
+        transform: scale(1.12);
+    }
+    /* Softens the seam where the film meets the black beneath it. */
+    .lx-video-cover::after {
+        content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 64px;
+        background: linear-gradient(to top, var(--black), rgba(4,4,4,0));
+    }
+    /* And keeps the logo legible where the nav floats over the film. */
+    .lx-hero .lx-video-cover::before {
+        content: ''; position: absolute; left: 0; right: 0; top: 0; height: 76px;
+        background: linear-gradient(to bottom, rgba(4,4,4,.62), rgba(4,4,4,0));
+        z-index: 1;
+    }
+    /* The shades existed to hold white text legible over the film. The text
+       is no longer over the film, so they would only grey out the picture. */
+    .lx-hero-shade, .lx-film-shade { display: none; }
+    .lx-hero-scroll { display: none; }
+
+    .lx-hero-content { padding: 30px 16px 42px; }
+    .lx-hero-content h1 { font-size: clamp(27px, 8vw, 40px); margin-bottom: 16px; }
+    .lx-hero-content p  { font-size: 15px; margin-bottom: 26px; }
+    /* Stacked and full width: two buttons of different lengths side by side
+       on a narrow screen is the detail that reads as unfinished. */
+    .lx-hero-ctas { gap: 10px; }
+    .lx-hero-ctas > a { flex: 1 1 100%; }
+    .lx-film-caption { padding: 30px 16px 44px; }
 }
 </style>
 

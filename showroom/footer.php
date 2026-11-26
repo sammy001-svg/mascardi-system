@@ -1,5 +1,5 @@
 <!-- ── Footer ────────────────────────────────────────────── -->
-<footer id="contact" style="background:var(--black);color:rgba(255,255,255,.55);padding:84px 0 0">
+<footer id="contact" style="background:var(--black);color:rgba(255,255,255,.55);padding:min(84px, 13vw) 0 0">
     <div class="lx-wrap">
         <div class="row g-5 mb-5">
 
@@ -161,7 +161,10 @@ $__vehicles = rtrim(BASE_URL, '/') . '/showroom/vehicles.php';
 @media (max-width: 768px) {
     body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
     .mtab {
-        display: grid; grid-template-columns: repeat(4, 1fr);
+        /* minmax(0, 1fr) rather than 1fr: a plain 1fr track refuses to go
+           narrower than the word inside it, so a longer label would widen the
+           bar past the screen instead of being made to fit. */
+        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
         position: fixed; left: 0; right: 0; bottom: 0;
         /* Below the mobile menu (999), so opening the menu covers this rather
            than leaving two navigations on screen at once. */
@@ -170,18 +173,27 @@ $__vehicles = rtrim(BASE_URL, '/') . '/showroom/vehicles.php';
         -webkit-backdrop-filter: saturate(180%) blur(12px);
         backdrop-filter: saturate(180%) blur(12px);
         border-top: 1px solid var(--line);
+        /* Clears the home indicator at the bottom, and the rounded corners and
+           notch at the sides when the phone is turned on its side. */
         padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-left: env(safe-area-inset-left, 0px);
+        padding-right: env(safe-area-inset-right, 0px);
     }
     .mtab-i {
-        position: relative;
+        position: relative; min-width: 0; padding: 0 2px;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 4px; height: 56px;                 /* past the 44px a thumb needs */
+        gap: 5px; height: 56px;                 /* past the 44px a thumb needs */
         text-decoration: none; color: var(--ink-3);
         -webkit-tap-highlight-color: transparent;
         transition: color .18s var(--ease);
     }
-    .mtab-i i    { font-size: 17px; line-height: 1; }
-    .mtab-i span { font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+    .mtab-i i    { font-size: 18px; line-height: 1; }
+    .mtab-i span {
+        font-size: 10px; font-weight: 600; letter-spacing: .04em; line-height: 1.2;
+        /* One line, always: a wrapped label would push the bar taller than the
+           room the page has reserved for it and hide content behind it. */
+        max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     .mtab-i.on   { color: var(--ink); }
     /* The marker along the top edge, which is what says "you are here" without
        another colour fighting the icon. */
@@ -205,6 +217,20 @@ $__vehicles = rtrim(BASE_URL, '/') . '/showroom/vehicles.php';
        position in a style attribute, which a stylesheet cannot otherwise
        outrank. */
     #pwaInstallBanner { bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important; }
+
+    /* At its desktop size the banner is 98px tall, and stacked on the 57px bar
+       it took a fifth of a phone screen -- on the home page it covered both of
+       the hero's buttons. Trimmed to a single line so it offers rather than
+       interrupts. !important because the banner carries these as inline
+       styles, which a stylesheet cannot otherwise outrank. */
+    #pwaInstallBanner > div { padding: 10px 14px !important; gap: 10px !important; }
+    #pwaInstallBanner .pwa-ico { width: 34px !important; height: 34px !important; }
+    #pwaInstallBanner .pwa-title { font-size: 13px !important; line-height: 1.3; }
+    #pwaInstallBanner .pwa-sub {
+        font-size: 11.5px !important; line-height: 1.3;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #pwaInstallBtn { padding: 9px 14px !important; }
 }
 </style>
 <script>
@@ -247,10 +273,10 @@ $__vehicles = rtrim(BASE_URL, '/') . '/showroom/vehicles.php';
         pointer-events:all;
     ">
         <img src="<?= BASE_URL ?>/assets/images/icons/icon.svg" width="40" height="40"
-             style="border-radius:2px;flex-shrink:0" alt="App icon">
+             class="pwa-ico" style="border-radius:2px;flex-shrink:0" alt="App icon">
         <div style="flex:1;min-width:0">
-            <div style="font-size:13.5px;font-weight:600;color:var(--ink)"><?= htmlspecialchars($__companyName) ?></div>
-            <div style="font-size:12px;color:var(--ink-3)">Install for faster access &amp; offline browsing</div>
+            <div class="pwa-title" style="font-size:13.5px;font-weight:600;color:var(--ink)"><?= htmlspecialchars($__companyName) ?></div>
+            <div class="pwa-sub" style="font-size:12px;color:var(--ink-3)">Install for faster access &amp; offline browsing</div>
         </div>
         <button id="pwaInstallBtn" style="
             flex-shrink:0; background:var(--ink); color:#fff; border:none;

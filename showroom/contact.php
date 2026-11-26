@@ -389,7 +389,7 @@ include __DIR__ . '/header.php';
 
 <style>
 .ct-label { display:block; font-size:11.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin-bottom:7px; }
-.ct-input { width:100%; border:1.5px solid #e2e8f0; border-radius:10px; padding:11px 14px; font-size:14px; font-family:inherit; outline:none; color:#0f172a; background:#fff; transition:border-color .15s, box-shadow .15s; }
+.ct-input { min-width:0; width:100%; border:1.5px solid #e2e8f0; border-radius:10px; padding:11px 14px; font-size:14px; font-family:inherit; outline:none; color:#0f172a; background:#fff; transition:border-color .15s, box-shadow .15s; }
 .ct-input:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
 select.ct-input { cursor:pointer; }
 textarea.ct-input { resize:vertical; min-height:120px; }

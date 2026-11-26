@@ -202,6 +202,15 @@ h1,h2,h3,h4,h5,h6 { font-weight: 400; letter-spacing: -.01em; }
     text-decoration: none; cursor: pointer; transition: all .25s var(--ease);
     border: 1px solid transparent; white-space: nowrap;
 }
+/* An uppercase label with wide letter-spacing is a long word, and `nowrap`
+   means a long word pushes the page out rather than breaking. "Continue &
+   Confirm Booking" measures 305px, which is wider than the room a 320px phone
+   has to offer it. On a narrow screen the label is allowed to take two lines. */
+@media (max-width: 400px) {
+    .btn-lx, .btn-lx-light, .btn-lx-ghost, .btn-lx-ghost-dark {
+        white-space: normal; min-width: 0; padding: 13px 20px; text-align: center;
+    }
+}
 .btn-lx { background: var(--ink); color: #fff; border-color: var(--ink); }
 .btn-lx:hover { background: #000; color: #fff; }
 .btn-lx-light { background: #fff; color: var(--ink); border-color: #fff; }
@@ -220,8 +229,39 @@ h1,h2,h3,h4,h5,h6 { font-weight: 400; letter-spacing: -.01em; }
    all of them. */
 @media (max-width: 640px) { .lx-wrap { padding: 0 16px; } }
 @media (max-width: 380px) { .lx-wrap { padding: 0 13px; } }
+
+/* A Bootstrap row carries its gutter as a negative margin on both sides, on the
+   understanding that the container it sits in gives the same amount back as
+   padding. The rows here are g-5, which pulls 24px a side, while the wrapper
+   around them only gives back 16px (13px on a small phone) and .container-xl
+   gives back 12px. The difference is the page being 8 to 12 pixels wider than
+   the phone: every page slid sideways, and a browser that answers that by
+   shrinking the whole page to fit also pushes the fixed bottom bar below the
+   edge of the screen, which is what cut its labels in half.
+   Columns are stacked at this width, so the horizontal gutter is not visible
+   and nothing is lost by matching it to the padding. The vertical gutter, which
+   is the spacing you can actually see between stacked blocks, is untouched. */
+@media (max-width: 768px) {
+    .row { --bs-gutter-x: 1.5rem; }
+    /* A net, not the fix above: one long unbroken word in a description should
+       never be able to make the whole site slide sideways. `clip` rather than
+       `hidden` so it does not become a scroll container and break sticky. */
+    body { overflow-x: clip; }
+}
 .lx-flabel { display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .16em; color: var(--ink-3); margin-bottom: 8px; }
+/* A pair of form fields that becomes one column on a phone. A date field and a
+   select both refuse to go below their own intrinsic width, so two of them side
+   by side on a 320px screen pushed the page wider than the screen. */
+.lx-fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.lx-fgrid > * { min-width: 0; }
+@media (max-width: 640px) { .lx-fgrid { grid-template-columns: 1fr; } }
+/* Panels carrying a form: a desktop inset is a sixth of a phone's width. */
+.lx-panel { background: var(--white); border: 1px solid var(--line); border-radius: var(--r); padding: 40px 36px; }
+@media (max-width: 640px) { .lx-panel { padding: 26px 18px; } }
 .lx-input {
+    /* Never wider than the space it is given, whatever the browser thinks a
+       date or colour field ought to measure. */
+    min-width: 0;
     width: 100%; border: 1px solid var(--line); border-radius: var(--r);
     padding: 10px 13px; font-size: 13.5px; font-family: inherit; color: var(--ink);
     background: var(--white); outline: none; transition: border-color .25s var(--ease);

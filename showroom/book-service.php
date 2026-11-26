@@ -152,7 +152,7 @@ include __DIR__ . '/header.php';
 
 <?php if ($success): ?>
 <!-- ── SUCCESS STATE ──────────────────────────────────────── -->
-<section style="background:#f8fafc;padding:80px 0;min-height:55vh;display:flex;align-items:center">
+<section style="background:#f8fafc;padding:min(80px, 13vw) 0;min-height:55vh;display:flex;align-items:center">
     <div class="container-xl">
         <div style="max-width:540px;margin:0 auto;text-align:center">
             <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#22c55e,#16a34a);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;box-shadow:0 8px 32px rgba(34,197,94,.3)">
