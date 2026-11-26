@@ -141,7 +141,16 @@ function imgFitBox(int $w, int $h, int $maxW, int $maxH): array
  *
  * @return array{made:int,skipped:string}
  */
-function imgDerive(string $subDir, string $filename): array
+/**
+ * Build the sizes a browser wants from a photograph already on disk.
+ *
+ * $withWebp is false during an upload. WebP encoding measured 1.9 of the 3.7
+ * seconds the derivatives took -- a second of that for the 2560 master alone --
+ * and it is the one part nothing waits on: imgSrcset() offers only files that
+ * exist, so a page serves JPEG until scripts/build_image_sizes.php fills them
+ * in. Making somebody watch a progress bar for it was the wrong trade.
+ */
+function imgDerive(string $subDir, string $filename, bool $withWebp = true): array
 {
     if ($filename === '') return ['made' => 0, 'skipped' => 'no filename'];
     $src = BASE_PATH . '/uploads/' . $subDir . '/' . $filename;
@@ -156,107 +165,208 @@ function imgDerive(string $subDir, string $filename): array
         return ['made' => 0, 'skipped' => 'too large for memory_limit'];
     }
 
-    $made = 0;
+    /* What is missing, worked out before anything is decoded.
+       A photograph whose derivatives already exist then costs a handful of
+       stat() calls and no image work at all, which is what makes re-running
+       the backfill over a full uploads folder cheap. */
+    $todo = [];
     foreach (imgLadder() as $w) {
         if ($w > $ow) continue;                       // never enlarge
-        $q = $w <= 480 ? 85 : 88;
         $jpg = imgVariantPath($subDir, $filename, $w, false);
-        if (!is_file($jpg) && imgWrite($src, $jpg, $w, $q, false)) $made++;
-        if (imgWebpOk()) {
-            $wp = imgVariantPath($subDir, $filename, $w, true);
-            if (!is_file($wp) && imgWrite($src, $wp, $w, 82, true)) $made++;
-        }
+        $wp  = ($withWebp && imgWebpOk()) ? imgVariantPath($subDir, $filename, $w, true) : null;
+        $need = [];
+        if (!is_file($jpg)) $need['jpg']  = ['path' => $jpg, 'q' => $w <= 480 ? 85 : 88];
+        if ($wp !== null && !is_file($wp)) $need['webp'] = ['path' => $wp, 'q' => 82];
+        if ($need) $todo[$w] = $need;
     }
-    // A WebP of the master too, for the lightbox.
-    if (imgWebpOk()) {
-        $masterWebp = preg_replace('/\.[^.]+$/', '', $src) . '.webp';
-        if (!is_file($masterWebp) && imgWrite($src, $masterWebp, $ow, 82, true)) $made++;
-    }
-    return ['made' => $made, 'skipped' => ''];
-}
+    $masterWebp = ($withWebp && imgWebpOk())
+        ? preg_replace('/\.[^.]+$/', '', $src) . '.webp'
+        : null;
+    $needMasterWebp = $masterWebp !== null && !is_file($masterWebp);
 
-/**
- * Write one resized copy.
- *
- * Downscaling a photograph softens it -- that is arithmetic, not a bug -- so
- * every copy is sharpened afterwards by an amount scaled to how far it was
- * reduced. Skipping that step is most of why the old images looked flat.
- */
-function imgWrite(string $src, string $dest, int $targetW, int $quality, bool $webp): bool
-{
-    $dir = dirname($dest);
-    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
-        error_log('imgWrite: cannot create ' . $dir);
-        return false;
-    }
+    if (!$todo && !$needMasterWebp) return ['made' => 0, 'skipped' => ''];
+
+    // A long batch must not be killed half way through by the clock. Each
+    // photograph asks for its own allowance rather than the whole upload
+    // sharing one.
+    if (function_exists('set_time_limit')) @set_time_limit(120);
+
+    $made = 0;
+    $ext  = strtolower(pathinfo($src, PATHINFO_EXTENSION));
 
     try {
         if (imgEngine() === 'imagick') {
+            // Read once, then step down. clone() copies the decoded picture
+            // rather than reading the file again.
+            $master = new Imagick($src);
+            try { $master->autoOrientImage(); } catch (\Throwable $_) {}
+
+            if ($needMasterWebp) {
+                $m = clone $master;
+                $m->setImageFormat('webp');
+                $m->setImageCompressionQuality(82);
+                if ($m->writeImage($masterWebp)) $made++;
+                $m->clear();
+            }
+
+            $cur = $master;
+            krsort($todo);                             // widest first
+            foreach ($todo as $w => $need) {
+                $step = clone $cur;
+                $th   = max(1, (int)round($step->getImageHeight()
+                                          * ($w / max(1, $step->getImageWidth()))));
+                $step->resizeImage($w, $th, Imagick::FILTER_LANCZOS, 1);
+                try { $step->unsharpMaskImage(0, 0.6, $w / $ow < 0.5 ? 0.9 : 0.5, 0.02); }
+                catch (\Throwable $_) {}
+
+                foreach ($need as $kind => $out) {
+                    $o = clone $step;
+                    if ($kind === 'webp') $o->setImageFormat('webp');
+                    $o->setImageCompressionQuality($out['q']);
+                    if (!is_dir(dirname($out['path']))) @mkdir(dirname($out['path']), 0755, true);
+                    if ($o->writeImage($out['path'])) $made++;
+                    $o->clear();
+                }
+                if ($cur !== $master) $cur->clear();
+                $cur = $step;
+            }
+            if ($cur !== $master) $cur->clear();
+            $master->clear();
+            return ['made' => $made, 'skipped' => ''];
+        }
+
+        // ── GD ────────────────────────────────────────────────────────────
+        $img = imgDecode($src, $ext);
+        if (!$img) return ['made' => 0, 'skipped' => 'could not decode'];
+
+        if ($needMasterWebp && imgEncodeTo($img, $masterWebp, 82, true, $ext)) $made++;
+
+        $cur = $img;
+        krsort($todo);                                 // widest first
+        foreach ($todo as $w => $need) {
+            // Resampled from the step above, not from the master every time.
+            $step = imgResample($cur, $w, $ow, $ext);
+            if (!$step) continue;
+            foreach ($need as $kind => $out) {
+                if (imgEncodeTo($step, $out['path'], $out['q'], $kind === 'webp', $ext)) $made++;
+            }
+            if ($cur !== $img) imagedestroy($cur);
+            $cur = $step;
+        }
+        if ($cur !== $img) imagedestroy($cur);
+        imagedestroy($img);
+        return ['made' => $made, 'skipped' => ''];
+
+    } catch (\Throwable $e) {
+        error_log('imgDerive: ' . $e->getMessage());
+        return ['made' => $made, 'skipped' => 'error'];
+    }
+}
+
+/** Decode a file into a GD image, or false. */
+function imgDecode(string $src, string $ext)
+{
+    return match ($ext) {
+        'jpg', 'jpeg' => @imagecreatefromjpeg($src),
+        'png'         => @imagecreatefrompng($src),
+        'webp'        => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($src) : false,
+        'gif'         => @imagecreatefromgif($src),
+        default       => false,
+    };
+}
+
+/**
+ * One step down, sharpened.
+ *
+ * $origW is the width of the photograph as uploaded, not of the image being
+ * resampled, so a 480 is sharpened by the same amount whether it came straight
+ * off the master or down through 1440 and 960.
+ */
+function imgResample($img, int $targetW, int $origW, string $ext)
+{
+    $ow = imagesx($img);
+    $oh = imagesy($img);
+    $tw = min($targetW, $ow);
+    $th = max(1, (int)round($oh * ($tw / max(1, $ow))));
+
+    $dst = imagecreatetruecolor($tw, $th);
+    if (in_array($ext, ['png', 'gif'], true)) {
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        imagefill($dst, 0, 0, imagecolorallocatealpha($dst, 0, 0, 0, 127));
+    }
+    imagecopyresampled($dst, $img, 0, 0, 0, 0, $tw, $th, $ow, $oh);
+
+    // Downscaling a photograph softens it -- that is arithmetic, not a bug --
+    // so put the edge back by an amount scaled to the total reduction. GD has
+    // no unsharp mask, so this is a light convolution: enough to restore the
+    // edge, gentle enough not to ring around chrome.
+    if ($tw < $origW) {
+        $amount = $tw / $origW < 0.5 ? 0.8 : 0.45;
+        $c      = -$amount;
+        $centre = 1 + (4 * $amount);
+        @imageconvolution($dst, [[0, $c, 0], [$c, $centre, $c], [0, $c, 0]], 1, 0);
+    }
+    return $dst;
+}
+
+/** Write a GD image out, in the format the destination asks for. */
+function imgEncodeTo($img, string $dest, int $quality, bool $webp, string $ext): bool
+{
+    $dir = dirname($dest);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+        error_log('imgEncodeTo: cannot create ' . $dir);
+        return false;
+    }
+    if ($webp) {
+        if (!function_exists('imagewebp')) return false;
+        // A palette image cannot be written as WebP by GD.
+        if (function_exists('imageistruecolor') && !imageistruecolor($img)) {
+            @imagepalettetotruecolor($img);
+        }
+        return (bool)@imagewebp($img, $dest, $quality);
+    }
+    return (bool)match ($ext) {
+        'png'  => @imagepng($img, $dest, 6),
+        'gif'  => @imagegif($img, $dest),
+        'webp' => function_exists('imagewebp') && @imagewebp($img, $dest, $quality),
+        default => @imagejpeg($img, $dest, $quality),
+    };
+}
+
+/**
+ * Write one resized copy, decoding the source itself.
+ *
+ * imgDerive() no longer goes through here -- it decodes once and reuses the
+ * result, which is the whole point of the change -- but this is kept for any
+ * caller that has a single file to convert and nothing already in memory.
+ */
+function imgWrite(string $src, string $dest, int $targetW, int $quality, bool $webp): bool
+{
+    if (imgEngine() === 'none') return false;
+    try {
+        if (imgEngine() === 'imagick') {
             $im = new Imagick($src);
-            $im->setImageOrientation($im->getImageOrientation());
             try { $im->autoOrientImage(); } catch (\Throwable $_) {}
             $ow = $im->getImageWidth();
-            $oh = $im->getImageHeight();
-            $th = max(1, (int)round($oh * ($targetW / max(1, $ow))));
-            if ($targetW < $ow) {
-                // Lanczos: the reason Imagick is preferred here.
-                $im->resizeImage($targetW, $th, Imagick::FILTER_LANCZOS, 1);
-                $im->unsharpMaskImage(0, 0.6, 0.8, 0.02);
-            }
-            $im->stripImage();                        // drop EXIF bulk, keep pixels
-            $im->setImageFormat($webp ? 'webp' : strtolower(pathinfo($dest, PATHINFO_EXTENSION)));
+            $th = max(1, (int)round($im->getImageHeight() * ($targetW / max(1, $ow))));
+            if ($targetW < $ow) $im->resizeImage($targetW, $th, Imagick::FILTER_LANCZOS, 1);
+            if ($webp) $im->setImageFormat('webp');
             $im->setImageCompressionQuality($quality);
-            if (!$webp) $im->setInterlaceScheme(Imagick::INTERLACE_PLANE);  // progressive JPEG
+            $dir = dirname($dest);
+            if (!is_dir($dir)) @mkdir($dir, 0755, true);
             $ok = $im->writeImage($dest);
             $im->clear();
             return (bool)$ok;
         }
-
-        // ── GD ────────────────────────────────────────────────────────────
         $ext = strtolower(pathinfo($src, PATHINFO_EXTENSION));
-        $img = match ($ext) {
-            'jpg', 'jpeg' => @imagecreatefromjpeg($src),
-            'png'         => @imagecreatefrompng($src),
-            'webp'        => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($src) : false,
-            'gif'         => @imagecreatefromgif($src),
-            default       => false,
-        };
+        $img = imgDecode($src, $ext);
         if (!$img) return false;
-
-        $ow = imagesx($img);
-        $oh = imagesy($img);
-        $tw = min($targetW, $ow);
-        $th = max(1, (int)round($oh * ($tw / max(1, $ow))));
-
-        $dst = imagecreatetruecolor($tw, $th);
-        if ($webp || in_array($ext, ['png', 'gif'], true)) {
-            imagealphablending($dst, false);
-            imagesavealpha($dst, true);
-            imagefill($dst, 0, 0, imagecolorallocatealpha($dst, 0, 0, 0, 127));
-        }
-        imagecopyresampled($dst, $img, 0, 0, 0, 0, $tw, $th, $ow, $oh);
-
-        // Sharpen in proportion to the reduction. GD has no unsharp mask, so
-        // this is a light convolution -- enough to put back the edge the
-        // resample took off, gentle enough not to ring around chrome.
-        if ($tw < $ow) {
-            $amount = $tw / $ow < 0.5 ? 0.8 : 0.45;
-            $c = -$amount;
-            $centre = 1 + (4 * $amount);
-            @imageconvolution($dst, [[0, $c, 0], [$c, $centre, $c], [0, $c, 0]], 1, 0);
-        }
-
-        $ok = $webp
-            ? (function_exists('imagewebp') && imagewebp($dst, $dest, $quality))
-            : match ($ext) {
-                'png'  => imagepng($dst, $dest, 6),
-                'gif'  => imagegif($dst, $dest),
-                'webp' => function_exists('imagewebp') && imagewebp($dst, $dest, $quality),
-                default => imagejpeg($dst, $dest, $quality),
-            };
-        imagedestroy($dst);
+        $out = imgResample($img, $targetW, imagesx($img), $ext);
+        $ok  = imgEncodeTo($out, $dest, $quality, $webp, $ext);
+        imagedestroy($out);
         imagedestroy($img);
-        return (bool)$ok;
+        return $ok;
     } catch (\Throwable $e) {
         error_log('imgWrite: ' . $e->getMessage());
         return false;

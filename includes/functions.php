@@ -370,7 +370,9 @@ function _imgProcess(string $filePath, string $ext, string $targetDir): void {
         // srcset, so derivatives of a logbook scan would be dead weight.
         if ($isPhoto) {
             require_once __DIR__ . '/images.php';
-            imgDerive('cars', basename($filePath));
+            // No WebP here: it is the slowest part by a distance and the one
+            // nothing waits on. scripts/build_image_sizes.php writes it later.
+            imgDerive('cars', basename($filePath), false);
         }
     } catch (\Throwable $e) {
         // Never fail an upload due to image processing errors

@@ -16,6 +16,14 @@ if (!$car) { setFlash('error', 'Car not found.'); redirect(BASE_URL . '/modules/
 $errors = [];
 
 // Handle Upload — accepts one or many files in a single submission.
+/* The page sends photographs one at a time and asks for JSON back, so that
+   twenty pictures are twenty short requests rather than one long one. That
+   is what keeps a batch inside max_execution_time; it also means a picture
+   that fails costs itself and not the rest, and there is something truthful
+   to show on screen while it happens. The ordinary form post below is
+   untouched and still works where the JavaScript cannot run. */
+$ajax = ($_POST['ajax'] ?? '') === '1';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_FILES['photos']['name'][0])) {
     $caption = trim($_POST['caption'] ?? '');
 
@@ -59,6 +67,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_FILES['photos']['name'][0]
     if ($ok > 0) {
         logActivity('upload', 'media', $id,
             "Uploaded {$ok} photo(s) for vehicle: {$car['make']} {$car['model']}");
+    }
+
+    if ($ajax) {
+        // One picture, one answer. The page keeps its own count.
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => $ok > 0, 'uploaded' => $ok,
+                          'error' => $errors ? strip_tags($errors[0]) : '']);
+        exit;
     }
 
     if ($ok > 0 && !$errors) {
@@ -145,9 +161,19 @@ include __DIR__ . '/../../includes/header.php';
                         <div class="form-text text-muted">
                             Select several at once — hold <strong>Ctrl</strong> (or <strong>Cmd</strong>) while clicking,
                             or drag a selection.<br>
-                            Up to <strong><?= $__mb($__totalMax) ?></strong> in one upload (<?= $__mb($__fileMax) ?> per file), at most <?= $__maxFiles ?> files. JPG, PNG or WEBP.
+                            <span id="photoLimitModern" style="display:none">Pictures are reduced in the browser
+                            and sent one at a time, so there is no limit on how many go at once.</span>
+                            <span id="photoLimitPlain">Up to <strong><?= $__mb($__totalMax) ?></strong> in one upload
+                            (<?= $__mb($__fileMax) ?> per file), at most <?= $__maxFiles ?> files.</span>
+                            JPG, PNG or WEBP.
                         </div>
                         <div id="photoPickSummary" class="small mt-2" style="display:none"></div>
+                        <div id="photoProgress" class="mt-3" style="display:none">
+                            <div class="progress" style="height:6px">
+                                <div id="photoBar" class="progress-bar" role="progressbar" style="width:0%"></div>
+                            </div>
+                            <div id="photoProgressText" class="small text-muted mt-2"></div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Caption (optional)</label>
@@ -218,6 +244,20 @@ include __DIR__ . '/../../includes/header.php';
     var label   = document.getElementById('photoUploadLabel');
     if (!input || !form) return;
 
+    /* Can this browser reduce a picture and post it on its own? If not,
+       everything below is skipped and the form posts the ordinary way. */
+    var CAN_STREAM = !!(window.fetch && window.FormData && window.Promise
+                        && window.createImageBitmap
+                        && document.createElement('canvas').getContext);
+    var MAX_EDGE = 2560;          // what the server reduces to anyway
+
+    if (CAN_STREAM) {
+        var modern = document.getElementById('photoLimitModern');
+        var plain  = document.getElementById('photoLimitPlain');
+        if (modern) modern.style.display = '';
+        if (plain)  plain.style.display  = 'none';
+    }
+
     var MAX_FILES = <?= (int)$__maxFiles ?>;
     var MAX_BYTES = <?= (int)$__fileMax ?>;
     // The one that was missing, and the one that was breaking the upload.
@@ -234,7 +274,7 @@ include __DIR__ . '/../../includes/header.php';
         // Warn before the round-trip — the server rejects these anyway, but
         // finding out after a long upload is a poor experience.
         var notes = [];
-        if (files.length > MAX_FILES) {
+        if (!CAN_STREAM && files.length > MAX_FILES) {
             notes.push('<div class="text-danger"><i class="fa fa-triangle-exclamation me-1"></i>'
                      + files.length + ' selected, but the server accepts at most ' + MAX_FILES
                      + ' per upload. Please upload in smaller batches.</div>');
@@ -247,7 +287,9 @@ include __DIR__ . '/../../includes/header.php';
         // Over the request limit the server never sees the upload at all: it
         // discards the body and the browser is told nothing, so this has to be
         // caught here or not at all.
-        var tooMuch = MAX_TOTAL > 0 && total > MAX_TOTAL;
+        // Only the ordinary form post shares one envelope. Sent one at a
+        // time, neither the total nor the file count means anything.
+        var tooMuch = !CAN_STREAM && MAX_TOTAL > 0 && total > MAX_TOTAL;
         if (tooMuch) {
             notes.push('<div class="text-danger"><i class="fa fa-triangle-exclamation me-1"></i>'
                      + 'That is ' + mb(total) + ' in one upload and the server takes '
@@ -270,6 +312,88 @@ include __DIR__ . '/../../includes/header.php';
         btn.disabled = true;
         label.innerHTML = 'Uploading…';
     });
+
+    /* ── Sending ────────────────────────────────────────────────────────────
+       One picture per request. Twenty photographs used to be one request of
+       about two minutes, which is over most max_execution_time settings and
+       lost every picture when it expired; this is twenty requests of a few
+       seconds, and a failure costs one picture. */
+    function shrink(file) {
+        if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return Promise.resolve(file);
+        return createImageBitmap(file, { imageOrientation: 'from-image' }).then(function (bmp) {
+            var longest = Math.max(bmp.width, bmp.height);
+            // Already small enough: send what was chosen rather than re-encoding
+            // it, which would only lose a little quality for nothing.
+            if (longest <= MAX_EDGE) { bmp.close(); return file; }
+            var scale = MAX_EDGE / longest;
+            var w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+            var c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+            bmp.close();
+            return new Promise(function (res) {
+                c.toBlob(function (blob) {
+                    if (!blob || blob.size >= file.size) { res(file); return; }
+                    res(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg',
+                                 { type: 'image/jpeg' }));
+                }, 'image/jpeg', 0.88);
+            });
+        }).catch(function () { return file; });   // unreadable: let the server try
+    }
+
+    function sendOne(file, caption) {
+        return shrink(file).then(function (f) {
+            var fd = new FormData();
+            fd.append('photos[]', f, f.name);
+            fd.append('caption', caption);
+            fd.append('ajax', '1');
+            var tok = document.querySelector('input[name="csrf_token"]');
+            if (tok) fd.append('csrf_token', tok.value);
+            return fetch(window.location.href, { method: 'POST', body: fd, credentials: 'same-origin' })
+                .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Server error' }; }); });
+        });
+    }
+
+    form.addEventListener('submit', function (e) {
+        if (!CAN_STREAM) return;                       // ordinary post
+        var files = Array.prototype.slice.call(input.files || []);
+        if (!files.length) return;
+        e.preventDefault();
+
+        var capEl   = form.querySelector('[name="caption"]');
+        var caption = capEl ? capEl.value : '';
+        var box     = document.getElementById('photoProgress');
+        var bar     = document.getElementById('photoBar');
+        var text    = document.getElementById('photoProgressText');
+        box.style.display = '';
+        if (btn) btn.disabled = true;
+        summary.style.display = 'none';
+
+        var done = 0, failed = [];
+        function step(i) {
+            if (i >= files.length) {
+                text.innerHTML = failed.length
+                    ? done + ' uploaded, ' + failed.length + ' could not be: ' + failed.join(', ')
+                    : 'All ' + done + ' uploaded. Reloading…';
+                // Reload either way, so what did arrive is on screen.
+                setTimeout(function () { window.location.href = window.location.pathname
+                    + window.location.search; }, failed.length ? 2500 : 500);
+                return;
+            }
+            text.textContent = 'Uploading ' + (i + 1) + ' of ' + files.length
+                             + ' — ' + files[i].name;
+            sendOne(files[i], caption).then(function (res) {
+                if (res && res.ok) done++; else failed.push(files[i].name);
+            }).catch(function () {
+                failed.push(files[i].name);
+            }).then(function () {
+                bar.style.width = Math.round(((i + 1) / files.length) * 100) + '%';
+                step(i + 1);
+            });
+        }
+        step(0);
+    });
+
 }());
 </script>
 
