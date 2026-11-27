@@ -212,6 +212,43 @@ function getSetting(string $key, string $default = ''): string {
 }
 
 /**
+ * The eleven characters that identify a film on YouTube, out of whatever was
+ * pasted in.
+ *
+ * Somebody setting the homepage film will copy what is in the address bar, and
+ * that comes in half a dozen shapes -- the watch page, a share link, a Shorts
+ * link, an embed, with a playlist or a timestamp hanging off the end. All of
+ * them carry the same id, and only the id is wanted: it is the embed address
+ * that gets built, not the link that was copied.
+ *
+ * Returns '' for anything that is not a YouTube address, which is the signal
+ * to fall back rather than to put a broken frame on the front page.
+ */
+function youtubeId(?string $value): string
+{
+    $value = trim((string)$value);
+    if ($value === '') {
+        return '';
+    }
+    // Already just the id.
+    if (preg_match('~^[A-Za-z0-9_-]{11}$~', $value)) {
+        return $value;
+    }
+    foreach ([
+        '~[?&]v=([A-Za-z0-9_-]{11})~',        // watch?v=ID
+        '~youtu\.be/([A-Za-z0-9_-]{11})~',    // youtu.be/ID
+        '~/embed/([A-Za-z0-9_-]{11})~',       // /embed/ID
+        '~/shorts/([A-Za-z0-9_-]{11})~',      // /shorts/ID
+        '~/live/([A-Za-z0-9_-]{11})~',        // /live/ID
+    ] as $pattern) {
+        if (preg_match($pattern, $value, $m)) {
+            return $m[1];
+        }
+    }
+    return '';
+}
+
+/**
  * Resolve the uploaded company logo to a usable URL + filesystem path.
  *
  * The logo always lives at /assets/images/<file>. Historically the setting

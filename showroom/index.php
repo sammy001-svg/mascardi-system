@@ -67,6 +67,72 @@ $vehiclesUrl = BASE_URL . '/showroom/vehicles.php';
 // Nav renders transparently over the video hero
 $navOverlay = true;
 
+/* ── The two films ───────────────────────────────────────────────────────────
+   Set in Settings → Website, so the film at the top of the page can be changed
+   without a deployment. The ids below are what the site ships with and what it
+   falls back to if the setting is blank or holds something that is not a
+   YouTube address.
+
+   One function builds both embeds, because the parameters are what keep the
+   player from looking like a YouTube page in the middle of the site, and they
+   were previously written out twice -- which is how two embeds drift apart.
+
+   · youtube-nocookie.com     nothing is written to the visitor's machine
+                              until they actually play something
+   · autoplay + mute + playsinline   the only combination phones will start
+                              by themselves; without playsinline iOS takes
+                              the film full screen
+   · loop + playlist=<id>     a single video will not loop without naming
+                              itself as the playlist
+   · controls, modestbranding, rel, iv_load_policy, disablekb, fs
+                              no chrome, no suggested videos at the end, no
+                              annotations, no keyboard, no full-screen button
+*/
+$heroVideo = youtubeId(getSetting('site_hero_video', '')) ?: 'VbubZ1qcYJw';
+$filmVideo = youtubeId(getSetting('site_film_video', '')) ?: 'P3JHd_cHHCM';
+
+/**
+ * A film that fills its frame, with a still of itself behind it.
+ *
+ * The poster matters more than it looks: a YouTube embed is close to a
+ * megabyte of script before it paints anything, and until it does the hero was
+ * a black rectangle. The still is one image, it arrives first, and it is the
+ * film's own opening frame, so the page opens on the car.
+ */
+function lxFilm(string $id, string $title, bool $eager = true): string
+{
+    $params = http_build_query([
+        'autoplay'        => 1,
+        'mute'            => 1,
+        'controls'        => 0,
+        'loop'            => 1,
+        'playlist'        => $id,
+        'playsinline'     => 1,
+        'rel'             => 0,
+        'modestbranding'  => 1,
+        'iv_load_policy'  => 3,
+        'disablekb'       => 1,
+        'fs'              => 0,
+    ]);
+    $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+    // maxresdefault exists only for films uploaded in HD; hqdefault exists for
+    // every film there has ever been. Asking for the good one and stepping
+    // down once if it is not there costs one attribute and means a film chosen
+    // in Settings can never leave a broken image at the top of the page.
+    $poster = 'https://i.ytimg.com/vi/' . $e($id) . '/maxresdefault.jpg';
+    $spare  = 'https://i.ytimg.com/vi/' . $e($id) . '/hqdefault.jpg';
+    return '<div class="lx-video-cover">'
+         . '<img class="lx-video-poster" src="' . $poster . '"'
+         . ' alt="" aria-hidden="true" decoding="async"'
+         . ' onerror="this.onerror=null;this.src=' . $e("'" . $spare . "'") . '"'
+         . ' ' . ($eager ? 'fetchpriority="high"' : 'loading="lazy"') . '>'
+         . '<iframe src="https://www.youtube-nocookie.com/embed/' . $e($id) . '?' . $e($params) . '"'
+         . ' title="' . $e($title) . '" frameborder="0" tabindex="-1"'
+         . ' allow="autoplay; encrypted-media; picture-in-picture"'
+         . ($eager ? '' : ' loading="lazy"') . '></iframe>'
+         . '</div>';
+}
+
 include __DIR__ . '/header.php';
 ?>
 
@@ -74,15 +140,14 @@ include __DIR__ . '/header.php';
      HERO — full-bleed autoplay video
 ═══════════════════════════════════════════════════════════════ -->
 <section id="hero" class="lx-hero">
-    <div class="lx-video-cover">
-        <iframe src="https://www.youtube.com/embed/x7U4nFENdjU?autoplay=1&amp;mute=1&amp;controls=0&amp;loop=1&amp;playlist=x7U4nFENdjU&amp;playsinline=1&amp;rel=0&amp;iv_load_policy=3&amp;disablekb=1"
-                title="Mascardi hero video" frameborder="0"
-                allow="autoplay; encrypted-media; picture-in-picture" tabindex="-1"></iframe>
-    </div>
+    <?= lxFilm($heroVideo, $companyName . ' — showroom film') ?>
     <div class="lx-hero-shade"></div>
 
     <div class="lx-hero-content">
-        <div class="lx-label rv" style="color:rgba(255,255,255,.65);margin-bottom:18px"><?= $totalStock ?> Vehicles Available Now</div>
+<?php /* .82 rather than .65. These were set for a dark film; over this one --
+         a white car under showroom lights -- the dimmer greys measured below
+         3:1 for half their length. */ ?>
+        <div class="lx-label rv" style="color:rgba(255,255,255,.82);margin-bottom:18px"><?= $totalStock ?> Vehicles Available Now</div>
         <h1 class="rv rv-d1">Extraordinary cars.<br>Effortless ownership.</h1>
         <p class="rv rv-d2">Quality imported vehicles, transparent pricing and flexible financing — hand-inspected and ready for the road.</p>
         <div class="lx-hero-ctas rv rv-d3">
@@ -244,11 +309,9 @@ include __DIR__ . '/header.php';
      SECOND VIDEO — brand film
 ═══════════════════════════════════════════════════════════════ -->
 <section class="lx-film">
-    <div class="lx-video-cover">
-        <iframe src="https://www.youtube.com/embed/P3JHd_cHHCM?autoplay=1&amp;mute=1&amp;controls=0&amp;loop=1&amp;playlist=P3JHd_cHHCM&amp;playsinline=1&amp;rel=0&amp;iv_load_policy=3&amp;disablekb=1"
-                title="Mascardi brand film" frameborder="0"
-                allow="autoplay; encrypted-media; picture-in-picture" tabindex="-1"></iframe>
-    </div>
+    <?php /* Below the fold, so it waits rather than competing with the hero
+             for the connection on the way in. */ ?>
+    <?= lxFilm($filmVideo, $companyName . ' — brand film', false) ?>
     <div class="lx-film-shade"></div>
     <div class="lx-film-caption">
         <div class="lx-label rv" style="color:rgba(255,255,255,.65);margin-bottom:14px">The Mascardi Experience</div>
@@ -384,15 +447,46 @@ include __DIR__ . '/header.php';
     width: 100vw; height: 56.25vw;         /* 16:9 of viewport width  */
     min-width: 177.78vh; min-height: 100vh; /* 16:9 of viewport height */
     transform: translate(-50%, -50%) scale(1.15);
-    border: 0;
+    border: 0; z-index: 1;
+}
+/* The film's own opening frame, behind it. A YouTube embed is most of a
+   megabyte of script before it paints anything, and until it did, this was a
+   black rectangle at the top of the page. The still is one image, it arrives
+   first, and it carries the same crop and the same overscan as the film, so
+   when the film starts there is nothing to see happen. */
+.lx-video-poster {
+    position: absolute; inset: 0; z-index: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; object-position: center;
+    transform: scale(1.15);
 }
 
 /* Hero */
 .lx-hero { position: relative; min-height: 100vh; display: flex; align-items: flex-end; overflow: hidden; background: var(--black); }
+/* The scrim the words sit on.
+   It used to run .78 at the foot to .22 halfway up, which was enough over the
+   film that was here before -- a dark one. This one is a white car under
+   showroom lights, and measured against it, 45% of the headline was sitting on
+   a backdrop under 3:1. So the scrim is deeper and held up to where the type
+   ends, then released quickly, so the picture above it is untouched and the
+   band reads as part of the design rather than as a veil over the film. The
+   little at the top is for the navigation. */
 .lx-hero-shade {
     position: absolute; inset: 0; pointer-events: none;
-    background: linear-gradient(to top, rgba(4,4,4,.78) 0%, rgba(4,4,4,.22) 45%, rgba(4,4,4,.34) 100%);
+    background: linear-gradient(to top,
+        rgba(4,4,4,.94) 0%,
+        rgba(4,4,4,.90) 34%,
+        rgba(4,4,4,.74) 52%,
+        rgba(4,4,4,.40) 62%,
+        rgba(4,4,4,.10) 72%,
+        rgba(4,4,4,0)   82%,
+        rgba(4,4,4,.42) 100%);
 }
+/* And a shadow on the type itself, which separates a letter from whatever it
+   happens to land on without darkening the picture any further. */
+.lx-hero-content h1,
+.lx-hero-content p,
+.lx-hero-content .lx-label { text-shadow: 0 1px 22px rgba(0,0,0,.5); }
 .lx-hero-content {
     position: relative; z-index: 2;
     width: 100%; max-width: 1320px; margin: 0 auto;
@@ -402,7 +496,7 @@ include __DIR__ . '/header.php';
     font-size: clamp(36px, 5.4vw, 68px); font-weight: 300; letter-spacing: -.01em;
     color: #fff; line-height: 1.08; margin: 0 0 20px;
 }
-.lx-hero-content p { font-size: 16px; color: rgba(255,255,255,.72); max-width: 460px; line-height: 1.7; margin: 0 0 36px; }
+.lx-hero-content p { font-size: 16px; color: rgba(255,255,255,.88); max-width: 460px; line-height: 1.7; margin: 0 0 36px; }
 .lx-hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; }
 .lx-hero-scroll { position: absolute; bottom: 34px; right: 44px; z-index: 2; }
 .lx-hero-scroll span {
@@ -558,6 +652,7 @@ include __DIR__ . '/header.php';
            the 23% the old full-bleed crop left. */
         transform: scale(1.12);
     }
+    .lx-video-poster { transform: scale(1.12); }
     /* Softens the seam where the film meets the black beneath it. */
     .lx-video-cover::after {
         content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 64px;

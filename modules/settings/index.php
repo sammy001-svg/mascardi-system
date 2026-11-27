@@ -239,7 +239,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             ),
             'seo_ga_id'               => trim($_POST['seo_ga_id']               ?? ''),
             'seo_allow_indexing'      => isset($_POST['seo_allow_indexing']) ? '1' : '0',
+            // Whatever was pasted -- a watch link, a share link, a Shorts
+            // link -- is reduced to the id here, once, so the page never has
+            // to guess what shape it is holding. Something that is not a
+            // YouTube address at all is stored empty, and the site falls back
+            // to the film it shipped with rather than showing a broken frame.
+            'site_hero_video'         => youtubeId($_POST['site_hero_video'] ?? ''),
+            'site_film_video'         => youtubeId($_POST['site_film_video'] ?? ''),
         ];
+        foreach (['site_hero_video' => 'Hero film', 'site_film_video' => 'Brand film'] as $k => $label) {
+            if (trim((string)($_POST[$k] ?? '')) !== '' && $updates[$k] === '') {
+                $errors[] = $label . ': that does not look like a YouTube link.';
+            }
+        }
     }
 
     if (empty($errors)) {
@@ -1095,6 +1107,33 @@ try { $connected = (int)$db->query("SELECT COUNT(*) FROM mail_accounts")->fetchC
                     <input type="url" name="seo_og_image_url" class="form-control"
                            value="<?= e($settings['seo_og_image_url'] ?? '') ?>" placeholder="https://yourdomain.com/assets/images/og-default.jpg">
                     <div class="form-text">Shown when the homepage or a page without its own image is shared on Facebook/WhatsApp/Twitter.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header"><i class="fa fa-film me-2"></i>Website Films</div>
+            <div class="card-body">
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Paste the YouTube link — the address bar, the Share button, a Shorts link,
+                    any of them. Leave a box empty to keep the film the site ships with.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Hero Film <small class="text-muted">(the top of the homepage)</small></label>
+                    <input type="text" name="site_hero_video" class="form-control"
+                           value="<?= e($settings['site_hero_video'] ?? '') ?>"
+                           placeholder="https://www.youtube.com/watch?v=...">
+                    <div class="form-text">
+                        Shot wide, please: it is cropped to fill the screen on a computer, and
+                        shown whole on a phone.
+                    </div>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label">Brand Film <small class="text-muted">(the band further down)</small></label>
+                    <input type="text" name="site_film_video" class="form-control"
+                           value="<?= e($settings['site_film_video'] ?? '') ?>"
+                           placeholder="https://www.youtube.com/watch?v=...">
                 </div>
             </div>
         </div>
