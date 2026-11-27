@@ -9,7 +9,12 @@
  *   API / POST    → Network-only (never cached)
  */
 
-const VERSION    = 'v79';
+// v80: the icons changed. They are precached here, and the activate handler
+// only drops caches whose name does not match this one -- so without the bump
+// every visitor who already has the worker installed would go on being served
+// the old icon from their own cache, however many times the file on the server
+// was replaced.
+const VERSION    = 'v80';
 const CACHE_NAME = 'mascardi-' + VERSION;
 const BASE       = self.location.pathname.replace(/\/sw\.js$/, '');
 const OFFLINE    = BASE + '/offline.php';

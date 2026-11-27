@@ -2,6 +2,9 @@
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/images.php';
 require_once __DIR__ . '/../modules/cars/_slug.php';
+// locationPublicName(): a yard is named for its district in the table and
+// carries the company in front of it everywhere a customer reads it.
+require_once __DIR__ . '/../modules/locations/_geo.php';
 $db = getDB();
 carSlugMigrate($db);
 
@@ -16,7 +19,7 @@ $ids = array_slice($ids, 0, 3);
 
 $placeholders = implode(',', array_fill(0, count($ids), '?'));
 $stmt = $db->prepare("
-    SELECT c.*, l.name AS location_name,
+    SELECT c.*, l.name AS location_name, l.type AS location_type,
            (SELECT file_path FROM car_images WHERE car_id=c.id AND is_primary=1 LIMIT 1) AS primary_image,
            (SELECT COUNT(*) FROM car_images WHERE car_id=c.id) AS image_count
     FROM cars c
@@ -39,6 +42,14 @@ foreach ($cars as $__i => $__c) {
               'rotation_notes', 'last_rotated_at', 'client_id', 'service_client_id',
               'share_token'] as $__backOffice) {
         unset($cars[$__i][$__backOffice]);
+    }
+    // The same public name the vehicle's own page uses: a row named for its
+    // district carries the company in front of it.
+    if (!empty($cars[$__i]['location_name'])) {
+        $cars[$__i]['location_name'] = locationPublicName(
+            (string)$cars[$__i]['location_name'],
+            (string)($cars[$__i]['location_type'] ?? '')
+        );
     }
 }
 

@@ -80,7 +80,8 @@ if ($slugParam !== '') {
 if (!$id) { header('Location: ' . BASE_URL . '/showroom/'); exit; }
 
 $stmt = $db->prepare("
-    SELECT c.*, IFNULL(pl.name, l.name) AS location_name
+    SELECT c.*, IFNULL(pl.name, l.name) AS location_name,
+           IFNULL(pl.type, l.type) AS location_type
     FROM cars c
     LEFT JOIN locations l  ON l.id  = c.location_id
     LEFT JOIN locations pl ON pl.id = l.parent_id
@@ -240,6 +241,18 @@ require_once __DIR__ . '/../modules/locations/_geo.php';
 // showroomViewingSlots() for the dialog's time list.
 require_once __DIR__ . '/_leads_bootstrap.php';
 $locMap = locationMap($db, isset($car['location_id']) ? (int)$car['location_id'] : null);
+
+// The same name, wherever this page prints it. The row is named for its
+// district -- "Lavington", "Spring Valley" -- which is how the yard is spoken
+// of inside the company and reads as a suburb to everybody else, so the public
+// name carries the company: "Mascardi Lavington". Done once, here, rather than
+// at each of the three places the page shows it.
+if (!empty($car['location_name'])) {
+    $car['location_name'] = locationPublicName(
+        (string)$car['location_name'],
+        (string)($car['location_type'] ?? '')
+    );
+}
 
 // A car still on the water is not anywhere a customer can come to, so it gets
 // neither a map nor a viewing form. The page already refuses to name the yard

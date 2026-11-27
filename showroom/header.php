@@ -133,12 +133,29 @@ document.addEventListener('click', function (e) {
 
 <!-- PWA -->
 <link rel="manifest"    href="<?= BASE_URL ?>/manifest.php">
-<link rel="icon"        type="image/svg+xml" href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
-<?php /* PNG, not the SVG that was here: iOS and iPadOS ignore SVG for
-         apple-touch-icon and fall back to a screenshot of the page. */ ?>
-<link rel="apple-touch-icon" sizes="192x192"  href="<?= BASE_URL ?>/assets/images/icons/icon-192.png">
-<link rel="apple-touch-icon" sizes="512x512"  href="<?= BASE_URL ?>/assets/images/icons/icon-512.png">
-<link rel="apple-touch-icon"                  href="<?= BASE_URL ?>/assets/images/icons/icon-192.png">
+<?php /* ── The icon ────────────────────────────────────────────────────────
+         The only icon offered used to be an SVG of a generic car, and Chrome
+         prefers an SVG over everything else on offer, so that is what sat in
+         the tab. These are the house mark: the monogram at the sizes a tab
+         uses -- a hairline script cannot survive 16 pixels, the whole word
+         comes back at 180 and above -- reversed out of the brand red, which
+         also means the icon is visible against a light tab strip and a dark
+         one alike.
+
+         The version is the file's own timestamp. A browser holds on to a
+         favicon far longer than it holds a page, and without this the old car
+         would stay in the tab for weeks. */ ?>
+<?php $__iconV = (int) @filemtime(BASE_PATH . '/assets/images/icons/favicon.ico'); ?>
+<link rel="icon" href="<?= BASE_URL ?>/assets/images/icons/favicon.ico?v=<?= $__iconV ?>" sizes="any">
+<link rel="icon" type="image/png" sizes="16x16" href="<?= BASE_URL ?>/assets/images/icons/icon-16.png?v=<?= $__iconV ?>">
+<link rel="icon" type="image/png" sizes="32x32" href="<?= BASE_URL ?>/assets/images/icons/icon-32.png?v=<?= $__iconV ?>">
+<link rel="icon" type="image/png" sizes="48x48" href="<?= BASE_URL ?>/assets/images/icons/icon-48.png?v=<?= $__iconV ?>">
+<?php /* PNG, not an SVG: iOS and iPadOS ignore SVG for apple-touch-icon and
+         fall back to a screenshot of the page. */ ?>
+<link rel="apple-touch-icon" sizes="180x180" href="<?= BASE_URL ?>/assets/images/icons/apple-touch-icon.png?v=<?= $__iconV ?>">
+<link rel="apple-touch-icon" sizes="192x192" href="<?= BASE_URL ?>/assets/images/icons/icon-192.png?v=<?= $__iconV ?>">
+<link rel="apple-touch-icon" sizes="512x512" href="<?= BASE_URL ?>/assets/images/icons/icon-512.png?v=<?= $__iconV ?>">
+<link rel="apple-touch-icon"                 href="<?= BASE_URL ?>/assets/images/icons/apple-touch-icon.png?v=<?= $__iconV ?>">
 <meta name="mobile-web-app-capable"          content="yes">
 <meta name="apple-mobile-web-app-capable"    content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -293,12 +310,21 @@ select.lx-input { cursor: pointer; }
 /* Wordmark */
 .nav-brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; text-decoration: none; }
 .nav-brand img { height: 34px; width: auto; object-fit: contain; }
-.nav-wordmark {
-    font-size: 19px; font-weight: 700; letter-spacing: .34em;
-    color: var(--ink); text-transform: uppercase; line-height: 1;
-    transition: color .35s var(--ease);
-}
-.nav-overlay-mode:not(.nav-solid) .nav-wordmark { color: #fff; }
+/* The wordmark from the house artwork, in place of the typeset stand-in that
+   was here. Two files rather than one recoloured by CSS, because a PNG cannot
+   be recoloured: the dark one for the white navigation bar, the white one for
+   the bar while it floats over the film. Both are in the markup and CSS picks,
+   so there is no flash of the wrong one and nothing for JavaScript to do. */
+/* Written as .nav-brand .nav-mark, not .nav-mark: the rule above it sets a
+   34px height for any image in the brand link, and one class loses to a class
+   and an element. At 34px this wordmark is 276px wide, which on a phone filled
+   the bar and pushed the menu button off the end of it. */
+.nav-brand .nav-mark { display: block; height: 20px; width: auto; }
+.nav-brand .nav-mark-light { display: none; }
+.nav-overlay-mode:not(.nav-solid) .nav-brand .nav-mark-dark  { display: none; }
+.nav-overlay-mode:not(.nav-solid) .nav-brand .nav-mark-light { display: block; }
+@media (max-width: 480px) { .nav-brand .nav-mark { height: 16px; } }
+@media (max-width: 360px) { .nav-brand .nav-mark { height: 14px; } }
 
 /* Links */
 .nav-links { display: flex; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; }
@@ -418,7 +444,12 @@ select.lx-input { cursor: pointer; }
     <div class="nav-inner">
 
         <a href="<?= BASE_URL ?>/showroom/" class="nav-brand" aria-label="<?= htmlspecialchars($__companyName) ?>">
-            <span class="nav-wordmark">Mascardi</span>
+            <?php $__wmV = (int) @filemtime(BASE_PATH . '/assets/images/brand/wordmark.png'); ?>
+            <img class="nav-mark nav-mark-dark" width="1400" height="172"
+                 src="<?= BASE_URL ?>/assets/images/brand/wordmark.png?v=<?= $__wmV ?>"
+                 alt="<?= htmlspecialchars($__companyName) ?>">
+            <img class="nav-mark nav-mark-light" width="1400" height="172" aria-hidden="true"
+                 src="<?= BASE_URL ?>/assets/images/brand/wordmark-light.png?v=<?= $__wmV ?>" alt="">
         </a>
 
         <div class="nav-links-wrap">

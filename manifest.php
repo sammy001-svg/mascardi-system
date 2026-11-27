@@ -28,8 +28,13 @@ try {
 } catch (\Throwable $e) { /* use defaults */ }
 
 // Static PNG paths (committed to git, always exist)
-$icon192 = $base . '/assets/images/icons/icon-192.png';
-$icon512 = $base . '/assets/images/icons/icon-512.png';
+$icon192  = $base . '/assets/images/icons/icon-192.png';
+$icon512  = $base . '/assets/images/icons/icon-512.png';
+// A maskable icon is cropped to whatever shape the launcher likes -- a circle,
+// a squircle, a rounded square -- so the mark has to sit well inside a safe
+// zone while the colour runs to the edge. The same file used for both purposes
+// is either clipped or floating in a box, so this one is drawn for the job.
+$iconMask = $base . '/assets/images/icons/maskable-512.png';
 
 header('Content-Type: application/manifest+json; charset=utf-8');
 header('Cache-Control: public, max-age=3600');  // 1-hour cache — short enough to pick up changes
@@ -58,10 +63,9 @@ echo json_encode([
     'lang'             => 'en',
 
     'icons' => [
-        ['src' => $icon192, 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'any'],
-        ['src' => $icon192, 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'maskable'],
-        ['src' => $icon512, 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any'],
-        ['src' => $icon512, 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
+        ['src' => $icon192,  'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'any'],
+        ['src' => $icon512,  'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any'],
+        ['src' => $iconMask, 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
     ],
 
     'shortcuts' => [

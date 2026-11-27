@@ -5,9 +5,11 @@
 
             <!-- Brand column -->
             <div class="col-lg-4">
-                <div style="font-size:20px;font-weight:700;letter-spacing:.34em;color:#fff;text-transform:uppercase;margin-bottom:22px">
-                    Mascardi
-                </div>
+                <?php /* The house wordmark rather than the typeset stand-in. The
+                         white cut, because the footer is black. */ ?>
+                <img src="<?= BASE_URL ?>/assets/images/brand/wordmark-light.png?v=<?= (int) @filemtime(BASE_PATH . '/assets/images/brand/wordmark-light.png') ?>"
+                     width="1400" height="172" alt="<?= htmlspecialchars($__companyName) ?>"
+                     style="display:block;height:22px;width:auto;margin-bottom:22px">
                 <p style="line-height:1.8;font-size:13.5px;margin:0 0 28px;max-width:340px;color:rgba(255,255,255,.5)">
                     Your trusted destination for quality imported vehicles. Transparent pricing,
                     flexible financing, and an unmatched selection of cars for every lifestyle.
@@ -272,8 +274,9 @@ $__vehicles = rtrim(BASE_URL, '/') . '/showroom/vehicles.php';
         max-width:560px; margin:0 auto;
         pointer-events:all;
     ">
-        <img src="<?= BASE_URL ?>/assets/images/icons/icon.svg" width="40" height="40"
-             class="pwa-ico" style="border-radius:2px;flex-shrink:0" alt="App icon">
+        <img src="<?= BASE_URL ?>/assets/images/icons/icon-192.png?v=<?= (int) @filemtime(BASE_PATH . '/assets/images/icons/icon-192.png') ?>"
+             width="40" height="40"
+             class="pwa-ico" style="border-radius:6px;flex-shrink:0" alt="App icon">
         <div style="flex:1;min-width:0">
             <div class="pwa-title" style="font-size:13.5px;font-weight:600;color:var(--ink)"><?= htmlspecialchars($__companyName) ?></div>
             <div class="pwa-sub" style="font-size:12px;color:var(--ink-3)">Install for faster access &amp; offline browsing</div>

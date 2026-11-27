@@ -73,9 +73,9 @@ function locationMap(PDO $db, ?int $locationId): ?array
     locationGeoMigrate($db);
     try {
         $st = $db->prepare(
-            "SELECT l.id, l.name, l.address, l.phone, l.latitude, l.longitude,
+            "SELECT l.id, l.name, l.type, l.address, l.phone, l.latitude, l.longitude,
                     p.name AS parent_name, p.address AS parent_address,
-                    p.phone AS parent_phone,
+                    p.phone AS parent_phone, p.type AS parent_type,
                     p.latitude AS parent_lat, p.longitude AS parent_lng
                FROM locations l
           LEFT JOIN locations p ON p.id = l.parent_id
@@ -94,7 +94,12 @@ function locationMap(PDO $db, ?int $locationId): ?array
 
     return [
         'id'          => (int)$r['id'],
-        'name'        => (string)$r['name'],
+        // Everything that reads this is a page or a message a customer sees, so
+        // the name carries the company. The row's own name is kept beside it
+        // for anything that needs to match back to the record.
+        'name'        => locationPublicName((string)$r['name'], (string)($r['type'] ?? '')),
+        'name_raw'    => (string)$r['name'],
+        'type'        => (string)($r['type'] ?? ''),
         // The address shown is the one belonging to whichever pin is used, so
         // the words and the marker never describe two different places.
         'address'     => $parent ? ($r['parent_address'] ?: $r['address']) : $r['address'],
@@ -107,12 +112,51 @@ function locationMap(PDO $db, ?int $locationId): ?array
 }
 
 /**
+ * The name a customer should see for one of our own places.
+ *
+ * The rows are named for the district they sit in -- "Lavington", "Spring
+ * Valley" -- which is how the yard is referred to inside the company and is
+ * nowhere near enough outside it. "Available at Lavington" names a suburb of
+ * about thirty thousand people, and a directions link built from it opens the
+ * suburb rather than the gate. Carrying the company name does both jobs at
+ * once: it reads as a place of ours, and it is a thing a map can find.
+ *
+ * A port is not ours, so it is left alone; every other type -- storage,
+ * showroom, office -- is a Mascardi address. A name that already says so is
+ * left as it is, so nothing is ever branded twice.
+ *
+ * The prefix is the first word of the company name, which is the brand rather
+ * than the registered name: "Mascardi Car Yard" gives "Mascardi Lavington",
+ * not "Mascardi Car Yard Lavington".
+ */
+function locationPublicName(?string $name, ?string $type = null): string
+{
+    $name = trim((string)$name);
+    if ($name === '' || $type === 'port') {
+        return $name;
+    }
+    $brand = trim((string)(function_exists('getSetting')
+        ? getSetting('company_name', 'Mascardi')
+        : 'Mascardi'));
+    $brand = trim((string)(explode(' ', $brand)[0] ?? ''));
+    if ($brand === '' || stripos($name, $brand) !== false) {
+        return $name;
+    }
+    return $brand . ' ' . $name;
+}
+
+/**
  * A link that opens the place in whatever maps app the visitor has.
  *
  * A plain maps URL, not the embedded JavaScript API: this needs no key, no
- * billing account and no third-party script on the page. With a pin it points
- * at the exact spot; without one it searches the address, which is the best
- * that can be done and still better than nothing.
+ * billing account and no third-party script on the page.
+ *
+ * With a pin it points at the exact spot and there is nothing to interpret.
+ * Without one it asks for directions to the place by name and address --
+ * "Mascardi Lavington, James Gichuru Road" -- rather than searching the
+ * address alone, which for a row named after its district used to open the
+ * district. Directions rather than a search either way, because that is the
+ * question the button is answering.
  */
 function locationDirectionsUrl(array $loc): string
 {
@@ -120,10 +164,15 @@ function locationDirectionsUrl(array $loc): string
         return 'https://www.google.com/maps/dir/?api=1&destination='
              . rawurlencode($loc['lat'] . ',' . $loc['lng']);
     }
-    $q = trim((string)($loc['address'] ?? ''));
-    if ($q === '') $q = (string)($loc['name'] ?? '');
-    if ($q === '') return '';
-    return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($q);
+    // Name first: it is the part that identifies the place, and the address
+    // narrows it down. Either alone is weaker than the two together.
+    $parts = array_filter([
+        trim((string)($loc['name'] ?? '')),
+        trim((string)($loc['address'] ?? '')),
+    ], static fn ($s) => $s !== '');
+    if ($parts === []) return '';
+    return 'https://www.google.com/maps/dir/?api=1&destination='
+         . rawurlencode(implode(', ', $parts));
 }
 
 } // function_exists('locationGeoMigrate')

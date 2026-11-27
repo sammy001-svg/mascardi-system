@@ -37,9 +37,11 @@
          blank tile or a screenshot of the page instead of the app icon. Safari
          does not read the manifest icons for this, so the PNG has to be declared
          here explicitly. */ ?>
-<link rel="apple-touch-icon" sizes="192x192" href="<?= BASE_URL ?>/assets/images/icons/icon-192.png">
-<link rel="apple-touch-icon" sizes="512x512" href="<?= BASE_URL ?>/assets/images/icons/icon-512.png">
-<link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/images/icons/icon-192.png">
+<?php $__iconV = (int) @filemtime(BASE_PATH . '/assets/images/icons/favicon.ico'); ?>
+<link rel="apple-touch-icon" sizes="180x180" href="<?= BASE_URL ?>/assets/images/icons/apple-touch-icon.png?v=<?= $__iconV ?>">
+<link rel="apple-touch-icon" sizes="192x192" href="<?= BASE_URL ?>/assets/images/icons/icon-192.png?v=<?= $__iconV ?>">
+<link rel="apple-touch-icon" sizes="512x512" href="<?= BASE_URL ?>/assets/images/icons/icon-512.png?v=<?= $__iconV ?>">
+<link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/images/icons/apple-touch-icon.png?v=<?= $__iconV ?>">
 
 <!-- PWA — Microsoft (Edge/Windows) -->
 <meta name="msapplication-TileColor" content="#2563eb">
@@ -47,8 +49,13 @@
 
 <!-- SEO / sharing -->
 <meta name="description" content="Showroom Management — fleet, workshop, sales and finance.">
-<link rel="icon" type="image/svg+xml" href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
-<link rel="shortcut icon" href="<?= BASE_URL ?>/assets/images/icons/icon.svg">
+<?php /* The house mark, not the generic car SVG that used to sit here. Chrome
+         prefers an SVG over every other icon offered, so while that file was
+         listed it was the only thing that ever reached a tab. */ ?>
+<link rel="icon" href="<?= BASE_URL ?>/assets/images/icons/favicon.ico?v=<?= $__iconV ?>" sizes="any">
+<link rel="icon" type="image/png" sizes="16x16" href="<?= BASE_URL ?>/assets/images/icons/icon-16.png?v=<?= $__iconV ?>">
+<link rel="icon" type="image/png" sizes="32x32" href="<?= BASE_URL ?>/assets/images/icons/icon-32.png?v=<?= $__iconV ?>">
+<link rel="icon" type="image/png" sizes="48x48" href="<?= BASE_URL ?>/assets/images/icons/icon-48.png?v=<?= $__iconV ?>">
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
