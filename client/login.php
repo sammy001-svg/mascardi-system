@@ -101,14 +101,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 /* ── What is behind the door ─────────────────────────────────────────────────
    Named after the pages the portal actually has, so nothing here is a promise
-   the portal does not keep. */
+   it does not keep -- and named only. Each of these used to carry a sentence
+   explaining it, which is six sentences nobody reads on the way to a password
+   box. A label and an icon say the same thing in a glance. */
 $services = [
-    ['fa-car-side',      'Your vehicles',      'Every car you have bought from us, with its papers and its history.'],
-    ['fa-file-invoice',  'Invoices & quotes',  'What is owed, what is paid, and a receipt for each of them.'],
-    ['fa-folder-open',   'Documents',          'Logbook, transfer papers and import records, kept where you can reach them.'],
-    ['fa-calendar',      'Service bookings',   'Book the workshop and see what was done last time.'],
-    ['fa-list-check',    'Assessments',        'What we found when we looked over the car, in writing.'],
-    ['fa-bell',          'Notices',            'Anything we need to tell you, rather than hoping a text gets through.'],
+    ['fa-car-side',     'Your vehicles'],
+    ['fa-file-invoice', 'Invoices & quotes'],
+    ['fa-folder-open',  'Documents'],
+    ['fa-calendar',     'Service bookings'],
+    ['fa-list-check',   'Assessments'],
+    ['fa-bell',         'Notices'],
 ];
 
 /* ── The latest cars, for the carousel ───────────────────────────────────────
@@ -157,209 +159,297 @@ $coEmail     = trim((string)getSetting('company_email', ''));
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
+/* ── Dark, with the house red as the light source ────────────────────────────
+   One surface colour and one accent. The red is the red sampled out of the
+   artwork; everything that glows is that same red at a different strength, so
+   the page reads as lit rather than decorated. */
 :root{
-    --ink:#121212; --ink-2:#4a4a4a; --ink-3:#8a8a8a;
-    --line:#e6e6e4; --paper:#f7f7f5; --white:#fff;
-    --brand:#7A0502;                       /* sampled from the house artwork */
-    --r:3px;
+    --bg:#08080a;            /* the room */
+    --panel:#0e0e11;         /* a surface in it */
+    --panel-2:#131317;
+    --edge:rgba(255,255,255,.08);
+    --txt:#f2f2f3;
+    --txt-2:rgba(242,242,243,.68);
+    --txt-3:rgba(242,242,243,.42);
+    --brand:#7A0502;         /* sampled from the house artwork */
+    --neon:#ff2a1f;          /* the same hue, lit */
+    --neon-soft:rgba(255,42,31,.42);
+    --r:4px;
     --ease:cubic-bezier(.22,.61,.36,1);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{
     font-family:'Inter',system-ui,-apple-system,sans-serif;
-    color:var(--ink);background:var(--paper);
+    color:var(--txt);background:var(--bg);
     -webkit-font-smoothing:antialiased;
 }
 a{color:inherit}
+::selection{background:var(--neon-soft);color:#fff}
 
-/* ── The two halves ───────────────────────────────────────────────────────
-   A grid rather than a flex row, so the two sides are exactly half each and
-   neither can be pushed about by the length of its own contents. */
 .cl-wrap{min-height:100vh;min-height:100svh;display:grid;grid-template-columns:1fr 1fr}
 
-/* ── Left: what is in here ───────────────────────────────────────────────── */
+/* ── Left ────────────────────────────────────────────────────────────────── */
 .cl-show{
-    position:relative;background:var(--ink);color:#fff;overflow:hidden;
-    display:flex;flex-direction:column;padding:42px 48px 36px;
+    position:relative;overflow:hidden;
+    display:flex;flex-direction:column;padding:44px 48px 38px;
+    background:var(--bg);
 }
-/* A slow wash of the house red, so the panel is not a flat black rectangle. */
+/* Two lamps rather than a flat fill: one behind the wordmark, one low and
+   right, so the panel has a direction to its light. */
 .cl-show::before{
     content:'';position:absolute;inset:0;pointer-events:none;
     background:
-        radial-gradient(900px 500px at 12% -10%, rgba(122,5,2,.55), transparent 62%),
-        radial-gradient(700px 600px at 108% 110%, rgba(122,5,2,.32), transparent 60%);
+        radial-gradient(760px 420px at 6% -8%,  rgba(122,5,2,.60), transparent 64%),
+        radial-gradient(620px 520px at 104% 108%, rgba(255,42,31,.16), transparent 62%);
+}
+/* A hairline of neon down the seam between the halves. */
+.cl-show::after{
+    content:'';position:absolute;top:0;right:0;width:1px;height:100%;
+    background:linear-gradient(180deg,transparent,var(--neon-soft) 28%,var(--neon-soft) 72%,transparent);
+    opacity:.5;
 }
 .cl-show > *{position:relative;z-index:1}
-.cl-mark{height:22px;width:auto;display:block;margin-bottom:auto}
-.cl-lead{padding:40px 0 30px;max-width:520px}
+/* The wordmark, the welcome and the labels sit together at the top; the rail
+   is anchored to the bottom. One gap between them rather than two, which is
+   what the panel had when the copy was long enough to fill it. */
+.cl-mark{height:22px;width:auto;display:block}
+
+/* The pair of them centred between the wordmark and the rail: with the copy
+   this short, letting the space fall entirely in one place left a hole. */
+.cl-lead{margin-top:auto;padding:0 0 26px;max-width:520px}
 .cl-eyebrow{
-    font-size:11px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;
-    color:rgba(255,255,255,.62);margin-bottom:16px;
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:10.5px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--txt-3);margin-bottom:18px;
+}
+.cl-eyebrow::before{
+    content:'';width:5px;height:5px;border-radius:50%;background:var(--neon);
+    box-shadow:0 0 8px var(--neon),0 0 18px var(--neon-soft);
 }
 .cl-lead h1{
-    font-size:clamp(28px,2.7vw,40px);font-weight:300;line-height:1.14;
-    letter-spacing:-.01em;margin-bottom:16px;
+    font-size:clamp(30px,3vw,44px);font-weight:300;line-height:1.1;
+    letter-spacing:-.015em;
 }
-.cl-lead p{font-size:15px;line-height:1.75;color:rgba(255,255,255,.72);max-width:430px}
 
-.cl-services{
-    display:grid;grid-template-columns:1fr 1fr;gap:18px 26px;
-    padding:4px 0 34px;max-width:560px;
+/* The six things, as labels. */
+.cl-services{display:flex;flex-wrap:wrap;gap:9px;padding:0 0 34px;max-width:560px;margin-bottom:auto}
+.cl-svc{
+    display:inline-flex;align-items:center;gap:9px;
+    padding:8px 14px 8px 11px;border-radius:999px;
+    background:rgba(255,255,255,.035);border:1px solid var(--edge);
+    font-size:12.5px;font-weight:500;color:var(--txt-2);
+    transition:border-color .3s var(--ease),color .3s var(--ease),background .3s var(--ease);
 }
-.cl-svc{display:flex;gap:12px;align-items:flex-start}
-.cl-svc i{
-    flex-shrink:0;width:30px;height:30px;border-radius:50%;
-    display:flex;align-items:center;justify-content:center;font-size:12px;
-    background:rgba(255,255,255,.1);color:#fff;
-    border:1px solid rgba(255,255,255,.16);
-}
-.cl-svc .t{font-size:13.5px;font-weight:600;margin-bottom:3px}
-.cl-svc .d{font-size:12px;line-height:1.55;color:rgba(255,255,255,.58)}
+.cl-svc i{font-size:11.5px;color:var(--neon);opacity:.9}
+.cl-svc:hover{border-color:var(--neon-soft);color:var(--txt);background:rgba(255,42,31,.07)}
 
-/* ── The carousel ─────────────────────────────────────────────────────────
-   A sliding track rather than a fade, because a fade between two photographs
-   of two different cars reads as a glitch. One rail, translated. */
+/* ── The carousel ────────────────────────────────────────────────────────────
+   Perspective on the frame and depth on the cards, so the rail reads as
+   something standing in a room rather than three rectangles in a row. The
+   centre of each page faces you; its neighbours turn away and sit back.
+   The neon is a rim light on the glass, brightest on the card in front. */
 .cl-carousel{margin-top:auto}
-.cl-car-head{
-    display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:14px;
-}
-.cl-car-head .h{font-size:11px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.62)}
-.cl-car-head a{font-size:12px;color:rgba(255,255,255,.72);text-decoration:none;border-bottom:1px solid rgba(255,255,255,.25);padding-bottom:2px}
-.cl-car-head a:hover{color:#fff;border-color:#fff}
-.cl-vp{overflow:hidden}
-.cl-track{display:flex;gap:16px;transition:transform .75s var(--ease);will-change:transform}
+.cl-car-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:16px}
+.cl-car-head .h{font-size:10.5px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--txt-3)}
+.cl-car-head a{font-size:12px;color:var(--txt-2);text-decoration:none;border-bottom:1px solid var(--edge);padding-bottom:2px;transition:color .25s,border-color .25s}
+.cl-car-head a:hover{color:var(--txt);border-color:var(--neon)}
+
+.cl-vp{overflow:hidden;perspective:1500px;perspective-origin:50% 50%;padding:14px 0 4px}
+.cl-track{display:flex;gap:18px;transform-style:preserve-3d;transition:transform .8s var(--ease);will-change:transform}
 .cl-slide{
-    flex:0 0 calc((100% - 32px) / 3);min-width:0;
-    background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);
-    border-radius:var(--r);overflow:hidden;text-decoration:none;color:#fff;
-    transition:border-color .3s var(--ease),background .3s var(--ease);
+    flex:0 0 calc((100% - 36px) / 3);min-width:0;
+    position:relative;border-radius:var(--r);overflow:hidden;text-decoration:none;color:var(--txt);
+    background:linear-gradient(160deg,var(--panel-2),var(--panel));
+    border:1px solid var(--edge);
+    transform-style:preserve-3d;
+    /* Set per card by the script; the defaults keep it sane without it. */
+    transform:rotateY(var(--ry,0deg)) rotateX(var(--rx,0deg)) translateZ(var(--tz,0px)) scale(var(--sc,1));
+    transition:transform .8s var(--ease),box-shadow .45s var(--ease),border-color .45s var(--ease),opacity .6s var(--ease);
+    box-shadow:0 12px 30px rgba(0,0,0,.55);
+    opacity:var(--op,1);
 }
-.cl-slide:hover{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.1)}
-.cl-slide .ph{position:relative;aspect-ratio:16/10;overflow:hidden;background:#1c1c1c}
-.cl-slide .ph img{width:100%;height:100%;object-fit:cover;transition:transform .9s var(--ease)}
-.cl-slide:hover .ph img{transform:scale(1.05)}
+/* The rim light. A thin inner line plus an outer bloom, both the same hue. */
+.cl-slide.lit{
+    border-color:rgba(255,42,31,.34);
+    box-shadow:
+        0 0 0 1px rgba(255,42,31,.20),
+        0 0 22px rgba(255,42,31,.20),
+        0 18px 44px rgba(0,0,0,.6),
+        inset 0 1px 0 rgba(255,255,255,.05);
+}
+.cl-slide:hover{
+    border-color:rgba(255,42,31,.70);
+    box-shadow:
+        0 0 0 1px rgba(255,42,31,.45),
+        0 0 30px rgba(255,42,31,.40),
+        0 0 70px rgba(255,42,31,.16),
+        0 22px 52px rgba(0,0,0,.65),
+        inset 0 1px 0 rgba(255,255,255,.08);
+}
+/* A filament along the top edge, lit on the card in front. */
+.cl-slide::after{
+    content:'';position:absolute;top:0;left:12%;right:12%;height:1px;
+    background:linear-gradient(90deg,transparent,var(--neon),transparent);
+    opacity:0;transition:opacity .45s var(--ease);
+}
+.cl-slide.lit::after{opacity:.55}
+.cl-slide:hover::after{opacity:1}
+
+.cl-slide .ph{position:relative;aspect-ratio:16/10;overflow:hidden;background:#000}
+.cl-slide .ph img{width:100%;height:100%;object-fit:cover;transition:transform 1s var(--ease);opacity:.92}
+.cl-slide:hover .ph img{transform:scale(1.06);opacity:1}
+.cl-slide .ph::after{
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(180deg,transparent 48%,rgba(8,8,10,.85));
+}
 .cl-slide .tag{
-    position:absolute;top:8px;left:8px;font-size:9px;font-weight:600;
-    letter-spacing:.14em;text-transform:uppercase;padding:4px 8px;border-radius:2px;
-    background:rgba(0,0,0,.6);backdrop-filter:blur(6px);
+    position:absolute;top:9px;left:9px;z-index:2;font-size:8.5px;font-weight:700;
+    letter-spacing:.16em;text-transform:uppercase;padding:4px 9px;border-radius:2px;
+    color:#fff;background:rgba(122,5,2,.82);
+    border:1px solid rgba(255,42,31,.45);
+    box-shadow:0 0 14px rgba(255,42,31,.35);
 }
-.cl-slide .bd{padding:11px 12px 13px}
+.cl-slide .bd{padding:12px 14px 15px;position:relative;z-index:2}
 .cl-slide .nm{
-    font-size:12.5px;font-weight:600;line-height:1.35;margin-bottom:5px;
+    font-size:12.5px;font-weight:600;line-height:1.35;margin-bottom:6px;color:var(--txt);
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
-.cl-slide .pr{font-size:13px;font-weight:300;color:rgba(255,255,255,.9);letter-spacing:.01em}
-.cl-slide .pr small{font-size:10px;color:rgba(255,255,255,.5);font-weight:500}
-.cl-dots{display:flex;gap:6px;margin-top:16px}
+.cl-slide .pr{font-size:14px;font-weight:300;color:#fff;letter-spacing:.01em}
+.cl-slide .pr small{font-size:9.5px;color:var(--txt-3);font-weight:600;letter-spacing:.1em}
+
+.cl-dots{display:flex;gap:7px;margin-top:18px}
 .cl-dots button{
-    width:18px;height:2px;border:none;padding:0;cursor:pointer;
-    background:rgba(255,255,255,.22);transition:background .3s var(--ease);
+    width:20px;height:2px;border:none;padding:0;cursor:pointer;
+    background:rgba(255,255,255,.16);transition:background .35s var(--ease),box-shadow .35s var(--ease);
 }
-.cl-dots button.on{background:#fff}
+.cl-dots button.on{background:var(--neon);box-shadow:0 0 10px var(--neon),0 0 22px var(--neon-soft)}
+
 @media (prefers-reduced-motion: reduce){
-    .cl-track{transition:none}
-    .cl-slide .ph img{transition:none}
+    .cl-track,.cl-slide,.cl-slide .ph img{transition:none}
+    .cl-slide{transform:none}
 }
 
-/* ── Right: the form ─────────────────────────────────────────────────────── */
+/* ── Right: the form, on the same dark ───────────────────────────────────── */
 .cl-form-side{
     display:flex;align-items:center;justify-content:center;
-    padding:48px 40px;background:var(--white);
+    padding:48px 40px;background:var(--panel);position:relative;overflow:hidden;
 }
-.cl-card{width:100%;max-width:412px}
+.cl-form-side::before{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(620px 420px at 50% 0%, rgba(122,5,2,.22), transparent 66%);
+}
+.cl-card{width:100%;max-width:392px;position:relative;z-index:1}
 .cl-back{
-    display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:600;
-    letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
-    text-decoration:none;margin-bottom:34px;transition:color .2s var(--ease);
+    display:inline-flex;align-items:center;gap:8px;font-size:10.5px;font-weight:600;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--txt-3);
+    text-decoration:none;margin-bottom:34px;transition:color .25s var(--ease);
 }
-.cl-back:hover{color:var(--ink)}
-.cl-card h2{font-size:25px;font-weight:400;letter-spacing:-.01em;margin-bottom:7px}
-.cl-card .sub{font-size:13.5px;color:var(--ink-2);line-height:1.6;margin-bottom:26px}
+.cl-back:hover{color:var(--txt)}
+.cl-card h2{font-size:26px;font-weight:400;letter-spacing:-.015em;margin-bottom:6px}
+.cl-card .sub{font-size:13px;color:var(--txt-3);line-height:1.6;margin-bottom:26px}
 
-.cl-tabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:26px}
+.cl-tabs{display:flex;border-bottom:1px solid var(--edge);margin-bottom:26px}
 .cl-tabs a{
-    flex:1;text-align:center;padding:11px 4px;font-size:12px;font-weight:600;
-    letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+    flex:1;text-align:center;padding:11px 4px;font-size:11px;font-weight:600;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--txt-3);
     text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;
-    transition:color .2s var(--ease),border-color .2s var(--ease);
+    transition:color .25s var(--ease),border-color .25s var(--ease);
 }
-.cl-tabs a:hover{color:var(--ink-2)}
-.cl-tabs a.on{color:var(--ink);border-bottom-color:var(--brand)}
+.cl-tabs a:hover{color:var(--txt-2)}
+.cl-tabs a.on{
+    color:var(--txt);border-bottom-color:var(--neon);
+    text-shadow:0 0 18px var(--neon-soft);
+}
 
-.cl-field{margin-bottom:16px}
+.cl-field{margin-bottom:15px}
 .cl-field label{
-    display:block;font-size:10.5px;font-weight:600;letter-spacing:.14em;
-    text-transform:uppercase;color:var(--ink-3);margin-bottom:7px;
+    display:block;font-size:10px;font-weight:600;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--txt-3);margin-bottom:7px;
 }
 .cl-field input{
-    width:100%;min-width:0;border:1px solid var(--line);border-radius:var(--r);
-    padding:12px 14px;font-size:14px;font-family:inherit;color:var(--ink);
-    background:var(--white);outline:none;transition:border-color .2s var(--ease),box-shadow .2s var(--ease);
+    width:100%;min-width:0;border:1px solid var(--edge);border-radius:var(--r);
+    padding:12px 14px;font-size:14px;font-family:inherit;color:var(--txt);
+    background:rgba(255,255,255,.035);outline:none;
+    transition:border-color .25s var(--ease),box-shadow .25s var(--ease),background .25s var(--ease);
 }
-.cl-field input:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(18,18,18,.06)}
-.cl-field input::placeholder{color:#b9b9b7}
+.cl-field input:focus{
+    border-color:rgba(255,42,31,.55);background:rgba(255,255,255,.055);
+    box-shadow:0 0 0 3px rgba(255,42,31,.12),0 0 22px rgba(255,42,31,.14);
+}
+.cl-field input::placeholder{color:rgba(242,242,243,.26)}
+/* The browser's own autofill paints its own background; this keeps it dark. */
+.cl-field input:-webkit-autofill,
+.cl-field input:-webkit-autofill:focus{
+    -webkit-text-fill-color:var(--txt);
+    -webkit-box-shadow:0 0 0 1000px #16161a inset,0 0 0 3px rgba(255,42,31,.12);
+    caret-color:var(--txt);
+}
 .cl-pw{position:relative}
 .cl-pw input{padding-right:46px}
 .cl-pw button{
     position:absolute;right:4px;top:50%;transform:translateY(-50%);
-    border:none;background:none;cursor:pointer;color:var(--ink-3);
-    padding:8px 10px;font-size:13px;line-height:1;
+    border:none;background:none;cursor:pointer;color:var(--txt-3);
+    padding:8px 10px;font-size:13px;line-height:1;transition:color .2s var(--ease);
 }
-.cl-pw button:hover{color:var(--ink)}
-.cl-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cl-pw button:hover{color:var(--neon)}
+.cl-row{display:grid;grid-template-columns:1fr 1fr;gap:15px}
 .cl-row > *{min-width:0}
 
 .cl-submit{
-    width:100%;border:1px solid var(--ink);background:var(--ink);color:#fff;
-    border-radius:var(--r);padding:13px 20px;font-size:11.5px;font-weight:600;
-    letter-spacing:.16em;text-transform:uppercase;cursor:pointer;font-family:inherit;
-    transition:background .25s var(--ease);margin-top:6px;
+    position:relative;width:100%;border:1px solid rgba(255,42,31,.5);
+    background:linear-gradient(135deg,#8d0703,var(--brand));
+    color:#fff;border-radius:var(--r);padding:13px 20px;
+    font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+    cursor:pointer;font-family:inherit;margin-top:8px;
+    box-shadow:0 0 0 1px rgba(255,42,31,.18),0 0 24px rgba(255,42,31,.22),0 10px 26px rgba(0,0,0,.5);
+    transition:box-shadow .3s var(--ease),transform .15s var(--ease),filter .3s var(--ease);
 }
-.cl-submit:hover{background:#000}
+.cl-submit:hover{
+    filter:brightness(1.12);
+    box-shadow:0 0 0 1px rgba(255,42,31,.4),0 0 34px rgba(255,42,31,.42),0 12px 30px rgba(0,0,0,.55);
+}
+.cl-submit:active{transform:translateY(1px)}
+
 .cl-note,.cl-error{
-    font-size:13px;line-height:1.6;padding:11px 14px;border-radius:var(--r);
-    margin-bottom:20px;border:1px solid;
+    font-size:12.5px;line-height:1.6;padding:11px 14px;border-radius:var(--r);
+    margin-bottom:18px;border:1px solid;
 }
-.cl-error{background:#fdf2f2;border-color:#f3d2d2;color:#8a2020}
-.cl-note{background:#f1f7f4;border-color:#cfe6dc;color:#1f5e49}
-.cl-aside{font-size:12.5px;color:var(--ink-3);line-height:1.7;margin-top:22px;text-align:center}
-.cl-aside a{color:var(--ink);font-weight:600;text-decoration:none;border-bottom:1px solid var(--line)}
-.cl-aside a:hover{border-color:var(--ink)}
+.cl-error{background:rgba(255,42,31,.1);border-color:rgba(255,42,31,.32);color:#ffb4ae}
+.cl-note{background:rgba(32,200,140,.08);border-color:rgba(32,200,140,.28);color:#8ee9c4}
+.cl-aside{font-size:12.5px;color:var(--txt-3);line-height:1.7;margin-top:20px;text-align:center}
+.cl-aside a{color:var(--txt);font-weight:600;text-decoration:none;border-bottom:1px solid var(--edge)}
+.cl-aside a:hover{border-color:var(--neon)}
 .cl-help{
-    margin-top:30px;padding-top:22px;border-top:1px solid var(--line);
-    font-size:12.5px;color:var(--ink-3);line-height:1.8;
+    margin-top:28px;padding-top:20px;border-top:1px solid var(--edge);
+    font-size:12px;color:var(--txt-3);line-height:1.8;
 }
-.cl-help a{color:var(--ink);text-decoration:none;font-weight:500}
-.cl-help a:hover{text-decoration:underline}
+.cl-help a{color:var(--txt-2);text-decoration:none;font-weight:500;transition:color .2s var(--ease)}
+.cl-help a:hover{color:var(--neon)}
 .cl-contact{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:6px}
 .cl-contact a{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.cl-contact i{font-size:11px;color:var(--ink-3)}
-.cl-code{
-    letter-spacing:.5em;text-align:center;font-size:21px;font-weight:600;
-    font-variant-numeric:tabular-nums;
-}
+.cl-contact i{font-size:11px;color:var(--txt-3)}
+.cl-code{letter-spacing:.5em;text-align:center;font-size:21px;font-weight:600;font-variant-numeric:tabular-nums}
 
 /* ── Narrower ─────────────────────────────────────────────────────────────
    The form comes first on a phone: somebody who came here to sign in should
-   not have to scroll past the sales pitch to do it. The panel keeps its
-   welcome and its carousel underneath, where it reads as what it is. */
+   not have to scroll past the panel to do it. */
 @media (max-width: 1100px){
-    .cl-services{grid-template-columns:1fr;gap:14px}
-    .cl-slide{flex:0 0 calc((100% - 16px) / 2)}
+    .cl-slide{flex:0 0 calc((100% - 18px) / 2)}
     .cl-show{padding:34px 34px 30px}
     .cl-form-side{padding:40px 30px}
 }
 @media (max-width: 860px){
     .cl-wrap{grid-template-columns:1fr}
     .cl-show{order:2;min-height:0}
-    .cl-form-side{order:1;padding:34px 20px 40px;min-height:0}
+    .cl-show::after{display:none}
+    .cl-form-side{order:1;padding:34px 20px 42px;min-height:0}
     .cl-mark{margin-bottom:26px}
-    .cl-lead{padding:0 0 26px}
+    .cl-lead{padding:0 0 24px}
     .cl-carousel{margin-top:30px}
+    .cl-vp{perspective:900px}
 }
 @media (max-width: 560px){
-    .cl-slide{flex:0 0 calc((100% - 16px) / 2)}
     .cl-show{padding:30px 18px 28px}
     .cl-row{grid-template-columns:1fr;gap:0}
 }
@@ -379,22 +469,16 @@ a{color:inherit}
                  width="1400" height="172" alt="<?= e($companyName) ?>">
         </a>
 
+        <?php /* The heading, and nothing under it. The paragraph that used to
+                 sit here said what the six labels below it already say. */ ?>
         <div class="cl-lead">
             <div class="cl-eyebrow">Client Area</div>
             <h1>Welcome to your<br>client area.</h1>
-            <p>Everything to do with your car in one place &mdash; what you own, what it has
-               cost, what has been done to it, and what is due next.</p>
         </div>
 
         <div class="cl-services">
-            <?php foreach ($services as [$icon, $title, $desc]): ?>
-            <div class="cl-svc">
-                <i class="fa <?= e($icon) ?>"></i>
-                <div>
-                    <div class="t"><?= e($title) ?></div>
-                    <div class="d"><?= e($desc) ?></div>
-                </div>
-            </div>
+            <?php foreach ($services as [$icon, $title]): ?>
+            <span class="cl-svc"><i class="fa <?= e($icon) ?>"></i><?= e($title) ?></span>
             <?php endforeach; ?>
         </div>
 
@@ -450,17 +534,18 @@ a{color:inherit}
                 <i class="fa fa-arrow-left"></i> Back to the showroom
             </a>
 
+            <?php /* A line each. The register step keeps its one sentence
+                     because it is the one that stops people making a second
+                     account beside the one they already have. */ ?>
             <?php if ($pane === 'verify'): ?>
                 <h2>Check your email</h2>
-                <p class="sub">We sent a 6-digit code to <strong><?= e($email) ?></strong>.
-                   It is good for a few minutes.</p>
+                <p class="sub">A 6-digit code is on its way to <strong><?= e($email) ?></strong>.</p>
             <?php elseif ($pane === 'register'): ?>
                 <h2>Create your account</h2>
-                <p class="sub">If you have bought or serviced a car with us, use the address
-                   we already have for you and your history will be waiting.</p>
+                <p class="sub">Use the address we already have for you and your history comes with it.</p>
             <?php else: ?>
                 <h2>Sign in</h2>
-                <p class="sub">Your vehicles, invoices, documents and bookings.</p>
+                <p class="sub">Your vehicles, invoices and documents.</p>
             <?php endif; ?>
 
             <?php if ($error !== ''): ?>
@@ -651,13 +736,54 @@ a{color:inherit}
 
     function render() {
         var per = perPage();
-        var first = slides[Math.min(page * per, slides.length - 1)];
+        var firstIndex = Math.min(page * per, slides.length - 1);
+        var first = slides[firstIndex];
         // Measured from the rail itself rather than computed from widths, so a
         // rounding difference cannot accumulate across pages.
         var x = first.offsetLeft - track.offsetLeft;
         track.style.transform = 'translateX(' + (-x) + 'px)';
         [].slice.call(dots.children).forEach(function (d, i) {
             d.className = i === page ? 'on' : '';
+        });
+        depth(firstIndex, per);
+    }
+
+    /* ── Depth ────────────────────────────────────────────────────────────
+       The rail is in perspective, so the cards can stand at an angle to it.
+       Whatever is on the page you are looking at faces you and is lit; the
+       cards either side of it turn away and sit back, which is what gives the
+       row its depth rather than a drop shadow pretending to.
+
+       The angle is signed by which side of the page a card is on, so the two
+       edges lean towards the middle and the row reads as curved. */
+    function depth(firstIndex, per) {
+        var lastIndex = firstIndex + per - 1;
+        var mid = (per - 1) / 2;          // the middle seat of the page
+        slides.forEach(function (card, i) {
+            var onPage = i >= firstIndex && i <= lastIndex;
+            var ry, tz;
+            if (onPage) {
+                // Within the page the row is a shallow curve: the middle card
+                // faces you, the ones beside it turn in towards it and sit
+                // back a little. This is what makes the rail read as standing
+                // in a room; the cards off the page only confirm it.
+                var seat = (i - firstIndex) - mid;
+                ry = seat * -7;
+                tz = -Math.abs(seat) * 22;
+            } else {
+                var offset = i < firstIndex ? i - firstIndex : i - lastIndex;
+                // Clamped: a card eight along should not be turned eight times
+                // as far as the one next door.
+                var lean = Math.max(-2, Math.min(2, offset));
+                ry = lean * -14;
+                tz = -90 - Math.abs(lean) * 28;
+            }
+            card.style.setProperty('--ry', ry.toFixed(2) + 'deg');
+            card.style.setProperty('--rx', '0deg');
+            card.style.setProperty('--tz', tz.toFixed(0) + 'px');
+            card.style.setProperty('--sc', onPage ? 1 : 0.93);
+            card.style.setProperty('--op', onPage ? 1 : 0.38);
+            card.classList.toggle('lit', onPage);
         });
     }
 
@@ -671,6 +797,27 @@ a{color:inherit}
     track.addEventListener('mouseenter', function () { hovering = true; });
     track.addEventListener('mouseleave', function () { hovering = false; });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) restart(); });
+
+    /* The card under the pointer leans towards it. Small -- six degrees at the
+       corner -- because the point is that the card has a surface, not that it
+       is a toy. Pointer events only, so a finger scrolling past a card on a
+       phone does not leave it stuck at an angle. */
+    if (!reduce && window.matchMedia && window.matchMedia('(hover: hover)').matches) {
+        slides.forEach(function (card) {
+            card.addEventListener('mousemove', function (e) {
+                var r = card.getBoundingClientRect();
+                var dx = (e.clientX - r.left) / r.width  - 0.5;
+                var dy = (e.clientY - r.top)  / r.height - 0.5;
+                card.style.setProperty('--ry', (dx * 12).toFixed(2) + 'deg');
+                card.style.setProperty('--rx', (-dy * 8).toFixed(2) + 'deg');
+                card.style.setProperty('--tz', '26px');
+            });
+            card.addEventListener('mouseleave', function () {
+                card.style.setProperty('--rx', '0deg');
+                render();            // back to wherever the page says it belongs
+            });
+        });
+    }
 
     var resizeTimer = null;
     window.addEventListener('resize', function () {
