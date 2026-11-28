@@ -35,19 +35,41 @@ img[loading="lazy"].img-loaded{background:none;animation:none}
         input.value = tokenValue;
         form.appendChild(input);
     }
-    // form.method is normalised by the browser, so this catches method="Post"
-    // and the rest, which the old attribute selector did not.
-    function isPost(f) { return f && f.tagName === 'FORM' && (f.method || '').toLowerCase() === 'post'; }
+    /* The attribute, not the property.
+       A form's controls are exposed as properties of the form, and they win
+       over the form's own: a page carrying <input name="method"> -- a payment
+       method, which four pages here have -- makes form.method return that
+       input rather than the string "post". Calling .toLowerCase() on it threw,
+       and the throw took this whole function down with it, so nothing on those
+       pages was ever stamped and every form without a token of its own was
+       turned away at the security screen. Leads, payments, finance accounts
+       and call-centre top-ups, all from one property read.
+       (The refusal's own wording is deliberately not quoted here: it is served
+       inside every page, and a check that looks for that text in a response
+       would find this comment instead of a real refusal.)
+       getAttribute cannot be shadowed. Lower-casing it keeps method="Post"
+       working, which is what the property was reached for in the first place. */
+    function isPost(f) {
+        if (!f || f.tagName !== 'FORM') return false;
+        var m = f.getAttribute('method');
+        return (typeof m === 'string' ? m : '').toLowerCase() === 'post';
+    }
 
-    document.querySelectorAll('form').forEach(function (f) { if (isPost(f)) stamp(f); });
-
-    // Stamping once cannot cover a form a script builds later -- a modal, a row
-    // the table renders -- and those failed in exactly the same way. Doing it
-    // again as the form is submitted costs nothing and catches the ones that
-    // did not exist yet.
+    /* The listener goes on first, and the sweep is wrapped.
+       The sweep walks every form on the page and the listener is the net that
+       catches whatever it misses -- so the net must not be able to go down
+       with the sweep. Registering it first, and refusing to let one odd form
+       stop it, is the difference between a page losing one form and a page
+       losing all of them. */
     document.addEventListener('submit', function (e) {
-        if (isPost(e.target)) stamp(e.target);
+        try { if (isPost(e.target)) stamp(e.target); } catch (err) {}
     }, true);
+
+    // Stamping up front as well, so a form posted by script -- without a
+    // submit event -- still carries a token.
+    document.querySelectorAll('form').forEach(function (f) {
+        try { if (isPost(f)) stamp(f); } catch (err) {}
+    });
 
     // Also set header for fetch/XMLHttpRequest
     var origFetch = window.fetch;

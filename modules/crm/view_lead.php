@@ -4075,6 +4075,7 @@ $__showCreditModals = $lead['stage'] === 'reserved'
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <form method="POST">
+                <?= csrfField() ?>
                 <input type="hidden" name="action" value="record_credit_payment">
                 <div class="modal-header">
                     <h6 class="modal-title fw-bold"><i class="fa fa-coins me-2 text-success"></i>Record Monthly Payment</h6>
@@ -4265,6 +4266,10 @@ $__showCreditModals = $lead['stage'] === 'reserved'
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST">
+                <?php /* Written out rather than left to the stamp in the footer.
+                         A form that takes money should not be one script error
+                         away from refusing the customer in front of you. */ ?>
+                <?= csrfField() ?>
                 <input type="hidden" name="action" value="add_deposit">
                 <div class="modal-body">
                     <div class="row g-3">
