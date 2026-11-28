@@ -79,14 +79,17 @@ $setupDone = false;
  * the handful of lines that turn a posted form into one of its calls. */
 require_once __DIR__ . '/includes/client_auth.php';
 
-// ?door=client opens on the customer side. The old client/login.php forwards
-// here with it, so links already out in the world land on the right panel.
-$clientSide  = ($_GET['door'] ?? '') === 'client';
-$clientPost  = false;                    // was THIS request a customer form?
-$clientPane  = 'signin';                 // signin | register | verify
-$clientError = '';
-$clientNote  = '';
-$clientEmail = '';
+/* This page is the staff door. The customer's is /client/login.php, which can
+ * say what is behind it and show the stock while it asks -- things a staff
+ * sign-in has no use for.
+ *
+ * ?door=client used to open the customer panel here, and that address is in
+ * emails we have already sent and in people's bookmarks, so it is forwarded
+ * rather than broken. */
+if (($_GET['door'] ?? '') === 'client') {
+    header('Location: ' . BASE_URL . '/client/login.php', true, 302);
+    exit;
+}
 $portalOn    = clientPortalEnabled();
 
 // A customer already signed in has no business on the sign-in page.
@@ -95,70 +98,9 @@ if (!empty($_SESSION['_client'])) {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $portalOn
-    && in_array(($_POST['client_do'] ?? ''), ['signin', 'register', 'verify', 'resend'], true)) {
+/* The customer's form posts to /client/login.php now, which is where it is
+ * read. Nothing here answers client_do any more: one door, one page. */
 
-    $clientSide = true;
-    $clientPost = true;
-    $do         = (string)$_POST['client_do'];
-    $clientEmail = trim((string)($_POST['email'] ?? ''));
-    $db         = getDB();
-
-    if ($do === 'signin') {
-        $r = clientPortalLogin($db, $clientEmail, (string)($_POST['password'] ?? ''));
-        if ($r['ok']) {
-            clientPortalSignIn($r['client']);
-            header('Location: ' . BASE_URL . '/client/index.php');
-            exit;
-        }
-        $clientError = $r['error'];
-
-    } elseif ($do === 'register' || $do === 'resend') {
-        $pass  = (string)($_POST['password'] ?? '');
-        $pass2 = (string)($_POST['password_confirm'] ?? '');
-
-        if ($do === 'register' && $pass !== $pass2) {
-            $clientPane  = 'register';
-            $clientError = 'The two passwords do not match.';
-        } else {
-            $r = clientPortalStart($db, (string)($_POST['name'] ?? ''), $clientEmail,
-                                   (string)($_POST['phone'] ?? ''), $pass);
-            if (!$r['ok']) {
-                $clientPane  = 'register';
-                $clientError = $r['error'];
-            } else {
-                $clientPane  = 'verify';
-                $clientEmail = $r['email'];
-                // Said the same way whether or not that address is on file: a
-                // stranger must not be able to find out who banks here by
-                // watching which addresses get a different answer.
-                $clientNote  = 'If we can reach that address, a 6-digit code is on its way. '
-                             . 'Enter it below to finish.';
-                if (!$r['sent'] && $r['error'] !== '') {
-                    // The yard's own mail is broken. Say so plainly rather than
-                    // leaving them waiting for a code that cannot arrive.
-                    $clientError = 'We could not send the code just now. Please contact us and we will '
-                                 . 'set your access up by hand.';
-                }
-            }
-        }
-
-    } elseif ($do === 'verify') {
-        $r = clientPortalVerify($db, $clientEmail, (string)($_POST['code'] ?? ''));
-        if ($r['ok']) {
-            clientPortalSignIn($r['client']);
-            header('Location: ' . BASE_URL . '/client/index.php');
-            exit;
-        }
-        $clientPane  = 'verify';
-        $clientError = $r['error'];
-    }
-}
-
-// Which pane is SHOWING ($clientSide) and which form was SUBMITTED are two
-// different questions. Reading the staff branch off the visible pane meant
-// that arriving at ?door=client and then switching to Staff posted a form
-// nothing would process.
 /* Staff who have forgotten their password. Same shape as the customer door:
  * a code to the address on file, and nothing changes until it comes back.
  * The engine is in includes/staff_auth.php. */
@@ -174,7 +116,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     && in_array(($_POST['staff_do'] ?? ''), ['forgot', 'reset'], true)) {
 
     $clientPost = true;            // not a sign-in; keep the sign-in branch off
-    $clientSide = false;           // but this is the staff side of the door
     $staffWho   = trim((string)($_POST['who'] ?? ''));
     $db         = getDB();
 
@@ -214,7 +155,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$clientPost) {
 
     // Whatever ?door said, a staff form was posted, so show the staff pane —
     // otherwise its error message renders behind a hidden panel.
-    $clientSide = false;
 
     if ($isFirstRun && isset($_POST['setup_admin'])) {
         $name   = trim($_POST['name'] ?? '');
@@ -553,26 +493,13 @@ body {
 .btn-login:hover { box-shadow: 0 6px 20px rgba(37,99,235,.45); transform: translateY(-1px); }
 .first-run-badge { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #1d4ed8; margin-bottom: 18px; }
 
-/* ── The two doors ──────────────────────────────────────────────────────────
-   Staff sign in with a username, customers with the email we invoice them at.
-   They are different accounts in different tables, so the choice is made
-   before anything is typed rather than guessed from what was. */
-.door-switch{
-    display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px;
-    background:rgba(255,255,255,.05); border:1px solid rgba(148,163,184,.18);
-    border-radius:12px; margin-bottom:20px;
-}
-.door-switch button{
-    border:0; background:transparent; color:#94a3b8; cursor:pointer;
-    padding:9px 6px; border-radius:9px; font-size:13.5px; font-weight:600;
-    letter-spacing:.2px; transition:background .16s, color .16s;
-    display:flex; align-items:center; justify-content:center; gap:7px;
-}
-.door-switch button:hover{ color:#e6edf7; }
-.door-switch button.on{
-    background:linear-gradient(135deg,#2563eb,#1d4ed8); color:#fff;
-    box-shadow:0 4px 14px rgba(37,99,235,.35);
-}
+/* ── The steps ──────────────────────────────────────────────────────────────
+   Sign in, ask for a code, set a new password. One is showing at a time and
+   the others are simply not drawn, so the card does not jump about as it
+   moves between them.
+   (The switch that used to sit above these, between the staff door and the
+   customer's, is gone: the customer has their own page at /client/login.php,
+   which can say what is behind it and show the stock while it asks.) */
 .door-pane[hidden]{ display:none; }
 
 /* The code boxes on the verify step. Big and monospaced, because a code read
@@ -886,22 +813,10 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
             // deciding whether they are in the right place, and this notice
             // would be wrong for them. The switch on the form side changes
             // which is showing, so both are rendered and one is hidden. ?>
-      <div class="stage-copy" data-door="staff"<?= $clientSide ? ' hidden' : '' ?>>
+      <div class="stage-copy">
         <p class="auth-tagline auth-notice">Mascardi Family Members Access Only</p>
       </div>
 
-      <div class="stage-copy" data-door="client"<?= $clientSide ? '' : ' hidden' ?>>
-        <p class="auth-tagline">
-          Your vehicles, your paperwork and what you still owe &mdash; in one place,
-          whenever you want to look.
-        </p>
-        <ul class="auth-points">
-          <li><i class="fa fa-car"></i><span>The vehicles you have bought from us</span></li>
-          <li><i class="fa fa-file-invoice"></i><span>Your invoices, receipts and statement</span></li>
-          <li><i class="fa fa-calendar-check"></i><span>Service bookings and what was done</span></li>
-          <li><i class="fa fa-folder-open"></i><span>Logbooks and documents we hold for you</span></li>
-        </ul>
-      </div>
     </div>
 
     <?php // The way back out to the public site, kept on the picture side where
@@ -921,7 +836,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
     <div class="neon-aura" aria-hidden="true"></div>
     <div class="login-card">
       <span class="neon-ring" aria-hidden="true"></span>
-      <div class="auth-form<?= $error || $clientError ? ' err' : '' ?>">
+      <div class="auth-form<?= $error ? ' err' : '' ?>">
 
         <?php // On a phone the picture side is only a band, so the brand is
               // repeated here where there is room to read it. ?>
@@ -929,25 +844,19 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
           <span><?= htmlspecialchars($companyName) ?></span>
         </div>
         <div class="login-title"><?= $isFirstRun ? 'System Setup' : htmlspecialchars(APP_NAME) ?></div>
-        <div class="login-sub" id="doorSub"><?= $isFirstRun
+        <div class="login-sub"><?= $isFirstRun
             ? 'Create your administrator account to get started.'
-            : ($clientSide ? 'Customer portal — your vehicles, invoices and documents'
-                           : 'Staff portal — sign in to continue') ?></div>
+            : 'Staff portal — sign in to continue' ?></div>
 
-        <?php // First-run setup is the only thing that matters until an admin
-              // exists, so the choice of door is not offered yet. ?>
-        <?php if (!$isFirstRun && $portalOn): ?>
-        <div class="door-switch" role="tablist" aria-label="Who is signing in">
-            <button type="button" id="doorStaffBtn"  class="<?= $clientSide ? '' : 'on' ?>"
-                    role="tab" aria-selected="<?= $clientSide ? 'false' : 'true' ?>">
-                <i class="fa fa-id-badge"></i> Staff
-            </button>
-            <button type="button" id="doorClientBtn" class="<?= $clientSide ? 'on' : '' ?>"
-                    role="tab" aria-selected="<?= $clientSide ? 'true' : 'false' ?>">
-                <i class="fa fa-user"></i> Customer
-            </button>
-        </div>
-        <?php endif; ?>
+        <?php /* The customer's door is its own page now -- /client/login.php --
+                 because the two are not the same job. Staff know the system and
+                 want a username box; a customer arrives twice a year, is not
+                 sure whether an account exists for them, and needs to be told
+                 what is behind the door before they go through it. One page
+                 trying to be both was serving neither well.
+                 The switch is therefore gone and this page is the staff door.
+                 Anybody arriving on the old ?door=client address is sent to the
+                 new page by the redirect at the top of this file. */ ?>
 
         <?php if ($isFirstRun && !$setupDone): ?>
         <div class="first-run-badge"><i class="fa fa-star me-2"></i><strong>First-time setup:</strong> No admin account exists yet. Create one below.</div>
@@ -1007,7 +916,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 
         <?php else: ?>
         <!-- ── Staff: a username against `users` ── -->
-        <div class="door-pane" id="paneStaff"<?= $clientSide ? ' hidden' : '' ?>>
+        <div id="paneStaff">
 
         <?php if ($resetError): ?>
         <div class="alert alert-danger py-2"><i class="fa fa-circle-exclamation me-2"></i><?= e($resetError) ?></div>
@@ -1110,128 +1019,6 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 
         </div><!-- /paneStaff -->
 
-        <?php if ($portalOn): ?>
-        <!-- ── Customer: the email we invoice them at, against `clients` ── -->
-        <div class="door-pane" id="paneClient"<?= $clientSide ? '' : ' hidden' ?>>
-
-            <?php if ($clientError): ?>
-            <div class="alert alert-danger py-2"><i class="fa fa-circle-exclamation me-2"></i><?= e($clientError) ?></div>
-            <?php endif; ?>
-            <?php if ($clientNote): ?>
-            <div class="alert alert-success py-2"><i class="fa fa-envelope-circle-check me-2"></i><?= e($clientNote) ?></div>
-            <?php endif; ?>
-
-            <!-- Sign in -->
-            <div class="door-pane" id="cliSignin"<?= $clientPane === 'signin' ? '' : ' hidden' ?>>
-                <form method="POST">
-                    <input type="hidden" name="client_do" value="signin">
-                    <div class="mb-3">
-                        <label class="form-label">Email address</label>
-                        <div class="field-wrap"><i class="fa fa-envelope"></i>
-                        <input type="email" name="email" class="form-control" required autocomplete="email"
-                               placeholder="The address we invoice you at"
-                               value="<?= e($clientPane === 'signin' ? $clientEmail : '') ?>"></div>
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label">Password</label>
-                        <div class="field-wrap">
-                            <i class="fa fa-lock"></i>
-                            <input type="password" name="password" class="form-control password-input"
-                                   required autocomplete="current-password" placeholder="Enter your password">
-                            <button type="button" class="password-toggle"><i class="fa fa-eye"></i></button>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-login btn-primary w-100 text-white">
-                        <i class="fa fa-right-to-bracket me-2"></i>Sign In
-                    </button>
-                </form>
-                <div class="door-alt">
-                    <?php // One link for three things, because from here they are
-                          // the same act: proving you can read the address. ?>
-                    New here, or forgotten your password?<br>
-                    <a href="#" id="toRegister">Create an account or reset your access →</a>
-                </div>
-            </div>
-
-            <!-- Register / claim / reset -->
-            <div class="door-pane" id="cliRegister"<?= $clientPane === 'register' ? '' : ' hidden' ?>>
-                <form method="POST">
-                    <input type="hidden" name="client_do" value="register">
-                    <div class="mb-3">
-                        <label class="form-label">Your name</label>
-                        <div class="field-wrap"><i class="fa fa-user"></i>
-                        <input type="text" name="name" class="form-control" required
-                               placeholder="As it should appear on your invoices"
-                               value="<?= e($clientPane === 'register' ? (string)($_POST['name'] ?? '') : '') ?>"></div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email address</label>
-                        <div class="field-wrap"><i class="fa fa-envelope"></i>
-                        <input type="email" name="email" class="form-control" required autocomplete="email"
-                               placeholder="We will send a code here"
-                               value="<?= e($clientPane === 'register' ? $clientEmail : '') ?>"></div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Phone <span class="text-muted fw-normal">(optional)</span></label>
-                        <div class="field-wrap"><i class="fa fa-phone"></i>
-                        <input type="text" name="phone" class="form-control" placeholder="07xx xxx xxx"
-                               value="<?= e($clientPane === 'register' ? (string)($_POST['phone'] ?? '') : '') ?>"></div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Choose a password</label>
-                        <div class="field-wrap">
-                            <i class="fa fa-lock"></i>
-                            <input type="password" name="password" class="form-control password-input"
-                                   required minlength="8" autocomplete="new-password"
-                                   placeholder="At least 8 characters">
-                            <button type="button" class="password-toggle"><i class="fa fa-eye"></i></button>
-                        </div>
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label">Confirm password</label>
-                        <div class="field-wrap">
-                            <i class="fa fa-lock"></i>
-                            <input type="password" name="password_confirm" class="form-control password-input"
-                                   required minlength="8" autocomplete="new-password" placeholder="Repeat it">
-                            <button type="button" class="password-toggle"><i class="fa fa-eye"></i></button>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-login btn-primary w-100 text-white">
-                        <i class="fa fa-paper-plane me-2"></i>Send me a code
-                    </button>
-                </form>
-                <div class="door-alt">
-                    Already set up? <a href="#" id="toSignin">Sign in instead →</a>
-                </div>
-            </div>
-
-            <!-- Verify -->
-            <div class="door-pane" id="cliVerify"<?= $clientPane === 'verify' ? '' : ' hidden' ?>>
-                <div class="sent-to">
-                    <i class="fa fa-envelope me-1"></i>
-                    Code sent to <strong><?= e($clientEmail) ?></strong>.
-                    It is good for <?= CLIENT_CODE_TTL_MINUTES ?> minutes.
-                </div>
-                <form method="POST">
-                    <input type="hidden" name="client_do" value="verify">
-                    <input type="hidden" name="email" value="<?= e($clientEmail) ?>">
-                    <div class="mb-4">
-                        <label class="form-label">Enter the 6-digit code</label>
-                        <input type="text" name="code" class="form-control code-input" required
-                               inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
-                               autocomplete="one-time-code" placeholder="000000" autofocus>
-                    </div>
-                    <button type="submit" class="btn btn-login btn-primary w-100 text-white">
-                        <i class="fa fa-circle-check me-2"></i>Confirm and sign in
-                    </button>
-                </form>
-                <div class="door-alt">
-                    Nothing arrived? <a href="#" id="toRegister2">Start again →</a>
-                </div>
-            </div>
-
-        </div><!-- /paneClient -->
-        <?php endif; ?>
         <?php endif; ?>
         <footer class="auth-foot">
           <?php // Somebody who cannot get in needs a way to reach a person,
@@ -1255,7 +1042,7 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
           <div class="auth-legal">
             &copy; <?= date('Y') ?> <?= htmlspecialchars($companyName) ?>
             <span aria-hidden="true">&middot;</span>
-            <?= $clientSide ? 'Customer portal' : 'Showroom management System' ?>
+            Showroom management System
           </div>
 
           <?php // Repeated for the phone, where the picture side is a band and
@@ -1275,65 +1062,16 @@ body.has-intro .login-stage.show{ opacity:1; transform:none; }
 </div><!-- /login-stage -->
 
 <script>
-/* Which door is showing, and which of the customer's three steps.
+/* Which of the staff sign-in's three steps is showing.
    The server has already picked the right one on a POST, so this only has to
-   handle the clicking — reload with a wrong password and you are still on the
-   customer side, looking at the message about it. */
+   handle the clicking -- reload after a wrong password and you are still
+   looking at the message about it.
+
+   This used to open by switching between the two doors, and bailed out at its
+   first line if the switch was not on the page. The customer has their own
+   page now, so the switch is gone -- and that early return would have taken
+   the staff steps below down with it. */
 (function () {
-    var staffBtn = document.getElementById('doorStaffBtn'),
-        cliBtn   = document.getElementById('doorClientBtn'),
-        staff    = document.getElementById('paneStaff'),
-        client   = document.getElementById('paneClient'),
-        sub      = document.getElementById('doorSub');
-    if (!staffBtn || !cliBtn || !staff || !client) return;
-
-    function door(toClient) {
-        staff.hidden  = toClient;
-        client.hidden = !toClient;
-        staffBtn.classList.toggle('on', !toClient);
-        cliBtn.classList.toggle('on', toClient);
-        staffBtn.setAttribute('aria-selected', String(!toClient));
-        cliBtn.setAttribute('aria-selected', String(toClient));
-        if (sub) {
-            sub.textContent = toClient
-                ? 'Customer portal — your vehicles, invoices and documents'
-                : 'Staff portal — sign in to continue';
-        }
-        // The picture side promises different things to the two of them, so it
-        // moves with the switch. Leaving it behind would sit a customer's form
-        // next to a list of what staff can do.
-        document.querySelectorAll('.stage-copy').forEach(function (c) {
-            c.hidden = (c.getAttribute('data-door') !== (toClient ? 'client' : 'staff'));
-        });
-        var legal = document.querySelector('.auth-legal');
-        if (legal) {
-            legal.lastChild.textContent = toClient ? ' Customer portal' : ' Showroom management System';
-        }
-        var first = (toClient ? client : staff).querySelector('input:not([type=hidden])');
-        if (first && !first.hasAttribute('autofocus')) { try { first.focus(); } catch (e) {} }
-    }
-    staffBtn.addEventListener('click', function () { door(false); });
-    cliBtn.addEventListener('click',   function () { door(true);  });
-
-    // The customer's three steps: sign in, ask for a code, type the code.
-    var panes = {
-        signin:   document.getElementById('cliSignin'),
-        register: document.getElementById('cliRegister'),
-        verify:   document.getElementById('cliVerify')
-    };
-    function step(which) {
-        Object.keys(panes).forEach(function (k) {
-            if (panes[k]) panes[k].hidden = (k !== which);
-        });
-        var first = panes[which] && panes[which].querySelector('input:not([type=hidden])');
-        if (first) { try { first.focus(); } catch (e) {} }
-    }
-    ['toRegister', 'toRegister2'].forEach(function (id) {
-        var a = document.getElementById(id);
-        if (a) a.addEventListener('click', function (ev) { ev.preventDefault(); step('register'); });
-    });
-    var back = document.getElementById('toSignin');
-    if (back) back.addEventListener('click', function (ev) { ev.preventDefault(); step('signin'); });
 
     // The staff side has the same three steps: sign in, ask for a code, set a
     // new password. The server has already chosen the right one on a POST, so

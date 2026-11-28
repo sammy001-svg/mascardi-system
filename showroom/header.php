@@ -403,12 +403,33 @@ select.lx-input { cursor: pointer; }
 .nav-cta-btn:hover { background: #000; }
 .nav-overlay-mode:not(.nav-solid) .nav-cta-btn { background: #fff; color: var(--ink) !important; border-color: #fff; }
 .nav-overlay-mode:not(.nav-solid) .nav-cta-btn:hover { background: rgba(255,255,255,.88); }
-.nav-staff {
-    color: var(--ink-3); font-size: 15px; display: inline-flex; padding: 8px;
-    transition: color .25s var(--ease);
+/* The two doors.
+   A person icon said "sign in" and nothing about which of the two sign-ins it
+   led to, so a customer looking for their invoices and a salesperson looking
+   for the system clicked the same thing and one of them was wrong. They are
+   named now. Outlined rather than filled, so the WhatsApp button beside them
+   stays the one thing the eye goes to. */
+.nav-door {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--line); border-radius: var(--r);
+    padding: 10px 16px; font-size: 11px; font-weight: 600;
+    letter-spacing: .14em; text-transform: uppercase; text-decoration: none;
+    color: var(--ink); background: transparent; white-space: nowrap;
+    transition: all .25s var(--ease);
 }
-.nav-staff:hover { color: var(--bronze); }
-.nav-overlay-mode:not(.nav-solid) .nav-staff { color: rgba(255,255,255,.7); }
+.nav-door i { font-size: 12px; }
+.nav-door:hover { border-color: var(--ink); color: var(--ink); }
+/* The customer's door is the one most people arriving here want. */
+.nav-door-client { border-color: var(--ink-3); }
+.nav-door-client:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+.nav-overlay-mode:not(.nav-solid) .nav-door {
+    color: rgba(255,255,255,.92); border-color: rgba(255,255,255,.34);
+}
+.nav-overlay-mode:not(.nav-solid) .nav-door:hover {
+    border-color: #fff; color: #fff; background: rgba(255,255,255,.12);
+}
+.nav-overlay-mode:not(.nav-solid) .nav-door-client { border-color: rgba(255,255,255,.66); }
+.nav-overlay-mode:not(.nav-solid) .nav-door-client:hover { background: #fff; color: var(--ink); }
 
 /* Hamburger */
 .nav-toggle { display: none; flex-direction: column; gap: 5px; cursor: pointer; padding: 8px; border: none; background: none; }
@@ -431,6 +452,11 @@ select.lx-input { cursor: pointer; }
     .nav-cta-btn span { display: none; }
     .nav-cta-btn { padding: 10px 14px; }
 }
+/* Below the desktop layout the two doors are in the menu, where there is room
+   to name them properly, so they come out of the bar rather than shrinking
+   until they are a pair of unlabelled icons again. */
+@media (max-width: 1180px) { .nav-door-staff { display: none; } }
+@media (max-width: 1080px) { .nav-door { display: none; } }
 </style>
 <?php /* A page that needs its own stylesheet sets $pageHead before including
          this. Used by the vehicle page for the map library, which no other
@@ -508,8 +534,11 @@ select.lx-input { cursor: pointer; }
                 <i class="fa-brands fa-whatsapp"></i><span>WHATSAPP US</span>
             </a>
             <?php endif; ?>
-            <a href="<?= BASE_URL ?>/login.php" class="nav-staff" title="Staff Login" aria-label="Staff Login">
-                <i class="fa fa-user"></i>
+            <a href="<?= BASE_URL ?>/client/login.php" class="nav-door nav-door-client">
+                <i class="fa fa-circle-user"></i><span>Client Area</span>
+            </a>
+            <a href="<?= BASE_URL ?>/login.php" class="nav-door nav-door-staff">
+                <i class="fa fa-id-badge"></i><span>Staff</span>
             </a>
             <button class="nav-toggle" id="navToggle" aria-label="Menu">
                 <span></span><span></span><span></span>
@@ -538,7 +567,9 @@ select.lx-input { cursor: pointer; }
     </div>
     <div class="m-group" style="border-bottom:none">
         <a href="<?= BASE_URL ?>/showroom/#story">About</a>
-        <a href="<?= BASE_URL ?>/login.php">Staff Login</a>
+        <?php /* The two doors, named, as they are in the bar on a desktop. */ ?>
+        <a href="<?= BASE_URL ?>/client/login.php"><i class="fa fa-circle-user" style="font-size:13px;width:20px"></i> Client Area</a>
+        <a href="<?= BASE_URL ?>/login.php"><i class="fa fa-id-badge" style="font-size:13px;width:20px"></i> Staff Sign In</a>
     </div>
 </div>
 
